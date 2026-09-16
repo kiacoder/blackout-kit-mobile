@@ -1,0 +1,69 @@
+name: Build APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build iOS
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Package iOS build
+        run: |
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -derivedDataPath build -arch arm64
+          cd ..
+
+      - name: Upload iOS build
+        uses: actions/upload-artifact@v3
+        with:
+          name: ios-build
+          path: ios/build/Release-iphoneos/Runner.app

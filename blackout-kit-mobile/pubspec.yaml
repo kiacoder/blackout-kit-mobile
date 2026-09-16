@@ -1,0 +1,67 @@
+name: blackout_kit_mobile
+description: 🌐 Trustworthy VPN alternative for Iranian users. Config-based, open-source, no backend exposure.
+publish_to: none
+
+version: 1.0.0-beta.1+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  get: ^4.6.5
+
+  # Local Storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  encrypted_shared_preferences: ^2.1.0
+
+  # HTTP & Networking
+  http: ^1.1.0
+  dio: ^5.3.0
+
+  # Config Parsing (future: add specific packages for WG/OpenVPN/SS)
+  # For now: pure Dart parsing
+
+  # UI & Animation
+  cupertino_icons: ^1.0.2
+  flutter_animate: ^4.2.0
+  flutter_svg: ^2.0.5
+
+  # Platform Channels
+  flutter_vpn: ^0.0.4  # Android VPN wrapper (if available; otherwise custom)
+
+  # Utilities
+  crypto: ^3.0.2  # For config hashing
+  logger: ^2.0.1  # Better logging
+  intl: ^0.19.0   # Internationalization (future)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Linting
+  flutter_lints: ^3.0.0
+
+  # Testing
+  mockito: ^5.4.0
+  test: ^1.24.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600

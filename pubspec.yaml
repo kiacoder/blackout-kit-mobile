@@ -1,5 +1,5 @@
 name: blackout_kit_mobile
-description: 🌐 Trustworthy VPN alternative for Iranian users. Config-based, open-source, no backend exposure.
+description: Trustworthy VPN alternative for Iranian users. Config-based, open-source, no backend exposure.
 publish_to: none
 
 version: 1.0.0-beta.1+1
@@ -32,7 +32,7 @@ dependencies:
   flutter_svg: ^2.0.5
 
   # Platform Channels
-  flutter_vpn: ^0.0.4  # Android VPN wrapper (if available; otherwise custom)
+  flutter_vpn: ^0.13.0  # Android VPN wrapper (null-safe version)
 
   # Utilities
   crypto: ^3.0.2  # For config hashing

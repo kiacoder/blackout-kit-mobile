@@ -10,6 +10,9 @@ import '../controllers/connection_controller.dart';
 import '../models/config.dart';
 import '../models/test_result.dart';
 import '../widgets/config_tile.dart';
+import 'config_import_screen.dart';
+import 'speed_test_screen.dart';
+import 'config_editor_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({Key? key}) : super(key: key);
@@ -36,6 +39,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
         title: const Text('Config Library'),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.speed),
+            onPressed: () => Get.to(() => const SpeedTestScreen()),
+            tooltip: 'Speed Benchmark',
+          ),
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: () => Get.to(() => const ConfigImportScreen()),
+            tooltip: 'Import Config / Scan QR',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () async {
@@ -403,7 +416,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.edit_note, size: 28),
+                  tooltip: 'Edit & Share QR',
+                  onPressed: () {
+                    Get.back();
+                    Get.to(() => ConfigEditorScreen(config: config));
+                  },
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {

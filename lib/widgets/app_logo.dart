@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// App logo widget with customizable size, subtitle, and layout.
+/// Official Blackout Kit Logo Widget
 class AppLogo extends StatelessWidget {
   final double size;
   final bool showTitle;
   final bool showSubtitle;
+  final bool useFullLogoImage;
   final Axis direction;
 
   const AppLogo({
@@ -12,53 +13,49 @@ class AppLogo extends StatelessWidget {
     this.size = 64.0,
     this.showTitle = true,
     this.showSubtitle = true,
+    this.useFullLogoImage = false,
     this.direction = Axis.vertical,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
+
+    // If using full logo image asset (B mark + text on black background)
+    if (useFullLogoImage) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.2),
+        child: Image.asset(
+          'assets/images/logo.png',
+          width: size * 2.5,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => _buildFallbackLogo(context),
+        ),
+      );
+    }
 
     final logoIcon = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [
-            primaryColor,
-            primaryColor.withOpacity(0.7),
-            const Color(0xFF4F46E5),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(size * 0.22),
         boxShadow: [
           BoxShadow(
-            color: primaryColor.withOpacity(0.35),
-            blurRadius: size * 0.25,
-            spreadRadius: size * 0.05,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: size * 0.2,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(
-              Icons.shield_outlined,
-              size: size * 0.58,
-              color: Colors.white,
-            ),
-            Icon(
-              Icons.vpn_key_rounded,
-              size: size * 0.28,
-              color: Colors.white,
-            ),
-          ],
-        ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        'assets/icons/app_icon.png',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildFallbackLogo(context),
       ),
     );
 
@@ -74,11 +71,11 @@ class AppLogo extends StatelessWidget {
       children: [
         if (showTitle)
           Text(
-            'BLACKOUT KIT',
+            'blackout kit',
             style: TextStyle(
-              fontSize: size * 0.32,
+              fontSize: size * 0.35,
               fontWeight: FontWeight.w900,
-              letterSpacing: 1.5,
+              letterSpacing: 0.5,
               color: theme.textTheme.titleLarge?.color,
             ),
           ),
@@ -114,6 +111,25 @@ class AppLogo extends StatelessWidget {
         const SizedBox(height: 12),
         textColumn,
       ],
+    );
+  }
+
+  Widget _buildFallbackLogo(BuildContext context) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(size * 0.22),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.flash_on_rounded,
+          size: size * 0.6,
+          color: primaryColor,
+        ),
+      ),
     );
   }
 }

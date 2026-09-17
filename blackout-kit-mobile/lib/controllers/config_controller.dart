@@ -119,10 +119,10 @@ class ConfigController extends GetxController {
   }
 
   /// Fetch from all enabled sources
-  Future<int> fetchFromAllSources() async {
+  Future<int> fetchFromAllSources({bool force = false}) async {
     int totalSaved = 0;
     for (final source in sources.where((s) => s.isEnabled)) {
-      if (source.needsRefresh) {
+      if (force || source.needsRefresh) {
         totalSaved += await fetchFromSource(source);
       }
     }

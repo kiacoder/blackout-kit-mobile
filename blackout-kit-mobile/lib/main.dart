@@ -86,25 +86,34 @@ class BlackoutKitApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp(
-      title: 'Blackout Kit',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.light,
+    final settingsController = Get.find<SettingsController>();
+
+    return Obx(() {
+      final themeStr = settingsController.theme.value;
+      ThemeMode mode = ThemeMode.system;
+      if (themeStr == 'light') mode = ThemeMode.light;
+      if (themeStr == 'dark') mode = ThemeMode.dark;
+
+      return GetMaterialApp(
+        title: 'Blackout Kit',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF6366F1),
+            brightness: Brightness.light,
+          ),
         ),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.dark,
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF6366F1),
+            brightness: Brightness.dark,
+          ),
         ),
-      ),
-      themeMode: ThemeMode.system,
-      home: const RootScreen(),
-    );
+        themeMode: mode,
+        home: const RootScreen(),
+      );
+    });
   }
 }

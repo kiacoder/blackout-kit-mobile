@@ -2,6 +2,7 @@
 /// Supports: WireGuard, OpenVPN, Shadowsocks protocols.
 /// V2 extensibility: Add V2Ray, Trojan, NaïveProxy subclasses without UI changes.
 
+import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 /// Base proxy config class (protocol-agnostic)
@@ -58,40 +59,70 @@ class WireGuardConfig extends Config {
 
   @override
   Future<bool> connect() async {
-    // Implemented by VPN service
     return true;
   }
 
   @override
-  Future<void> disconnect() async {
-    // Implemented by VPN service
-  }
+  Future<void> disconnect() async {}
 
   @override
   Future<bool> isRunning() async {
-    // Implemented by VPN service
     return false;
   }
 
   @override
   bool validate() {
-    return privateKey.isNotEmpty &&
-        address.isNotEmpty &&
-        gateway.isNotEmpty &&
-        dns.isNotEmpty;
+    return privateKey.isNotEmpty || endpoint != null;
   }
 
-  static WireGuardConfig? fromUri(String uri) {
+  /// Parse WireGuard INI content
+  static WireGuardConfig? fromUri(String content, {String? customName}) {
     try {
-      // Parse WireGuard URI format (typically config file content)
-      // For now, basic implementation
+      String privateKey = '';
+      String address = '';
+      String dns = '';
+      String publicKey = '';
+      String endpoint = '';
+      int port = 51820;
+
+      final lines = content.split('\n');
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.startsWith('#') || !trimmed.contains('=')) continue;
+
+        final parts = trimmed.split('=');
+        if (parts.length < 2) continue;
+
+        final key = parts[0].trim().toLowerCase();
+        final val = parts.sublist(1).join('=').trim();
+
+        if (key == 'privatekey') privateKey = val;
+        if (key == 'address') address = val;
+        if (key == 'dns') dns = val;
+        if (key == 'publickey') publicKey = val;
+        if (key == 'endpoint') {
+          endpoint = val;
+          final epParts = val.split(':');
+          if (epParts.length == 2) {
+            port = int.tryParse(epParts[1]) ?? 51820;
+          }
+        }
+      }
+
+      final host = endpoint.isNotEmpty
+          ? endpoint.split(':')[0]
+          : (address.isNotEmpty ? address.split('/')[0] : '127.0.0.1');
+
       return WireGuardConfig(
-        name: 'WireGuard Config',
-        rawUri: uri,
-        privateKey: '',
-        address: '',
-        gateway: '',
-        dns: '',
+        name: customName ?? 'WireGuard ($host:$port)',
+        rawUri: content,
+        privateKey: privateKey,
+        address: address.isNotEmpty ? address : host,
+        gateway: host,
+        dns: dns.isNotEmpty ? dns : '1.1.1.1',
+        port: port,
+        publicKey: publicKey,
+        endpoint: endpoint,
       );
     } catch (e) {
       return null;
@@ -123,18 +154,14 @@ class OpenVpnConfig extends Config {
 
   @override
   Future<bool> connect() async {
-    // Implemented by VPN service
     return true;
   }
 
   @override
-  Future<void> disconnect() async {
-    // Implemented by VPN service
-  }
+  Future<void> disconnect() async {}
 
   @override
   Future<bool> isRunning() async {
-    // Implemented by VPN service
     return false;
   }
 
@@ -143,14 +170,28 @@ class OpenVpnConfig extends Config {
     return configContent.isNotEmpty && address.isNotEmpty;
   }
 
-  static OpenVpnConfig? fromUri(String uri) {
+  static OpenVpnConfig? fromUri(String content, {String? customName}) {
     try {
-      // Parse OpenVPN config
+      String remoteHost = '127.0.0.1';
+      int remotePort = 1194;
+
+      final lines = content.split('\n');
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.startsWith('remote ')) {
+          final parts = trimmed.split(RegExp(r'\s+'));
+          if (parts.length >= 2) remoteHost = parts[1];
+          if (parts.length >= 3) remotePort = int.tryParse(parts[2]) ?? 1194;
+          break;
+        }
+      }
+
       return OpenVpnConfig(
-        name: 'OpenVPN Config',
-        rawUri: uri,
-        configContent: uri,
-        address: '',
+        name: customName ?? 'OpenVPN ($remoteHost:$remotePort)',
+        rawUri: content,
+        configContent: content,
+        address: remoteHost,
+        port: remotePort,
       );
     } catch (e) {
       return null;
@@ -186,18 +227,14 @@ class ShadowsocksConfig extends Config {
 
   @override
   Future<bool> connect() async {
-    // Implemented by VPN service
     return true;
   }
 
   @override
-  Future<void> disconnect() async {
-    // Implemented by VPN service
-  }
+  Future<void> disconnect() async {}
 
   @override
   Future<bool> isRunning() async {
-    // Implemented by VPN service
     return false;
   }
 
@@ -206,13 +243,39 @@ class ShadowsocksConfig extends Config {
     return address.isNotEmpty && port > 0 && method.isNotEmpty && password.isNotEmpty;
   }
 
-  /// Parse ss:// URI format
-  /// Format: ss://method:password@host:port/?plugin=...
-  static ShadowsocksConfig? fromUri(String uri) {
+  /// Parse ss:// URI format (supports plain & base64 encoded)
+  static ShadowsocksConfig? fromUri(String uri, {String? customName}) {
     try {
       if (!uri.startsWith('ss://')) return null;
 
-      final cleanUri = uri.substring(5);
+      String nameFromHash = customName ?? '';
+      String cleanUri = uri.substring(5);
+
+      final hashIndex = cleanUri.indexOf('#');
+      if (hashIndex != -1) {
+        if (nameFromHash.isEmpty) {
+          nameFromHash = Uri.decodeComponent(cleanUri.substring(hashIndex + 1));
+        }
+        cleanUri = cleanUri.substring(0, hashIndex);
+      }
+
+      // Check if base64 encoded (ss://BASE64@host:port) or full base64 (ss://BASE64)
+      if (!cleanUri.contains('@')) {
+        try {
+          final normalized = base64.normalize(cleanUri);
+          final decoded = utf8.decode(base64.decode(normalized));
+          cleanUri = decoded;
+        } catch (_) {}
+      } else {
+        final parts = cleanUri.split('@');
+        final encodedCreds = parts[0];
+        try {
+          final normalized = base64.normalize(encodedCreds);
+          final decodedCreds = utf8.decode(base64.decode(normalized));
+          cleanUri = '$decodedCreds@${parts[1]}';
+        } catch (_) {}
+      }
+
       final atIndex = cleanUri.lastIndexOf('@');
       if (atIndex == -1) return null;
 
@@ -233,7 +296,7 @@ class ShadowsocksConfig extends Config {
       final port = int.tryParse(portStr) ?? 8388;
 
       return ShadowsocksConfig(
-        name: 'Shadowsocks ($address:$port)',
+        name: nameFromHash.isNotEmpty ? nameFromHash : 'Shadowsocks ($address:$port)',
         rawUri: uri,
         address: address,
         port: port,
@@ -248,14 +311,15 @@ class ShadowsocksConfig extends Config {
 
 /// Config parser factory
 class ConfigParser {
-  static Config? parse(String uri, {String? customName}) {
+  static Config? parse(String text, {String? customName}) {
     try {
-      if (uri.startsWith('ss://')) {
-        return ShadowsocksConfig.fromUri(uri);
-      } else if (uri.startsWith('ovpn://') || uri.contains('BEGIN CERTIFICATE')) {
-        return OpenVpnConfig.fromUri(uri);
-      } else if (uri.contains('[Interface]')) {
-        return WireGuardConfig.fromUri(uri);
+      final trimmed = text.trim();
+      if (trimmed.startsWith('ss://')) {
+        return ShadowsocksConfig.fromUri(trimmed, customName: customName);
+      } else if (trimmed.contains('remote ') || trimmed.contains('BEGIN CERTIFICATE') || trimmed.contains('client\n')) {
+        return OpenVpnConfig.fromUri(trimmed, customName: customName);
+      } else if (trimmed.contains('[Interface]') || trimmed.contains('PrivateKey')) {
+        return WireGuardConfig.fromUri(trimmed, customName: customName);
       }
       return null;
     } catch (e) {
@@ -263,13 +327,31 @@ class ConfigParser {
     }
   }
 
-  /// Parse all configs from text (one per line)
+  /// Parse all configs from text
   static List<Config> parseMultiple(String text) {
-    return text.split('\n')
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty && !line.startsWith('#'))
-        .map((uri) => parse(uri))
-        .whereType<Config>()
-        .toList();
+    final list = <Config>[];
+    final lines = text.split('\n');
+    final buffer = StringBuffer();
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.startsWith('ss://')) {
+        final cfg = ShadowsocksConfig.fromUri(trimmed);
+        if (cfg != null) list.add(cfg);
+      } else {
+        buffer.writeln(line);
+      }
+    }
+
+    final blockText = buffer.toString();
+    if (blockText.contains('[Interface]')) {
+      final wg = WireGuardConfig.fromUri(blockText);
+      if (wg != null) list.add(wg);
+    } else if (blockText.contains('remote ') || blockText.contains('BEGIN CERTIFICATE')) {
+      final ovpn = OpenVpnConfig.fromUri(blockText);
+      if (ovpn != null) list.add(ovpn);
+    }
+
+    return list;
   }
 }

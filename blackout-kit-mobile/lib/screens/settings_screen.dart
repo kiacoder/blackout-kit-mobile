@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import '../controllers/config_controller.dart';
 import '../controllers/settings_controller.dart';
 import 'logs_screen.dart';
+import 'split_tunneling_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -72,6 +73,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _settingsController.splitTunnelingEnabled.value,
                   onChanged: _settingsController.toggleSplitTunneling,
                 )),
+                ListTile(
+                  title: const Text('Select Apps for Split Tunneling'),
+                  subtitle: Obx(() => Text('${_settingsController.splitTunnelingApps.length} apps selected')),
+                  leading: const Icon(Icons.apps),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Get.to(() => const SplitTunnelingScreen());
+                  },
+                ),
               ],
             ),
             // Appearance Section

@@ -30,6 +30,9 @@ dependencies:
   cupertino_icons: ^1.0.2
   flutter_animate: ^4.2.0
   flutter_svg: ^2.0.5
+  qr_flutter: ^4.1.0      # QR Code Generation for config sharing
+  file_picker: ^8.0.0     # Import .conf / .ovpn / config files
+  mobile_scanner: ^4.0.1  # QR Code camera scanning
 
   # Platform Channels
   flutter_vpn: ^0.13.0  # Android VPN wrapper (null-safe version)
@@ -56,6 +59,7 @@ dev_dependencies:
 dependency_overrides:
   shared_preferences_android: 2.3.4
   package_info_plus: 5.0.1
+  flutter_plugin_android_lifecycle: 2.0.17
 
 flutter:
   uses-material-design: true

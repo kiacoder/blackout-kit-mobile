@@ -38,11 +38,13 @@ class ConnectionController extends GetxController {
   final Rx<Config?> selectedConfig = Rx<Config?>(null);
   final Rx<TestResult?> selectedConfigResult = Rx<TestResult?>(null);
   final RxString statusMessage = RxString('Ready');
-  final RxString? connectedIP = RxString?();
+  final Rxn<String> connectedIP = Rxn<String>();
   final RxDouble connectionUptime = RxDouble(0.0); // seconds
   final RxBool isKillSwitchEnabled = RxBool(false);
   final RxBool isDNSLeakPreventionEnabled = RxBool(false);
   final RxBool isSplitTunnelingEnabled = RxBool(false);
+
+  bool get isConnected => state.value == ConnectionState.connected;
 
   DateTime? _connectionStartTime;
   int? _uptimeUpdateTimer;

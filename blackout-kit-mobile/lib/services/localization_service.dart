@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 
@@ -326,7 +327,7 @@ class LocalizationService extends GetxService {
 
 /// Extension for easy translation access
 extension TranslationExtension on String {
-  String tr({String? lang}) {
+  String trApp({String? lang}) {
     final language = lang ?? Get.find<LocalizationService>().currentLanguage.value;
     return LocalizationService._getTranslation(this, language);
   }

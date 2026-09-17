@@ -21,7 +21,7 @@ class AnimatedErrorNotification extends StatefulWidget {
 class _AnimatedErrorNotificationState extends State<AnimatedErrorNotification>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _slideAnimation;
+  late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
 
   @override

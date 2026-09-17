@@ -14,6 +14,10 @@ import 'services/config_service.dart';
 import 'services/github_service.dart';
 import 'services/tester_service.dart';
 import 'services/vpn_service.dart';
+import 'services/kill_switch_service.dart';
+import 'services/dns_leak_prevention_service.dart';
+import 'services/split_tunneling_service.dart';
+import 'services/debug_service.dart';
 import 'screens/root_screen.dart';
 
 void main() async {
@@ -28,6 +32,10 @@ void main() async {
   final githubService = GitHubService(logger: logger);
   final testerService = TesterService(logger: logger);
   final vpnService = VPNService(logger: logger);
+  final killSwitchService = KillSwitchService();
+  final dnsLeakPreventionService = DNSLeakPreventionService();
+  final splitTunnelingService = SplitTunnelingService();
+  final debugService = DebugService();
 
   // Initialize config service (opens Hive boxes)
   await configService.initialize();
@@ -35,11 +43,15 @@ void main() async {
   // Initialize VPN service (platform channels)
   vpnService.initialize();
 
-  // Register controllers with GetX (singleton pattern)
+  // Register services with GetX (singleton pattern)
   Get.put<ConfigService>(configService);
   Get.put<GitHubService>(githubService);
   Get.put<TesterService>(testerService);
   Get.put<VPNService>(vpnService);
+  Get.put<KillSwitchService>(killSwitchService);
+  Get.put<DNSLeakPreventionService>(dnsLeakPreventionService);
+  Get.put<SplitTunnelingService>(splitTunnelingService);
+  Get.put<DebugService>(debugService);
 
   Get.put<ConfigController>(
     ConfigController(
@@ -54,6 +66,10 @@ void main() async {
     ConnectionController(
       vpnService: vpnService,
       testerService: testerService,
+      killSwitchService: killSwitchService,
+      dnsLeakPreventionService: dnsLeakPreventionService,
+      splitTunnelingService: splitTunnelingService,
+      debugService: debugService,
       logger: logger,
     ),
   );
@@ -79,7 +95,6 @@ class BlackoutKitApp extends StatelessWidget {
           seedColor: const Color(0xFF6366F1),
           brightness: Brightness.light,
         ),
-        fontFamily: 'Poppins',
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
@@ -87,7 +102,6 @@ class BlackoutKitApp extends StatelessWidget {
           seedColor: const Color(0xFF6366F1),
           brightness: Brightness.dark,
         ),
-        fontFamily: 'Poppins',
       ),
       themeMode: ThemeMode.system,
       home: const RootScreen(),

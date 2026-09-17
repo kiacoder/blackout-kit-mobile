@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import '../controllers/connection_controller.dart';
 
 /// Animated connection button with state-based visuals
 class AnimatedConnectionButton extends StatefulWidget {
@@ -65,7 +63,6 @@ class _AnimatedConnectionButtonState extends State<AnimatedConnectionButton>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final buttonColor = widget.isConnected
         ? Colors.green
         : (widget.isLoading ? Colors.orange : Colors.blue);

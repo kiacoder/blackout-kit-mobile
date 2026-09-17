@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import '../controllers/connection_controller.dart';
 
 /// Animated status indicator with smooth transitions

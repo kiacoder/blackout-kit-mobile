@@ -57,15 +57,6 @@ class WireGuardConfig extends Config {
   String get displayName => name;
 
   @override
-  String get address => this.address;
-
-  @override
-  int get port => this.port;
-
-  @override
-  String get rawUri => this.rawUri;
-
-  @override
   Future<bool> connect() async {
     // Implemented by VPN service
     return true;
@@ -131,15 +122,6 @@ class OpenVpnConfig extends Config {
   String get displayName => name;
 
   @override
-  String get address => this.address;
-
-  @override
-  int get port => this.port;
-
-  @override
-  String get rawUri => this.rawUri;
-
-  @override
   Future<bool> connect() async {
     // Implemented by VPN service
     return true;
@@ -201,15 +183,6 @@ class ShadowsocksConfig extends Config {
 
   @override
   String get displayName => name;
-
-  @override
-  String get address => this.address;
-
-  @override
-  int get port => this.port;
-
-  @override
-  String get rawUri => this.rawUri;
 
   @override
   Future<bool> connect() async {

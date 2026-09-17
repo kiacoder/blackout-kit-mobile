@@ -10,7 +10,7 @@ import 'package:get/get.dart';
 
 import '../controllers/config_controller.dart';
 import '../controllers/connection_controller.dart';
-import '../controllers/settings_controller.dart';
+import '../widgets/app_logo.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -22,14 +22,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final ConfigController _configController;
   late final ConnectionController _connectionController;
-  late final SettingsController _settingsController;
 
   @override
   void initState() {
     super.initState();
     _configController = Get.find<ConfigController>();
     _connectionController = Get.find<ConnectionController>();
-    _settingsController = Get.find<SettingsController>();
 
     // Fetch configs on first load
     _initializeApp();
@@ -85,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Blackout Kit VPN'),
+        title: const AppLogo(size: 28, showSubtitle: false, direction: Axis.horizontal),
         centerTitle: true,
         elevation: 0,
       ),

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../controllers/config_controller.dart';
 import '../controllers/settings_controller.dart';
+import 'logs_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -27,6 +28,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -37,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             // VPN Settings Section
             _buildSection(
+              context: context,
               title: 'VPN Settings',
               children: [
                 Obx(() => SwitchListTile(
@@ -71,6 +76,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             // Appearance Section
             _buildSection(
+              context: context,
               title: 'Appearance',
               children: [
                 Obx(() => ListTile(
@@ -78,7 +84,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(_getThemeLabel(
                     _settingsController.theme.value,
                   )),
+                  leading: Icon(
+                    _settingsController.theme.value == 'dark'
+                        ? Icons.dark_mode
+                        : (_settingsController.theme.value == 'light'
+                            ? Icons.light_mode
+                            : Icons.brightness_auto),
+                  ),
                   onTap: _showThemeDialog,
+                )),
+                Obx(() => SwitchListTile(
+                  title: const Text('Keep Screen Awake'),
+                  subtitle: const Text('Prevent screen from turning off during config testing or active VPN'),
+                  secondary: const Icon(Icons.wb_incandescent_outlined),
+                  value: _settingsController.keepScreenAwake.value,
+                  onChanged: _settingsController.toggleKeepScreenAwake,
                 )),
                 Obx(() => SwitchListTile(
                   title: const Text('Show Speed in Status Bar'),
@@ -92,6 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             // General Section
             _buildSection(
+              context: context,
               title: 'General',
               children: [
                 Obx(() => ListTile(
@@ -99,6 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(_getLanguageLabel(
                     _settingsController.selectedLanguage.value,
                   )),
+                  leading: const Icon(Icons.language),
                   onTap: _showLanguageDialog,
                 )),
                 Obx(() => SwitchListTile(
@@ -117,6 +139,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             // Protocol Preference Section
             _buildSection(
+              context: context,
               title: 'Protocol',
               children: [
                 Obx(() => ListTile(
@@ -124,6 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(
                     _settingsController.preferredProtocol.value.toUpperCase(),
                   ),
+                  leading: const Icon(Icons.security),
                   onTap: _showProtocolDialog,
                 )),
                 Obx(() => SwitchListTile(
@@ -138,24 +162,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(
                     '${_settingsController.autoTestIntervalMinutes.value} minutes',
                   ),
+                  leading: const Icon(Icons.timer_outlined),
                   onTap: _showTestIntervalDialog,
                 )),
               ],
             ),
-            // Sources Section
+            // Repositories Section
             _buildSection(
+              context: context,
               title: 'Repositories',
               children: [
                 Obx(() {
                   final sources = _configController.sources;
+                  if (sources.isEmpty) {
+                    return const ListTile(
+                      title: Text('No repositories loaded'),
+                    );
+                  }
                   return Column(
                     children: [
                       for (final source in sources)
                         ListTile(
                           title: Text(source.name),
                           subtitle: Text(
-                            '${source.owner}/${source.repo}',
-                            style: const TextStyle(fontSize: 12),
+                            '${source.owner}/${source.repo} (${source.branch})',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                            ),
                           ),
                           trailing: Obx(() => Switch(
                             value: source.isEnabled,
@@ -168,7 +202,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               await _configController.loadSources();
                             },
                           )),
-                          onTap: () => _showSourceDetails(source),
+                          onTap: () => _showSourceDetails(context, source),
                         ),
                     ],
                   );
@@ -177,7 +211,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             // Advanced Section
             _buildSection(
-              title: 'Advanced',
+              context: context,
+              title: 'Advanced & Diagnostics',
               children: [
                 Obx(() => SwitchListTile(
                   title: const Text('Log Local Connection'),
@@ -187,36 +222,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _settingsController.logLocalConnection.value = value;
                   },
                 )),
+                ListTile(
+                  title: const Text('System Logs & Inspector'),
+                  subtitle: const Text('View, filter, copy, and export real-time application logs'),
+                  leading: const Icon(Icons.article_outlined),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Get.to(() => const LogsScreen());
+                  },
+                ),
               ],
             ),
             // About Section
             _buildSection(
+              context: context,
               title: 'About',
               children: [
                 const ListTile(
                   title: Text('App Version'),
-                  subtitle: Text('1.0.0-beta'),
+                  subtitle: Text('1.0.0-beta.1'),
+                  leading: Icon(Icons.info_outline),
                 ),
                 ListTile(
                   title: const Text('GitHub'),
-                  subtitle: const Text('Open source on GitHub'),
+                  subtitle: const Text('github.com/kiacoder/blackout-kit-mobile'),
+                  leading: const Icon(Icons.code),
                   onTap: () {
                     Get.snackbar(
-                      'GitHub',
-                      'Visit: github.com/blackout-kit/blackout-kit-mobile',
-                      backgroundColor: Colors.blue,
-                      colorText: Colors.white,
+                      'GitHub Repository',
+                      'github.com/kiacoder/blackout-kit-mobile',
+                      backgroundColor: theme.colorScheme.primary,
+                      colorText: theme.colorScheme.onPrimary,
                     );
                   },
                 ),
                 ListTile(
                   title: const Text('Privacy Policy'),
+                  subtitle: const Text('No data collection. Open source & transparent.'),
+                  leading: const Icon(Icons.privacy_tip_outlined),
                   onTap: () {
                     Get.snackbar(
-                      'Privacy',
-                      'No data collection. Open source = transparent.',
-                      backgroundColor: Colors.blue,
-                      colorText: Colors.white,
+                      'Privacy Policy',
+                      'No user tracking or data collection.',
+                      backgroundColor: theme.colorScheme.primary,
+                      colorText: theme.colorScheme.onPrimary,
                     );
                   },
                 ),
@@ -227,13 +276,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(24),
               child: SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: ElevatedButton.icon(
                   onPressed: _showResetDialog,
+                  icon: const Icon(Icons.restore),
+                  label: const Text('Reset to Defaults'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: const Text('Reset to Defaults'),
                 ),
               ),
             ),
@@ -244,9 +295,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSection({
+    required BuildContext context,
     required String title,
     required List<Widget> children,
   }) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -254,10 +308,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
           child: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: Colors.indigo,
+              color: primaryColor,
             ),
           ),
         ),
@@ -286,8 +340,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return 'Español';
       case 'fr':
         return 'Français';
+      case 'de':
+        return 'Deutsch';
       case 'zh':
         return '中文';
+      case 'ja':
+        return '日本語';
+      case 'ru':
+        return 'Русский';
+      case 'ar':
+        return 'العربية';
+      case 'pt':
+        return 'Português';
       default:
         return 'English';
     }
@@ -301,7 +365,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             RadioListTile(
-              title: const Text('System'),
+              title: const Text('System Default'),
               value: 'system',
               groupValue: _settingsController.theme.value,
               onChanged: (value) {
@@ -337,39 +401,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Get.dialog(
       AlertDialog(
         title: const Text('Select Language'),
-        content: Obx(() => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile(
-              title: const Text('English'),
-              value: 'en',
-              groupValue: _settingsController.selectedLanguage.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setLanguage(value);
-                Get.back();
-              },
-            ),
-            RadioListTile(
-              title: const Text('Español'),
-              value: 'es',
-              groupValue: _settingsController.selectedLanguage.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setLanguage(value);
-                Get.back();
-              },
-            ),
-            RadioListTile(
-              title: const Text('Français'),
-              value: 'fr',
-              groupValue: _settingsController.selectedLanguage.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setLanguage(value);
-                Get.back();
-              },
-            ),
-          ],
+        content: Obx(() => SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildLangRadio('English', 'en'),
+              _buildLangRadio('Español', 'es'),
+              _buildLangRadio('Français', 'fr'),
+              _buildLangRadio('Deutsch', 'de'),
+              _buildLangRadio('中文', 'zh'),
+              _buildLangRadio('日本語', 'ja'),
+              _buildLangRadio('Русский', 'ru'),
+              _buildLangRadio('العربية', 'ar'),
+              _buildLangRadio('Português', 'pt'),
+            ],
+          ),
         )),
       ),
+    );
+  }
+
+  Widget _buildLangRadio(String label, String code) {
+    return RadioListTile<String>(
+      title: Text(label),
+      value: code,
+      groupValue: _settingsController.selectedLanguage.value,
+      onChanged: (value) {
+        if (value != null) _settingsController.setLanguage(value);
+        Get.back();
+      },
     );
   }
 
@@ -449,10 +509,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showSourceDetails(dynamic source) {
+  void _showSourceDetails(BuildContext context, dynamic source) {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardColor;
+
     Get.bottomSheet(
       Container(
         padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,20 +539,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             Text(
               'Branch: ${source.branch}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: theme.hintColor),
             ),
             if (source.configCount != null) ...[
               const SizedBox(height: 8),
               Text(
                 'Configs: ${source.configCount}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: theme.hintColor),
               ),
             ],
             if (source.lastFetched != null) ...[
               const SizedBox(height: 8),
               Text(
                 'Last fetched: ${_formatDate(source.lastFetched)}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(fontSize: 12, color: theme.hintColor),
               ),
             ],
             const SizedBox(height: 24),
@@ -503,7 +570,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),

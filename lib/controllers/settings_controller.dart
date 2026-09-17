@@ -1,10 +1,17 @@
 /// Settings controller using GetX for user preferences.
 /// Manages app-wide settings like auto-connect, kill switch, theme, etc.
+/// Persisted locally via Hive box.
 
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:hive/hive.dart';
 import 'package:logger/logger.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import '../services/localization_service.dart';
 
 class SettingsController extends GetxController {
+  static const String _settingsBoxName = 'settings';
+  late Box _settingsBox;
   final Logger _log;
 
   // Observable preferences
@@ -17,6 +24,7 @@ class SettingsController extends GetxController {
   final RxString theme = RxString('system'); // system, light, dark
   final RxBool showSpeedInTray = RxBool(true);
   final RxBool showNotifications = RxBool(true);
+  final RxBool keepScreenAwake = RxBool(false);
 
   final RxString selectedLanguage = RxString('en');
   final RxBool analyticsEnabled = RxBool(false);
@@ -32,22 +40,77 @@ class SettingsController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _loadSettings();
-    _log.i('SettingsController initialized');
+    _initSettings();
   }
 
-  /// Load settings from storage (future implementation with Hive)
+  /// Initialize Hive box and load settings
+  Future<void> _initSettings() async {
+    try {
+      _settingsBox = await Hive.openBox(_settingsBoxName);
+      _loadSettings();
+      _log.i('SettingsController initialized with persistent storage');
+    } catch (e) {
+      _log.e('Error opening settings Hive box: $e');
+    }
+  }
+
+  /// Load settings from persistent storage
   void _loadSettings() {
-    // In production, load from persistent storage
-    // For now, use defaults set above
-    _log.i('Settings loaded');
+    try {
+      autoConnect.value = _settingsBox.get('autoConnect', defaultValue: false);
+      killSwitchEnabled.value = _settingsBox.get('killSwitchEnabled', defaultValue: false);
+      blockNonVPNTraffic.value = _settingsBox.get('blockNonVPNTraffic', defaultValue: false);
+      splitTunnelingEnabled.value = _settingsBox.get('splitTunnelingEnabled', defaultValue: false);
+
+      final savedApps = _settingsBox.get('splitTunnelingApps');
+      if (savedApps is List) {
+        splitTunnelingApps.value = List<String>.from(savedApps);
+      }
+
+      theme.value = _settingsBox.get('theme', defaultValue: 'system');
+      showSpeedInTray.value = _settingsBox.get('showSpeedInTray', defaultValue: true);
+      showNotifications.value = _settingsBox.get('showNotifications', defaultValue: true);
+      keepScreenAwake.value = _settingsBox.get('keepScreenAwake', defaultValue: false);
+      selectedLanguage.value = _settingsBox.get('selectedLanguage', defaultValue: 'en');
+      analyticsEnabled.value = _settingsBox.get('analyticsEnabled', defaultValue: false);
+
+      preferredProtocol.value = _settingsBox.get('preferredProtocol', defaultValue: 'wireguard');
+      autoSelectFastest.value = _settingsBox.get('autoSelectFastest', defaultValue: true);
+      autoTestIntervalMinutes.value = _settingsBox.get('autoTestIntervalMinutes', defaultValue: 60);
+      logLocalConnection.value = _settingsBox.get('logLocalConnection', defaultValue: false);
+
+      // Apply initial theme mode & wakelock
+      _applyTheme(theme.value);
+      _applyKeepScreenAwake(keepScreenAwake.value);
+
+      _log.i('Settings loaded successfully');
+    } catch (e) {
+      _log.e('Error loading settings from Hive: $e');
+    }
   }
 
-  /// Save all settings to storage
+  /// Save all settings to Hive storage
   Future<void> saveSettings() async {
     try {
-      // In production, save to Hive encrypted box
-      _log.i('Settings saved');
+      await _settingsBox.put('autoConnect', autoConnect.value);
+      await _settingsBox.put('killSwitchEnabled', killSwitchEnabled.value);
+      await _settingsBox.put('blockNonVPNTraffic', blockNonVPNTraffic.value);
+      await _settingsBox.put('splitTunnelingEnabled', splitTunnelingEnabled.value);
+      await _settingsBox.put('splitTunnelingApps', splitTunnelingApps.toList());
+
+      await _settingsBox.put('theme', theme.value);
+      await _settingsBox.put('showSpeedInTray', showSpeedInTray.value);
+      await _settingsBox.put('showNotifications', showNotifications.value);
+      await _settingsBox.put('keepScreenAwake', keepScreenAwake.value);
+      await _settingsBox.put('selectedLanguage', selectedLanguage.value);
+      await _settingsBox.put('analyticsEnabled', analyticsEnabled.value);
+
+      await _settingsBox.put('preferredProtocol', preferredProtocol.value);
+      await _settingsBox.put('autoSelectFastest', autoSelectFastest.value);
+      await _settingsBox.put('autoTestIntervalMinutes', autoTestIntervalMinutes.value);
+      await _settingsBox.put('logLocalConnection', logLocalConnection.value);
+
+      _log.i('Settings saved to storage');
     } catch (e) {
       _log.e('Error saving settings: $e');
     }
@@ -90,11 +153,22 @@ class SettingsController extends GetxController {
     _log.i('Removed app from split tunneling: $appPackage');
   }
 
-  /// Set theme
+  /// Set theme and trigger Get.changeThemeMode
   void setTheme(String themeValue) {
     theme.value = themeValue;
+    _applyTheme(themeValue);
     saveSettings();
     _log.i('Theme set to: $themeValue');
+  }
+
+  void _applyTheme(String themeValue) {
+    if (themeValue == 'light') {
+      Get.changeThemeMode(ThemeMode.light);
+    } else if (themeValue == 'dark') {
+      Get.changeThemeMode(ThemeMode.dark);
+    } else {
+      Get.changeThemeMode(ThemeMode.system);
+    }
   }
 
   /// Set preferred protocol
@@ -122,6 +196,9 @@ class SettingsController extends GetxController {
   void setLanguage(String languageCode) {
     selectedLanguage.value = languageCode;
     saveSettings();
+    if (Get.isRegistered<LocalizationService>()) {
+      Get.find<LocalizationService>().setLanguage(languageCode);
+    }
     _log.i('Language set to: $languageCode');
   }
 
@@ -130,6 +207,26 @@ class SettingsController extends GetxController {
     analyticsEnabled.value = value;
     saveSettings();
     _log.i('Analytics: $value');
+  }
+
+  /// Toggle keep screen awake
+  void toggleKeepScreenAwake(bool value) {
+    keepScreenAwake.value = value;
+    _applyKeepScreenAwake(value);
+    saveSettings();
+    _log.i('Keep screen awake: $value');
+  }
+
+  void _applyKeepScreenAwake(bool enabled) {
+    try {
+      if (enabled) {
+        WakelockPlus.enable();
+      } else {
+        WakelockPlus.disable();
+      }
+    } catch (e) {
+      _log.w('Wakelock error: $e');
+    }
   }
 
   /// Toggle notifications
@@ -149,6 +246,7 @@ class SettingsController extends GetxController {
     theme.value = 'system';
     showSpeedInTray.value = true;
     showNotifications.value = true;
+    keepScreenAwake.value = false;
     selectedLanguage.value = 'en';
     analyticsEnabled.value = false;
     preferredProtocol.value = 'wireguard';
@@ -156,6 +254,8 @@ class SettingsController extends GetxController {
     autoTestIntervalMinutes.value = 60;
     logLocalConnection.value = false;
 
+    _applyTheme('system');
+    _applyKeepScreenAwake(false);
     await saveSettings();
     _log.i('Settings reset to defaults');
   }

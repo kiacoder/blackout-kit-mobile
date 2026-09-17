@@ -38,6 +38,7 @@ dependencies:
   crypto: ^3.0.2  # For config hashing
   logger: ^2.0.1  # Better logging
   intl: ^0.19.0   # Internationalization (future)
+  wakelock_plus: 1.1.4  # Keep screen awake during config testing / active session
 
 dev_dependencies:
   flutter_test:
@@ -54,6 +55,7 @@ dev_dependencies:
 
 dependency_overrides:
   shared_preferences_android: 2.3.4
+  package_info_plus: 5.0.1
 
 flutter:
   uses-material-design: true

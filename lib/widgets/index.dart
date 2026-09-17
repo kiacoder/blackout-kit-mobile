@@ -1,4 +1,5 @@
-// Animation widgets
+// Animation & UI widgets
+export 'app_logo.dart';
 export 'animated_connection_button.dart';
 export 'animated_status_indicator.dart';
 export 'animated_security_toggle.dart';

@@ -37,6 +37,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () async {
+              Get.snackbar(
+                'Fetching',
+                'Updating repositories and configs...',
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                colorText: Theme.of(context).colorScheme.onPrimary,
+                duration: const Duration(seconds: 2),
+              );
+              final count = await _configController.fetchFromAllSources(force: true);
+              Get.snackbar(
+                'Update Complete',
+                '$count configs updated',
+                backgroundColor: Colors.green,
+                colorText: Colors.white,
+              );
+            },
+            tooltip: 'Refresh all sources',
+          ),
+          IconButton(
             icon: const Icon(Icons.add),
             onPressed: _showAddCustomSourceDialog,
             tooltip: 'Add custom source',
@@ -46,64 +66,92 @@ class _LibraryScreenState extends State<LibraryScreen> {
       body: Column(
         children: [
           // Filter bar
-          _buildFilterBar(),
+          _buildFilterBar(context),
           // Config list
           Expanded(
             child: Obx(() {
               if (_configController.isLoading.value) {
                 return const Center(
-                  child: CircularProgressIndicator(),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Loading repositories & configs...'),
+                    ],
+                  ),
                 );
               }
 
               final filtered = _configController.getFilteredConfigs();
 
               if (filtered.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    await _configController.fetchFromAllSources(force: true);
+                  },
+                  child: ListView(
                     children: [
-                      Icon(
-                        Icons.folder_open,
-                        size: 64,
-                        color: Colors.grey.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No configs found',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.5,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.folder_open,
+                              size: 64,
+                              color: Theme.of(context).disabledColor,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No configs found',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Theme.of(context).textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final count = await _configController.fetchFromAllSources(force: true);
+                                Get.snackbar(
+                                  'Configs Fetched',
+                                  '$count configs loaded',
+                                  backgroundColor: Colors.green,
+                                  colorText: Colors.white,
+                                );
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Fetch Configs'),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          await _configController.fetchFromAllSources();
-                        },
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Fetch Configs'),
                       ),
                     ],
                   ),
                 );
               }
 
-              return ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final config = filtered[index];
-                  final result = _configController.testResults[config.getHash()];
-
-                  return ConfigTile(
-                    config: config,
-                    testResult: result,
-                    onTap: () => _showConfigDetails(config, result),
-                    onConnect: () => _handleConnect(config),
-                    onDelete: () => _handleDelete(config),
-                  );
+              return RefreshIndicator(
+                onRefresh: () async {
+                  await _configController.fetchFromAllSources(force: true);
                 },
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final config = filtered[index];
+                    final result = _configController.testResults[config.getHash()];
+
+                    return ConfigTile(
+                      config: config,
+                      testResult: result,
+                      onTap: () => _showConfigDetails(config, result),
+                      onConnect: () => _handleConnect(config),
+                      onDelete: () => _handleDelete(config),
+                    );
+                  },
+                ),
               );
             }),
           ),
@@ -112,10 +160,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildFilterBar() {
+  Widget _buildFilterBar(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final containerColor = isDark
+        ? theme.cardColor
+        : Colors.grey.shade100;
+
     return Container(
       padding: const EdgeInsets.all(12),
-      color: Colors.grey.shade50,
+      color: containerColor,
       child: Column(
         children: [
           // Protocol filter
@@ -159,13 +213,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
             children: [
               Text(
                 'Sort by:',
-                style: TextStyle(color: Colors.grey.shade700),
+                style: TextStyle(color: theme.textTheme.bodyMedium?.color),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButton<String>(
                   value: _configController.sortBy.value,
                   isExpanded: true,
+                  dropdownColor: theme.cardColor,
                   onChanged: (value) {
                     if (value != null) {
                       _configController.sortBy.value = value;
@@ -208,9 +263,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   void _showConfigDetails(Config config, TestResult? result) {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardColor;
+
     Get.bottomSheet(
       Container(
         padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,7 +293,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       const SizedBox(height: 4),
                       Text(
                         config.protocol.toUpperCase(),
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        style: TextStyle(fontSize: 12, color: theme.hintColor),
                       ),
                     ],
                   ),
@@ -240,8 +302,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: result?.isWorking == true
-                        ? Colors.green.shade100
-                        : Colors.grey.shade100,
+                        ? Colors.green.withOpacity(0.2)
+                        : Colors.grey.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -274,7 +336,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     children: [
                       Text(
                         'Speed',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(fontSize: 12, color: theme.hintColor),
                       ),
                       Text(
                         result.speedMbps != null
@@ -292,7 +354,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     children: [
                       Text(
                         'Latency',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(fontSize: 12, color: theme.hintColor),
                       ),
                       Text(
                         result.latencyMs != null
@@ -310,7 +372,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     children: [
                       Text(
                         'Reliability',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(fontSize: 12, color: theme.hintColor),
                       ),
                       Text(
                         '${result.reliability.toStringAsFixed(0)}%',
@@ -361,7 +423,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ],
         ),
       ),
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),

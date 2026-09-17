@@ -39,7 +39,7 @@ class _DebugScreenState extends State<DebugScreen>
           tabs: const [
             Tab(text: 'Logs', icon: Icon(Icons.description)),
             Tab(text: 'Debug Info', icon: Icon(Icons.info_outline)),
-            Tab(text: 'Diagnostics', icon: Icon(Icons.stethoscope)),
+            Tab(text: 'Diagnostics', icon: Icon(Icons.medical_services)),
           ],
         ),
       ),

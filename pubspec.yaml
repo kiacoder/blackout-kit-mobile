@@ -42,6 +42,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
 
   # Linting
   flutter_lints: ^3.0.0
@@ -50,18 +52,12 @@ dev_dependencies:
   mockito: ^5.4.0
   test: ^1.24.0
 
+dependency_overrides:
+  shared_preferences_android: 2.3.4
+
 flutter:
   uses-material-design: true
 
   assets:
     - assets/images/
     - assets/icons/
-
-  fonts:
-    - family: Poppins
-      fonts:
-        - asset: assets/fonts/Poppins-Regular.ttf
-        - asset: assets/fonts/Poppins-Bold.ttf
-          weight: 700
-        - asset: assets/fonts/Poppins-SemiBold.ttf
-          weight: 600

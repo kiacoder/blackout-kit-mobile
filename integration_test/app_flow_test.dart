@@ -23,7 +23,7 @@ void main() {
       expect(find.byIcon(Icons.settings), findsOneWidget);
 
       // Verify connect button is visible
-      expect(find.byIcon(Icons.vpn_lock_open), findsOneWidget);
+      expect(find.byIcon(Icons.lock_open), findsOneWidget);
     });
 
     testWidgets('User can tap on Library tab', (WidgetTester tester) async {
@@ -114,15 +114,14 @@ void main() {
 
     testWidgets('App layout is responsive', (WidgetTester tester) async {
       app.main();
-      await tester.binding.window.physicalSizeTestValue =
-          const Size(400, 800);
+      tester.view.physicalSize = const Size(400, 800);
       await tester.pumpAndSettle();
 
       // Verify elements are visible in narrow viewport
       expect(find.byIcon(Icons.power), findsOneWidget);
-      expect(find.byIcon(Icons.vpn_lock_open), findsOneWidget);
+      expect(find.byIcon(Icons.lock_open), findsOneWidget);
 
-      addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+      addTearDown(tester.view.resetPhysicalSize);
     });
 
     testWidgets('Settings screen has all sections', (WidgetTester tester) async {

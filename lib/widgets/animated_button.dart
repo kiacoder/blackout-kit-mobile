@@ -65,32 +65,34 @@ class _AnimatedConnectButtonState extends State<AnimatedConnectButton> with Sing
   Widget build(BuildContext context) {
     return ScaleTransition(
       scale: _scaleAnimation,
-      child: ElevatedButton.icon(
-        onPressed: widget.isLoading ? null : widget.onPressed,
-        icon: widget.isLoading
-            ? SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.onPrimary,
+      child: AnimatedBuilder(
+        animation: _colorAnimation,
+        builder: (context, child) {
+          return ElevatedButton.icon(
+            onPressed: widget.isLoading ? null : widget.onPressed,
+            icon: widget.isLoading
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    ),
+                  )
+                : Icon(
+                    widget.isConnected ? Icons.vpn_lock : Icons.lock_open,
                   ),
-                ),
-              )
-            : Icon(
-                widget.isConnected ? Icons.vpn_lock : Icons.vpn_lock_open,
-              ),
-        label: Text(
-          widget.isConnected ? 'Disconnect' : 'Connect',
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AnimatedBuilder(
-            animation: _colorAnimation,
-            builder: (context, child) => _colorAnimation.value ?? Colors.green,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-        ),
+            label: Text(
+              widget.isConnected ? 'Disconnect' : 'Connect',
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _colorAnimation.value ?? Colors.green,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            ),
+          );
+        },
       ),
     );
   }

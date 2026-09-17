@@ -76,7 +76,7 @@ class DebugService extends GetxService {
       message,
       level: level.value,
       name: 'blackout_kit',
-      stackTrace: stackTrace,
+      stackTrace: stackTrace != null ? StackTrace.fromString(stackTrace) : null,
     );
   }
 

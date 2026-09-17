@@ -23,7 +23,7 @@ class _LanguageSettingsScreenState extends State<LanguageSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('language'.tr()),
+        title: Text('language'.trApp()),
         elevation: 0,
       ),
       body: Obx(

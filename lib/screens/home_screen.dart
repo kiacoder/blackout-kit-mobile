@@ -5,7 +5,7 @@
 /// - Quick stats (speed, reliability, uptime)
 /// - Quick access to Library and Settings
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:get/get.dart';
 
 import '../controllers/config_controller.dart';
@@ -230,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         )
                       else
                         Icon(
-                          isConnected ? Icons.vpn_lock : Icons.vpn_lock_open,
+                          isConnected ? Icons.vpn_lock : Icons.lock_open,
                           size: 56,
                           color: Colors.white,
                         ),

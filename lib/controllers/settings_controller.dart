@@ -220,9 +220,13 @@ class SettingsController extends GetxController {
   void _applyKeepScreenAwake(bool enabled) {
     try {
       if (enabled) {
-        WakelockPlus.enable();
+        WakelockPlus.enable().catchError((e) {
+          _log.w('Wakelock enable failed: $e');
+        });
       } else {
-        WakelockPlus.disable();
+        WakelockPlus.disable().catchError((e) {
+          _log.w('Wakelock disable failed: $e');
+        });
       }
     } catch (e) {
       _log.w('Wakelock error: $e');

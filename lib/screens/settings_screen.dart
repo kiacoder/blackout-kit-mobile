@@ -8,6 +8,7 @@ import '../controllers/config_controller.dart';
 import '../controllers/settings_controller.dart';
 import 'logs_screen.dart';
 import 'split_tunneling_screen.dart';
+import 'engine_hub_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -150,8 +151,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Protocol Preference Section
             _buildSection(
               context: context,
-              title: 'Protocol',
+              title: 'Protocol & Engines',
               children: [
+                ListTile(
+                  title: const Text('Blackout Engine Hub'),
+                  subtitle: const Text('View and configure all 10 circumvention engines'),
+                  leading: const Icon(Icons.memory),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Get.to(() => const EngineHubScreen());
+                  },
+                ),
                 Obx(() => ListTile(
                   title: const Text('Preferred Protocol'),
                   subtitle: Text(

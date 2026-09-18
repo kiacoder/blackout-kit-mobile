@@ -260,7 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 const ListTile(
                   title: Text('App Version'),
-                  subtitle: Text('1.0.0-beta.1'),
+                  subtitle: Text('1.0.0-beta.2'),
                   leading: Icon(Icons.info_outline),
                 ),
                 ListTile(

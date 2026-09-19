@@ -1,0 +1,13 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.jar binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.so binary
+*.aar binary
+*.keystore binary

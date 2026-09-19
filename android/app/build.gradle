@@ -4,21 +4,52 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Real release signing, driven by android/key.properties when present.
+// Falls back to the debug key so local release builds still work.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+def hasReleaseKey = keystorePropertiesFile.exists()
+if (hasReleaseKey) {
+    keystorePropertiesFile.withReader("UTF-8") { reader -> keystoreProperties.load(reader) }
+}
+
 android {
-    namespace = "com.example.blackout_kit_mobile"
+    namespace = "com.blackoutkit.vpn"
     compileSdkVersion 34
 
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     defaultConfig {
-        applicationId "com.example.blackout_kit_mobile"
+        applicationId "com.blackoutkit.vpn"
         minSdkVersion 21
         targetSdkVersion 34
         versionCode flutter.versionCode
         versionName flutter.versionName
     }
 
+    if (hasReleaseKey) {
+        signingConfigs {
+            release {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }

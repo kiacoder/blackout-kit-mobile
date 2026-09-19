@@ -123,6 +123,14 @@ class ConnectionController extends GetxController {
 
       _log.i('Connecting to ${config.displayName}');
 
+      // Android shows a system consent dialog before the first tunnel.
+      final prepared = await vpnService.prepare();
+      if (!prepared) {
+        state.value = ConnectionState.error;
+        statusMessage.value = vpnService.lastError ?? 'VPN permission was denied';
+        return false;
+      }
+
       final success = await vpnService.connect(config);
 
       if (success) {

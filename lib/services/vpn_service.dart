@@ -20,17 +20,40 @@ class VPNService {
 
   VPNStatus _status = VPNStatus.disconnected;
   String? _connectedConfigHash;
+  String? _lastError;
+
+  /// Loopback port the bundled engine exposes its SOCKS listener on.
+  /// Must match BlackoutVpnService.DEFAULT_SOCKS_PORT on the native side.
+  static const int defaultSocksPort = 10808;
 
   VPNService({Logger? logger}) : _log = logger ?? Logger();
 
   VPNStatus get status => _status;
   String? get connectedConfigHash => _connectedConfigHash;
+  String? get lastError => _lastError;
   bool get isConnected => _status == VPNStatus.connected;
 
   /// Initialize platform channel listeners
   void initialize() {
     platform.setMethodCallHandler(_handleMethodCall);
     _log.i('VPNService initialized');
+  }
+
+  /// Android requires explicit user consent before the first tunnel.
+  /// Returns true when consent is already granted or the user just granted it.
+  Future<bool> prepare() async {
+    try {
+      final result = await platform.invokeMethod<bool>('prepare');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      _lastError = e.message ?? e.code;
+      _log.e('VPN prepare failed: ${e.message}');
+      return false;
+    } catch (e) {
+      _lastError = e.toString();
+      _log.e('VPN prepare failed: $e');
+      return false;
+    }
   }
 
   /// Connect to VPN using config
@@ -45,6 +68,8 @@ class VPNService {
         'address': config.address,
         'port': config.port,
         'rawUri': config.rawUri,
+        // Where the native layer should point tun2socks at the engine.
+        'socksPort': defaultSocksPort,
         // Protocol-specific data
         if (config is WireGuardConfig) ...{
           'privateKey': config.privateKey,
@@ -66,19 +91,25 @@ class VPNService {
       if (result == true) {
         _status = VPNStatus.connected;
         _connectedConfigHash = config.getHash();
+        _lastError = null;
         _log.i('Connected to ${config.displayName}');
         return true;
       } else {
         _status = VPNStatus.error;
+        _lastError = 'The tunnel failed to come up';
         _log.e('Failed to connect: $result');
         return false;
       }
     } on PlatformException catch (e) {
+      // The native side reports the real reason (missing engine, revoked
+      // consent, establish() failure) instead of a generic error.
       _status = VPNStatus.error;
+      _lastError = e.message ?? e.code;
       _log.e('Platform error connecting: ${e.message}');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
+      _lastError = e.toString();
       _log.e('Error connecting: $e');
       return false;
     }

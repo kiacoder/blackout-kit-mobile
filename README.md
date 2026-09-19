@@ -2,9 +2,18 @@
 
 A trustworthy, open-source VPN client for Android and iOS built with Flutter. Fetches VPN configurations from GitHub, auto-tests them for speed/reliability, and provides one-tap VPN connection.
 
-**Status**: v1.0-beta (Phase 3 Complete)
+**Status**: v1.0.0-beta.2 — Dart layer complete, native tunnel in progress
+
+> ⚠️ **Not yet usable as a VPN.** The Flutter/Dart side is fully built, but the
+> Android native tunnel is not wired up end to end yet: the engine binaries are
+> not bundled, so tapping Connect surfaces a real error instead of connecting.
+> [PHASES.md](PHASES.md) carries the authoritative, current phase status.
 
 ## Features
+
+> The ✅ marks below describe the intended v1.0 feature set. Anything that depends
+> on an actual tunnel is implemented in Dart but has **no working native backend
+> yet**, so it does not function on a device. See [PHASES.md](PHASES.md).
 
 ✅ **Config-based Architecture**
 - Fetch VPN configs from trusted GitHub repositories
@@ -18,11 +27,11 @@ A trustworthy, open-source VPN client for Android and iOS built with Flutter. Fe
 - Config ranking by performance
 - Non-blocking UI during tests
 
-✅ **One-Tap Connection**
+🟡 **One-Tap Connection** *(UI done, native tunnel incomplete)*
 - Big connect button on home screen
 - Auto-select fastest working config
 - Real-time connection status and IP
-- Kill switch support (Phase 4)
+- Kill switch support (Phase 3)
 
 ✅ **Config Library**
 - Browse all downloaded configs
@@ -35,7 +44,7 @@ A trustworthy, open-source VPN client for Android and iOS built with Flutter. Fe
 - Auto-connect on launch
 - Theme selection (light/dark/system)
 - Language preferences
-- Split tunneling (roadmap)
+- Split tunneling (Phase 3)
 - Protocol preference
 - Auto-test intervals
 

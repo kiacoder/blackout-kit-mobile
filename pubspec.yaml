@@ -35,7 +35,9 @@ dependencies:
   mobile_scanner: ^4.0.1  # QR Code camera scanning
 
   # Platform Channels
-  flutter_vpn: ^0.13.0  # Android VPN wrapper (null-safe version)
+  # NOTE: the native tunnel lives in android/app/src/main/kotlin/com/blackoutkit/vpn/
+  # and is reached over MethodChannel. Do not add flutter_vpn here: it is a
+  # strongSwan IKEv2/IPSec wrapper and cannot carry WireGuard, OpenVPN or V2Ray.
 
   # Utilities
   crypto: ^3.0.2  # For config hashing

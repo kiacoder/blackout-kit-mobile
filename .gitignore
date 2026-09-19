@@ -77,6 +77,14 @@ app.*.map.json
 **/ios/**/ServiceDefinitions.json
 **/ios/**/Runner/GeneratedPluginRegistrant.*
 
+# Android local/secret state
+android/local.properties
+android/.gradle/
+android/key.properties
+key.properties
+*.jks
+*.keystore
+
 # Coverage
 coverage/
 

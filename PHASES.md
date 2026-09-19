@@ -39,32 +39,48 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 
 ---
 
-## ✅ Phase 2: VPN Integration & Core Features
+## 🟡 Phase 2: VPN Integration & Core Features
 
-**Status: COMPLETED** ✓ | **Version: v1.0-beta**
+**Status: PARTIAL** — Dart side complete, native tunnel not finished
+
+> **Correction (2026-09-19).** This phase was previously marked COMPLETED and
+> listed native files that were never delivered. Commit `4e73204`
+> ("chore: remove obsolete native VPN services") deleted four Kotlin files under
+> `android/app/src/main/kotlin/com/blackoutkit/vpn/`. They were mocks — they set
+> `isConnected = true` and returned a fabricated `192.168.1.x` address without ever
+> calling `VpnService.Builder.establish()`. Removing them was correct, but the Dart
+> layer was never updated, so every one of the 29 platform-channel calls threw
+> `MissingPluginException` on Android. The real native layer now exists again; the
+> engine binaries it needs are still pending.
 
 ### Deliverables
 
-- [x] Platform channels for Android native VPN
-- [x] iOS NEVPNManager integration
 - [x] Speed and reliability testing in background (isolate)
 - [x] Config ranking by performance (speed, latency)
 - [x] Connection state machine (idle → connecting → connected → disconnected)
-- [x] VPN service abstraction
+- [x] VPN service abstraction (Dart side)
 - [x] Connection controller with reactive state
+- [x] Android `BlackoutVpnService` — real `android.net.VpnService` + TUN + foreground service
+- [x] `VpnPlugin` method-channel bridge, registered in `MainActivity.configureFlutterEngine()`
+- [x] `VpnService.prepare()` consent flow surfaced to Dart
+- [ ] Engine binaries bundled (`xray-core`, `sing-box`, `tun2socks`) — **blocks connect**
+- [ ] iOS `NEVPNManager` integration (existing Swift files are unregistered mocks)
 
 ### Technical Features
 
 - **Speed Testing:** Background isolate (non-blocking UI)
 - **State Machine:** Controlled connection lifecycle
-- **Performance:** Latency and speed measurements
+- **Tunnel:** `Builder.establish()` returns a real `ParcelFileDescriptor`; connect
+  refuses to report success unless the engine is actually up, so a missing engine
+  can never black-hole traffic
 - **Reliability:** Working config detection and filtering
 
-### Key Files Created
+### Key Files
 
 - `lib/services/vpn_service.dart` - Platform channel interface
-- `android/app/src/main/kotlin/VpnService.kt` - Android native implementation
-- `ios/Runner/VpnService.swift` - iOS native implementation
+- `android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt` - Android tunnel
+- `android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt` - Channel bridge
+- `android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt` - Engine/fd handoff
 - `lib/controllers/connection_controller.dart` - Connection state machine
 - `lib/services/tester_service.dart` - Speed/reliability testing
 
@@ -106,7 +122,12 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 
 ## ✅ Phase 4: Testing, Polish & Release Setup
 
-**Status: COMPLETED** ✓ | **Version: v1.0-beta**
+**Status: COMPLETED (Dart-only)** | **Version: v1.0-beta**
+
+> **Caveat (2026-09-19).** These tests exercise the Dart layer against *mocked*
+> method channels. They pass while the native tunnel was entirely absent, so a
+> green suite here does **not** mean the app can connect. Treat them as
+> regression cover for Dart logic, not as end-to-end verification.
 
 ### Deliverables
 
@@ -389,8 +410,9 @@ Want to help? Check these resources:
 
 ---
 
-**Current Status:** Phase 4 Complete ✅ | Phase 5 Planning ⏳ | v2.0+ Visionary 🔮
+**Current Status:** Phase 0 (repo/build hygiene) complete ✅ | Phase 1 (native tunnel) complete ✅ |
+Phase 2 blocked on engine binaries 🟡 | Phase 3 pending ⏳ | v2.0+ Visionary 🔮
 
-**Last Updated:** 2026-01-15  
+**Last Updated:** 2026-09-19 (status corrected — see Phase 2 correction note)
 **Maintained By:** Blackout Kit Contributors  
 **Next Review:** 2026-02-15 (v1.0 release)

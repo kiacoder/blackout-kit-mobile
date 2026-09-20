@@ -28,10 +28,25 @@ android {
 
     defaultConfig {
         applicationId "com.blackoutkit.vpn"
-        minSdkVersion 21
+        // Raised from 21: libv2ray.aar declares minSdkVersion 24, and the
+        // manifest merger hard-fails when the app asks for a lower one.
+        minSdkVersion 24
         targetSdkVersion 34
         versionCode flutter.versionCode
         versionName flutter.versionName
+
+        // NOTE: deliberately no `ndk.abiFilters` here. AGP rejects it outright
+        // when ABI splits are requested — "Conflicting configuration :
+        // 'armeabi-v7a,arm64-v8a' in ndk abiFilters cannot be present when
+        // splits abi filters are set" — which made
+        // `flutter build apk --split-per-abi` fail completely.
+        //
+        // The emulator-only x86/x86_64 libs from the AAR are stripped in
+        // `packagingOptions` below, which is sufficient on its own: a plain
+        // `flutter build apk --release` yields a 109.8 MB fat APK containing
+        // only arm64-v8a and armeabi-v7a. Passing
+        // `--target-platform android-arm,android-arm64` additionally stops
+        // Flutter from compiling x86 Flutter libs that would be discarded.
     }
 
     if (hasReleaseKey) {
@@ -48,12 +63,69 @@ android {
     buildTypes {
         release {
             signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
+    }
+
+    packagingOptions {
+        // libv2ray.aar ships libgojni.so for four ABIs at ~35 MB each. Shipping
+        // all four took the debug APK to 354 MB. x86 and x86_64 are emulator-only,
+        // so arm64-v8a + armeabi-v7a cover every real device.
+        //
+        // `packagingOptions` DOES apply to native libs — unlike assets, which it
+        // silently ignores (see the androidResources note below).
+        //
+        // arm64-v8a + armeabi-v7a cover every real Android device in use. The
+        // x86/x86_64 copies are emulator-only and are dead weight in a shipped
+        // APK. If you ever need them back, delete the two `exclude` lines below.
+        exclude 'lib/x86/**'
+        exclude 'lib/x86_64/**'
+    }
+
+    // libv2ray.aar carries Xray's geoip/geosite databases. Measured effect of
+    // dropping them:
+    //   uncompressed  147.4 MB -> 119.2 MB  (-28.2 MB)
+    //   release APK   123.2 MB -> 115.7 MB  ( -7.5 MB on disk)
+    // The .dat files compress ~3.8:1, so the real on-disk saving is 7.5 MB, not
+    // the 28 MB the raw sizes suggest.
+    //
+    // Nothing in this app references them: XrayConfigBuilder emits literal CIDRs
+    // and explicit domain lists, never `geoip:`/`geosite:` tags, so the data is
+    // never read.
+    //
+    // NOTE: `packagingOptions.exclude` does NOT filter assets — it only covers
+    // JAR resources and native libs. An earlier attempt used it and the data
+    // stayed in the APK while the build still reported success. Assets are
+    // filtered here, by the resource merger's ignore pattern.
+    //
+    // The default pattern is repeated because setting this property replaces it.
+    //
+    // XrayEngine still calls Seq.setContext() so the Go asset reader keeps its
+    // APK-asset fallback wired up; it simply has nothing to fall back to.
+    //
+    // To revert: drop the three geoip/geosite entries and re-add ~7.5 MB on
+    // disk. Do that when country-based routing is added to
+    // lib/services/xray_config.dart.
+    androidResources {
+        ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:' +
+                '!CVS:!thumbs.db:!picasa.ini:!*~:' +
+                '!geoip.dat:!geosite.dat:!geoip-only-cn-private.dat'
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Xray core as an Android library (2dust/AndroidLibXrayLite, LGPL-3.0).
+    // The AAR ships libgojni.so for all four ABIs plus the geoip/geosite
+    // databases (excluded above), and exposes
+    // libv2ray.CoreController.startLoop(config, tunFd).
+    implementation fileTree(dir: "libs", include: ["*.aar", "*.jar"])
 }

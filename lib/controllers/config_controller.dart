@@ -189,9 +189,15 @@ class ConfigController extends GetxController {
     filtered.sort((a, b) {
       switch (sortBy.value) {
         case 'speed':
-          final speedA = testResults[a.getHash()]?.speedMbps ?? 0;
-          final speedB = testResults[b.getHash()]?.speedMbps ?? 0;
-          return speedB.compareTo(speedA); // Descending
+          // Throughput is not measured (see TesterService), so "speed" ranks by
+          // latency: lower is better. Untested configs sort last rather than
+          // being treated as 0 ms, which would put them at the top.
+          final aMs = testResults[a.getHash()]?.latencyMs;
+          final bMs = testResults[b.getHash()]?.latencyMs;
+          if (aMs == null && bMs == null) return 0;
+          if (aMs == null) return 1;
+          if (bMs == null) return -1;
+          return aMs.compareTo(bMs);
         case 'name':
           return a.displayName.compareTo(b.displayName);
         case 'recently_added':
@@ -205,15 +211,15 @@ class ConfigController extends GetxController {
     return filtered;
   }
 
-  /// Get top N working configs
+  /// Get top N working configs, lowest latency first
   List<Config> getTopConfigs({int limit = 5}) {
     final working = allConfigs
         .where((c) => testResults[c.getHash()]?.isWorking ?? false)
         .toList()
       ..sort((a, b) {
-        final speedA = testResults[a.getHash()]?.speedMbps ?? 0;
-        final speedB = testResults[b.getHash()]?.speedMbps ?? 0;
-        return speedB.compareTo(speedA);
+        final aMs = testResults[a.getHash()]?.latencyMs ?? 1 << 30;
+        final bMs = testResults[b.getHash()]?.latencyMs ?? 1 << 30;
+        return aMs.compareTo(bMs);
       });
 
     return working.take(limit).toList();

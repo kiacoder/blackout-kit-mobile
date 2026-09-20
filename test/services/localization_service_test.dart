@@ -1,265 +1,156 @@
+/// Tests for [LocalizationService].
+///
+/// The important invariant is **key parity**: every language must carry exactly
+/// the same key set as the fallback language. A missing key silently falls back
+/// to English, which looks like a half-translated screen and is easy to miss in
+/// review. These tests make it a build failure instead.
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:logger/logger.dart';
-
 import 'package:blackout_kit_mobile/services/localization_service.dart';
 
 void main() {
-  late LocalizationService localizationService;
+  final service = LocalizationService();
+  final englishKeys = service.keys[LocalizationService.fallbackLanguageCode]!.keys.toSet();
 
-  setUp(() {
-    localizationService = LocalizationService();
-    localizationService.onInit();
-  });
-
-  group('LocalizationService', () {
-    test('initializes with default language (English)', () {
-      expect(localizationService.currentLanguage.value, 'en');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        'English',
-      );
+  group('catalogue shape', () {
+    test('the fallback language is present', () {
+      expect(service.keys, contains(LocalizationService.fallbackLanguageCode));
     });
 
-    test('returns all supported languages', () {
-      final languages = localizationService.getSupportedLanguages();
-      expect(languages.length, 9);
-      expect(languages['en'], 'English');
-      expect(languages['es'], 'Español');
-      expect(languages['fr'], 'Français');
-      expect(languages['de'], 'Deutsch');
-      expect(languages['zh'], '中文');
-      expect(languages['ja'], '日本語');
-      expect(languages['ru'], 'Русский');
-      expect(languages['ar'], 'العربية');
-      expect(languages['pt'], 'Português');
-    });
-
-    test('changes language to Spanish', () async {
-      await localizationService.setLanguage('es');
-      expect(localizationService.currentLanguage.value, 'es');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        'Español',
-      );
-    });
-
-    test('changes language to French', () async {
-      await localizationService.setLanguage('fr');
-      expect(localizationService.currentLanguage.value, 'fr');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        'Français',
-      );
-    });
-
-    test('changes language to German', () async {
-      await localizationService.setLanguage('de');
-      expect(localizationService.currentLanguage.value, 'de');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        'Deutsch',
-      );
-    });
-
-    test('changes language to Chinese', () async {
-      await localizationService.setLanguage('zh');
-      expect(localizationService.currentLanguage.value, 'zh');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        '中文',
-      );
-    });
-
-    test('changes language to Japanese', () async {
-      await localizationService.setLanguage('ja');
-      expect(localizationService.currentLanguage.value, 'ja');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        '日本語',
-      );
-    });
-
-    test('changes language to Russian', () async {
-      await localizationService.setLanguage('ru');
-      expect(localizationService.currentLanguage.value, 'ru');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        'Русский',
-      );
-    });
-
-    test('changes language to Arabic', () async {
-      await localizationService.setLanguage('ar');
-      expect(localizationService.currentLanguage.value, 'ar');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        'العربية',
-      );
-    });
-
-    test('changes language to Portuguese', () async {
-      await localizationService.setLanguage('pt');
-      expect(localizationService.currentLanguage.value, 'pt');
-      expect(
-        localizationService.currentLocaleDisplay.value,
-        'Português',
-      );
-    });
-
-    test('ignores unsupported language codes', () async {
-      await localizationService.setLanguage('invalid');
-      expect(localizationService.currentLanguage.value, 'en');
-    });
-
-    test('translates common key in English', () {
-      final translation = localizationService.translate('connected');
-      expect(translation, 'Connected');
-    });
-
-    test('translates common key in Spanish', () {
-      final translation = localizationService.translate('connected', language: 'es');
-      expect(translation, 'Conectado');
-    });
-
-    test('translates common key in French', () {
-      final translation = localizationService.translate('connected', language: 'fr');
-      expect(translation, 'Connecté');
-    });
-
-    test('translates common key in Chinese', () {
-      final translation = localizationService.translate('connected', language: 'zh');
-      expect(translation, '已连接');
-    });
-
-    test('returns key when translation not found', () {
-      final translation =
-          localizationService.translate('nonexistent_key');
-      expect(translation, 'nonexistent_key');
-    });
-
-    test('translates kill_switch in multiple languages', () {
-      expect(
-        localizationService.translate('kill_switch', language: 'en'),
-        'Kill Switch',
-      );
-      expect(
-        localizationService.translate('kill_switch', language: 'es'),
-        'Kill Switch',
-      );
-      expect(
-        localizationService.translate('kill_switch', language: 'fr'),
-        'Kill Switch',
-      );
-      expect(
-        localizationService.translate('kill_switch', language: 'de'),
-        'Kill Switch',
-      );
-      expect(
-        localizationService.translate('kill_switch', language: 'zh'),
-        '断流开关',
-      );
-    });
-
-    test('translates dns_leak_prevention in multiple languages', () {
-      expect(
-        localizationService.translate('dns_leak_prevention', language: 'en'),
-        'DNS Leak Prevention',
-      );
-      expect(
-        localizationService.translate('dns_leak_prevention', language: 'es'),
-        'Prevención de Fugas DNS',
-      );
-      expect(
-        localizationService.translate('dns_leak_prevention', language: 'fr'),
-        'Prévention des Fuites DNS',
-      );
-      expect(
-        localizationService.translate('dns_leak_prevention', language: 'de'),
-        'DNS-Leck-Prävention',
-      );
-      expect(
-        localizationService.translate('dns_leak_prevention', language: 'ja'),
-        'DNS リーク防止',
-      );
-    });
-
-    test('translates split_tunneling in multiple languages', () {
-      expect(
-        localizationService.translate('split_tunneling', language: 'en'),
-        'Split Tunneling',
-      );
-      expect(
-        localizationService.translate('split_tunneling', language: 'es'),
-        'Tunelización Dividida',
-      );
-      expect(
-        localizationService.translate('split_tunneling', language: 'fr'),
-        'Tunnelisation Fractionnée',
-      );
-      expect(
-        localizationService.translate('split_tunneling', language: 'pt'),
-        'Tunelamento Dividido',
-      );
-      expect(
-        localizationService.translate('split_tunneling', language: 'ru'),
-        'Разделенный туннель',
-      );
-    });
-
-    test('translates app state strings correctly', () {
-      expect(
-        localizationService.translate('connecting', language: 'en'),
-        'Connecting...',
-      );
-      expect(
-        localizationService.translate('disconnecting', language: 'en'),
-        'Disconnecting...',
-      );
-      expect(
-        localizationService.translate('error', language: 'en'),
-        'Error',
-      );
-      expect(
-        localizationService.translate('success', language: 'en'),
-        'Success',
-      );
-    });
-
-    test('has translations for all supported languages', () {
-      final languages = localizationService.getSupportedLanguages().keys;
-      for (final lang in languages) {
-        final appTitle = localizationService.translate('app_title', language: lang);
-        expect(appTitle.isNotEmpty, true);
-        expect(appTitle, isNotEmpty);
+    test('every supported language has a translation table', () {
+      for (final code in LocalizationService.supportedLanguages.keys) {
+        expect(
+          service.keys,
+          contains(code),
+          reason: "'$code' is advertised in supportedLanguages but has no table",
+        );
       }
     });
 
-    test('maintains state across multiple language changes', () async {
-      await localizationService.setLanguage('es');
-      expect(localizationService.currentLanguage.value, 'es');
-
-      await localizationService.setLanguage('fr');
-      expect(localizationService.currentLanguage.value, 'fr');
-
-      await localizationService.setLanguage('zh');
-      expect(localizationService.currentLanguage.value, 'zh');
-
-      await localizationService.setLanguage('en');
-      expect(localizationService.currentLanguage.value, 'en');
+    test('every translation table belongs to a supported language', () {
+      for (final code in service.keys.keys) {
+        expect(
+          LocalizationService.supportedLanguages,
+          contains(code),
+          reason: "'$code' has a table but is not in supportedLanguages, so no "
+              'picker entry can ever select it',
+        );
+      }
     });
 
-    test('observable language updates listeners', () {
-      int callCount = 0;
-      localizationService.currentLanguage.listen((_) {
-        callCount++;
-      });
+    test('key sets are identical across all languages', () {
+      for (final entry in service.keys.entries) {
+        final missing = englishKeys.difference(entry.value.keys.toSet());
+        final extra = entry.value.keys.toSet().difference(englishKeys);
 
-      localizationService.currentLanguage.value = 'es';
-      expect(callCount, 1);
+        expect(
+          missing,
+          isEmpty,
+          reason: "${entry.key} is missing: ${missing.toList()..sort()}",
+        );
+        expect(
+          extra,
+          isEmpty,
+          reason: "${entry.key} has keys English does not: ${extra.toList()..sort()}",
+        );
+      }
+    });
 
-      localizationService.currentLanguage.value = 'fr';
-      expect(callCount, 2);
+    test('no translation is blank', () {
+      for (final entry in service.keys.entries) {
+        for (final translation in entry.value.entries) {
+          expect(
+            translation.value.trim(),
+            isNotEmpty,
+            reason: "${entry.key}.${translation.key} is blank",
+          );
+        }
+      }
+    });
+
+    test('supportedLanguages is a non-trivial catalogue', () {
+      expect(LocalizationService.supportedLanguages.length, greaterThanOrEqualTo(9));
+      expect(LocalizationService.supportedLanguages['en'], 'English');
+    });
+  });
+
+  group('translate', () {
+    test('resolves a key in the requested language', () {
+      expect(LocalizationService.translate('connect', language: 'en'), 'Connect');
+      expect(LocalizationService.translate('connect', language: 'de'), 'Verbinden');
+      expect(LocalizationService.translate('connect', language: 'zh'), '连接');
+      expect(LocalizationService.translate('connect', language: 'ar'), 'اتصال');
+    });
+
+    test('defaults to the fallback language', () {
+      expect(
+        LocalizationService.translate('settings'),
+        LocalizationService.translate(
+          'settings',
+          language: LocalizationService.fallbackLanguageCode,
+        ),
+      );
+    });
+
+    test('falls back to English for an unknown language', () {
+      expect(LocalizationService.translate('connect', language: 'xx'), 'Connect');
+    });
+
+    test('returns the key itself for an unknown key, so the gap is visible', () {
+      // A blank string would hide the mistake; a raw key is noticeable on screen.
+      expect(
+        LocalizationService.translate('no_such_key', language: 'de'),
+        'no_such_key',
+      );
+    });
+
+    test('the connection-state keys exist, since the status card depends on them', () {
+      const stateKeys = [
+        'not_connected',
+        'selecting',
+        'connecting',
+        'connected',
+        'testing',
+        'disconnecting',
+        'error',
+      ];
+      for (final key in stateKeys) {
+        for (final code in LocalizationService.supportedLanguages.keys) {
+          expect(
+            LocalizationService.translate(key, language: code),
+            isNot(key),
+            reason: "'$key' is not translated into '$code'",
+          );
+        }
+      }
+    });
+  });
+
+  group('helpers', () {
+    test('isSupported', () {
+      expect(LocalizationService.isSupported('en'), isTrue);
+      expect(LocalizationService.isSupported('ja'), isTrue);
+      expect(LocalizationService.isSupported('xx'), isFalse);
+      expect(LocalizationService.isSupported(''), isFalse);
+    });
+
+    test('displayName falls back to the code', () {
+      expect(LocalizationService.displayName('de'), 'Deutsch');
+      expect(LocalizationService.displayName('xx'), 'xx');
+    });
+  });
+
+  group('GetX Translations contract', () {
+    test('implements Translations and exposes keys', () {
+      expect(service, isA<Translations>());
+      expect(service.keys, isNotEmpty);
+      // GetX looks up keys[locale.languageCode][key]; the outer keys must be
+      // bare language codes or `Get.updateLocale(Locale('de'))` finds nothing.
+      for (final code in service.keys.keys) {
+        expect(code, matches(RegExp(r'^[a-z]{2}$')),
+            reason: "'$code' is not a bare ISO-639-1 language code");
+      }
     });
   });
 }

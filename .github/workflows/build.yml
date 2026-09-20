@@ -13,9 +13,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          # Must be 17: android/app/build.gradle sets sourceCompatibility 17 and
+          # jvmTarget "17". This was '11' and could not compile the project.
+          java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Flutter
@@ -27,43 +29,27 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build APKs
+        # Per-ABI APKs: the Xray core (libgojni.so) is ~35 MB per ABI, so a fat
+        # APK is 115.7 MB while each split lands near 64 MB / 58 MB.
+        # --target-platform is required because android/app/build.gradle no
+        # longer sets ndk.abiFilters (that blocks --split-per-abi entirely).
+        run: |
+          flutter build apk --release --split-per-abi \
+            --target-platform android-arm,android-arm64
 
-      - name: Upload APK to Release
+      - name: Upload APKs to Release
         uses: softprops/action-gh-release@v1
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-ios:
-    runs-on: macos-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-          channel: stable
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build iOS
-        run: |
-          flutter build ios --release --no-codesign
-
-      - name: Package iOS build
-        run: |
-          cd ios
-          xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -derivedDataPath build -arch arm64
-          cd ..
-
-      - name: Upload iOS build
-        uses: actions/upload-artifact@v3
-        with:
-          name: ios-build
-          path: ios/build/Release-iphoneos/Runner.app
+  # The iOS job was removed on 2026-09-19. It ran `flutter build ios --release
+  # --no-codesign` and uploaded ios/build/Release-iphoneos/Runner.app, but the
+  # iOS native layer does not exist: ios/Runner/*.swift are unregistered mocks
+  # and there is no AppDelegate.swift. The build "succeeded" and published an
+  # artifact that cannot connect to anything. Restore this job once the
+  # NEVPNManager / NEPacketTunnelProvider implementation lands.

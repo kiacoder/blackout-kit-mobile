@@ -2,7 +2,7 @@
 /// Features:
 /// - Big connect/disconnect button (one-tap VPN)
 /// - Real-time connection status and IP
-/// - Quick stats (speed, reliability, uptime)
+/// - Quick stats (latency, reliability, uptime)
 /// - Quick access to Library and Settings
 
 import 'package:flutter/material.dart' hide ConnectionState;
@@ -44,28 +44,32 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _handleConnectDisconnect() async {
     if (_connectionController.isConnected) {
       await _connectionController.disconnect();
-    } else {
-      // Get available configs
-      final configs = _configController.allConfigs;
-      if (configs.isEmpty) {
-        _showSnackbar('No configs available', Colors.orange);
-        return;
-      }
+      return;
+    }
 
-      // Connect to fastest
-      final testResults = _connectionController.selectedConfigResult.value;
-      final success = await _connectionController.connectFastest(
-        configs,
-        testResults: testResults != null
-            ? [testResults]
-            : List.from(_connectionController.selectedConfigResult.value == null
-                ? []
-                : [_connectionController.selectedConfigResult.value!]),
-      );
+    // Get available configs
+    final configs = _configController.allConfigs;
+    if (configs.isEmpty) {
+      _showSnackbar('No configs available', Colors.orange);
+      return;
+    }
 
-      if (!success) {
-        _showSnackbar('Failed to connect', Colors.red);
-      }
+    // Hand over every measurement the library already has. The previous code
+    // passed the connection controller's single cached result, or an empty list
+    // on a cold start — and an empty (non-null) list short-circuits the tester
+    // inside connectFastest, so the very first tap on Connect always failed
+    // with "No working configs found" without testing a single config.
+    final results = _configController.testResults.values.toList();
+
+    final success = await _connectionController.connectFastest(
+      configs,
+      testResults: results.isEmpty ? null : results,
+    );
+
+    if (!success) {
+      // Surface the real reason (e.g. "no bundled engine for this protocol")
+      // instead of a generic failure string.
+      _showSnackbar(_connectionController.statusMessage.value, Colors.red);
     }
   }
 
@@ -136,7 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    _connectionController.getStateLabel(),
+                    _connectionController.getStateLabelKey().tr,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -147,13 +151,13 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
               if (config != null)
                 Text(
-                  'Connected to: ${config.displayName}',
+                  '${'connected_to'.tr}: ${config.displayName}',
                   style: const TextStyle(fontSize: 14),
                 )
               else
-                const Text(
-                  'Not connected',
-                  style: TextStyle(fontSize: 14),
+                Text(
+                  'not_connected'.tr,
+                  style: const TextStyle(fontSize: 14),
                 ),
               if (ip != null) ...[
                 const SizedBox(height: 8),
@@ -234,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       const SizedBox(height: 8),
                       Text(
-                        isConnected ? 'CONNECTED' : 'CONNECT',
+                        (isConnected ? 'connected' : 'connect').tr.toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -267,10 +271,11 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const NeverScrollableScrollPhysics(),
           children: [
             _buildStatCard(
-              'Speed',
-              result?.speedMbps != null
-                  ? '${result!.speedMbps!.toStringAsFixed(1)} Mbps'
-                  : 'Not tested',
+              // Throughput is never measured (the tester only opens a socket),
+              // so a "Speed" card could only ever read "Not tested" forever.
+              // Latency is the figure that is actually measured.
+              'Latency',
+              result?.latencyMs != null ? '${result!.latencyMs} ms' : 'Not tested',
               Icons.speed,
             ),
             _buildStatCard(

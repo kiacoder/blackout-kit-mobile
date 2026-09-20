@@ -1,19 +1,31 @@
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:logger/logger.dart';
 
-/// Manages app localization and language switching
-class LocalizationService extends GetxService {
-  final _logger = Logger();
+/// Translation catalogue for the app.
+///
+/// Implements GetX's [Translations] so `'key'.tr` resolves against the active
+/// locale. The active locale itself is **not** held here — it lives in
+/// `SettingsController.selectedLanguage`, which is the single source of truth
+/// and already persists to Hive. `main.dart` feeds it to `GetMaterialApp.locale`
+/// inside an `Obx`, so changing the setting re-renders the whole app.
+///
+/// That split is deliberate. The previous version kept a second copy of the
+/// language in a `currentLanguage` observable, persisted it nowhere (its
+/// `_loadSavedLanguage` was a TODO that always reset to English), and called
+/// `Get.updateLocale` on an app that had no `translations` or `locale` wired up
+/// at all — so the picker in Settings moved the radio button and changed
+/// nothing else.
+///
+/// ## Coverage
+///
+/// This is a **partial** localisation: the app shell (navigation, connection
+/// state, the main settings entries) is translated into nine languages. Body
+/// text on most screens is still English. See PHASES.md for the remaining work.
+class LocalizationService extends GetxService implements Translations {
+  /// Language code used when a lookup misses, and when no preference is stored.
+  static const String fallbackLanguageCode = 'en';
 
-  // Observable current language code
-  final currentLanguage = 'en'.obs;
-
-  // Observable current locale display name
-  final currentLocaleDisplay = 'English'.obs;
-
-  // Supported languages: code -> display name
-  static const supportedLanguages = {
+  /// Supported languages: language code -> display name, in menu order.
+  static const Map<String, String> supportedLanguages = {
     'en': 'English',
     'es': 'Español',
     'fr': 'Français',
@@ -25,72 +37,56 @@ class LocalizationService extends GetxService {
     'pt': 'Português',
   };
 
+  /// GetX reads this to resolve `'key'.tr`.
   @override
-  void onInit() {
-    super.onInit();
-    _loadSavedLanguage();
+  Map<String, Map<String, String>> get keys => _translations;
+
+  /// Display name for a language code, falling back to the code itself.
+  static String displayName(String languageCode) =>
+      supportedLanguages[languageCode] ?? languageCode;
+
+  /// True when [languageCode] is one this app ships translations for.
+  static bool isSupported(String languageCode) =>
+      supportedLanguages.containsKey(languageCode);
+
+  /// Resolve [key] in an explicit language, for callers that are not inside a
+  /// widget tree (services, log lines, tests). Widgets should use `'key'.tr`.
+  static String translate(
+    String key, {
+    String language = fallbackLanguageCode,
+  }) {
+    final table = _translations[language] ?? _translations[fallbackLanguageCode];
+    // Returning the key itself on a miss is deliberate: a visible `foo_bar` in
+    // the UI is easier to notice and fix than a silently blank string.
+    return table?[key] ?? key;
   }
 
-  /// Load saved language preference from storage
-  void _loadSavedLanguage() {
-    // TODO: Load from SharedPreferences/Hive
-    // For now, default to English
-    currentLanguage.value = 'en';
-    currentLocaleDisplay.value = supportedLanguages['en'] ?? 'English';
-  }
-
-  /// Change app language
-  Future<void> setLanguage(String languageCode) async {
-    try {
-      if (!supportedLanguages.containsKey(languageCode)) {
-        _logger.w('Unsupported language code: $languageCode');
-        return;
-      }
-
-      currentLanguage.value = languageCode;
-      currentLocaleDisplay.value =
-          supportedLanguages[languageCode] ?? 'English';
-
-      // TODO: Save to persistent storage
-      _logger.i('Language changed to: $languageCode');
-
-      // Trigger UI rebuild with new locale
-      // This requires integration with GetMaterialApp localizationsDelegates
-      Get.updateLocale(Locale(languageCode));
-    } catch (e) {
-      _logger.e('Error setting language: $e');
-    }
-  }
-
-  /// Get all supported languages
-  Map<String, String> getSupportedLanguages() => supportedLanguages;
-
-  /// Get string translation
-  /// This is a placeholder - actual translations would come from ARB files
-  String translate(String key, {String language = 'en'}) {
-    return _getTranslation(key, language);
-  }
-
-  /// Translation data by language
-  static const _translations = {
+  static const Map<String, Map<String, String>> _translations = {
     'en': {
       'app_title': 'Blackout Kit',
       'app_subtitle': 'Trustworthy VPN',
       'connected': 'Connected',
       'disconnected': 'Disconnected',
+      'not_connected': 'Not Connected',
       'connecting': 'Connecting...',
       'disconnecting': 'Disconnecting...',
+      'selecting': 'Selecting...',
+      'testing': 'Testing...',
+      'connected_to': 'Connected to',
       'connect': 'Connect',
       'disconnect': 'Disconnect',
       'settings': 'Settings',
       'library': 'Library',
       'configs': 'Configs',
       'speed': 'Speed',
+      'latency': 'Latency',
       'reliability': 'Reliability',
       'protocol': 'Protocol',
       'kill_switch': 'Kill Switch',
       'dns_leak_prevention': 'DNS Leak Prevention',
       'split_tunneling': 'Split Tunneling',
+      'engine_hub': 'Blackout Engine Hub',
+      'preferred_protocol': 'Preferred Protocol',
       'language': 'Language',
       'about': 'About',
       'close': 'Close',
@@ -105,19 +101,26 @@ class LocalizationService extends GetxService {
       'app_subtitle': 'VPN Confiable',
       'connected': 'Conectado',
       'disconnected': 'Desconectado',
+      'not_connected': 'Sin conexión',
       'connecting': 'Conectando...',
       'disconnecting': 'Desconectando...',
+      'selecting': 'Seleccionando...',
+      'testing': 'Probando...',
+      'connected_to': 'Conectado a',
       'connect': 'Conectar',
       'disconnect': 'Desconectar',
       'settings': 'Configuración',
       'library': 'Biblioteca',
       'configs': 'Configuraciones',
       'speed': 'Velocidad',
+      'latency': 'Latencia',
       'reliability': 'Confiabilidad',
       'protocol': 'Protocolo',
       'kill_switch': 'Kill Switch',
       'dns_leak_prevention': 'Prevención de Fugas DNS',
       'split_tunneling': 'Tunelización Dividida',
+      'engine_hub': 'Centro de motores Blackout',
+      'preferred_protocol': 'Protocolo preferido',
       'language': 'Idioma',
       'about': 'Acerca de',
       'close': 'Cerrar',
@@ -132,19 +135,26 @@ class LocalizationService extends GetxService {
       'app_subtitle': 'VPN de Confiance',
       'connected': 'Connecté',
       'disconnected': 'Déconnecté',
+      'not_connected': 'Non connecté',
       'connecting': 'Connexion...',
       'disconnecting': 'Déconnexion...',
+      'selecting': 'Sélection...',
+      'testing': 'Test en cours...',
+      'connected_to': 'Connecté à',
       'connect': 'Connecter',
       'disconnect': 'Déconnecter',
       'settings': 'Paramètres',
       'library': 'Bibliothèque',
       'configs': 'Configurations',
       'speed': 'Vitesse',
+      'latency': 'Latence',
       'reliability': 'Fiabilité',
       'protocol': 'Protocole',
       'kill_switch': 'Kill Switch',
       'dns_leak_prevention': 'Prévention des Fuites DNS',
       'split_tunneling': 'Tunnelisation Fractionnée',
+      'engine_hub': 'Centre de moteurs Blackout',
+      'preferred_protocol': 'Protocole préféré',
       'language': 'Langue',
       'about': 'À Propos',
       'close': 'Fermer',
@@ -159,19 +169,26 @@ class LocalizationService extends GetxService {
       'app_subtitle': 'Vertrauenswürdiges VPN',
       'connected': 'Verbunden',
       'disconnected': 'Getrennt',
+      'not_connected': 'Nicht verbunden',
       'connecting': 'Verbindung wird hergestellt...',
       'disconnecting': 'Trennung läuft...',
+      'selecting': 'Auswahl läuft...',
+      'testing': 'Test läuft...',
+      'connected_to': 'Verbunden mit',
       'connect': 'Verbinden',
       'disconnect': 'Trennen',
       'settings': 'Einstellungen',
       'library': 'Bibliothek',
       'configs': 'Konfigurationen',
       'speed': 'Geschwindigkeit',
+      'latency': 'Latenz',
       'reliability': 'Zuverlässigkeit',
       'protocol': 'Protokoll',
       'kill_switch': 'Kill Switch',
       'dns_leak_prevention': 'DNS-Leck-Prävention',
       'split_tunneling': 'Split Tunneling',
+      'engine_hub': 'Blackout Engine-Zentrale',
+      'preferred_protocol': 'Bevorzugtes Protokoll',
       'language': 'Sprache',
       'about': 'Über',
       'close': 'Schließen',
@@ -186,19 +203,26 @@ class LocalizationService extends GetxService {
       'app_subtitle': '可信赖的 VPN',
       'connected': '已连接',
       'disconnected': '已断开',
+      'not_connected': '未连接',
       'connecting': '正在连接...',
       'disconnecting': '正在断开...',
+      'selecting': '正在选择...',
+      'testing': '正在测试...',
+      'connected_to': '已连接到',
       'connect': '连接',
       'disconnect': '断开',
       'settings': '设置',
-      'library': '库',
+      'library': '配置库',
       'configs': '配置',
       'speed': '速度',
+      'latency': '延迟',
       'reliability': '可靠性',
       'protocol': '协议',
       'kill_switch': '断流开关',
-      'dns_leak_prevention': 'DNS 泄露防止',
-      'split_tunneling': '分割隧道',
+      'dns_leak_prevention': 'DNS 泄露防护',
+      'split_tunneling': '分流隧道',
+      'engine_hub': 'Blackout 引擎中心',
+      'preferred_protocol': '首选协议',
       'language': '语言',
       'about': '关于',
       'close': '关闭',
@@ -212,47 +236,61 @@ class LocalizationService extends GetxService {
       'app_title': 'Blackout Kit',
       'app_subtitle': '信頼できる VPN',
       'connected': '接続済み',
-      'disconnected': '切断',
+      'disconnected': '切断済み',
+      'not_connected': '未接続',
       'connecting': '接続中...',
       'disconnecting': '切断中...',
+      'selecting': '選択中...',
+      'testing': 'テスト中...',
+      'connected_to': '接続先',
       'connect': '接続',
       'disconnect': '切断',
       'settings': '設定',
       'library': 'ライブラリ',
-      'configs': '設定',
+      'configs': '設定ファイル',
       'speed': '速度',
+      'latency': 'レイテンシ',
       'reliability': '信頼性',
       'protocol': 'プロトコル',
       'kill_switch': 'キルスイッチ',
       'dns_leak_prevention': 'DNS リーク防止',
       'split_tunneling': 'スプリットトンネリング',
+      'engine_hub': 'Blackout エンジンハブ',
+      'preferred_protocol': '優先プロトコル',
       'language': '言語',
-      'about': 'について',
+      'about': 'アプリについて',
       'close': '閉じる',
       'cancel': 'キャンセル',
       'save': '保存',
       'error': 'エラー',
       'success': '成功',
-      'loading': 'ロード中...',
+      'loading': '読み込み中...',
     },
     'ru': {
       'app_title': 'Blackout Kit',
-      'app_subtitle': 'Надежный VPN',
+      'app_subtitle': 'Надёжный VPN',
       'connected': 'Подключено',
       'disconnected': 'Отключено',
+      'not_connected': 'Не подключено',
       'connecting': 'Подключение...',
       'disconnecting': 'Отключение...',
+      'selecting': 'Выбор...',
+      'testing': 'Проверка...',
+      'connected_to': 'Подключено к',
       'connect': 'Подключить',
       'disconnect': 'Отключить',
-      'settings': 'Параметры',
+      'settings': 'Настройки',
       'library': 'Библиотека',
       'configs': 'Конфигурации',
       'speed': 'Скорость',
-      'reliability': 'Надежность',
+      'latency': 'Задержка',
+      'reliability': 'Надёжность',
       'protocol': 'Протокол',
       'kill_switch': 'Kill Switch',
       'dns_leak_prevention': 'Защита от утечек DNS',
-      'split_tunneling': 'Разделенный туннель',
+      'split_tunneling': 'Раздельный туннель',
+      'engine_hub': 'Центр движков Blackout',
+      'preferred_protocol': 'Предпочитаемый протокол',
       'language': 'Язык',
       'about': 'О приложении',
       'close': 'Закрыть',
@@ -267,19 +305,26 @@ class LocalizationService extends GetxService {
       'app_subtitle': 'VPN موثوق',
       'connected': 'متصل',
       'disconnected': 'غير متصل',
+      'not_connected': 'غير متصل',
       'connecting': 'جاري الاتصال...',
       'disconnecting': 'جاري قطع الاتصال...',
+      'selecting': 'جاري الاختيار...',
+      'testing': 'جاري الاختبار...',
+      'connected_to': 'متصل بـ',
       'connect': 'اتصال',
       'disconnect': 'قطع الاتصال',
       'settings': 'الإعدادات',
       'library': 'المكتبة',
-      'configs': 'الإعدادات',
+      'configs': 'التهيئات',
       'speed': 'السرعة',
+      'latency': 'زمن الاستجابة',
       'reliability': 'الموثوقية',
       'protocol': 'البروتوكول',
       'kill_switch': 'Kill Switch',
       'dns_leak_prevention': 'منع تسرب DNS',
       'split_tunneling': 'النفق المقسم',
+      'engine_hub': 'مركز محركات Blackout',
+      'preferred_protocol': 'البروتوكول المفضل',
       'language': 'اللغة',
       'about': 'حول',
       'close': 'إغلاق',
@@ -294,19 +339,26 @@ class LocalizationService extends GetxService {
       'app_subtitle': 'VPN Confiável',
       'connected': 'Conectado',
       'disconnected': 'Desconectado',
+      'not_connected': 'Não conectado',
       'connecting': 'Conectando...',
       'disconnecting': 'Desconectando...',
+      'selecting': 'Selecionando...',
+      'testing': 'Testando...',
+      'connected_to': 'Conectado a',
       'connect': 'Conectar',
       'disconnect': 'Desconectar',
       'settings': 'Configurações',
       'library': 'Biblioteca',
       'configs': 'Configurações',
       'speed': 'Velocidade',
+      'latency': 'Latência',
       'reliability': 'Confiabilidade',
       'protocol': 'Protocolo',
       'kill_switch': 'Kill Switch',
       'dns_leak_prevention': 'Prevenção de Vazamento de DNS',
       'split_tunneling': 'Tunelamento Dividido',
+      'engine_hub': 'Central de motores Blackout',
+      'preferred_protocol': 'Protocolo preferido',
       'language': 'Idioma',
       'about': 'Sobre',
       'close': 'Fechar',
@@ -317,18 +369,4 @@ class LocalizationService extends GetxService {
       'loading': 'Carregando...',
     },
   };
-
-  /// Get translation for a key in a specific language
-  static String _getTranslation(String key, String language) {
-    final languageTranslations = _translations[language] ?? _translations['en'];
-    return languageTranslations?[key] ?? key;
-  }
-}
-
-/// Extension for easy translation access
-extension TranslationExtension on String {
-  String trApp({String? lang}) {
-    final language = lang ?? Get.find<LocalizationService>().currentLanguage.value;
-    return LocalizationService._getTranslation(this, language);
-  }
 }

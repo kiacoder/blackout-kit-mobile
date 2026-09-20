@@ -70,8 +70,10 @@ void main() {
       app.main();
       await tester.pumpAndSettle();
 
-      // Verify home screen stats are present
-      expect(find.text('Speed'), findsWidgets);
+      // Verify home screen stats are present. The first card reads "Latency":
+      // throughput is never measured, so a "Speed" card could only ever show
+      // "Not tested".
+      expect(find.text('Latency'), findsWidgets);
       expect(find.text('Total Configs'), findsWidgets);
       expect(find.text('Working'), findsWidgets);
       expect(find.text('Reliability'), findsWidgets);

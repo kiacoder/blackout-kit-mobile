@@ -5,14 +5,26 @@ import android.util.Log
 import java.io.File
 
 /**
- * Owns the packet-forwarding engine that sits behind the TUN interface.
+ * Subprocess-based engine runner, for protocols the in-process Xray core
+ * cannot serve.
  *
- *   TUN fd  <->  tun2socks  <->  127.0.0.1:<socksPort>  <->  xray-core / sing-box
+ *   TUN fd  <->  tun2socks  <->  127.0.0.1:<socksPort>  <->  sing-box
  *
- * Binaries are shipped under `android/app/src/main/jniLibs/<abi>/` named `lib*.so`.
- * That naming is deliberate: Android only lets an app execute files from
- * `nativeLibraryDir` (API 29+ blocks exec from filesDir), and the packaging step
- * only extracts files matching `lib*.so`.
+ * Xray-family protocols (vless / vmess / trojan / shadowsocks) do **not** come
+ * through here — [XrayEngine] links them straight into the process and Xray
+ * binds the TUN itself, so no SOCKS hop is needed.
+ *
+ * ## Current status: not yet functional
+ *
+ * The `jniLibs/<abi>/lib*.so` binaries this class expects are **not bundled in
+ * the repository**. It is kept because the packaging contract is sound and the
+ * failure mode is correct, but every protocol routed here currently fails with
+ * an explicit "binaries are not bundled" error rather than pretending to
+ * connect.
+ *
+ * Binaries are named `lib*.so` on purpose: Android only permits `exec()` from
+ * `nativeLibraryDir` (API 29+ blocks execution from `filesDir`), and the APK
+ * packaging step only extracts files matching that pattern.
  *
  * This runner refuses to bring a tunnel up when its engine is missing, rather
  * than installing a default route that would black-hole all traffic.
@@ -23,15 +35,20 @@ object EngineRunner {
     /** Always required: the bridge between the TUN fd and the loopback proxy. */
     private const val TUN2SOCKS = "libtun2socks.so"
 
-    /** Protocol -> engine binary that can carry it. */
+    /**
+     * Protocol -> engine binary that can carry it.
+     *
+     * Xray protocols are intentionally absent: they are handled in-process by
+     * [XrayEngine]. Listing them here would route them to a binary that does
+     * not exist.
+     *
+     * `wireguard` is in that group too. It used to be listed here and so was
+     * refused with "no engine is bundled"; the bundled core in fact contains
+     * `xray.proxy.wireguard`, and [XrayEngine] now serves it directly.
+     */
     private val ENGINE_FOR_PROTOCOL = mapOf(
-        "vless" to "libxray.so",
-        "vmess" to "libxray.so",
-        "trojan" to "libxray.so",
-        "shadowsocks" to "libxray.so",
         "hysteria2" to "libsingbox.so",
         "tuic" to "libsingbox.so",
-        "wireguard" to "libsingbox.so",
         "amneziawg" to "libsingbox.so",
         "warp" to "libsingbox.so",
     )
@@ -51,7 +68,7 @@ object EngineRunner {
         val engineName = ENGINE_FOR_PROTOCOL[protocol]
 
         if (engineName == null) {
-            lastError = "No engine is mapped for protocol '$protocol' yet."
+            lastError = "No engine is mapped for protocol '$protocol'."
             Log.w(TAG, lastError!!)
             return false
         }
@@ -62,17 +79,18 @@ object EngineRunner {
 
         if (absent.isNotEmpty()) {
             lastError = buildString {
-                append("Engine binaries are not bundled yet for '$protocol' ")
+                append("'$protocol' needs an engine that is not bundled in this build ")
                 append("(missing: ${absent.joinToString { it.name }}). ")
-                append("Tunnel refused rather than black-holing traffic.")
+                append("The tunnel was refused instead of black-holing your traffic. ")
+                append("Use a VLESS, VMess, Trojan or Shadowsocks config for now.")
             }
             Log.w(TAG, lastError!!)
             return false
         }
 
-        val configFile = File(File(context.filesDir, "engine").apply { mkdirs() }, "config.json")
+        val configFile = File(configDir(context), "singbox.json")
         if (!configFile.exists()) {
-            lastError = "No engine config has been written yet."
+            lastError = "No sing-box config has been written yet."
             Log.w(TAG, lastError!!)
             return false
         }
@@ -110,11 +128,11 @@ object EngineRunner {
         engineProcess = null
     }
 
-    /** Called by Dart once it has generated a config, before connect(). */
+    /** Called by Dart before connect() for a subprocess-backed engine. */
     fun writeConfig(context: Context, json: String): Boolean {
         return try {
-            val dir = File(context.filesDir, "engine").apply { mkdirs() }
-            File(dir, "config.json").writeText(json)
+            val dir = configDir(context)
+            File(dir, "singbox.json").writeText(json)
             true
         } catch (e: Exception) {
             lastError = "Could not write engine config: ${e.message}"
@@ -122,4 +140,7 @@ object EngineRunner {
             false
         }
     }
+
+    private fun configDir(context: Context): File =
+        File(context.filesDir, "engine").apply { mkdirs() }
 }

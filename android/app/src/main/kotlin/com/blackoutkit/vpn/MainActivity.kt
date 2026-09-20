@@ -11,5 +11,9 @@ class MainActivity : FlutterActivity() {
         // The native tunnel bridge is not a pub package, so it is registered here
         // rather than by the generated plugin registrant.
         flutterEngine.plugins.add(VpnPlugin())
+
+        // Host-side facts the Dart layer cannot get on its own: installed apps,
+        // app icons, and Android's always-on VPN state.
+        flutterEngine.plugins.add(NetworkPlugin())
     }
 }

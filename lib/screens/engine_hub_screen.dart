@@ -1,9 +1,16 @@
+/// Engine hub - shows which circumvention engines this build can actually run.
+///
+/// The [EngineRegistry] describes ten engines because that is the catalogue the
+/// desktop CLI ships. Only a subset has a runtime bundled into this APK. This
+/// screen asks the native layer which protocols are really served and marks the
+/// rest as unavailable, instead of presenting the catalogue as if every entry
+/// were wired up.
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controllers/config_controller.dart';
-import '../controllers/connection_controller.dart';
 import '../models/engine_capability.dart';
+import '../services/vpn_service.dart';
 
 class EngineHubScreen extends StatefulWidget {
   const EngineHubScreen({Key? key}) : super(key: key);
@@ -17,10 +24,47 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
 
   String _selectedCategory = 'All';
 
+  /// Native capability report. `null` while the query is still in flight.
+  EngineAvailability? _availability;
+
   @override
   void initState() {
     super.initState();
     _configController = Get.find<ConfigController>();
+    _loadAvailability();
+  }
+
+  Future<void> _loadAvailability() async {
+    try {
+      final info = await Get.find<VPNService>().getEngineInfo();
+      if (!mounted) return;
+      setState(() => _availability = info);
+    } catch (_) {
+      // The channel is absent on platforms without a native layer. Fall back to
+      // "unknown" so the screen degrades to the plain catalogue rather than
+      // asserting that everything is broken.
+      if (!mounted) return;
+      setState(() => _availability = const EngineAvailability.unknown());
+    }
+  }
+
+  /// True when we have no capability report and therefore cannot judge.
+  bool get _capabilityUnknown => _availability == null || !_availability!.isKnown;
+
+  /// An engine is runnable only when this build can serve **every** protocol
+  /// the engine advertises. See [engineIsRunnable] for why `any` was wrong.
+  bool _isRunnable(EngineCapability engine) {
+    if (_capabilityUnknown) return true;
+    return engineIsRunnable(engine, _availability!.canConnect);
+  }
+
+  /// Real version string for engines whose runtime we ship; the registry's
+  /// hardcoded version is only shown when we have nothing better.
+  String? _versionFor(EngineCapability engine) {
+    if (engine.engine == EngineType.xray && _availability?.xrayVersion != null) {
+      return _availability!.xrayVersion;
+    }
+    return engine.version;
   }
 
   Map<String, List<EngineCapability>> _getGroupedEngines() {
@@ -63,6 +107,9 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final groupedEngines = _getGroupedEngines();
 
+    final allEngines = EngineRegistry.getAll();
+    final runnableCount = allEngines.where(_isRunnable).length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Blackout Engine Hub'),
@@ -73,10 +120,12 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
             tooltip: 'Engine information',
             onPressed: () {
               Get.snackbar(
-                'Blackout Kit Engines',
-                'All 10 circumvention engines from Blackout CLI are supported',
+                'Bundled engines',
+                _availability?.summary ??
+                    'Checking which engines are bundled in this build...',
                 backgroundColor: theme.colorScheme.primary,
                 colorText: theme.colorScheme.onPrimary,
+                duration: const Duration(seconds: 6),
               );
             },
           ),
@@ -106,12 +155,16 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            '10 CLI Bypass Engines',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          Text(
+                            _availability == null
+                                ? 'Checking bundled engines...'
+                                : '$runnableCount of ${allEngines.length} Engines Available',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                           Text(
-                            'Full parity with Blackout Kit desktop & Linux CLI',
+                            _capabilityUnknown
+                                ? 'Engine support could not be determined on this platform'
+                                : 'Engines without a bundled runtime are shown greyed out',
                             style: TextStyle(fontSize: 12, color: theme.hintColor),
                           ),
                         ],
@@ -200,14 +253,18 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final configCount = _getConfigCountForEngine(engine);
-    final catColor = _getCategoryColor(engine.category);
+    final runnable = _isRunnable(engine);
+    final catColor = runnable ? _getCategoryColor(engine.category) : theme.disabledColor;
+    final version = _versionFor(engine);
 
     return Card(
       elevation: isDark ? 2 : 1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: configCount > 0 ? catColor.withOpacity(0.4) : Colors.transparent,
+          color: runnable && configCount > 0
+              ? catColor.withOpacity(0.4)
+              : Colors.transparent,
           width: 1,
         ),
       ),
@@ -243,15 +300,19 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              engine.displayName,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                            Flexible(
+                              child: Text(
+                                engine.displayName,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: runnable ? null : theme.hintColor,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (engine.version != null) ...[
-                              const SizedBox(width: 8),
+                            const SizedBox(width: 8),
+                            if (!runnable)
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
@@ -259,11 +320,22 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'v${engine.version}',
+                                  'Not bundled',
+                                  style: TextStyle(fontSize: 10, color: theme.hintColor),
+                                ),
+                              )
+                            else if (version != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: theme.disabledColor.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'v$version',
                                   style: TextStyle(fontSize: 10, color: theme.hintColor),
                                 ),
                               ),
-                            ],
                           ],
                         ),
                         const SizedBox(height: 2),
@@ -280,7 +352,9 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: configCount > 0 ? Colors.green.withOpacity(0.15) : theme.disabledColor.withOpacity(0.1),
+                      color: runnable && configCount > 0
+                          ? Colors.green.withOpacity(0.15)
+                          : theme.disabledColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -288,7 +362,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: configCount > 0 ? Colors.green : theme.hintColor,
+                        color: runnable && configCount > 0 ? Colors.green : theme.hintColor,
                       ),
                     ),
                   ),
@@ -303,8 +377,17 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                   Wrap(
                     spacing: 4,
                     children: engine.compatibleProtocols.map((p) {
+                      final protocolServed = !_capabilityUnknown && _availability!.canConnect(p);
                       return Chip(
-                        label: Text(p.toUpperCase(), style: const TextStyle(fontSize: 9)),
+                        label: Text(
+                          p.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 9,
+                            decoration: protocolServed || _capabilityUnknown
+                                ? null
+                                : TextDecoration.lineThrough,
+                          ),
+                        ),
                         padding: EdgeInsets.zero,
                         visualDensity: VisualDensity.compact,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -324,6 +407,8 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
   void _showEngineDetails(BuildContext context, EngineCapability engine) {
     final theme = Theme.of(context);
     final configCount = _getConfigCountForEngine(engine);
+    final runnable = _isRunnable(engine);
+    final version = _versionFor(engine);
 
     Get.bottomSheet(
       Container(
@@ -332,80 +417,123 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
           color: theme.cardColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          engine.displayName,
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Category: ${engine.category}',
+                          style: TextStyle(fontSize: 12, color: theme.hintColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (runnable && version != null) Chip(label: Text('v$version')),
+                ],
+              ),
+              if (!runnable) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.disabledColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        engine.displayName,
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Category: ${engine.category}',
-                        style: TextStyle(fontSize: 12, color: theme.hintColor),
+                      Icon(Icons.block, size: 18, color: theme.hintColor),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'This engine is not bundled in this build, so it cannot '
+                          'connect. Configs are still listed so you can review them.',
+                          style: TextStyle(fontSize: 12, color: theme.hintColor),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                if (engine.version != null)
-                  Chip(label: Text('v${engine.version}')),
               ],
-            ),
-            const SizedBox(height: 16),
-            Text(engine.description, style: const TextStyle(fontSize: 14)),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 12),
-            const Text('Supported Protocols:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              children: engine.compatibleProtocols.map((p) => Chip(label: Text(p.toUpperCase()))).toList(),
-            ),
-            const SizedBox(height: 12),
-            const Text('Requirements:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            for (final req in engine.requirements)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check, size: 16, color: Colors.green),
-                    const SizedBox(width: 8),
-                    Text(req, style: const TextStyle(fontSize: 12)),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Get.back();
-                  _configController.filterProtocol.value = engine.compatibleProtocols.first;
-                  Get.snackbar(
-                    'Filter Applied',
-                    'Filtered library by ${engine.displayName}',
-                    backgroundColor: Colors.indigo,
-                    colorText: Colors.white,
+              const SizedBox(height: 16),
+              Text(engine.description, style: const TextStyle(fontSize: 14)),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+              const Text('Supported Protocols:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: engine.compatibleProtocols.map((p) {
+                  final served = !_capabilityUnknown && _availability!.canConnect(p);
+                  return Chip(
+                    label: Text(
+                      p.toUpperCase(),
+                      style: TextStyle(
+                        decoration: served || _capabilityUnknown
+                            ? null
+                            : TextDecoration.lineThrough,
+                      ),
+                    ),
                   );
-                },
-                icon: const Icon(Icons.filter_list),
-                label: Text('Filter Library by ${engine.displayName} ($configCount configs)'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              const Text('Requirements:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              for (final req in engine.requirements)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Icon(
+                        runnable ? Icons.check : Icons.close,
+                        size: 16,
+                        color: runnable ? Colors.green : theme.disabledColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(req, style: const TextStyle(fontSize: 12))),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Get.back();
+                    _configController.filterProtocol.value = engine.compatibleProtocols.first;
+                    Get.snackbar(
+                      'Filter Applied',
+                      'Filtered library by ${engine.displayName}',
+                      backgroundColor: Colors.indigo,
+                      colorText: Colors.white,
+                    );
+                  },
+                  icon: const Icon(Icons.filter_list),
+                  label: Text(
+                    'Filter Library by ${engine.displayName} ($configCount configs)',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

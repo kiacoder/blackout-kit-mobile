@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../controllers/config_controller.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
 import 'settings_screen.dart';
@@ -16,7 +15,6 @@ class RootScreen extends StatefulWidget {
 }
 
 class _RootScreenState extends State<RootScreen> {
-  late final ConfigController _configController;
   int _selectedIndex = 0;
   late PageController _pageController;
 
@@ -30,7 +28,6 @@ class _RootScreenState extends State<RootScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
-    _configController = Get.find<ConfigController>();
   }
 
   @override
@@ -67,18 +64,18 @@ class _RootScreenState extends State<RootScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onTabTapped,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.power),
-            label: 'Connect',
+            icon: const Icon(Icons.power),
+            label: 'connect'.tr,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.library_books),
-            label: 'Library',
+            icon: const Icon(Icons.library_books),
+            label: 'library'.tr,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
+            icon: const Icon(Icons.settings),
+            label: 'settings'.tr,
           ),
         ],
       ),

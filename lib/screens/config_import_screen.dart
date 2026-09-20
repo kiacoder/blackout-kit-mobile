@@ -22,7 +22,6 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   final MobileScannerController _scannerController = MobileScannerController();
 
   Config? _parsedConfig;
-  List<Config> _parsedMultiple = [];
   bool _isScanning = true;
   bool _torchEnabled = false;
 
@@ -106,7 +105,6 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           setState(() {
             _textController.text = content;
             _parsedConfig = single;
-            _parsedMultiple = multiple;
           });
 
           if (single != null) {

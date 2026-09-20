@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../controllers/config_controller.dart';
 import '../controllers/settings_controller.dart';
+import '../services/vpn_service.dart';
 import 'logs_screen.dart';
 import 'split_tunneling_screen.dart';
 import 'engine_hub_screen.dart';
@@ -127,7 +128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'General',
               children: [
                 Obx(() => ListTile(
-                  title: const Text('Language'),
+                  title: Text('language'.tr),
                   subtitle: Text(_getLanguageLabel(
                     _settingsController.selectedLanguage.value,
                   )),
@@ -154,8 +155,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Protocol & Engines',
               children: [
                 ListTile(
-                  title: const Text('Blackout Engine Hub'),
-                  subtitle: const Text('View and configure all 10 circumvention engines'),
+                  title: Text('engine_hub'.tr),
+                  subtitle: const Text('See which engines this build can actually run'),
                   leading: const Icon(Icons.memory),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -163,7 +164,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
                 Obx(() => ListTile(
-                  title: const Text('Preferred Protocol'),
+                  title: Text('preferred_protocol'.tr),
                   subtitle: Text(
                     _settingsController.preferredProtocol.value.toUpperCase(),
                   ),
@@ -453,42 +454,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showProtocolDialog() {
+  /// Protocols the bundled Xray core can serve. Must stay in sync with
+  /// [kXrayProtocols] in `services/xray_config.dart`.
+  static const List<String> _servedProtocols = [
+    'vless',
+    'vmess',
+    'trojan',
+    'shadowsocks',
+  ];
+
+  /// Protocols the app knows about but cannot dial in this build: they need a
+  /// sing-box runtime that is not bundled. Listed so a user staring at a
+  /// Hysteria2 config in their library gets an explanation instead of a
+  /// spinner that never resolves.
+  static const List<String> _unbundledProtocols = [
+    'hysteria2',
+    'tuic',
+    'wireguard',
+    'amneziawg',
+    'warp',
+    'openvpn',
+  ];
+
+  Future<void> _showProtocolDialog() async {
+    final availability = await Get.find<VPNService>().getEngineInfo();
+    if (!mounted) return;
+
+    // If the native layer could not tell us anything (e.g. running on an
+    // unsupported host), do not grey anything out — assume the protocol is
+    // fine and let the connection attempt produce the real error.
+    final served = availability.isKnown
+        ? _servedProtocols.where(availability.canConnect).toList()
+        : _servedProtocols;
+    final blocked = availability.isKnown
+        ? _unbundledProtocols.where((p) => !availability.canConnect(p)).toList()
+        : <String>[];
+
     Get.dialog(
       AlertDialog(
-        title: const Text('Preferred Protocol'),
-        content: Obx(() => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile(
-              title: const Text('WireGuard'),
-              value: 'wireguard',
-              groupValue: _settingsController.preferredProtocol.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setPreferredProtocol(value);
-                Get.back();
-              },
-            ),
-            RadioListTile(
-              title: const Text('OpenVPN'),
-              value: 'openvpn',
-              groupValue: _settingsController.preferredProtocol.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setPreferredProtocol(value);
-                Get.back();
-              },
-            ),
-            RadioListTile(
-              title: const Text('Shadowsocks'),
-              value: 'shadowsocks',
-              groupValue: _settingsController.preferredProtocol.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setPreferredProtocol(value);
-                Get.back();
-              },
-            ),
-          ],
+        title: Text('preferred_protocol'.tr),
+        content: Obx(() => SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final protocol in served)
+                RadioListTile<String>(
+                  title: Text(protocol.toUpperCase()),
+                  value: protocol,
+                  groupValue: _settingsController.preferredProtocol.value,
+                  onChanged: (value) {
+                    if (value != null) {
+                      _settingsController.setPreferredProtocol(value);
+                    }
+                    Get.back();
+                  },
+                ),
+              if (blocked.isNotEmpty) ...[
+                const Divider(height: 24),
+                Padding(
+                  padding: const EdgeInsets.only(left: 16, bottom: 4),
+                  child: Text(
+                    'Not available in this build',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).hintColor,
+                    ),
+                  ),
+                ),
+                for (final protocol in blocked)
+                  ListTile(
+                    enabled: false,
+                    dense: true,
+                    title: Text(protocol.toUpperCase()),
+                    subtitle: const Text('Requires the sing-box runtime'),
+                  ),
+              ],
+            ],
+          ),
         )),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('Close')),
+        ],
       ),
     );
   }

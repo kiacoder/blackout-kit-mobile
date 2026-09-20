@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 import '../models/config.dart';
 import '../models/test_result.dart';
+import '../models/vpn_session_options.dart';
 import '../services/vpn_service.dart';
 import '../services/tester_service.dart';
 import '../services/kill_switch_service.dart';
@@ -47,7 +48,11 @@ class ConnectionController extends GetxController {
   bool get isConnected => state.value == ConnectionState.connected;
 
   DateTime? _connectionStartTime;
-  int? _uptimeUpdateTimer;
+  Timer? _uptimeTimer;
+
+  /// Cached native capability report. Engine support is fixed for the lifetime
+  /// of the process, so probing once is enough.
+  EngineAvailability? _engineAvailability;
 
   ConnectionController({
     required this.vpnService,
@@ -75,7 +80,21 @@ class ConnectionController extends GetxController {
       state.value = ConnectionState.selecting;
       statusMessage.value = 'Finding fastest config...';
 
-      final results = testResults ?? await testerService.testConfigs(availableConfigs);
+      // Drop anything no bundled engine can serve, otherwise "fastest" can
+      // select a config that connect() is then obliged to refuse.
+      final candidates = await _servableConfigs(availableConfigs);
+      if (candidates.isEmpty) {
+        state.value = ConnectionState.error;
+        statusMessage.value = availableConfigs.isEmpty
+            ? 'No configs available'
+            : 'None of your configs use a protocol this build can serve';
+        return false;
+      }
+
+      final candidateHashes = candidates.map((c) => c.getHash()).toSet();
+      final results = (testResults ?? await testerService.testConfigs(candidates))
+          .where((r) => candidateHashes.contains(r.configHash))
+          .toList();
       final fastest = testerService.getFastestConfig(results);
 
       if (fastest == null) {
@@ -85,7 +104,7 @@ class ConnectionController extends GetxController {
       }
 
       // Find the config object matching this result
-      final config = availableConfigs.firstWhereOrNull(
+      final config = candidates.firstWhereOrNull(
         (c) => c.getHash() == fastest.configHash,
       );
 
@@ -116,6 +135,16 @@ class ConnectionController extends GetxController {
         return false;
       }
 
+      // Refuse before the consent dialog: there is no point asking the user to
+      // grant VPN permission for a protocol no bundled runtime can serve.
+      final refusal = await _engineRefusal(config);
+      if (refusal != null) {
+        state.value = ConnectionState.error;
+        statusMessage.value = refusal;
+        debugService.logError('Connect refused for ${config.protocol}: $refusal');
+        return false;
+      }
+
       state.value = ConnectionState.connecting;
       statusMessage.value = 'Connecting to ${config.displayName}...';
       selectedConfig.value = config;
@@ -131,7 +160,20 @@ class ConnectionController extends GetxController {
         return false;
       }
 
-      final success = await vpnService.connect(config);
+      // Split tunneling, DNS and the kill switch are all inputs to
+      // Builder.establish(), so they have to be assembled *before* connecting.
+      // The old code activated them afterwards through channels that had no
+      // native handler, so none of them ever took effect.
+      final options = buildSessionOptions();
+      final optionProblem = options.validationError;
+      if (optionProblem != null) {
+        state.value = ConnectionState.error;
+        statusMessage.value = optionProblem;
+        debugService.logError('Session options rejected: $optionProblem');
+        return false;
+      }
+
+      final success = await vpnService.connect(config, options: options);
 
       if (success) {
         state.value = ConnectionState.connected;
@@ -140,45 +182,27 @@ class ConnectionController extends GetxController {
         _startUptimeCounter();
         _fetchConnectedIP();
 
-        debugService.logInfo('VPN connected to ${config.displayName}');
+        debugService.logInfo(
+          'VPN connected to ${config.displayName} - '
+          'split tunneling: ${splitTunnelingService.describe()}, '
+          'DNS: ${dnsLeakPreventionService.describe()}, '
+          'kill switch: ${killSwitchService.describe()}',
+        );
 
-        // Activate kill switch if enabled
-        if (isKillSwitchEnabled.value) {
-          try {
-            await killSwitchService.activate();
-            debugService.logInfo('Kill switch activated');
-          } catch (e) {
-            _log.w('Kill switch activation failed: $e');
-            debugService.logWarning('Kill switch activation failed: $e');
-          }
-        }
+        // The live tunnel now carries the current selection.
+        splitTunnelingService.clearStaleFlag();
 
-        // Activate DNS leak prevention if enabled
-        if (isDNSLeakPreventionEnabled.value) {
-          try {
-            await dnsLeakPreventionService.activate();
-            debugService.logInfo('DNS leak prevention activated');
-          } catch (e) {
-            _log.w('DNS leak prevention activation failed: $e');
-            debugService.logWarning('DNS leak prevention activation failed: $e');
-          }
-        }
-
-        // Activate split tunneling if enabled
-        if (isSplitTunnelingEnabled.value) {
-          try {
-            await splitTunnelingService.activate();
-            debugService.logInfo('Split tunneling activated');
-          } catch (e) {
-            _log.w('Split tunneling activation failed: $e');
-            debugService.logWarning('Split tunneling activation failed: $e');
-          }
+        if (killSwitchService.needsUserAction) {
+          debugService.logWarning(
+            'Kill switch is on, but full protection needs this app set as '
+            'always-on VPN with "Block connections without VPN" enabled.',
+          );
         }
 
         return true;
       } else {
         state.value = ConnectionState.error;
-        statusMessage.value = 'Failed to connect';
+        statusMessage.value = vpnService.lastError ?? 'Failed to connect';
         return false;
       }
     } catch (e) {
@@ -189,6 +213,55 @@ class ConnectionController extends GetxController {
     }
   }
 
+  /// Drops configs whose protocol no bundled engine can serve.
+  ///
+  /// Fails open: if the capability probe errors, every config is returned and
+  /// the per-connect check in [connect] still guards the actual attempt.
+  Future<List<Config>> _servableConfigs(List<Config> configs) async {
+    try {
+      _engineAvailability ??= await vpnService.getEngineInfo();
+    } catch (e) {
+      _log.w('Engine capability probe failed, testing all configs: $e');
+      return configs;
+    }
+
+    final availability = _engineAvailability!;
+    if (!availability.isKnown) return configs;
+
+    final servable =
+        configs.where((c) => availability.canConnect(c.protocol)).toList();
+    final skipped = configs.length - servable.length;
+    if (skipped > 0) {
+      _log.i('Skipped $skipped config(s) with no bundled engine');
+    }
+    return servable;
+  }
+
+  /// Returns a human-readable refusal when no bundled engine can serve
+  /// [config]'s protocol, or null when the attempt should go ahead.
+  ///
+  /// Fails open on purpose: if the capability probe itself errors we return
+  /// null and let the native layer produce the real diagnostic, rather than
+  /// blocking a connection that might have worked.
+  Future<String?> _engineRefusal(Config config) async {
+    try {
+      _engineAvailability ??= await vpnService.getEngineInfo();
+    } catch (e) {
+      _log.w('Engine capability probe failed, continuing: $e');
+      return null;
+    }
+
+    final availability = _engineAvailability!;
+    if (!availability.isKnown) return null;
+    if (availability.canConnect(config.protocol)) return null;
+
+    final supported = availability.supportedProtocols;
+    final supportedLabel =
+        supported.isEmpty ? 'none' : supported.map((p) => p.toUpperCase()).join(', ');
+    return "'${config.protocol}' cannot be dialled by this build: no engine that "
+        'serves it is bundled. Supported here: $supportedLabel.';
+  }
+
   /// Disconnect from VPN
   Future<bool> disconnect() async {
     try {
@@ -197,24 +270,10 @@ class ConnectionController extends GetxController {
 
       _stopUptimeCounter();
 
-      // Deactivate security features before disconnecting
-      try {
-        if (killSwitchService.isActive.value) {
-          await killSwitchService.deactivate();
-          debugService.logInfo('Kill switch deactivated');
-        }
-        if (dnsLeakPreventionService.isActive.value) {
-          await dnsLeakPreventionService.deactivate();
-          debugService.logInfo('DNS leak prevention deactivated');
-        }
-        if (splitTunnelingService.isActive.value) {
-          await splitTunnelingService.deactivate();
-          debugService.logInfo('Split tunneling deactivated');
-        }
-      } catch (e) {
-        _log.w('Security feature deactivation failed: $e');
-        debugService.logWarning('Security feature deactivation failed: $e');
-      }
+      // Nothing to unwind here: split tunneling, DNS and the kill switch all
+      // live inside the tunnel itself, so closing the interface releases them.
+      // The previous code called deactivate() on three channels that had no
+      // native handler.
 
       final success = await vpnService.disconnect();
 
@@ -272,8 +331,11 @@ class ConnectionController extends GetxController {
 
       if (result.isWorking) {
         state.value = ConnectionState.connected;
-        statusMessage.value =
-          'Connected (${result.speedMbps?.toStringAsFixed(1)}Mbps)';
+        // Report the real measured figure. Throughput is not measured by the
+        // tester, so the previous "Connected (43.2Mbps)" was fabricated.
+        statusMessage.value = result.latencyMs != null
+            ? 'Connected (${result.latencyMs}ms to the server)'
+            : 'Connected';
         return true;
       } else {
         state.value = ConnectionState.error;
@@ -287,40 +349,27 @@ class ConnectionController extends GetxController {
     }
   }
 
-  /// Toggle DNS leak prevention on/off
+  /// Toggle DNS leak prevention on/off.
+  ///
+  /// Takes effect on the next connect: the tunnel's DNS servers are fixed at
+  /// establish() time and cannot be changed on a live interface.
   Future<bool> toggleDNSLeakPrevention() async {
     try {
-      if (isDNSLeakPreventionEnabled.value) {
-        // Disable DNS leak prevention
-        final success = await dnsLeakPreventionService.disable();
-        if (success) {
-          isDNSLeakPreventionEnabled.value = false;
-          _log.i('DNS leak prevention disabled');
-          debugService.logInfo('DNS leak prevention disabled');
-          return true;
-        }
-      } else {
-        // Enable DNS leak prevention
-        final success = await dnsLeakPreventionService.enable();
-        if (success) {
-          isDNSLeakPreventionEnabled.value = true;
-          _log.i('DNS leak prevention enabled');
-          debugService.logInfo('DNS leak prevention enabled');
+      final next = !isDNSLeakPreventionEnabled.value;
+      await dnsLeakPreventionService.setEnabled(next);
+      isDNSLeakPreventionEnabled.value = next;
 
-          // If currently connected, activate immediately
-          if (state.value == ConnectionState.connected) {
-            try {
-              await dnsLeakPreventionService.activate();
-              debugService.logInfo('DNS leak prevention activated immediately');
-            } catch (e) {
-              _log.w('DNS leak prevention activation failed: $e');
-              debugService.logWarning('DNS leak prevention activation failed: $e');
-            }
-          }
-          return true;
-        }
+      final problem = dnsLeakPreventionService.lastError.value;
+      if (problem != null) {
+        statusMessage.value = problem;
+        return false;
       }
-      return false;
+
+      debugService.logInfo('DNS leak prevention: ${dnsLeakPreventionService.describe()}');
+      if (next && isConnected) {
+        statusMessage.value = 'DNS leak prevention applies after reconnecting';
+      }
+      return true;
     } catch (e) {
       _log.e('Error toggling DNS leak prevention: $e');
       debugService.logError('Error toggling DNS leak prevention: $e');
@@ -328,40 +377,25 @@ class ConnectionController extends GetxController {
     }
   }
 
-  /// Toggle kill switch on/off
+  /// Toggle kill switch on/off.
+  ///
+  /// The in-app half (holding the tunnel open when the engine dies) applies on
+  /// the next connect. The system half needs the user to enable always-on VPN
+  /// with lockdown; [KillSwitchService.needsUserAction] reports whether they
+  /// still have to.
   Future<bool> toggleKillSwitch() async {
     try {
-      if (isKillSwitchEnabled.value) {
-        // Disable kill switch
-        final success = await killSwitchService.disable();
-        if (success) {
-          isKillSwitchEnabled.value = false;
-          _log.i('Kill switch disabled');
-          debugService.logInfo('Kill switch disabled');
-          return true;
-        }
-      } else {
-        // Enable kill switch
-        final success = await killSwitchService.enable();
-        if (success) {
-          isKillSwitchEnabled.value = true;
-          _log.i('Kill switch enabled');
-          debugService.logInfo('Kill switch enabled');
+      final next = !isKillSwitchEnabled.value;
+      await killSwitchService.setEnabled(next);
+      isKillSwitchEnabled.value = next;
 
-          // If currently connected, activate immediately
-          if (state.value == ConnectionState.connected) {
-            try {
-              await killSwitchService.activate();
-              debugService.logInfo('Kill switch activated immediately');
-            } catch (e) {
-              _log.w('Kill switch activation failed: $e');
-              debugService.logWarning('Kill switch activation failed: $e');
-            }
-          }
-          return true;
-        }
+      debugService.logInfo('Kill switch: ${killSwitchService.describe()}');
+      if (next && killSwitchService.needsUserAction) {
+        statusMessage.value =
+            'For full protection, set this app as always-on VPN and enable '
+            '"Block connections without VPN" in system settings';
       }
-      return false;
+      return true;
     } catch (e) {
       _log.e('Error toggling kill switch: $e');
       debugService.logError('Error toggling kill switch: $e');
@@ -369,40 +403,21 @@ class ConnectionController extends GetxController {
     }
   }
 
-  /// Toggle split tunneling on/off
+  /// Toggle split tunneling on/off.
+  ///
+  /// Android freezes the per-app list into the tunnel at establish(), so a
+  /// change while connected only takes effect after reconnecting.
   Future<bool> toggleSplitTunneling() async {
     try {
-      if (isSplitTunnelingEnabled.value) {
-        // Disable split tunneling
-        final success = await splitTunnelingService.disable();
-        if (success) {
-          isSplitTunnelingEnabled.value = false;
-          _log.i('Split tunneling disabled');
-          debugService.logInfo('Split tunneling disabled');
-          return true;
-        }
-      } else {
-        // Enable split tunneling
-        final success = await splitTunnelingService.enable();
-        if (success) {
-          isSplitTunnelingEnabled.value = true;
-          _log.i('Split tunneling enabled');
-          debugService.logInfo('Split tunneling enabled');
+      final next = !isSplitTunnelingEnabled.value;
+      await splitTunnelingService.setEnabled(next);
+      isSplitTunnelingEnabled.value = next;
 
-          // If currently connected, activate immediately
-          if (state.value == ConnectionState.connected) {
-            try {
-              await splitTunnelingService.activate();
-              debugService.logInfo('Split tunneling activated immediately');
-            } catch (e) {
-              _log.w('Split tunneling activation failed: $e');
-              debugService.logWarning('Split tunneling activation failed: $e');
-            }
-          }
-          return true;
-        }
+      debugService.logInfo('Split tunneling: ${splitTunnelingService.describe()}');
+      if (next && isConnected) {
+        statusMessage.value = 'Split tunneling applies after reconnecting';
       }
-      return false;
+      return true;
     } catch (e) {
       _log.e('Error toggling split tunneling: $e');
       debugService.logError('Error toggling split tunneling: $e');
@@ -410,34 +425,60 @@ class ConnectionController extends GetxController {
     }
   }
 
-  /// Get human-readable state
-  String getStateLabel() {
+  /// Translation key for the current state, e.g. `'connected'`.
+  ///
+  /// Returns a key rather than English text so this controller stays free of
+  /// presentation concerns. The UI resolves it with `'key'.tr`; the tables live
+  /// in `LocalizationService`. The previous `getStateLabel()` hardcoded English
+  /// here, which is why the status card stayed English in every language.
+  String getStateLabelKey() {
     switch (state.value) {
       case ConnectionState.idle:
-        return 'Not Connected';
+        return 'not_connected';
       case ConnectionState.selecting:
-        return 'Selecting...';
+        return 'selecting';
       case ConnectionState.connecting:
-        return 'Connecting...';
+        return 'connecting';
       case ConnectionState.connected:
-        return 'Connected';
+        return 'connected';
       case ConnectionState.testing:
-        return 'Testing...';
+        return 'testing';
       case ConnectionState.disconnecting:
-        return 'Disconnecting...';
+        return 'disconnecting';
       case ConnectionState.error:
-        return 'Error';
+        return 'error';
     }
   }
 
+  /// Assembles the builder-time options from the three feature services.
+  ///
+  /// Order matters only in that split tunneling and DNS each own a distinct
+  /// field; the kill switch owns a third. None of them clobber the others.
+  VpnSessionOptions buildSessionOptions([Config? config]) {
+    var options = VpnSessionOptions(
+      dnsServers: config == null
+          ? const ['1.1.1.1']
+          : VPNService.dnsServersForConfig(config),
+    );
+    options = splitTunnelingService.applyTo(options);
+    options = dnsLeakPreventionService.applyTo(options);
+    options = killSwitchService.applyTo(options);
+    return options;
+  }
+
   void _startUptimeCounter() {
-    _uptimeUpdateTimer = null;
-    // In production, use Timer for real uptime tracking
-    // For now, update every second in UI rebuild
+    _uptimeTimer?.cancel();
+    _uptimeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final start = _connectionStartTime;
+      if (start == null) return;
+      connectionUptime.value =
+          DateTime.now().difference(start).inMilliseconds / 1000.0;
+    });
   }
 
   void _stopUptimeCounter() {
-    _uptimeUpdateTimer = null;
+    _uptimeTimer?.cancel();
+    _uptimeTimer = null;
     connectionUptime.value = 0;
   }
 
@@ -454,9 +495,6 @@ class ConnectionController extends GetxController {
   void onClose() {
     _stopUptimeCounter();
     debugService.logInfo('ConnectionController closing');
-    unawaited(killSwitchService.cleanup());
-    unawaited(dnsLeakPreventionService.cleanup());
-    unawaited(splitTunnelingService.cleanup());
     super.onClose();
   }
 }

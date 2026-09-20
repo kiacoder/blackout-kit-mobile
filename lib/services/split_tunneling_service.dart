@@ -1,307 +1,249 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 
-/// App model for split tunneling configuration
+import '../controllers/settings_controller.dart';
+import '../models/vpn_session_options.dart';
+
+/// An app that can be routed into or out of the tunnel.
 class TunnelApp {
   final String packageName;
   final String appName;
-  final String? iconPath;
-  final bool includedInTunnel;
+  final bool isSystem;
 
   TunnelApp({
     required this.packageName,
     required this.appName,
-    this.iconPath,
-    this.includedInTunnel = false,
+    this.isSystem = false,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'packageName': packageName,
-      'appName': appName,
-      'iconPath': iconPath,
-      'includedInTunnel': includedInTunnel,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'packageName': packageName,
+        'appName': appName,
+        'isSystem': isSystem,
+      };
 
-  factory TunnelApp.fromMap(Map<dynamic, dynamic> map) {
-    return TunnelApp(
-      packageName: map['packageName'] as String,
-      appName: map['appName'] as String,
-      iconPath: map['iconPath'] as String?,
-      includedInTunnel: map['includedInTunnel'] as bool? ?? false,
-    );
-  }
+  factory TunnelApp.fromMap(Map<dynamic, dynamic> map) => TunnelApp(
+        packageName: map['packageName']?.toString() ?? '',
+        appName: map['appName']?.toString() ?? '',
+        isSystem: map['isSystem'] == true,
+      );
 }
 
-/// Manages split tunneling - route specific apps through VPN, others direct
+/// Split tunneling: choose which apps are routed through the tunnel.
 ///
-/// On Android: Uses iptables to route traffic by uid (user id) to VPN
-/// On iOS: Uses NEAppProxySettings to configure per-app VPN rules
+/// ## What changed
 ///
-/// Strategies:
-/// 1. Whitelist mode: Only selected apps go through VPN
-/// 2. Blacklist mode: All apps except selected go through VPN
-/// 3. Smart mode: Automatic based on app categories (social, messaging, etc.)
+/// The old version called four method channels
+/// (`enableSplitTunneling`, `activateSplitTunneling`, ...) that had no native
+/// handler at all, so every call threw `MissingPluginException` and was
+/// swallowed. It also shipped a hardcoded `_demoApps` list that the UI fell
+/// back to when the real list came back empty — so the picker looked populated
+/// with apps that were not on the device, and selecting one did nothing.
+///
+/// Neither exists now. The app list comes from `PackageManager`, and the
+/// selection is fed into [VpnSessionOptions], which the native layer applies
+/// through `Builder.addAllowedApplication` / `addDisallowedApplication`.
+///
+/// ## Why there is no "activate" any more
+///
+/// Android freezes the per-app list into the tunnel at `establish()`. There is
+/// no API to add or remove an app from a live tunnel. Changing the selection
+/// therefore takes effect on the next connect, which is what [requiresReconnect]
+/// reports so the UI can say so honestly.
 class SplitTunnelingService extends GetxService {
-  static const platform = MethodChannel('com.blackoutkit.vpn/splittunneling');
+  static const platform = MethodChannel('com.blackoutkit.vpn/network');
 
   final _logger = Logger();
 
-  final isEnabled = false.obs;
-  final isActive = false.obs;
-  final mode = Rxn<String>(); // 'whitelist', 'blacklist', 'smart'
   final installedApps = RxList<TunnelApp>();
-  final selectedApps = RxSet<String>(); // packageNames of selected apps
+  final isLoadingApps = RxBool(false);
   final lastError = Rxn<String>();
 
-  @override
-  void onInit() {
-    super.onInit();
-    _loadSavedState();
-  }
+  /// True once a selection has changed while a tunnel is up, meaning the new
+  /// selection will not be in force until the user reconnects.
+  final requiresReconnect = RxBool(false);
 
-  /// Load split tunneling saved state from persistent storage
-  void _loadSavedState() {
-    // TODO: Load from SharedPreferences/Hive
-    // For now, default to false
-  }
+  SettingsController? get _settings =>
+      Get.isRegistered<SettingsController>() ? Get.find<SettingsController>() : null;
 
-  /// Fetch installed apps from device
-  Future<List<TunnelApp>> fetchInstalledApps() async {
+  bool get isEnabled => _settings?.splitTunnelingEnabled.value ?? false;
+
+  /// 'whitelist' (only selected apps are tunnelled) or 'blacklist' (selected
+  /// apps bypass the tunnel).
+  String get mode => _settings?.splitTunnelingMode.value ?? 'blacklist';
+
+  List<String> get selectedApps =>
+      _settings?.splitTunnelingApps.toList() ?? const [];
+
+  /// Loads the real installed-app list from `PackageManager`.
+  ///
+  /// Returns an empty list on failure and records [lastError]. It deliberately
+  /// does **not** substitute sample data: an empty picker is honest, a picker
+  /// full of apps that are not installed is not.
+  Future<List<TunnelApp>> fetchInstalledApps({bool includeSystem = false}) async {
+    if (isLoadingApps.value) return installedApps.toList();
+
+    isLoadingApps.value = true;
     try {
-      _logger.i('Fetching installed apps...');
+      _logger.i('Fetching installed apps (includeSystem=$includeSystem)...');
 
       final result = await platform.invokeMethod<List<Object?>>(
         'getInstalledApps',
+        {'includeSystem': includeSystem},
       );
 
-      if (result != null) {
-        final apps = result
-            .map((item) => TunnelApp.fromMap(item as Map<dynamic, dynamic>))
-            .toList();
+      final apps = (result ?? [])
+          .whereType<Map<dynamic, dynamic>>()
+          .map(TunnelApp.fromMap)
+          .where((app) => app.packageName.isNotEmpty)
+          .toList();
 
-        installedApps.assignAll(apps);
-        _logger.i('✓ Fetched ${apps.length} apps');
-        return apps;
-      }
-
-      _logger.w('No apps returned from platform');
-      return [];
+      installedApps.assignAll(apps);
+      lastError.value = null;
+      _logger.i('Loaded ${apps.length} apps');
+      return apps;
+    } on MissingPluginException {
+      lastError.value = 'App listing is not available on this platform.';
+      _logger.w('getInstalledApps has no handler on this platform');
+      return const [];
     } catch (e) {
-      lastError.value = 'Failed to fetch apps: ${e.toString()}';
+      lastError.value = 'Could not list installed apps: $e';
       _logger.e('Error fetching installed apps: $e');
-      return [];
+      return const [];
+    } finally {
+      isLoadingApps.value = false;
     }
   }
 
-  /// Enable split tunneling with specified mode
-  Future<bool> enable({String mode = 'whitelist'}) async {
+  /// PNG bytes for an app icon, fetched one at a time.
+  ///
+  /// Lazy on purpose: encoding icons for 200 apps up front would push tens of
+  /// megabytes across the platform channel to draw a list nobody has scrolled.
+  Future<Uint8List?> getAppIcon(String packageName) async {
     try {
-      _logger.i('Enabling split tunneling ($mode mode)...');
-
-      final result = await platform.invokeMethod<bool>(
-        'enableSplitTunneling',
-        {'mode': mode},
+      final encoded = await platform.invokeMethod<String>(
+        'getAppIcon',
+        {'packageName': packageName},
       );
-
-      if (result == true) {
-        isEnabled.value = true;
-        this.mode.value = mode;
-        lastError.value = null;
-        _logger.i('✓ Split tunneling enabled ($mode)');
-        return true;
-      } else {
-        lastError.value = 'Failed to enable split tunneling';
-        _logger.w('Split tunneling enablement returned false');
-        return false;
-      }
+      if (encoded == null || encoded.isEmpty) return null;
+      return base64.decode(encoded);
     } catch (e) {
-      lastError.value = 'Split tunneling unavailable: ${e.toString()}';
-      _logger.e('Split tunneling enable failed: $e');
-      return false;
+      _logger.w('No icon for $packageName: $e');
+      return null;
     }
   }
 
-  /// Disable split tunneling
-  Future<bool> disable() async {
-    try {
-      _logger.i('Disabling split tunneling...');
+  // ─────────────────────────── selection ─────────────────────────────────
 
-      final result = await platform.invokeMethod<bool>(
-        'disableSplitTunneling',
-      );
-
-      if (result == true) {
-        isEnabled.value = false;
-        isActive.value = false;
-        selectedApps.clear();
-        lastError.value = null;
-        _logger.i('✓ Split tunneling disabled');
-        return true;
-      } else {
-        lastError.value = 'Failed to disable split tunneling';
-        _logger.w('Split tunneling disablement returned false');
-        return false;
-      }
-    } catch (e) {
-      lastError.value = 'Error disabling split tunneling: ${e.toString()}';
-      _logger.e('Split tunneling disable failed: $e');
-      return false;
-    }
+  Future<void> setEnabled(bool enabled) async {
+    final settings = _settings;
+    if (settings == null) return;
+    settings.toggleSplitTunneling(enabled);
+    _markStale();
   }
 
-  /// Add app to split tunneling list
-  Future<bool> addApp(String packageName) async {
-    try {
-      _logger.i('Adding app to split tunneling: $packageName');
-
-      if (!selectedApps.contains(packageName)) {
-        selectedApps.add(packageName);
-      }
-
-      if (isActive.value) {
-        final result = await platform.invokeMethod<bool>(
-          'addAppToTunnel',
-          {'packageName': packageName},
-        );
-
-        if (result == true) {
-          _logger.i('✓ App added: $packageName');
-          return true;
-        }
-      }
-
-      return true; // Will be applied when activated
-    } catch (e) {
-      lastError.value = 'Failed to add app: ${e.toString()}';
-      _logger.e('Error adding app: $e');
-      return false;
+  Future<void> setMode(String newMode) async {
+    if (newMode != 'whitelist' && newMode != 'blacklist') {
+      lastError.value = 'Unknown split tunneling mode "$newMode".';
+      return;
     }
+    final settings = _settings;
+    if (settings == null) return;
+    settings.setSplitTunnelingMode(newMode);
+    _markStale();
   }
 
-  /// Remove app from split tunneling list
-  Future<bool> removeApp(String packageName) async {
-    try {
-      _logger.i('Removing app from split tunneling: $packageName');
+  Future<void> addApp(String packageName) async {
+    _settings?.addSplitTunnelingApp(packageName);
+    _markStale();
+  }
 
-      selectedApps.remove(packageName);
+  Future<void> removeApp(String packageName) async {
+    _settings?.removeSplitTunnelingApp(packageName);
+    _markStale();
+  }
 
-      if (isActive.value) {
-        final result = await platform.invokeMethod<bool>(
-          'removeAppFromTunnel',
-          {'packageName': packageName},
-        );
+  Future<void> clearSelection() async {
+    final settings = _settings;
+    if (settings == null) return;
+    settings.splitTunnelingApps.clear();
+    await settings.saveSettings();
+    _markStale();
+  }
 
-        if (result == true) {
-          _logger.i('✓ App removed: $packageName');
-          return true;
-        }
+  /// Selecting every installed app is almost never what the user wants and can
+  /// exceed the per-list cap Android enforces, so it is capped here with a
+  /// reason rather than failing later inside `establish()`.
+  Future<int> selectAll(List<TunnelApp> apps) async {
+    final settings = _settings;
+    if (settings == null) return 0;
+
+    final capped = apps.take(VpnSessionOptions.maxAppsPerList).toList();
+    for (final app in capped) {
+      if (!settings.splitTunnelingApps.contains(app.packageName)) {
+        settings.splitTunnelingApps.add(app.packageName);
       }
-
-      return true; // Will be applied when deactivated/reactivated
-    } catch (e) {
-      lastError.value = 'Failed to remove app: ${e.toString()}';
-      _logger.e('Error removing app: $e');
-      return false;
     }
+    await settings.saveSettings();
+    _markStale();
+
+    if (apps.length > capped.length) {
+      lastError.value =
+          'Only the first ${VpnSessionOptions.maxAppsPerList} apps were '
+          'selected; Android rejects longer lists.';
+    }
+    return capped.length;
   }
 
-  /// Activate split tunneling with current app selection
-  Future<void> activate() async {
-    if (!isEnabled.value) return;
-
-    try {
-      _logger.i('Activating split tunneling...');
-
-      final apps = selectedApps.toList();
-      await platform.invokeMethod<void>(
-        'activateSplitTunneling',
-        {'apps': apps},
-      );
-
-      isActive.value = true;
-      lastError.value = null;
-      _logger.i('✓ Split tunneling activated for ${apps.length} apps');
-    } catch (e) {
-      lastError.value = 'Failed to activate split tunneling: ${e.toString()}';
-      _logger.e('Split tunneling activate failed: $e');
-    }
+  void _markStale() {
+    // Only meaningful while a tunnel is live.
+    requiresReconnect.value = true;
   }
 
-  /// Deactivate split tunneling
-  Future<void> deactivate() async {
-    try {
-      _logger.i('Deactivating split tunneling...');
+  /// Called by the connection controller once a fresh tunnel is up.
+  void clearStaleFlag() => requiresReconnect.value = false;
 
-      await platform.invokeMethod<void>('deactivateSplitTunneling');
-
-      isActive.value = false;
-      lastError.value = null;
-      _logger.i('✓ Split tunneling deactivated');
-    } catch (e) {
-      lastError.value = 'Failed to deactivate split tunneling: ${e.toString()}';
-      _logger.e('Split tunneling deactivate failed: $e');
+  /// Translates the current selection into builder-time options.
+  ///
+  /// Returns [options] untouched when split tunneling is off, and clears any
+  /// app list when the selection is empty (an empty allowed-list would mean
+  /// "route nothing", which is not what an empty picker means to a user).
+  VpnSessionOptions applyTo(VpnSessionOptions options) {
+    if (!isEnabled) {
+      return options.copyWith(allowedApps: const [], disallowedApps: const []);
     }
+
+    final selected = selectedApps;
+    if (selected.isEmpty) {
+      return options.copyWith(allowedApps: const [], disallowedApps: const []);
+    }
+
+    return switch (mode) {
+      'whitelist' => options.copyWith(
+          allowedApps: selected,
+          disallowedApps: const [],
+        ),
+      _ => options.copyWith(
+          allowedApps: const [],
+          disallowedApps: selected,
+        ),
+    };
   }
 
-  /// Change tunneling mode (whitelist/blacklist/smart)
-  Future<bool> changeMode(String newMode) async {
-    try {
-      _logger.i('Changing split tunneling mode to: $newMode');
-
-      final result = await platform.invokeMethod<bool>(
-        'changeSplitTunnelingMode',
-        {'mode': newMode},
-      );
-
-      if (result == true) {
-        mode.value = newMode;
-        _logger.i('✓ Mode changed to: $newMode');
-        return true;
-      }
-
-      return false;
-    } catch (e) {
-      lastError.value = 'Failed to change mode: ${e.toString()}';
-      _logger.e('Error changing mode: $e');
-      return false;
-    }
+  /// Human-readable description of what is currently configured.
+  String describe() {
+    if (!isEnabled) return 'Off';
+    if (selectedApps.isEmpty) return 'On, but no apps selected';
+    final label = mode == 'whitelist' ? 'only' : 'all except';
+    return 'On - $label ${selectedApps.length} app(s)';
   }
 
-  /// Get current split tunneling configuration
-  Future<Map<String, dynamic>> getConfiguration() async {
-    try {
-      final result = await platform.invokeMethod<Map<Object?, Object?>>(
-        'getSplitTunnelingConfig',
-      );
-
-      if (result != null) {
-        return Map<String, dynamic>.from(result);
-      }
-
-      return {
-        'enabled': isEnabled.value,
-        'active': isActive.value,
-        'mode': mode.value,
-        'appCount': selectedApps.length,
-      };
-    } catch (e) {
-      _logger.e('Error getting configuration: $e');
-      return {};
-    }
-  }
-
-  /// Cleanup split tunneling on app exit
-  Future<void> cleanup() async {
-    try {
-      if (isActive.value) {
-        await deactivate();
-      }
-      _logger.i('Split tunneling cleanup complete');
-    } catch (e) {
-      _logger.e('Error during split tunneling cleanup: $e');
-    }
+  @override
+  void onClose() {
+    installedApps.clear();
+    super.onClose();
   }
 }

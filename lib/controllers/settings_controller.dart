@@ -21,6 +21,18 @@ class SettingsController extends GetxController {
   final RxBool splitTunnelingEnabled = RxBool(false);
   final RxList<String> splitTunnelingApps = RxList<String>();
 
+  /// 'whitelist' (only the listed apps are tunnelled) or 'blacklist' (the
+  /// listed apps bypass the tunnel). Persisted because it is a real builder-time
+  /// input, not a UI-only preference.
+  final RxString splitTunnelingMode = RxString('blacklist');
+
+  /// Force DNS through the tunnel and resolve via the core, so queries cannot
+  /// fall back to the carrier resolver.
+  final RxBool dnsLeakPreventionEnabled = RxBool(false);
+
+  /// Resolver used when [dnsLeakPreventionEnabled] is on.
+  final RxString customDnsServer = RxString('1.1.1.1');
+
   final RxString theme = RxString('system'); // system, light, dark
   final RxBool showSpeedInTray = RxBool(true);
   final RxBool showNotifications = RxBool(true);
@@ -66,6 +78,12 @@ class SettingsController extends GetxController {
       if (savedApps is List) {
         splitTunnelingApps.value = List<String>.from(savedApps);
       }
+      splitTunnelingMode.value =
+          _settingsBox.get('splitTunnelingMode', defaultValue: 'blacklist');
+      dnsLeakPreventionEnabled.value =
+          _settingsBox.get('dnsLeakPreventionEnabled', defaultValue: false);
+      customDnsServer.value =
+          _settingsBox.get('customDnsServer', defaultValue: '1.1.1.1');
 
       theme.value = _settingsBox.get('theme', defaultValue: 'system');
       showSpeedInTray.value = _settingsBox.get('showSpeedInTray', defaultValue: true);
@@ -97,6 +115,9 @@ class SettingsController extends GetxController {
       await _settingsBox.put('blockNonVPNTraffic', blockNonVPNTraffic.value);
       await _settingsBox.put('splitTunnelingEnabled', splitTunnelingEnabled.value);
       await _settingsBox.put('splitTunnelingApps', splitTunnelingApps.toList());
+      await _settingsBox.put('splitTunnelingMode', splitTunnelingMode.value);
+      await _settingsBox.put('dnsLeakPreventionEnabled', dnsLeakPreventionEnabled.value);
+      await _settingsBox.put('customDnsServer', customDnsServer.value);
 
       await _settingsBox.put('theme', theme.value);
       await _settingsBox.put('showSpeedInTray', showSpeedInTray.value);
@@ -135,6 +156,31 @@ class SettingsController extends GetxController {
     splitTunnelingEnabled.value = value;
     saveSettings();
     _log.i('Split tunneling: $value');
+  }
+
+  /// Set split tunneling mode ('whitelist' | 'blacklist')
+  void setSplitTunnelingMode(String newMode) {
+    if (newMode != 'whitelist' && newMode != 'blacklist') {
+      _log.w('Ignoring unknown split tunneling mode: $newMode');
+      return;
+    }
+    splitTunnelingMode.value = newMode;
+    saveSettings();
+    _log.i('Split tunneling mode: $newMode');
+  }
+
+  /// Toggle DNS leak prevention
+  void toggleDnsLeakPrevention(bool value) {
+    dnsLeakPreventionEnabled.value = value;
+    saveSettings();
+    _log.i('DNS leak prevention: $value');
+  }
+
+  /// Set the DNS resolver used while leak prevention is on
+  void setCustomDnsServer(String server) {
+    customDnsServer.value = server;
+    saveSettings();
+    _log.i('Custom DNS server: $server');
   }
 
   /// Add app to split tunneling list
@@ -192,13 +238,20 @@ class SettingsController extends GetxController {
     _log.i('Auto-test interval set to: $minutes minutes');
   }
 
-  /// Set language
+  /// Set the app language.
+  ///
+  /// [selectedLanguage] is the single source of truth: `main.dart` feeds it to
+  /// `GetMaterialApp.locale`, so assigning it re-renders the app in the new
+  /// language. There is deliberately no second copy to keep in sync — the old
+  /// code also pushed the code into `LocalizationService.currentLanguage`, which
+  /// was persisted nowhere and read by nothing.
   void setLanguage(String languageCode) {
+    if (!LocalizationService.isSupported(languageCode)) {
+      _log.w('Ignoring unsupported language code: $languageCode');
+      return;
+    }
     selectedLanguage.value = languageCode;
     saveSettings();
-    if (Get.isRegistered<LocalizationService>()) {
-      Get.find<LocalizationService>().setLanguage(languageCode);
-    }
     _log.i('Language set to: $languageCode');
   }
 
@@ -253,7 +306,7 @@ class SettingsController extends GetxController {
     keepScreenAwake.value = false;
     selectedLanguage.value = 'en';
     analyticsEnabled.value = false;
-    preferredProtocol.value = 'wireguard';
+    preferredProtocol.value = 'vless';
     autoSelectFastest.value = true;
     autoTestIntervalMinutes.value = 60;
     logLocalConnection.value = false;

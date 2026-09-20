@@ -25,30 +25,138 @@ abstract class Config {
   bool validate() => address.isNotEmpty && port > 0 && port < 65536;
 }
 
-/// WireGuard config
+/// Splits `host:port`, a bracketed `[v6]:port`, or a bare host/IPv6 literal.
+///
+/// Returns null only for empty input. When no port can be read, [fallbackPort]
+/// is used — WireGuard's registered default is 51820, but real profiles
+/// routinely pin something else, so the value from the file always wins.
+(String, int)? _splitHostPort(String? raw, {int fallbackPort = 51820}) {
+  final value = raw?.trim() ?? '';
+  if (value.isEmpty) return null;
+
+  // Bracketed IPv6, e.g. `[2606:4700::1]:51820`.
+  if (value.startsWith('[')) {
+    final close = value.indexOf(']');
+    if (close == -1) return (value, fallbackPort);
+    final host = value.substring(1, close);
+    final rest = value.substring(close + 1);
+    final port = rest.startsWith(':')
+        ? int.tryParse(rest.substring(1)) ?? fallbackPort
+        : fallbackPort;
+    return (host, port);
+  }
+
+  final parts = value.split(':');
+  if (parts.length >= 2) {
+    final port = int.tryParse(parts.last);
+    // A bare IPv6 literal splits into many non-numeric parts; only treat the
+    // tail as a port when it actually parses as one.
+    if (port != null) {
+      return (parts.sublist(0, parts.length - 1).join(':'), port);
+    }
+  }
+  return (value, fallbackPort);
+}
+
+/// Splits a comma-separated INI value (`1.1.1.1, 8.8.8.8`).
+List<String> _splitList(String value) => value
+    .split(',')
+    .map((e) => e.trim())
+    .where((e) => e.isNotEmpty)
+    .toList();
+
+/// A single `[Peer]` block from a WireGuard `.conf`.
+///
+/// A profile may legally carry more than one peer, and the Xray `wireguard`
+/// outbound accepts an array, so every block is kept. Collapsing to the first
+/// peer would silently drop routes for the rest.
+class WireGuardPeer {
+  /// `PublicKey` — the peer's public key. Required; there is no
+  /// unauthenticated WireGuard handshake.
+  final String publicKey;
+
+  /// `PresharedKey` — optional extra symmetric key. A profile that specifies
+  /// one cannot complete a handshake without it, so it is carried through.
+  final String? presharedKey;
+
+  /// `AllowedIPs` — which destinations this peer may carry.
+  final List<String> allowedIPs;
+
+  /// `Endpoint` — `host:port` as written, or null when the profile omits it.
+  final String? endpoint;
+
+  /// `PersistentKeepalive` in seconds.
+  final int? persistentKeepalive;
+
+  const WireGuardPeer({
+    required this.publicKey,
+    this.presharedKey,
+    this.allowedIPs = const ['0.0.0.0/0', '::/0'],
+    this.endpoint,
+    this.persistentKeepalive,
+  });
+
+  /// Host half of [endpoint], or null when no endpoint was given.
+  String? get host => _splitHostPort(endpoint)?.$1;
+
+  /// Port half of [endpoint], defaulting to 51820.
+  int get port => _splitHostPort(endpoint)?.$2 ?? 51820;
+
+  Map<String, dynamic> toMap() => {
+        'publicKey': publicKey,
+        if (presharedKey != null) 'presharedKey': presharedKey,
+        'allowedIPs': allowedIPs,
+        if (endpoint != null) 'endpoint': endpoint,
+        if (persistentKeepalive != null) 'persistentKeepalive': persistentKeepalive,
+      };
+
+  static WireGuardPeer fromMap(Map data) => WireGuardPeer(
+        publicKey: data['publicKey'] as String? ?? '',
+        presharedKey: data['presharedKey'] as String?,
+        allowedIPs: (data['allowedIPs'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const ['0.0.0.0/0', '::/0'],
+        endpoint: data['endpoint'] as String?,
+        persistentKeepalive: data['persistentKeepalive'] as int?,
+      );
+}
+
+/// WireGuard config, parsed from a standard `.conf` / `wg-quick` profile.
+///
+/// Carried on Android by the bundled Xray core's own `wireguard` outbound
+/// (`xray.proxy.wireguard`), so no separate sing-box binary is required.
 class WireGuardConfig extends Config {
   final String name;
   final String rawUri;
+
+  /// `[Interface] PrivateKey` — this device's static private key.
   final String privateKey;
-  final String address;
-  final String gateway;
+
+  /// `[Interface] Address` — the local address(es) the interface claims.
+  ///
+  /// This is **not** the server. It is what Xray's `wireguard` outbound wants
+  /// in its own `address` field, and it must stay distinct from
+  /// [Config.address], which is the server the user dials.
+  final List<String> localAddresses;
+
+  /// `[Interface] DNS`, comma separated exactly as written in the file.
   final String dns;
-  final int port;
-  final String? publicKey;
-  final String? presharedKey;
-  final String? endpoint;
+
+  /// `[Interface] MTU`, when the profile pins one.
+  final int? mtu;
+
+  /// Every `[Peer]` block, in file order.
+  final List<WireGuardPeer> peers;
 
   WireGuardConfig({
     required this.name,
     required this.rawUri,
     required this.privateKey,
-    required this.address,
-    required this.gateway,
-    required this.dns,
-    this.port = 51820,
-    this.publicKey,
-    this.presharedKey,
-    this.endpoint,
+    this.localAddresses = const [],
+    this.dns = '',
+    this.mtu,
+    this.peers = const [],
   });
 
   @override
@@ -56,6 +164,13 @@ class WireGuardConfig extends Config {
 
   @override
   String get displayName => name;
+
+  /// The server the user connects to: the first peer's endpoint host.
+  @override
+  String get address => peers.isEmpty ? '' : (peers.first.host ?? '');
+
+  @override
+  int get port => peers.isEmpty ? 51820 : peers.first.port;
 
   @override
   Future<bool> connect() async {
@@ -70,59 +185,101 @@ class WireGuardConfig extends Config {
     return false;
   }
 
+  /// Both halves are mandatory — WireGuard has no unauthenticated mode, so a
+  /// profile missing its private key, or any peer missing its public key or
+  /// endpoint, cannot handshake. The previous implementation used `||` and so
+  /// accepted a profile with an endpoint and no key at all.
   @override
   bool validate() {
-    return privateKey.isNotEmpty || endpoint != null;
+    if (privateKey.isEmpty) return false;
+    if (peers.isEmpty) return false;
+    return peers.every(
+      (p) => p.publicKey.isNotEmpty && (p.endpoint ?? '').isNotEmpty,
+    );
   }
 
-  /// Parse WireGuard INI content
+  /// Parse a WireGuard `.conf` / `wg-quick` profile.
+  ///
+  /// Section-aware: keys are attributed to `[Interface]` or to the `[Peer]`
+  /// block they appear in, which the previous flat scan could not do — it read
+  /// the first `PublicKey` anywhere in the file as *the* peer key and never
+  /// looked at `AllowedIPs`, `PresharedKey` or `PersistentKeepalive` at all.
   static WireGuardConfig? fromUri(String content, {String? customName}) {
     try {
       String privateKey = '';
-      String address = '';
       String dns = '';
-      String publicKey = '';
-      String endpoint = '';
-      int port = 51820;
+      int? mtu;
+      final localAddresses = <String>[];
 
-      final lines = content.split('\n');
-      for (final line in lines) {
-        final trimmed = line.trim();
-        if (trimmed.startsWith('#') || !trimmed.contains('=')) continue;
+      // Raw key/value maps per peer, in file order. Built first, then
+      // converted, because a peer's fields arrive incrementally.
+      final peerMaps = <Map<String, String>>[];
+      Map<String, String>? current;
 
-        final parts = trimmed.split('=');
-        if (parts.length < 2) continue;
+      for (final rawLine in content.split('\n')) {
+        final line = rawLine.trim();
+        if (line.isEmpty || line.startsWith('#') || line.startsWith(';')) {
+          continue;
+        }
 
-        final key = parts[0].trim().toLowerCase();
-        final val = parts.sublist(1).join('=').trim();
-
-        if (key == 'privatekey') privateKey = val;
-        if (key == 'address') address = val;
-        if (key == 'dns') dns = val;
-        if (key == 'publickey') publicKey = val;
-        if (key == 'endpoint') {
-          endpoint = val;
-          final epParts = val.split(':');
-          if (epParts.length == 2) {
-            port = int.tryParse(epParts[1]) ?? 51820;
+        if (line.startsWith('[')) {
+          final section = line.toLowerCase();
+          if (section.startsWith('[peer')) {
+            current = <String, String>{};
+            peerMaps.add(current);
+          } else {
+            // `[Interface]` or anything unrecognised ends the current peer.
+            current = null;
           }
+          continue;
+        }
+
+        final eq = line.indexOf('=');
+        if (eq == -1) continue;
+        final key = line.substring(0, eq).trim().toLowerCase();
+        final value = line.substring(eq + 1).trim();
+        if (value.isEmpty) continue;
+
+        if (current != null) {
+          current[key] = value;
+          continue;
+        }
+
+        switch (key) {
+          case 'privatekey':
+            privateKey = value;
+          case 'address':
+            localAddresses.addAll(_splitList(value));
+          case 'dns':
+            dns = value;
+          case 'mtu':
+            mtu = int.tryParse(value);
         }
       }
 
-      final host = endpoint.isNotEmpty
-          ? endpoint.split(':')[0]
-          : (address.isNotEmpty ? address.split('/')[0] : '127.0.0.1');
+      final peers = peerMaps.map((m) {
+        final allowed = m['allowedips'];
+        return WireGuardPeer(
+          publicKey: m['publickey'] ?? '',
+          presharedKey: m['presharedkey'],
+          allowedIPs: allowed == null || allowed.isEmpty
+              ? const ['0.0.0.0/0', '::/0']
+              : _splitList(allowed),
+          endpoint: m['endpoint'],
+          persistentKeepalive: int.tryParse(m['persistentkeepalive'] ?? ''),
+        );
+      }).toList();
 
+      final host = peers.isEmpty ? '' : (peers.first.host ?? '');
       return WireGuardConfig(
-        name: customName ?? 'WireGuard ($host:$port)',
+        name: customName ??
+            (host.isEmpty ? 'WireGuard' : 'WireGuard ($host:${peers.first.port})'),
         rawUri: content,
         privateKey: privateKey,
-        address: address.isNotEmpty ? address : host,
-        gateway: host,
-        dns: dns.isNotEmpty ? dns : '1.1.1.1',
-        port: port,
-        publicKey: publicKey,
-        endpoint: endpoint,
+        localAddresses: localAddresses,
+        dns: dns,
+        mtu: mtu,
+        peers: peers,
       );
     } catch (e) {
       return null;
@@ -325,13 +482,25 @@ class VlessConfig extends Config {
   final String? publicKey;  // REALITY
   final String? shortId;    // REALITY
   final String? pbk;        // REALITY short alias
-  final String? network;    // tcp / ws / grpc / http
+  final String? network;    // tcp / ws / grpc / http / splithttp
+  // Transport detail. These were previously parsed away, which silently broke
+  // every WebSocket / gRPC config: the outbound would dial the right host on
+  // the right port but request the wrong path and get 404s forever.
+  final String? path;       // ws / splithttp path
+  final String? host;       // ws Host header / splithttp host
+  final String? serviceName; // grpc service name
+  final String? spiderX;    // REALITY spider path
+  final String? xhttpMode;  // splithttp mode: auto / packet-up / stream-up
+  final String? alpn;       // TLS ALPN list
+  final bool allowInsecure;
 
   VlessConfig({
     required this.name, required this.rawUri, required this.uuid,
     required this.address, required this.port,
     this.security = 'none', this.flow, this.sni, this.fingerprint,
     this.publicKey, this.shortId, this.pbk, this.network,
+    this.path, this.host, this.serviceName, this.spiderX, this.xhttpMode,
+    this.alpn, this.allowInsecure = false,
   });
 
   @override String get protocol => 'vless';
@@ -351,16 +520,36 @@ class VlessConfig extends Config {
       final port = u.port;
       final params = u.queryParameters;
       final name = customName ?? Uri.decodeComponent(u.fragment.isNotEmpty ? u.fragment : 'VLESS ($host:$port)');
+
+      // `type` is the Xray share-link spelling. Both `xhttp` and `splithttp`
+      // appear in the wild; the bundled core registers the transport under
+      // **`splithttp` only** — a byte scan of libgojni.so finds `splithttp`
+      // 14 times and the literal `xhttp` never (only the settings key
+      // `xhttpSettings`, which is a different thing). Emitting
+      // `network: "xhttp"` therefore names a transport the core cannot
+      // resolve, so both spellings are normalised to `splithttp`.
+      var network = params['type'] ?? 'tcp';
+      if (network == 'xhttp') network = 'splithttp';
+
+      final insecureRaw = (params['insecure'] ?? '').toLowerCase();
+
       return VlessConfig(
         name: name, rawUri: uri, uuid: uuid, address: host, port: port,
         security: params['security'] ?? 'none',
         flow: params['flow'],
         sni: params['sni'],
         fingerprint: params['fp'],
-        publicKey: params['pbk'],
-        shortId: params['sid'],
+        publicKey: params['pbk'] ?? params['publicKey'],
+        shortId: params['sid'] ?? params['shortId'],
         pbk: params['pbk'],
-        network: params['type'] ?? 'tcp',
+        network: network,
+        path: params['path'],
+        host: params['host'],
+        serviceName: params['serviceName'],
+        spiderX: params['spx'] ?? params['spiderX'],
+        xhttpMode: params['mode'],
+        alpn: params['alpn'],
+        allowInsecure: insecureRaw == '1' || insecureRaw == 'true' || insecureRaw == 'yes',
       );
     } catch (_) { return null; }
   }
@@ -437,11 +626,15 @@ class TrojanConfig extends Config {
   final bool allowInsecure;
   final String? fingerprint;
   final String? network;
+  final String? path;   // Trojan over WebSocket path
+  final String? host;   // Trojan over WebSocket Host header
+  final String? alpn;
 
   TrojanConfig({
     required this.name, required this.rawUri, required this.password,
     required this.address, required this.port,
     this.sni, this.allowInsecure = false, this.fingerprint, this.network,
+    this.path, this.host, this.alpn,
   });
 
   @override String get protocol => 'trojan';
@@ -457,14 +650,22 @@ class TrojanConfig extends Config {
       if (!uri.startsWith('trojan://')) return null;
       final u = Uri.parse(uri);
       final name = customName ?? Uri.decodeComponent(u.fragment.isNotEmpty ? u.fragment : 'Trojan (${u.host}:${u.port})');
+      var network = u.queryParameters['type'] ?? 'tcp';
+      // See the note in [VlessConfig.fromUri]: the bundled core knows this
+      // transport as `splithttp`, not `xhttp`.
+      if (network == 'xhttp') network = 'splithttp';
       return TrojanConfig(
         name: name, rawUri: uri,
         password: u.userInfo,
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
-        allowInsecure: u.queryParameters['allowInsecure'] == '1',
+        allowInsecure: u.queryParameters['allowInsecure'] == '1' ||
+            u.queryParameters['insecure'] == '1',
         fingerprint: u.queryParameters['fp'],
-        network: u.queryParameters['type'] ?? 'tcp',
+        network: network,
+        path: u.queryParameters['path'],
+        host: u.queryParameters['host'],
+        alpn: u.queryParameters['alpn'],
       );
     } catch (_) { return null; }
   }
@@ -662,15 +863,20 @@ class WarpConfig extends Config {
   @override Future<bool> isRunning() async => false;
   @override bool validate() => privateKey.isNotEmpty || accountId.isNotEmpty;
 
-  static WarpConfig? fromUri(String content, {String? customName}) {
-    if (!content.contains('warp') && !content.contains('WARP') && !content.contains('1dot1dot1dot1')) return null;
-    return WarpConfig(
-      name: customName ?? 'Cloudflare WARP',
-      rawUri: content,
-      privateKey: '',
-      accountId: '',
-    );
-  }
+  /// Refuses to fabricate a config.
+  ///
+  /// WARP is WireGuard underneath, and a real profile — the kind `wgcf`
+  /// generates — is a plain `.conf` with an `[Interface]` and a `[Peer]`, so it
+  /// is parsed by [WireGuardConfig.fromUri] earlier in [ConfigParser.parse] and
+  /// is served by the bundled core's `wireguard` outbound.
+  ///
+  /// This method used to return a config with an **empty** `privateKey` and an
+  /// empty `accountId` for any text that merely contained the word "warp".
+  /// That produced a plausible-looking entry in the config list which could
+  /// never connect, and which `validate()` only rejected by accident. There is
+  /// no WARP registration flow to mint a real key pair, so the honest answer
+  /// for non-WireGuard WARP input is "cannot parse".
+  static WarpConfig? fromUri(String content, {String? customName}) => null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

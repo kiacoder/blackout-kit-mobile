@@ -38,7 +38,9 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          # Must be 17: android/app/build.gradle sets sourceCompatibility 17 and
+          # jvmTarget "17". This was '11' and could not compile the project.
+          java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Flutter
@@ -49,46 +51,34 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Upload APK
-        uses: softprops/action-gh-release@v1
-        with:
-          files: build/app/outputs/flutter-app-release.apk
-          tag_name: ${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build_ios:
-    runs-on: macos-latest
-    needs: release
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build iOS
-        run: flutter build ios --release --no-codesign
-
-      - name: Create IPA
+      - name: Build APKs
+        # Per-ABI APKs. --target-platform is required because
+        # android/app/build.gradle no longer sets ndk.abiFilters (AGP rejects
+        # that combination outright when ABI splits are requested).
         run: |
-          cd build/ios/Release-iphoneos
-          mkdir -p Payload
-          mv Runner.app Payload/
-          zip -r -q "../../../build/app/outputs/app-release.ipa" Payload
+          flutter build apk --release --split-per-abi \
+            --target-platform android-arm,android-arm64
 
-      - name: Upload IPA
+      - name: Upload APKs
         uses: softprops/action-gh-release@v1
         with:
-          files: build/app/outputs/app-release.ipa
+          # Previous path was `build/app/outputs/flutter-app-release.apk`, which
+          # has never existed — the real directory is `flutter-apk/`. The release
+          # step uploaded nothing and still reported success.
+          files: |
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           tag_name: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # build_ios was removed on 2026-09-19.
+  #
+  # It ran `flutter build ios --release --no-codesign`, wrapped Runner.app into
+  # an unsigned .ipa and attached it to the GitHub release. The iOS native layer
+  # does not exist — ios/Runner/*.swift are unregistered mocks and there is no
+  # AppDelegate.swift — so the job published an installable artifact that cannot
+  # establish a tunnel. Shipping it is worse than shipping nothing.
+  #
+  # Restore this job once NEVPNManager / NEPacketTunnelProvider is implemented
+  # and the build is verified on a device.

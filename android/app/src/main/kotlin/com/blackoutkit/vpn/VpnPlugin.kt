@@ -62,9 +62,54 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             "disconnect" -> handleDisconnect(result)
             "isRunning" -> result.success(BlackoutVpnService.isRunning)
             "getStatus" -> result.success(statusMap())
+            // Deliberately unimplemented — not an oversight.
+            //
+            // The tunnel's own address (10.111.222.1) is not the exit IP the user
+            // wants to see. Fetching the real one over HTTP from inside the app is
+            // unreliable here: a VPN app's own traffic may not traverse its own
+            // tunnel, so the request could report the *unprotected* address. That
+            // is worse than showing nothing.
+            //
+            // The UI hides the row when this is null, so the app degrades
+            // honestly. See the Phase 3 note in PHASES.md.
             "getConnectedIP" -> result.success(null)
+            "getEngineInfo" -> result.success(engineInfoMap())
             else -> result.notImplemented()
         }
+    }
+
+    /**
+     * Reports which engine is actually available on this build.
+     *
+     * The UI uses this so it can stop advertising protocols that have no
+     * bundled engine — a config list full of protocols that can never connect
+     * is worse than an honest shorter list.
+     *
+     * `wireguard` is listed under the Xray core rather than as unavailable:
+     * the bundled `libgojni.so` contains `xray.proxy.wireguard`, so a
+     * WireGuard profile is served in-process by the same core that carries
+     * VLESS/VMess/Trojan/Shadowsocks. It does not need the sing-box binary,
+     * and therefore does not pull in sing-box's GPL-3.0 licence.
+     *
+     * `warp` stays unavailable. Cloudflare WARP is WireGuard underneath, so a
+     * `wgcf`-generated profile works once imported as a WireGuard `.conf`, but
+     * [WarpConfig] itself has no registration flow and cannot mint the key
+     * pair WARP requires.
+     */
+    private fun engineInfoMap(): Map<String, Any?> {
+        val xrayVersion = XrayEngine.version()
+        return mapOf(
+            "xrayAvailable" to (xrayVersion != null),
+            "xrayVersion" to xrayVersion,
+            "xrayProtocols" to
+                listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard"),
+            "singboxAvailable" to false,
+            "singboxProtocols" to emptyList<String>(),
+            // hysteria2 needs sing-box: the core ships Hysteria v1 only
+            // (`xray.proxy.hysteria`), which is a different protocol.
+            "unavailableProtocols" to
+                listOf("hysteria2", "tuic", "amneziawg", "warp")
+        )
     }
 
     private fun statusMap(): Map<String, Any?> = mapOf(
@@ -124,6 +169,20 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 call.argument<Int>("socksPort") ?: BlackoutVpnService.DEFAULT_SOCKS_PORT
             )
             putExtra(BlackoutVpnService.EXTRA_DNS, call.argument<String>("dns"))
+            putStringArrayListExtra(
+                BlackoutVpnService.EXTRA_DNS_SERVERS,
+                ArrayList(call.argument<List<String>>("dnsServers") ?: emptyList())
+            )
+            putExtra(
+                BlackoutVpnService.EXTRA_HOLD_ON_ENGINE_FAILURE,
+                call.argument<Boolean>("holdTunnelOnEngineFailure") ?: false
+            )
+            // Present only for Xray-family protocols; its presence is what
+            // selects the in-process core over the subprocess runner.
+            putExtra(
+                BlackoutVpnService.EXTRA_XRAY_CONFIG,
+                call.argument<String>("xrayConfig")
+            )
             putStringArrayListExtra(
                 BlackoutVpnService.EXTRA_ALLOWED_APPS,
                 ArrayList(call.argument<List<String>>("allowedApps") ?: emptyList())

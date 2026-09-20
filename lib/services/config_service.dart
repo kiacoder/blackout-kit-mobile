@@ -65,11 +65,10 @@ class ConfigService {
         // Protocol-specific fields
         if (config is WireGuardConfig) ...{
           'privateKey': config.privateKey,
-          'gateway': config.gateway,
+          'localAddresses': config.localAddresses,
           'dns': config.dns,
-          'publicKey': config.publicKey,
-          'presharedKey': config.presharedKey,
-          'endpoint': config.endpoint,
+          'mtu': config.mtu,
+          'peers': config.peers.map((p) => p.toMap()).toList(),
         },
         if (config is OpenVpnConfig) ...{
           'configContent': config.configContent,
@@ -256,13 +255,17 @@ class ConfigService {
             name: data['displayName'] as String? ?? 'WireGuard',
             rawUri: rawUri,
             privateKey: data['privateKey'] as String? ?? '',
-            address: data['address'] as String? ?? '',
-            gateway: data['gateway'] as String? ?? '',
+            localAddresses: (data['localAddresses'] as List?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                const [],
             dns: data['dns'] as String? ?? '',
-            port: data['port'] as int? ?? 51820,
-            publicKey: data['publicKey'] as String?,
-            presharedKey: data['presharedKey'] as String?,
-            endpoint: data['endpoint'] as String?,
+            mtu: data['mtu'] as int?,
+            peers: (data['peers'] as List?)
+                    ?.whereType<Map>()
+                    .map(WireGuardPeer.fromMap)
+                    .toList() ??
+                const [],
           );
 
         case 'openvpn':
@@ -286,7 +289,22 @@ class ConfigService {
           );
 
         default:
-          return null;
+          // Rebuild from the raw link that was stored alongside the record.
+          //
+          // This branch used to `return null`, and because
+          // [getAllConfigs] drops nulls, every VLESS / VMess / Trojan /
+          // Hysteria2 / TUIC config was silently deleted from the library on
+          // each app start — only the three protocols with an explicit branch
+          // above survived a restart. VLESS is the app's primary protocol, so
+          // the practical effect was that the config list emptied itself.
+          //
+          // Every saved record carries `rawUri`, and [ConfigParser.parse] is
+          // the same code that produced the object on import, so re-parsing
+          // reconstructs it faithfully.
+          return ConfigParser.parse(
+            rawUri,
+            customName: data['displayName'] as String?,
+          );
       }
     } catch (e) {
       _log.e('Error converting map to config: $e');

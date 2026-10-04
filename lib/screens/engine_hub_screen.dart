@@ -303,6 +303,11 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                             Flexible(
                               child: Text(
                                 engine.displayName,
+                                // Ellipsis alone does not stop soft wrapping:
+                                // once the Row squeezes this below one line's
+                                // worth of width the name stacks one glyph per
+                                // line. Cap it at a single line.
+                                maxLines: 1,
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

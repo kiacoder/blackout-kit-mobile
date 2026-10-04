@@ -139,6 +139,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Repository names rendered one letter per line in Settings → Repositories.**
+  No code was splitting the string; the tile's usable width was collapsing and
+  `Text` soft-wrapped down to a single glyph per line. `overflow: ellipsis`
+  alone does not prevent this — it needs an explicit `maxLines`. The source name
+  and the `owner/repo (branch)` subtitle are now capped at one line with an
+  ellipsis, and the wrapping column stretches to the section's full width.
+- **Engine names in the Engine Hub had the same defect** — `overflow: ellipsis`
+  inside a `Flexible` with no `maxLines`. Capped at one line.
+- The repository detail sheet now caps its title at two lines instead of
+  wrapping indefinitely.
+
 ### Planned
 - Native buildVariants for different feature sets
 - Reproducible builds with published checksums

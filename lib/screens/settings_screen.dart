@@ -201,12 +201,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   }
                   return Column(
+                    // Stretch so every tile gets the section's full width
+                    // instead of shrink-wrapping to its content.
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final source in sources)
                         ListTile(
-                          title: Text(source.name),
+                          // maxLines/ellipsis: when the tile's usable width
+                          // collapses (narrow window, split-screen, huge font
+                          // scale) an unconstrained Text soft-wraps and renders
+                          // one glyph per line. Never wrap — truncate instead.
+                          title: Text(
+                            source.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           subtitle: Text(
                             '${source.owner}/${source.repo} (${source.branch})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -594,6 +607,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Text(
               source.name,
+              // Same reason as the tile above: never soft-wrap a single name
+              // down to one glyph per line when width is tight.
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,

@@ -2,7 +2,7 @@
 
 A trustworthy, open-source VPN client for Android and iOS built with Flutter. Fetches VPN configurations from GitHub, auto-tests them for reachability, and provides one-tap VPN connection.
 
-**Status**: v1.0.0-beta.2 — Android tunnel implemented and building; not yet verified on hardware
+**Status**: v1.0.0-beta.3 — Android tunnel implemented and building; not yet verified on hardware
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process

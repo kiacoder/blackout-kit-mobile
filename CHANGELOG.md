@@ -5,6 +5,15 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.3] - 2026-10-06
+
+### Fixed
+- **Settings Repository Layout**: Fixed column stretching and layout squishing that caused repository card labels to wrap one character per line.
+- **Protocol Filtering**: Expanded Config Library filter bar to support all 10+ core protocols (All, VLESS, VMess, Trojan, Shadowsocks, WireGuard, Hysteria 2, TUIC, OpenVPN, AmneziaWG, WARP, Psiphon).
+- **Subscription Ingestion**: Added automatic Base64 subscription decoding and embedded markdown/HTML URI extraction to `ConfigParser.parseMultiple`.
+- **Repository Ingestion**: Updated `GitHubService.fetchConfigsFromSource` to search across candidate files (`configs.txt`, `subscription.txt`, `sub.txt`, `all.txt`, `vpn.txt`, `nodes.txt`, `v2ray.txt`, `README.md`) on both `main` and `master` branches.
+- **Static Analysis**: Resolved all unnecessary cast warnings.
+
 ## [1.0.0-beta] - 2026-01-15
 
 ### Added

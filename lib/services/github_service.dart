@@ -50,7 +50,15 @@ class GitHubService {
       }
 
       _log.i('Fetching $url');
-      final response = await _client.get<String>(url);
+      final response = await _client.get<String>(
+        url,
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (BlackoutKitMobile/1.0)',
+          },
+        ),
+      );
       if (response.statusCode == 200 && response.data != null) {
         // Cache the content
         _contentCache[url] = CachedContent(
@@ -69,6 +77,41 @@ class GitHubService {
       return null;
     } catch (e) {
       _log.e('Unexpected error: $e');
+      return null;
+    }
+  }
+
+  /// Fetch directly from any HTTP/HTTPS URL
+  Future<String?> fetchDirectUrl(String url) async {
+    try {
+      if (_contentCache.containsKey(url)) {
+        final cached = _contentCache[url]!;
+        if (DateTime.now().difference(cached.timestamp) < _repoTtl) {
+          return cached.content;
+        } else {
+          _contentCache.remove(url);
+        }
+      }
+
+      final response = await _client.get<String>(
+        url,
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (BlackoutKitMobile/1.0)',
+          },
+        ),
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        _contentCache[url] = CachedContent(
+          content: response.data!,
+          timestamp: DateTime.now(),
+        );
+        return response.data!;
+      }
+      return null;
+    } catch (e) {
+      _log.e('Direct URL fetch error: $e');
       return null;
     }
   }
@@ -118,8 +161,8 @@ class GitHubService {
     }
   }
 
-  /// Fetch configs from a trusted source (file-based)
-  /// Handles asset selection with fnmatch-style patterns
+  /// Fetch configs from a trusted source (file-based or direct URL)
+  /// Handles asset selection with multiple candidate fallback patterns
   Future<List<Config>> fetchConfigsFromSource(
     ConfigSource source, {
     String? filePattern,
@@ -127,25 +170,66 @@ class GitHubService {
     try {
       _log.i('Fetching configs from ${source.fullId}');
 
-      // Default pattern: look for common config file names
-      final pattern = filePattern ?? 'configs.txt';
-
-      // Fetch the file
-      final content = await fetchRawFile(
-        source.owner,
-        source.repo,
-        pattern,
-        branch: source.branch ?? 'main',
-      );
-
-      if (content == null) {
-        return [];
+      // If user entered a full direct URL
+      if (source.owner.startsWith('http://') || source.owner.startsWith('https://')) {
+        final content = await fetchDirectUrl(source.owner);
+        if (content != null && content.isNotEmpty) {
+          final configs = ConfigParser.parseMultiple(content);
+          _log.i('Parsed ${configs.length} configs from direct URL ${source.owner}');
+          return configs;
+        }
       }
 
-      // Parse configs from content
-      final configs = ConfigParser.parseMultiple(content);
-      _log.i('Parsed ${configs.length} configs from ${source.fullId}');
-      return configs;
+      // Try multiple common config & subscription filenames in repos
+      final candidateFiles = filePattern != null
+          ? [filePattern]
+          : [
+              'configs.txt',
+              'subscription.txt',
+              'sub.txt',
+              'all.txt',
+              'vpn.txt',
+              'nodes.txt',
+              'v2ray.txt',
+              'README.md',
+            ];
+
+      for (final filename in candidateFiles) {
+        final content = await fetchRawFile(
+          source.owner,
+          source.repo,
+          filename,
+          branch: source.branch ?? 'main',
+        );
+        if (content != null && content.trim().isNotEmpty) {
+          final configs = ConfigParser.parseMultiple(content);
+          if (configs.isNotEmpty) {
+            _log.i('Parsed ${configs.length} configs from ${source.fullId}/$filename');
+            return configs;
+          }
+        }
+      }
+
+      // If branch was defaulted to 'main', also try 'master' as a fallback
+      if (source.branch == null || source.branch == 'main') {
+        for (final filename in candidateFiles) {
+          final content = await fetchRawFile(
+            source.owner,
+            source.repo,
+            filename,
+            branch: 'master',
+          );
+          if (content != null && content.trim().isNotEmpty) {
+            final configs = ConfigParser.parseMultiple(content);
+            if (configs.isNotEmpty) {
+              _log.i('Parsed ${configs.length} configs from ${source.fullId}/$filename (master)');
+              return configs;
+            }
+          }
+        }
+      }
+
+      return [];
     } catch (e) {
       _log.e('Error fetching configs: $e');
       return [];

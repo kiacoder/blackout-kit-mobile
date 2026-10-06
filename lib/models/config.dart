@@ -704,7 +704,7 @@ class Hysteria2Config extends Config {
   /// hy2://password@host:port?sni=...&insecure=1
   static Hysteria2Config? fromUri(String uri, {String? customName}) {
     try {
-      if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://')) return null;
+      if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://') && !uri.startsWith('hysteria://')) return null;
       final u = Uri.parse(uri);
       final name = customName ?? Uri.decodeComponent(u.fragment.isNotEmpty ? u.fragment : 'Hysteria2 (${u.host}:${u.port})');
       return Hysteria2Config(
@@ -1005,7 +1005,7 @@ class ConfigParser {
       if (trimmed.startsWith('vless://'))       return VlessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vmess://'))       return VmessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('trojan://'))      return TrojanConfig.fromUri(trimmed, customName: customName);
-      if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://'))
+      if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://') || trimmed.startsWith('hysteria://'))
                                                 return Hysteria2Config.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('tuic://'))        return TuicConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('ss://'))          return ShadowsocksConfig.fromUri(trimmed, customName: customName);
@@ -1026,17 +1026,82 @@ class ConfigParser {
     }
   }
 
-  /// Parse all configs from multi-line text
+  /// Parse all configs from multi-line text, Base64 subscriptions, or embedded markdown
   static List<Config> parseMultiple(String text) {
+    if (text.trim().isEmpty) return [];
+
+    var rawText = text.trim();
+
+    // 1. Check if the entire payload is a Base64-encoded subscription
+    if (!rawText.contains('://') &&
+        !rawText.contains('[Interface]') &&
+        !rawText.contains('remote ') &&
+        !rawText.contains('BEGIN CERTIFICATE')) {
+      try {
+        final cleanBase64 = rawText.replaceAll(RegExp(r'\s+'), '');
+        final normalized = base64.normalize(cleanBase64);
+        final decoded = utf8.decode(base64.decode(normalized));
+        if (decoded.contains('://') ||
+            decoded.contains('[Interface]') ||
+            decoded.contains('remote ') ||
+            decoded.contains('BEGIN CERTIFICATE')) {
+          rawText = decoded;
+        }
+      } catch (_) {}
+    }
+
     final list = <Config>[];
-    final lines = text.split('\n');
+    final seenUris = <String>{};
+
+    void addIfValid(Config? c) {
+      if (c != null && c.validate() && !seenUris.contains(c.rawUri)) {
+        seenUris.add(c.rawUri);
+        list.add(c);
+      }
+    }
+
+    final lines = rawText.split(RegExp(r'[\r\n]+'));
     final buffer = StringBuffer();
 
     for (final line in lines) {
       final trimmed = line.trim();
+      if (trimmed.isEmpty || trimmed.startsWith('#') || trimmed.startsWith('//')) {
+        continue;
+      }
+
+      // Direct single line parse
       final single = parse(trimmed);
       if (single != null && trimmed.contains('://')) {
-        list.add(single);
+        addIfValid(single);
+        continue;
+      }
+
+      // Single line base64 URI check
+      if (!trimmed.contains('://') && trimmed.length > 20) {
+        try {
+          final normalized = base64.normalize(trimmed);
+          final decoded = utf8.decode(base64.decode(normalized));
+          final decodedParsed = parse(decoded);
+          if (decodedParsed != null) {
+            addIfValid(decodedParsed);
+            continue;
+          }
+        } catch (_) {}
+      }
+
+      // Extract embedded URIs from markdown tables, bullet points, or HTML
+      final uriRegex = RegExp(r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic)://[^\s<>"\]]+');
+      final matches = uriRegex.allMatches(trimmed);
+      if (matches.isNotEmpty) {
+        for (final match in matches) {
+          final matchedUri = match.group(0);
+          if (matchedUri != null) {
+            final parsedMatched = parse(matchedUri);
+            if (parsedMatched != null) {
+              addIfValid(parsedMatched);
+            }
+          }
+        }
       } else {
         buffer.writeln(line);
       }
@@ -1044,11 +1109,16 @@ class ConfigParser {
 
     final blockText = buffer.toString();
     if (blockText.contains('[Interface]')) {
-      final wg = WireGuardConfig.fromUri(blockText);
-      if (wg != null) list.add(wg);
+      final blocks = blockText.split(RegExp(r'(?=\[Interface\])', caseSensitive: false));
+      for (final block in blocks) {
+        if (block.trim().contains('[Interface]')) {
+          final wg = WireGuardConfig.fromUri(block.trim());
+          addIfValid(wg);
+        }
+      }
     } else if (blockText.contains('remote ') || blockText.contains('BEGIN CERTIFICATE')) {
       final ovpn = OpenVpnConfig.fromUri(blockText);
-      if (ovpn != null) list.add(ovpn);
+      addIfValid(ovpn);
     }
 
     return list;

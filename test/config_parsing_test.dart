@@ -436,6 +436,37 @@ Endpoint = i.com:51820
         {'vless', 'trojan', 'shadowsocks'},
       );
     });
+
+    test('parseMultiple decodes a Base64 subscription blob', () {
+      final plainUris = [
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443?security=none#VlessNode',
+        'trojan://password@b.com:443?sni=b.com#TrojanNode',
+        'hy2://password@c.com:443?sni=c.com#HysteriaNode',
+      ].join('\n');
+
+      final base64Blob = base64.encode(utf8.encode(plainUris));
+      final configs = ConfigParser.parseMultiple(base64Blob);
+
+      expect(configs.length, 3);
+      expect(configs[0].protocol, 'vless');
+      expect(configs[1].protocol, 'trojan');
+      expect(configs[2].protocol, 'hysteria2');
+    });
+
+    test('parseMultiple extracts URIs embedded in markdown or HTML', () {
+      const markdown = '''
+# Community Free Nodes
+| Name | Link |
+| --- | --- |
+| Node 1 | `vless://11111111-1111-1111-1111-111111111111@node1.com:443?security=none#Node1` |
+| Node 2 | [Connect](trojan://secret@node2.com:443#Node2) |
+''';
+
+      final configs = ConfigParser.parseMultiple(markdown);
+      expect(configs.length, 2);
+      expect(configs[0].protocol, 'vless');
+      expect(configs[1].protocol, 'trojan');
+    });
   });
 
   group('hashing', () {

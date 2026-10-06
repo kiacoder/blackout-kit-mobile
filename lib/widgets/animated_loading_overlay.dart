@@ -85,7 +85,7 @@ class _AnimatedLoadingOverlayState extends State<AnimatedLoadingOverlay>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       RotationTransition(
-                        turns: _rotationAnimation as Animation<double>,
+                        turns: _rotationAnimation,
                         child: Container(
                           width: 60,
                           height: 60,

@@ -101,7 +101,7 @@ class _AnimatedConnectionButtonState extends State<AnimatedConnectionButton>
                   children: [
                     if (widget.isLoading)
                       RotationTransition(
-                        turns: _rotationAnimation as Animation<double>,
+                        turns: _rotationAnimation,
                         child: Icon(
                           Icons.cloud_queue,
                           size: 48,

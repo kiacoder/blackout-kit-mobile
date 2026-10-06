@@ -41,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: SingleChildScrollView(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // VPN Settings Section
             _buildSection(
@@ -201,42 +202,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   }
                   return Column(
-                    // Stretch so every tile gets the section's full width
-                    // instead of shrink-wrapping to its content.
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final source in sources)
-                        ListTile(
-                          // maxLines/ellipsis: when the tile's usable width
-                          // collapses (narrow window, split-screen, huge font
-                          // scale) an unconstrained Text soft-wraps and renders
-                          // one glyph per line. Never wrap — truncate instead.
-                          title: Text(
-                            source.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${source.owner}/${source.repo} (${source.branch})',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDark ? theme.cardColor : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
                             ),
                           ),
-                          trailing: Obx(() => Switch(
-                            value: source.isEnabled,
-                            onChanged: (value) async {
-                              final updated = source.copyWith(
-                                isEnabled: value,
-                              );
-                              await _configController.configService
-                                  .saveSource(updated);
-                              await _configController.loadSources();
-                            },
-                          )),
-                          onTap: () => _showSourceDetails(context, source),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: (source.isEnabled ? theme.colorScheme.primary : Colors.grey).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.source_outlined,
+                                color: source.isEnabled ? theme.colorScheme.primary : Colors.grey,
+                              ),
+                            ),
+                            title: Text(
+                              source.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                '${source.owner}/${source.repo} (${source.branch ?? "main"})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                            trailing: Switch(
+                              value: source.isEnabled,
+                              onChanged: (value) async {
+                                final updated = source.copyWith(
+                                  isEnabled: value,
+                                );
+                                await _configController.configService
+                                    .saveSource(updated);
+                                await _configController.loadSources();
+                              },
+                            ),
+                            onTap: () => _showSourceDetails(context, source),
+                          ),
                         ),
                     ],
                   );
@@ -336,7 +361,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),

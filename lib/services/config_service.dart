@@ -40,7 +40,7 @@ class ConfigService {
       final hash = config.getHash();
 
       // Check for duplicate
-      final dedup = _configBox.get(_dedupKey) as Map? ?? {};
+      final dedup = _configBox.get(_dedupKey) ?? {};
       if (dedup.containsKey(hash)) {
         _log.w('Duplicate config detected: $hash (source: $sourceId)');
         return false;
@@ -114,7 +114,7 @@ class ConfigService {
       final configs = <Config>[];
       for (final key in _configBox.keys) {
         if (key == _dedupKey || key is! String) continue;
-        final data = _configBox.get(key) as Map?;
+        final data = _configBox.get(key);
         if (data == null) continue;
 
         final config = _configFromMap(data);
@@ -143,7 +143,7 @@ class ConfigService {
       final configs = <Config>[];
       for (final key in _configBox.keys) {
         if (key == _dedupKey || key is! String) continue;
-        final data = _configBox.get(key) as Map?;
+        final data = _configBox.get(key);
         if (data == null) continue;
 
         if (data['sourceId'] == sourceId) {
@@ -172,7 +172,7 @@ class ConfigService {
       await _configBox.delete(key);
 
       // Remove from dedup tracker
-      final dedup = _configBox.get(_dedupKey) as Map? ?? {};
+      final dedup = _configBox.get(_dedupKey) ?? {};
       dedup.remove(hash);
       await _configBox.put(_dedupKey, dedup);
 
@@ -221,7 +221,7 @@ class ConfigService {
   /// Get source by ID
   ConfigSource? getSource(String id) {
     try {
-      final data = _sourceBox.get(id) as Map?;
+      final data = _sourceBox.get(id);
       if (data == null) return null;
       return ConfigSource.fromJson(Map<String, dynamic>.from(data));
     } catch (e) {

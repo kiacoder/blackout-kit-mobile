@@ -180,6 +180,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ? theme.cardColor
         : Colors.grey.shade100;
 
+    final protocols = [
+      {'id': 'all', 'label': 'All'},
+      {'id': 'vless', 'label': 'VLESS'},
+      {'id': 'vmess', 'label': 'VMess'},
+      {'id': 'trojan', 'label': 'Trojan'},
+      {'id': 'shadowsocks', 'label': 'Shadowsocks'},
+      {'id': 'wireguard', 'label': 'WireGuard'},
+      {'id': 'hysteria2', 'label': 'Hysteria 2'},
+      {'id': 'tuic', 'label': 'TUIC'},
+      {'id': 'openvpn', 'label': 'OpenVPN'},
+      {'id': 'amneziawg', 'label': 'AmneziaWG'},
+      {'id': 'warp', 'label': 'WARP'},
+      {'id': 'psiphon', 'label': 'Psiphon'},
+    ];
+
     return Container(
       padding: const EdgeInsets.all(12),
       color: containerColor,
@@ -189,35 +204,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Obx(() => SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: [
-                _buildFilterChip(
-                  label: 'All',
-                  selected: _configController.filterProtocol.value == 'all',
-                  onSelected: () =>
-                    _configController.filterProtocol.value = 'all',
-                ),
-                _buildFilterChip(
-                  label: 'WireGuard',
-                  selected:
-                    _configController.filterProtocol.value == 'wireguard',
-                  onSelected: () =>
-                    _configController.filterProtocol.value = 'wireguard',
-                ),
-                _buildFilterChip(
-                  label: 'OpenVPN',
-                  selected:
-                    _configController.filterProtocol.value == 'openvpn',
-                  onSelected: () =>
-                    _configController.filterProtocol.value = 'openvpn',
-                ),
-                _buildFilterChip(
-                  label: 'Shadowsocks',
-                  selected:
-                    _configController.filterProtocol.value == 'shadowsocks',
-                  onSelected: () =>
-                    _configController.filterProtocol.value = 'shadowsocks',
-                ),
-              ],
+              children: protocols.map((proto) {
+                final id = proto['id']!;
+                final label = proto['label']!;
+                return _buildFilterChip(
+                  label: label,
+                  selected: _configController.filterProtocol.value == id,
+                  onSelected: () => _configController.filterProtocol.value = id,
+                );
+              }).toList(),
             ),
           )),
           const SizedBox(height: 12),

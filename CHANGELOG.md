@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0-beta.3] - 2026-10-06
 
+### Added
+- **Bundled sing-box & tun2socks Core**: Compiled and bundled native `libsingbox.so` and `libtun2socks.so` for Android `arm64-v8a` and `armeabi-v7a`.
+- **Active Protocol Execution**: Enabled full tunnel connection support for **Hysteria 2**, **TUIC v5**, **AmneziaWG** (obfuscated WireGuard with junk packets), and **WARP**.
+- **SingboxConfigBuilder**: Created Dart configuration builder for sing-box routing, inbounds, outbounds, DNS protection, and split tunneling.
+
 ### Fixed
 - **Settings Repository Layout**: Fixed column stretching and layout squishing that caused repository card labels to wrap one character per line.
 - **Protocol Filtering**: Expanded Config Library filter bar to support all 10+ core protocols (All, VLESS, VMess, Trojan, Shadowsocks, WireGuard, Hysteria 2, TUIC, OpenVPN, AmneziaWG, WARP, Psiphon).

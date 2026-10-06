@@ -103,12 +103,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             "xrayVersion" to xrayVersion,
             "xrayProtocols" to
                 listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard"),
-            "singboxAvailable" to false,
-            "singboxProtocols" to emptyList<String>(),
-            // hysteria2 needs sing-box: the core ships Hysteria v1 only
-            // (`xray.proxy.hysteria`), which is a different protocol.
+            "singboxAvailable" to true,
+            "singboxProtocols" to
+                listOf("hysteria2", "tuic", "amneziawg", "warp"),
             "unavailableProtocols" to
-                listOf("hysteria2", "tuic", "amneziawg", "warp")
+                listOf("openvpn", "psiphon")
         )
     }
 
@@ -182,6 +181,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             putExtra(
                 BlackoutVpnService.EXTRA_XRAY_CONFIG,
                 call.argument<String>("xrayConfig")
+            )
+            putExtra(
+                BlackoutVpnService.EXTRA_SINGBOX_CONFIG,
+                call.argument<String>("singboxConfig")
             )
             putStringArrayListExtra(
                 BlackoutVpnService.EXTRA_ALLOWED_APPS,

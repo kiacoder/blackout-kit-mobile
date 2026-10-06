@@ -54,6 +54,9 @@ class BlackoutVpnService : VpnService() {
         /** Full Xray JSON document, built by the Dart side. */
         const val EXTRA_XRAY_CONFIG = "xrayConfig"
 
+        /** Full sing-box JSON document, built by the Dart side. */
+        const val EXTRA_SINGBOX_CONFIG = "singboxConfig"
+
         private const val CHANNEL_ID = "blackout_vpn"
         private const val NOTIFICATION_ID = 1001
 
@@ -165,6 +168,7 @@ class BlackoutVpnService : VpnService() {
         val disallowed =
             intent?.getStringArrayListExtra(EXTRA_DISALLOWED_APPS) ?: emptyList()
         val xrayConfig = intent?.getStringExtra(EXTRA_XRAY_CONFIG)
+        val singboxConfig = intent?.getStringExtra(EXTRA_SINGBOX_CONFIG)
 
         Thread({
             val ok = establish(
@@ -175,7 +179,8 @@ class BlackoutVpnService : VpnService() {
                 allowed = allowed,
                 disallowed = disallowed,
                 holdOnFailure = holdOnFailure,
-                xrayConfig = xrayConfig
+                xrayConfig = xrayConfig,
+                singboxConfig = singboxConfig
             )
 
             mainHandler.post {
@@ -199,7 +204,8 @@ class BlackoutVpnService : VpnService() {
         allowed: List<String>,
         disallowed: List<String>,
         holdOnFailure: Boolean,
-        xrayConfig: String?
+        xrayConfig: String?,
+        singboxConfig: String?
     ): Boolean {
         if (tun != null) teardown()
 
@@ -243,27 +249,6 @@ class BlackoutVpnService : VpnService() {
                 }
             }
 
-            // Never route our own traffic back into the tunnel: the proxy
-            // connection to the server is dialled from this very process, and
-            // looping it back into the TUN would deadlock the tunnel.
-            //
-            // CONSEQUENCE — read before adding any in-app network probe.
-            // This makes every socket opened by this app bypass the tunnel, in
-            // both split-tunneling modes:
-            //   * disallow-list mode: we add ourselves to the disallowed list;
-            //   * allow-list mode: only the listed packages are tunneled and we
-            //     are not among them (the call below throws and is caught).
-            // So a `Socket.connect` or `HttpClient` request made from Dart
-            // measures the *physical* path, not the tunnel. A probe like that
-            // cannot detect a dead tunnel — it reports healthy as long as the
-            // device has any internet at all. That is exactly why
-            // `HealthMonitorService` was removed rather than wired up.
-            //
-            // To probe through the tunnel, dial the core's loopback inbound
-            // instead: the SOCKS listener on `DEFAULT_SOCKS_PORT` (see
-            // [XrayConfigBuilder.socksPort] on the Dart side). Requests sent
-            // there enter Xray and leave via the proxy outbound, so the
-            // observed exit address is the tunnel's.
             try {
                 builder.addDisallowedApplication(packageName)
             } catch (e: Exception) {
@@ -286,7 +271,7 @@ class BlackoutVpnService : VpnService() {
 
             // The engine must be up before we claim success, otherwise all
             // traffic would be black-holed by the default route just installed.
-            val engineOk = startEngine(protocol, xrayConfig, fd.fd, socksPort)
+            val engineOk = startEngine(protocol, xrayConfig, singboxConfig, fd.fd, socksPort)
             if (!engineOk) {
                 if (lastError == null) {
                     lastError = "Engine failed to start for protocol '$protocol'"
@@ -322,6 +307,7 @@ class BlackoutVpnService : VpnService() {
     private fun startEngine(
         protocol: String,
         xrayConfig: String?,
+        singboxConfig: String?,
         tunFd: Int,
         socksPort: Int
     ): Boolean {
@@ -338,6 +324,9 @@ class BlackoutVpnService : VpnService() {
 
         if (!xrayConfig.isNullOrBlank()) {
             Log.w(TAG, "ignoring an Xray config supplied for non-Xray '$protocol'")
+        }
+        if (!singboxConfig.isNullOrBlank()) {
+            EngineRunner.writeConfig(this, singboxConfig)
         }
         return EngineRunner.start(
             context = this,

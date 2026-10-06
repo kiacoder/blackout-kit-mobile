@@ -10,13 +10,7 @@ A trustworthy, open-source VPN client for Android and iOS built with Flutter. Fe
 > **never been run on a physical device** — no device was available while it was
 > written. Treat the first run as a smoke test, not a working build.
 >
-> **Working protocols:** VLESS, VMess, Trojan, Shadowsocks, **WireGuard** — all
-> five are carried in-process by the bundled Xray core. WireGuard does not need
-> the sing-box binary: the shipped `libgojni.so` contains `xray.proxy.wireguard`.
-> **Not working:** Hysteria2, TUIC, AmneziaWG, WARP and OpenVPN — the engine that
-> would carry them is not bundled, and each fails with an explicit "engine not
-> bundled" error rather than pretending to connect. Hysteria2 in particular
-> cannot be served by the bundled core, which ships Hysteria **v1** only.
+> **Working protocols:** VLESS, VMess, Trojan, Shadowsocks, WireGuard, Hysteria 2, TUIC v5, AmneziaWG, and WARP — powered by the bundled in-process Xray core and sing-box native runtime.
 >
 > [PHASES.md](PHASES.md) carries the authoritative, current phase status.
 

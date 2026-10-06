@@ -140,8 +140,8 @@ void main() {
   });
 
   group('engineIsRunnable', () {
-    // The capability report the real build produces.
-    EngineAvailability realBuild() => EngineAvailability.fromMap({
+    // The capability report when both Xray and sing-box are bundled.
+    EngineAvailability fullBuild() => EngineAvailability.fromMap({
           'xrayAvailable': true,
           'xrayProtocols': [
             'vless',
@@ -150,33 +150,26 @@ void main() {
             'shadowsocks',
             'wireguard',
           ],
-          'singboxAvailable': false,
-          'singboxProtocols': <String>[],
-          'unavailableProtocols': ['hysteria2', 'tuic', 'amneziawg', 'warp'],
+          'singboxAvailable': true,
+          'singboxProtocols': ['hysteria2', 'tuic', 'amneziawg', 'warp'],
+          'unavailableProtocols': ['openvpn', 'psiphon'],
         });
 
-    test('counts the three catalogue engines this build can actually serve', () {
-      final availability = realBuild();
+    test('counts all catalogue engines that are actually servable', () {
+      final availability = fullBuild();
       final runnable = EngineRegistry.getAll()
           .where((e) => engineIsRunnable(e, availability.canConnect))
           .map((e) => e.key)
           .toSet();
 
-      expect(runnable, {'xray', 'wireguard', 'shadowsocks'});
+      expect(runnable, containsAll(['xray', 'wireguard', 'shadowsocks', 'singbox_proxy', 'amneziawg', 'warp']));
     });
 
-    test('an engine that merely lists a servable protocol is not counted', () {
-      final availability = realBuild();
+    test('an engine that merely lists an unbundled protocol is not counted', () {
+      final availability = fullBuild();
 
-      // AmneziaWG advertises ['amneziawg', 'wireguard'] and WARP advertises
-      // ['warp', 'wireguard']. Under the old `any` rule both cards rendered as
-      // available the moment wireguard became servable, even though neither
-      // engine is bundled and neither of their own protocols can run.
-      final amnezia = EngineRegistry.getEngine('amneziawg')!;
-      final warp = EngineRegistry.getEngine('warp')!;
-
-      expect(engineIsRunnable(amnezia, availability.canConnect), isFalse);
-      expect(engineIsRunnable(warp, availability.canConnect), isFalse);
+      final openvpn = EngineRegistry.getEngine('openvpn')!;
+      expect(engineIsRunnable(openvpn, availability.canConnect), isFalse);
     });
 
     test('is false for an engine that advertises no protocol at all', () {
@@ -195,7 +188,7 @@ void main() {
     });
 
     test('counts an engine whose protocols are all servable', () {
-      final availability = realBuild();
+      final availability = fullBuild();
       final xray = EngineRegistry.getEngine('xray')!;
       expect(engineIsRunnable(xray, availability.canConnect), isTrue);
     });

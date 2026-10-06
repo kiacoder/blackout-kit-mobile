@@ -492,26 +492,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// Protocols the bundled Xray core can serve. Must stay in sync with
-  /// [kXrayProtocols] in `services/xray_config.dart`.
+  /// Protocols the bundled engines (Xray & sing-box) can serve.
   static const List<String> _servedProtocols = [
     'vless',
     'vmess',
     'trojan',
     'shadowsocks',
-  ];
-
-  /// Protocols the app knows about but cannot dial in this build: they need a
-  /// sing-box runtime that is not bundled. Listed so a user staring at a
-  /// Hysteria2 config in their library gets an explanation instead of a
-  /// spinner that never resolves.
-  static const List<String> _unbundledProtocols = [
+    'wireguard',
     'hysteria2',
     'tuic',
-    'wireguard',
     'amneziawg',
     'warp',
+  ];
+
+  /// Protocols that still require external daemons or non-bundled engines.
+  static const List<String> _unbundledProtocols = [
     'openvpn',
+    'psiphon',
   ];
 
   Future<void> _showProtocolDialog() async {

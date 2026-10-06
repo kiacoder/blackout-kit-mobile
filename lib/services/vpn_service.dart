@@ -7,6 +7,7 @@ import 'package:logger/logger.dart';
 import '../models/config.dart';
 import '../models/vpn_session_options.dart';
 import 'xray_config.dart';
+import 'singbox_config.dart';
 
 enum VPNStatus {
   disconnected,
@@ -114,12 +115,26 @@ class VPNService {
             routeDnsThroughProxy: session.routeDnsThroughProxy,
           ).buildJson(config);
         } on ArgumentError catch (e) {
-          // A config that cannot produce a valid outbound (e.g. REALITY with no
-          // public key) should fail here, with the reason, rather than starting
-          // a core that silently drops every packet.
           _status = VPNStatus.error;
           _lastError = e.message?.toString() ?? e.toString();
           _log.e('Refusing to build an Xray config: $_lastError');
+          return false;
+        }
+      }
+
+      // sing-box-family protocols are carried by the bundled sing-box binary.
+      String? singboxJson;
+      if (isSingboxProtocol(config.protocol)) {
+        try {
+          singboxJson = SingboxConfigBuilder(
+            socksPort: defaultSocksPort,
+            dnsServers: session.dnsServers,
+            routeDnsThroughProxy: session.routeDnsThroughProxy,
+          ).buildJson(config);
+        } on ArgumentError catch (e) {
+          _status = VPNStatus.error;
+          _lastError = e.message?.toString() ?? e.toString();
+          _log.e('Refusing to build a sing-box config: $_lastError');
           return false;
         }
       }
@@ -134,14 +149,7 @@ class VPNService {
         'socksPort': defaultSocksPort,
         ...session.toChannelMap(),
         if (xrayJson != null) 'xrayConfig': xrayJson,
-        // NOTE: no per-protocol argument block here. The Kotlin side reads
-        // exactly nine keys — protocol, displayName, socksPort, dns,
-        // dnsServers, holdTunnelOnEngineFailure, xrayConfig, allowedApps and
-        // disallowedApps — all of which are already in the map above. Loose
-        // credentials used to be sent as well (privateKey, gateway, method,
-        // password, configContent…) and were silently discarded, which made
-        // the channel look like it carried more than it did. Everything a
-        // protocol actually needs now travels inside `xrayConfig`.
+        if (singboxJson != null) 'singboxConfig': singboxJson,
       });
 
       if (result == true) {

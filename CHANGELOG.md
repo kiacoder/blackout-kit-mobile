@@ -5,6 +5,45 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.6] - 2026-10-07
+
+### Fixed
+- **VLESS configs failed to build ("vless engine gives an error")**: measured
+  against a real 7,325-config subscription, 30 configs threw while being turned
+  into an Xray outbound — 28 for a missing `sni`, 2 for a missing `pbk`. Only 2
+  were genuinely unusable.
+  - `sni` is now recoverable. REALITY needs *a* server name to present, and the
+    Host header, failing that the address itself, is a valid substitute. The 28
+    configs build now.
+  - REALITY without `pbk` is rejected at import instead, so a link that cannot
+    handshake never reaches the engine. Same 2 configs, but they are skipped
+    rather than surfacing as an error.
+  - Re-running the measurement after the fix: 7,262 built, 0 failures.
+- **The library was unusably slow with a full source loaded** — three separate
+  causes, all of which only appear at the ~7.6k configs these sources return:
+  - `saveConfigs()` wrote to Hive one config at a time, and each `put` also
+    re-read and re-wrote the growing de-duplication map. Now a single `putAll`.
+  - `getFilteredConfigs()` re-sorted and re-filtered the entire list on every
+    rebuild, and it was called inside `Obx`, so a rebuild could trigger more
+    rebuilds. The result is now memoised on the filter/sort state and
+    invalidated only when the underlying configs or test results change.
+  - The list built a widget for every config. It now renders 50 and offers a
+    "show 50 more" button.
+- **`connectFastest` fell back to the sequential tester**: with no cached
+  results it probed one config at a time — 4s timeout x 3 attempts each — over
+  thousands of candidates. It now uses the concurrent tester over a bounded
+  sample of 150.
+
+### Added
+- `ConfigController.showMoreConfigs()` and `visibleConfigLimit`, backing the
+  windowed library list.
+
+### Tests
+- Replaced `REALITY without a server name is refused`, which asserted the old
+  fatal behaviour, with three tests covering the fallback chain (address, Host,
+  then `sni`).
+- Added coverage for the import-time REALITY public-key check.
+
 ## [1.0.0-beta.5] - 2026-10-07
 
 ### Fixed

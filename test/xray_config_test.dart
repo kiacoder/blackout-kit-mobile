@@ -266,12 +266,35 @@ Endpoint = vpn.example.com:51820
       expect(() => builder.build(config), throwsArgumentError);
     });
 
-    test('REALITY without a server name is refused', () {
-      final config = ConfigParser.parse(
+    // `sni` is optional on the wire: Xray needs *a* server name to present, and
+    // 28 of the 7,325 configs in a real subscription omit the parameter while
+    // still handshaking fine. Refusing them here is what made VLESS look broken.
+    test('REALITY without sni falls back to the address', () {
+      final doc = buildFor(
         'vless://11111111-1111-1111-1111-111111111111@a.com:443'
         '?security=reality&pbk=PUBKEY',
-      )!;
-      expect(() => builder.build(config), throwsArgumentError);
+      );
+      final stream = proxyOutbound(doc)['streamSettings'] as Map;
+      expect(stream['security'], 'reality');
+      expect((stream['realitySettings'] as Map)['serverName'], 'a.com');
+    });
+
+    test('REALITY without sni prefers the Host header over the address', () {
+      final doc = buildFor(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443'
+        '?security=reality&pbk=PUBKEY&host=cdn.example.com',
+      );
+      final stream = proxyOutbound(doc)['streamSettings'] as Map;
+      expect((stream['realitySettings'] as Map)['serverName'], 'cdn.example.com');
+    });
+
+    test('REALITY keeps sni when it is supplied', () {
+      final doc = buildFor(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443'
+        '?security=reality&pbk=PUBKEY&host=cdn.example.com&sni=www.microsoft.com',
+      );
+      final stream = proxyOutbound(doc)['streamSettings'] as Map;
+      expect((stream['realitySettings'] as Map)['serverName'], 'www.microsoft.com');
     });
 
     test('security=none emits no tlsSettings', () {

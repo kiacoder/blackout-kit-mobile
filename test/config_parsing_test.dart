@@ -120,6 +120,25 @@ void main() {
       final config = ConfigParser.parse('vless://@a.com:443') as VlessConfig;
       expect(config.validate(), isFalse);
     });
+
+    // REALITY cannot handshake without the server public key and there is no
+    // substitute for it, so such a link is dropped at import time rather than
+    // reaching the engine and failing there.
+    test('validation rejects REALITY with no public key', () {
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443'
+        '?security=reality&sni=www.microsoft.com',
+      ) as VlessConfig;
+      expect(config.validate(), isFalse);
+    });
+
+    test('validation accepts REALITY that does carry a public key', () {
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443'
+        '?security=reality&pbk=PUBKEY',
+      ) as VlessConfig;
+      expect(config.validate(), isTrue);
+    });
   });
 
   group('vmess', () {

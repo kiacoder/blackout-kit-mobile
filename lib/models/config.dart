@@ -437,7 +437,11 @@ class ShadowsocksConfig extends Config {
       if (atIndex == -1) return null;
 
       final creds = cleanUri.substring(0, atIndex);
-      final serverPart = cleanUri.substring(atIndex + 1);
+      // A query string (e.g. `?type=tcp` on shadowsocks-2022 links) is not part
+      // of the server address. Leaving it in made `int.tryParse` on the port
+      // fail and the config fall back to port 8388 — a silent wrong-port bug on
+      // every ss link that carries transport metadata.
+      final serverPart = cleanUri.substring(atIndex + 1).split('?')[0];
 
       final credParts = creds.split(':');
       if (credParts.length < 2) return null;

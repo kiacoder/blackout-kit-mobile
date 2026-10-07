@@ -19,8 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Uri.parse`. Both now go through tolerant helpers: `ConfigParser.safeFragment`
   (bad name returned raw instead of throwing) and `ConfigParser.tryParseUri`
   (retries without the fragment before giving up).
-- **Shadowsocks-2022 links now parse**: `ss://2022-blake3-…:psk1:psk2@host:port`
-  is now recognised (method + two PSKs), so those servers are no longer skipped.
+- **Shadowsocks links with a query string got the wrong port**: the parser did
+  not strip `?type=tcp` (and any other transport metadata) from the server part,
+  so `int.tryParse` on the port failed and every such link silently fell back to
+  port 8388. The server part is now split on `?` first. This is what made the
+  shadowsocks-2022 links connect to the wrong port even once they parsed.
 
 ### Added
 - `ConfigParser.safeFragment` and `ConfigParser.tryParseUri` — tolerant parsing

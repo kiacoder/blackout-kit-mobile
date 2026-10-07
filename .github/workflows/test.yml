@@ -16,7 +16,11 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
+          # >= 3.24.0, matching pubspec.lock (`dart ">=3.5.0 <4.0.0"`,
+          # `flutter ">=3.24.0"`) and build.yml. The tests happened to pass on
+          # 3.22.0 only because shared_preferences_android is Android-only and
+          # is never compiled by `flutter test` on the host.
+          flutter-version: '3.24.0'
           channel: stable
 
       - name: Get dependencies

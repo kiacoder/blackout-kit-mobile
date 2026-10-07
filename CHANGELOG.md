@@ -5,6 +5,45 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.5] - 2026-10-07
+
+### Fixed
+- **Config fetching returned nothing**: both built-in sources were invented
+  placeholders — `free-vpn-configs/configs` and `open-vpn-community/free-configs`
+  — and both return HTTP 404 from the GitHub API. Every fetch silently produced
+  zero configs. Replaced with two repositories verified against the network.
+- **Repository switches could not be turned off**: `loadSources()` merged the
+  hardcoded defaults ahead of stored state and de-duplicated keeping the first
+  entry, so the default's `isEnabled: true` overwrote whatever the user had
+  saved. `TrustedSources.getEnabled()` additionally dropped disabled built-ins
+  from the list entirely, so a turned-off source disappeared instead of showing
+  an off switch. Stored state now wins and all built-ins are always listed.
+- **Removing a repository did not stick**: `removeSource()` only dropped the
+  entry from the in-memory list; the next load read it back from storage.
+- **Startup would have hung once fetching worked**: `testAllConfigs()` used the
+  sequential `TesterService.testConfigs` — one probe at a time, up to 4s x 3
+  attempts each — against the ~7.6k configs a real source now returns. It uses
+  `testConfigsConcurrently` with a bounded sample of 150 instead.
+- **Source filtering was O(n²)**: `getFilteredConfigs()` called
+  `getConfigsBySource()` per config, and that re-reads the whole Hive box.
+  Source hashes are now resolved once into a `Set`.
+
+### Added
+- **barry-far/V2ray-Config** (`All_Configs_Sub.txt`, ~7.6k configs: vless, ss,
+  trojan, vmess, hysteria2, hy2) as a built-in source.
+- **mahdibland/V2RayAggregator** (`Eternity.txt`, ~200 configs: ss, trojan,
+  vmess) as a second built-in source, on its real default branch `master`.
+- `ConfigSource.filePath`, so a source can name the file that holds its configs
+  instead of the fetcher guessing through eight filenames per branch — none of
+  which these repos use.
+- A `flutter analyze` step in CI. The unit tests never import screens or
+  controllers, so a type error in `lib/` previously reached a release build
+  unchecked.
+
+### Changed
+- The retired placeholder source IDs (`trusted-1`, `trusted-2`) are purged from
+  storage on load, so upgraded installs do not keep showing two dead entries.
+
 ## [1.0.0-beta.4] - 2026-10-07
 
 ### Fixed

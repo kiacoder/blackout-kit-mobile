@@ -411,7 +411,7 @@ class ShadowsocksConfig extends Config {
       final hashIndex = cleanUri.indexOf('#');
       if (hashIndex != -1) {
         if (nameFromHash.isEmpty) {
-          nameFromHash = Uri.decodeComponent(cleanUri.substring(hashIndex + 1));
+          nameFromHash = ConfigParser.safeFragment(uri, fallback: nameFromHash);
         }
         cleanUri = cleanUri.substring(0, hashIndex);
       }
@@ -525,12 +525,16 @@ class VlessConfig extends Config {
   static VlessConfig? fromUri(String uri, {String? customName}) {
     try {
       if (!uri.startsWith('vless://')) return null;
-      final u = Uri.parse(uri);
+      final u = ConfigParser.tryParseUri(uri);
+      if (u == null) return null;
       final uuid = u.userInfo;
       final host = u.host;
       final port = u.port;
       final params = u.queryParameters;
-      final name = customName ?? Uri.decodeComponent(u.fragment.isNotEmpty ? u.fragment : 'VLESS ($host:$port)');
+      String name = customName ?? 'VLESS ($host:$port)';
+      if (customName == null && u.fragment.isNotEmpty) {
+        name = ConfigParser.safeFragment(uri, fallback: name);
+      }
 
       // `type` is the Xray share-link spelling. Both `xhttp` and `splithttp`
       // appear in the wild; the bundled core registers the transport under
@@ -659,8 +663,12 @@ class TrojanConfig extends Config {
   static TrojanConfig? fromUri(String uri, {String? customName}) {
     try {
       if (!uri.startsWith('trojan://')) return null;
-      final u = Uri.parse(uri);
-      final name = customName ?? Uri.decodeComponent(u.fragment.isNotEmpty ? u.fragment : 'Trojan (${u.host}:${u.port})');
+      final u = ConfigParser.tryParseUri(uri);
+      if (u == null) return null;
+      String name = customName ?? 'Trojan (${u.host}:${u.port})';
+      if (customName == null && u.fragment.isNotEmpty) {
+        name = ConfigParser.safeFragment(uri, fallback: name);
+      }
       var network = u.queryParameters['type'] ?? 'tcp';
       // See the note in [VlessConfig.fromUri]: the bundled core knows this
       // transport as `splithttp`, not `xhttp`.
@@ -716,8 +724,12 @@ class Hysteria2Config extends Config {
   static Hysteria2Config? fromUri(String uri, {String? customName}) {
     try {
       if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://') && !uri.startsWith('hysteria://')) return null;
-      final u = Uri.parse(uri);
-      final name = customName ?? Uri.decodeComponent(u.fragment.isNotEmpty ? u.fragment : 'Hysteria2 (${u.host}:${u.port})');
+      final u = ConfigParser.tryParseUri(uri);
+      if (u == null) return null;
+      String name = customName ?? 'Hysteria2 (${u.host}:${u.port})';
+      if (customName == null && u.fragment.isNotEmpty) {
+        name = ConfigParser.safeFragment(uri, fallback: name);
+      }
       return Hysteria2Config(
         name: name, rawUri: uri,
         password: u.userInfo,
@@ -765,11 +777,15 @@ class TuicConfig extends Config {
   static TuicConfig? fromUri(String uri, {String? customName}) {
     try {
       if (!uri.startsWith('tuic://')) return null;
-      final u = Uri.parse(uri);
+      final u = ConfigParser.tryParseUri(uri);
+      if (u == null) return null;
       final userInfo = u.userInfo.split(':');
       final uuid = userInfo.isNotEmpty ? userInfo[0] : '';
       final pwd = userInfo.length > 1 ? userInfo.sublist(1).join(':') : '';
-      final name = customName ?? Uri.decodeComponent(u.fragment.isNotEmpty ? u.fragment : 'TUIC (${u.host}:${u.port})');
+      String name = customName ?? 'TUIC (${u.host}:${u.port})';
+      if (customName == null && u.fragment.isNotEmpty) {
+        name = ConfigParser.safeFragment(uri, fallback: name);
+      }
       return TuicConfig(
         name: name, rawUri: uri, uuid: uuid, password: pwd,
         address: u.host, port: u.port,
@@ -1009,6 +1025,43 @@ extension BlackoutEngineInfo on BlackoutEngine {
 
 /// Config parser factory
 class ConfigParser {
+  /// Decodes the display name carried after `#` in a share link.
+  ///
+  /// Subscriptions routinely embed a literal `%` or other invalid percent
+  /// sequence in the name (it is just a label). A fragment that cannot be
+  /// percent-decoded must not void an otherwise valid config, so a bad one is
+  /// returned raw instead of throwing — which previously dropped hundreds of
+  /// real shadowsocks links.
+  static String safeFragment(String uri, {String fallback = ''}) {
+    final h = uri.indexOf('#');
+    if (h == -1 || h == uri.length - 1) return fallback;
+    final raw = uri.substring(h + 1);
+    try {
+      return Uri.decodeComponent(raw);
+    } on Object {
+      return raw;
+    }
+  }
+
+  /// Parses a share link, tolerating a malformed fragment.
+  ///
+  /// `Uri.parse` throws on illegal percent-encoding, and the fragment is the
+  /// most common offender even though it is cosmetic. Retry without the
+  /// fragment before giving up, so a bad name never discards a usable server.
+  static Uri? tryParseUri(String uri) {
+    try {
+      return Uri.parse(uri);
+    } on FormatException {
+      final h = uri.indexOf('#');
+      if (h == -1) return null;
+      try {
+        return Uri.parse(uri.substring(0, h));
+      } on FormatException {
+        return null;
+      }
+    }
+  }
+
   static Config? parse(String text, {String? customName}) {
     try {
       final trimmed = text.trim();

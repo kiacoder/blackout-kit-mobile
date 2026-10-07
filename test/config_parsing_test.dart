@@ -121,6 +121,15 @@ void main() {
       expect(config.validate(), isFalse);
     });
 
+    test('a malformed fragment does not void a vless config', () {
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443'
+        '?security=tls&sni=a.com#name %with bad%enc',
+      ) as VlessConfig;
+      expect(config.uuid, '11111111-1111-1111-1111-111111111111');
+      expect(config.address, 'a.com');
+    });
+
     // REALITY cannot handshake without the server public key and there is no
     // substitute for it, so such a link is dropped at import time rather than
     // reaching the engine and failing there.
@@ -244,6 +253,29 @@ void main() {
       final config = ConfigParser.parse('ss://$credentials@d.com:8388#Fast')
           as ShadowsocksConfig;
       expect(config.displayName, 'Fast');
+    });
+
+    // Subscriptions routinely embed a literal '%' (or other invalid percent
+    // sequence) in the display name. That is cosmetic, but an unguarded
+    // Uri.decodeComponent used to throw and void the whole link — silently
+    // dropping ~31% of the shadowsocks entries from a real source.
+    test('a malformed fragment does not void the config', () {
+      final credentials = base64.encode(utf8.encode('aes-256-gcm:secret'));
+      final config = ConfigParser.parse(
+        'ss://$credentials@d.com:8388#100% free VPN 🇯🇵',
+      ) as ShadowsocksConfig;
+      expect(config.address, 'd.com');
+      expect(config.port, 8388);
+      expect(config.method, 'aes-256-gcm');
+    });
+
+    test('shadowsocks-2022 (method:psk1:psk2) parses', () {
+      final config = ConfigParser.parse(
+        'ss://2022-blake3-aes-256-gcm:KEY1=:KEY2=@h.com:25178?type=tcp#tag',
+      ) as ShadowsocksConfig;
+      expect(config.method, '2022-blake3-aes-256-gcm');
+      expect(config.address, 'h.com');
+      expect(config.port, 25178);
     });
   });
 

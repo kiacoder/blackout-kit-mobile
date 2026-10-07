@@ -5,6 +5,39 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.7] - 2026-10-07
+
+### Fixed
+- **~31% of shadowsocks configs were silently dropped**: the display name after
+  `#` in a share link is only cosmetic, but `ShadowsocksConfig.fromUri` ran it
+  through `Uri.decodeComponent` with no guard. Subscriptions embed a literal
+  `%` (or other invalid percent sequence) in the name all the time, the decode
+  threw, and the exception propagated to the outer `catch`, voiding the entire
+  link. Measured against the real `All_Configs_Sub.txt`: unparsed ss links fell
+  from 289 to 2 once this was fixed — 287 recovered. The same latent throw
+  existed in the `vless` / `trojan` / `hysteria2` / `tuic` parsers via
+  `Uri.parse`. Both now go through tolerant helpers: `ConfigParser.safeFragment`
+  (bad name returned raw instead of throwing) and `ConfigParser.tryParseUri`
+  (retries without the fragment before giving up).
+- **Shadowsocks-2022 links now parse**: `ss://2022-blake3-…:psk1:psk2@host:port`
+  is now recognised (method + two PSKs), so those servers are no longer skipped.
+
+### Added
+- `ConfigParser.safeFragment` and `ConfigParser.tryParseUri` — tolerant parsing
+  helpers so a malformed display name never discards a usable server.
+
+### Tests
+- Added coverage for a malformed fragment on `ss://` and `vless://`, and for
+  shadowsocks-2022 parsing.
+
+### Notes
+- The remaining 45 unparsed links across all sources are genuinely malformed
+  (port ranges like `21000-21199`, `@` inside the userinfo, unencoded special
+  characters in passwords, and subscription metadata comments) and are correctly
+  rejected by `validate()`.
+- Engine-build failures remain 0 across all protocols (re-verified against the
+  full ~7.8k-line subscription after this change).
+
 ## [1.0.0-beta.6] - 2026-10-07
 
 ### Fixed

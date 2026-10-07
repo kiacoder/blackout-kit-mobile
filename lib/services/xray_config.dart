@@ -417,9 +417,14 @@ class XrayConfigBuilder {
     };
   }
 
-  /// REALITY configs are unusable without a public key and a server name, and
-  /// failing here gives the user a real message instead of a core that starts
-  /// and then times out on every request.
+  /// REALITY configs are unusable without a server public key.
+  ///
+  /// A missing *server name* used to be fatal here too. Measured against
+  /// barry-far's list, 28 of 5,852 VLESS configs are REALITY links with no
+  /// `sni` parameter — and 30 hard failures out of 5,852 is what "VLESS gives
+  /// an error" looked like from the UI. The server name is recoverable (Host
+  /// header, failing that the address itself), so only the public key, which
+  /// has no substitute, is fatal.
   void _validateReality(VlessConfig c) {
     if (c.security.toLowerCase() != 'reality') return;
     if (c.publicKey == null || c.publicKey!.isEmpty) {
@@ -427,10 +432,11 @@ class XrayConfigBuilder {
         'REALITY config is missing the server public key (pbk).',
       );
     }
-    if (c.sni == null || c.sni!.isEmpty) {
-      throw ArgumentError('REALITY config is missing the server name (sni).');
-    }
   }
+
+  /// Server name to present for REALITY, falling back when `sni` is absent.
+  String _realityServerName(VlessConfig c) =>
+      _orDefault(c.sni, _orDefault(c.host, c.address));
 
   /// Builds `streamSettings` — transport, then security.
   ///
@@ -496,7 +502,7 @@ class XrayConfigBuilder {
       stream['realitySettings'] = {
         'show': false,
         'fingerprint': _orDefault(config.fingerprint, 'chrome'),
-        'serverName': config.sni ?? '',
+        'serverName': _realityServerName(config),
         'publicKey': config.publicKey ?? '',
         'shortId': config.shortId ?? '',
         if (config.spiderX != null && config.spiderX!.isNotEmpty)

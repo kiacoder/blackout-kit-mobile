@@ -33,6 +33,35 @@ class ConfigService {
     }
   }
 
+  /// Serialises [config] for the box.
+  ///
+  /// Shared by the single and bulk save paths so the two cannot drift.
+  Map<String, dynamic> _configToMap(Config config, {String? sourceId}) => {
+    'protocol': config.protocol,
+    'displayName': config.displayName,
+    'address': config.address,
+    'port': config.port,
+    'rawUri': config.rawUri,
+    'sourceId': sourceId,
+    'savedAt': DateTime.now().toIso8601String(),
+    // Protocol-specific fields
+    if (config is WireGuardConfig) ...{
+      'privateKey': config.privateKey,
+      'localAddresses': config.localAddresses,
+      'dns': config.dns,
+      'mtu': config.mtu,
+      'peers': config.peers.map((p) => p.toMap()).toList(),
+    },
+    if (config is OpenVpnConfig) ...{
+      'configContent': config.configContent,
+    },
+    if (config is ShadowsocksConfig) ...{
+      'method': config.method,
+      'password': config.password,
+      'plugin': config.plugin,
+    },
+  };
+
   /// Save config with deduplication
   /// Returns true if saved, false if duplicate
   Future<bool> saveConfig(Config config, {String? sourceId}) async {
@@ -52,35 +81,10 @@ class ConfigService {
         return false;
       }
 
-      // Save to Hive (atomic: Hive handles write-safety)
-      final key = 'config_$hash';
-      final data = {
-        'protocol': config.protocol,
-        'displayName': config.displayName,
-        'address': config.address,
-        'port': config.port,
-        'rawUri': config.rawUri,
-        'sourceId': sourceId,
-        'savedAt': DateTime.now().toIso8601String(),
-        // Protocol-specific fields
-        if (config is WireGuardConfig) ...{
-          'privateKey': config.privateKey,
-          'localAddresses': config.localAddresses,
-          'dns': config.dns,
-          'mtu': config.mtu,
-          'peers': config.peers.map((p) => p.toMap()).toList(),
-        },
-        if (config is OpenVpnConfig) ...{
-          'configContent': config.configContent,
-        },
-        if (config is ShadowsocksConfig) ...{
-          'method': config.method,
-          'password': config.password,
-          'plugin': config.plugin,
-        },
-      };
-
-      await _configBox.put(key, data);
+      await _configBox.put(
+        'config_$hash',
+        _configToMap(config, sourceId: sourceId),
+      );
 
       // Update dedup tracker
       dedup[hash] = DateTime.now().toIso8601String();
@@ -94,18 +98,33 @@ class ConfigService {
     }
   }
 
-  /// Save multiple configs at once
+  /// Save many configs at once.
+  ///
+  /// Two batched writes instead of an await per config. A single source now
+  /// returns thousands of configs, and the old loop cost two Hive writes plus a
+  /// log line for every one of them — tens of thousands of awaits on the fetch
+  /// path, which is what left the library stuck on "Loading repositories".
   Future<int> saveConfigs(
     List<Config> configs, {
     String? sourceId,
   }) async {
-    int saved = 0;
+    final dedup = Map<dynamic, dynamic>.of(_configBox.get(_dedupKey) ?? {});
+    final batch = <String, Map<String, dynamic>>{};
+
     for (final config in configs) {
-      final result = await saveConfig(config, sourceId: sourceId);
-      if (result) saved++;
+      final hash = config.getHash();
+      if (dedup.containsKey(hash)) continue;
+      if (!config.validate()) continue;
+      dedup[hash] = DateTime.now().toIso8601String();
+      batch['config_$hash'] = _configToMap(config, sourceId: sourceId);
     }
-    _log.i('Saved $saved/${configs.length} configs');
-    return saved;
+
+    if (batch.isEmpty) return 0;
+
+    await _configBox.putAll(batch);
+    await _configBox.put(_dedupKey, dedup);
+    _log.i('Saved ${batch.length}/${configs.length} configs');
+    return batch.length;
   }
 
   /// Get all stored configs

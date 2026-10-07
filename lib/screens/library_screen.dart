@@ -98,6 +98,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
               final filtered = _configController.getFilteredConfigs();
 
+              // Render a window, not the whole list. A real source returns
+              // thousands of configs; handing all of them to the builder made
+              // opening the library stall.
+              final limit = _configController.visibleConfigLimit.value;
+              final visibleCount =
+                  limit < filtered.length ? limit : filtered.length;
+              final remaining = filtered.length - visibleCount;
+
               if (filtered.isEmpty) {
                 return RefreshIndicator(
                   onRefresh: () async {
@@ -151,8 +159,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 },
                 child: ListView.builder(
                   padding: const EdgeInsets.all(8),
-                  itemCount: filtered.length,
+                  // +1 for the "show more" row when the window is not the whole
+                  // list yet.
+                  itemCount: visibleCount + (remaining > 0 ? 1 : 0),
                   itemBuilder: (context, index) {
+                    if (index >= visibleCount) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: OutlinedButton.icon(
+                            onPressed: _configController.showMoreConfigs,
+                            icon: const Icon(Icons.expand_more),
+                            label: Text(
+                              'Show ${ConfigController.configPageSize} more '
+                              '— $remaining of ${filtered.length} not shown',
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
                     final config = filtered[index];
                     final result = _configController.testResults[config.getHash()];
 

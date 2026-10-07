@@ -45,6 +45,10 @@ class ConnectionController extends GetxController {
   final RxBool isDNSLeakPreventionEnabled = RxBool(false);
   final RxBool isSplitTunnelingEnabled = RxBool(false);
 
+  /// Cap on how many candidates `connectFastest` probes when the caller has no
+  /// measurements to hand it.
+  static const int _maxProbeCandidates = 150;
+
   bool get isConnected => state.value == ConnectionState.connected;
 
   DateTime? _connectionStartTime;
@@ -92,7 +96,12 @@ class ConnectionController extends GetxController {
       }
 
       final candidateHashes = candidates.map((c) => c.getHash()).toSet();
-      final results = (testResults ?? await testerService.testConfigs(candidates))
+      // `testConfigs` probes strictly one config at a time at up to 4s x 3
+      // attempts. With thousands of candidates that is hours of blocking, so
+      // the fallback is the concurrent tester over a bounded sample instead.
+      final probeSample = candidates.take(_maxProbeCandidates).toList();
+      final results = (testResults ??
+              await testerService.testConfigsConcurrently(probeSample))
           .where((r) => candidateHashes.contains(r.configHash))
           .toList();
       final fastest = testerService.getFastestConfig(results);

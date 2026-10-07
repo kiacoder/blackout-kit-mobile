@@ -508,7 +508,18 @@ class VlessConfig extends Config {
   @override Future<bool> connect() async => true;
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
-  @override bool validate() => address.isNotEmpty && port > 0 && uuid.isNotEmpty;
+  /// A REALITY config without a server public key cannot handshake and cannot
+  /// even be turned into an Xray outbound, so it is rejected here — at import —
+  /// rather than parked in the library where the only thing tapping it produces
+  /// is an error.
+  @override
+  bool validate() {
+    if (address.isEmpty || port <= 0 || uuid.isEmpty) return false;
+    if (security.toLowerCase() == 'reality') {
+      return publicKey != null && publicKey!.isNotEmpty;
+    }
+    return true;
+  }
 
   /// vless://UUID@host:port?security=...&sni=...#name
   static VlessConfig? fromUri(String uri, {String? customName}) {

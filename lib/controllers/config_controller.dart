@@ -27,6 +27,27 @@ class ConfigController extends GetxController {
   final RxString filterSource = RxString('all');
   final RxString sortBy = RxString('speed'); // speed, name, recently_added
 
+  /// How many rows the library renders at a time.
+  ///
+  /// A real source returns thousands of configs. `ListView.builder` is lazy, but
+  /// the *list* it is handed still had to be produced in full, and the screen
+  /// rebuilt it on every Obx tick — including a full sort. The library now
+  /// renders a window and grows it on demand.
+  static const int configPageSize = 50;
+  final RxInt visibleConfigLimit = RxInt(configPageSize);
+
+  /// Cache for [getFilteredConfigs]. Bumped whenever the inputs that are not
+  /// observables change (the config list itself, or the test results that drive
+  /// the "speed" ordering).
+  int _filterEpoch = 0;
+  String? _filteredCacheKey;
+  List<Config> _filteredCache = const [];
+
+  void _invalidateFilterCache() => _filterEpoch++;
+
+  /// Grows the visible window of the library list.
+  void showMoreConfigs() => visibleConfigLimit.value += configPageSize;
+
   ConfigController({
     required this.configService,
     required this.githubService,
@@ -37,6 +58,14 @@ class ConfigController extends GetxController {
   @override
   Future<void> onInit() async {
     super.onInit();
+
+    // Anything that changes the config list or the measurements behind the
+    // "speed" ordering invalidates the memoised filtered list. Watching the
+    // observables covers every write path — loadConfigs, the testers, deletes —
+    // without each of them having to remember to invalidate by hand.
+    ever(allConfigs, (_) => _invalidateFilterCache());
+    ever(testResults, (_) => _invalidateFilterCache());
+
     _log.i('ConfigController initialized');
 
     // Load existing data
@@ -213,8 +242,32 @@ class ConfigController extends GetxController {
     }
   }
 
-  /// Get filtered configs based on active filters
+  /// Get filtered configs based on active filters.
+  ///
+  /// Memoised: this runs inside an `Obx` build, so it used to re-copy, re-filter
+  /// and re-sort the entire list on every rebuild — thousands of entries, on
+  /// every tick of `isLoading`, every stored test result, every filter change.
+  /// The result only actually changes when the config list, the test results or
+  /// a filter does, so it is cached against those and invalidated explicitly.
   List<Config> getFilteredConfigs() {
+    final key = '${filterProtocol.value}|${filterSource.value}|'
+        '${sortBy.value}|$_filterEpoch';
+    if (key == _filteredCacheKey) return _filteredCache;
+
+    final filtered = _computeFilteredConfigs();
+    _filteredCacheKey = key;
+    _filteredCache = filtered;
+    // A new result set starts at the first page again, otherwise switching
+    // filters would leave you scrolled into a window sized for the old list.
+    // Guarded because this runs during a build: writing an Rx unconditionally
+    // here would schedule a rebuild on every frame.
+    if (visibleConfigLimit.value != configPageSize) {
+      visibleConfigLimit.value = configPageSize;
+    }
+    return filtered;
+  }
+
+  List<Config> _computeFilteredConfigs() {
     var filtered = allConfigs.toList();
 
     // Filter by protocol

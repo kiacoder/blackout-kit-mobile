@@ -206,6 +206,21 @@ class ConfigService {
     }
   }
 
+  /// Delete config source
+  ///
+  /// Removing a source only from the in-memory list is not enough: the entry is
+  /// still in the box, so the next load brought it straight back.
+  Future<bool> deleteSource(String id) async {
+    try {
+      await _sourceBox.delete(id);
+      _log.i('Deleted source: $id');
+      return true;
+    } catch (e) {
+      _log.e('Error deleting source: $e');
+      return false;
+    }
+  }
+
   /// Get all config sources
   List<ConfigSource> getAllSources() {
     try {

@@ -26,6 +26,16 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Analyze
+        # Errors only — infos and warnings are not fatal.
+        #
+        # This is the only static check the project gets. `dart analyze` cannot
+        # run on the dev machine (the Dart VM there cannot spawn child
+        # processes), and the unit tests below only import models and services,
+        # never screens or controllers — so a syntax or type error anywhere in
+        # lib/ used to go completely unchecked until a release build failed.
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
       - name: Run unit tests
         # --coverage is what produces coverage/lcov.info. Without it the Codecov
         # step below uploaded a file that was never generated.

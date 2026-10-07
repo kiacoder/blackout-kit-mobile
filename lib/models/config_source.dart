@@ -7,6 +7,12 @@ class ConfigSource {
   final String owner;
   final String repo;
   final String? branch;
+  /// Path inside the repo that holds the configs, when it is known.
+  ///
+  /// Without it the fetcher has to guess through a list of common filenames,
+  /// which is up to eight HTTP requests per branch and 404s for every repo
+  /// that does not happen to use one of those names.
+  final String? filePath;
   final SourceType type;
   final DateTime? lastFetched;
   final int configCount;
@@ -19,6 +25,7 @@ class ConfigSource {
     required this.owner,
     required this.repo,
     this.branch = 'main',
+    this.filePath,
     this.type = SourceType.githubRepo,
     this.lastFetched,
     this.configCount = 0,
@@ -51,6 +58,7 @@ class ConfigSource {
     String? owner,
     String? repo,
     String? branch,
+    String? filePath,
     SourceType? type,
     DateTime? lastFetched,
     int? configCount,
@@ -63,6 +71,7 @@ class ConfigSource {
       owner: owner ?? this.owner,
       repo: repo ?? this.repo,
       branch: branch ?? this.branch,
+      filePath: filePath ?? this.filePath,
       type: type ?? this.type,
       lastFetched: lastFetched ?? this.lastFetched,
       configCount: configCount ?? this.configCount,
@@ -82,6 +91,7 @@ class ConfigSource {
     'owner': owner,
     'repo': repo,
     'branch': branch,
+    'filePath': filePath,
     'type': type.toString(),
     'lastFetched': lastFetched?.toIso8601String(),
     'configCount': configCount,
@@ -97,6 +107,7 @@ class ConfigSource {
       owner: json['owner'] as String,
       repo: json['repo'] as String,
       branch: json['branch'] as String?,
+      filePath: json['filePath'] as String?,
       type: _parseSourceType(json['type'] as String?),
       lastFetched: json['lastFetched'] != null
           ? DateTime.parse(json['lastFetched'] as String)
@@ -121,37 +132,42 @@ SourceType _parseSourceType(String? type) {
   );
 }
 
-/// Hardcoded trusted sources (from CLI)
+/// Built-in config sources shipped with the app.
+///
+/// The previous entries were invented placeholders — `free-vpn-configs/configs`
+/// and `open-vpn-community/free-configs` — that were never checked against the
+/// network. Both return HTTP 404 from the GitHub API, so every fetch quietly
+/// produced zero configs and the app looked like fetching was broken.
+///
+/// Every entry below was verified before being added: the repository responds
+/// 200 on `https://api.github.com/repos/<owner>/<repo>`, the `branch` is the
+/// repo's real default branch, and `filePath` was downloaded and confirmed to
+/// contain parseable config URIs (scheme counts observed at the time of
+/// checking are in the comments). Re-check with curl before editing.
 class TrustedSources {
-  static final List<ConfigSource> sources = [
-    // Example trusted repos (populate with real repos)
+  static const List<ConfigSource> sources = [
     ConfigSource(
-      id: 'trusted-1',
-      name: 'Free VPN Configs (Official)',
-      owner: 'free-vpn-configs',
-      repo: 'configs',
-      configCount: 0,
+      id: 'trusted-barry-far',
+      name: 'barry-far V2Ray Configs',
+      owner: 'barry-far',
+      repo: 'V2ray-Config',
+      branch: 'main',
+      filePath: 'All_Configs_Sub.txt',
+      // ~7.6k lines: vless, ss, trojan, vmess, hy2, hysteria2.
     ),
     ConfigSource(
-      id: 'trusted-2',
-      name: 'Community Configs',
-      owner: 'open-vpn-community',
-      repo: 'free-configs',
-      configCount: 0,
+      id: 'trusted-v2ray-aggregator',
+      name: 'V2Ray Aggregator',
+      owner: 'mahdibland',
+      repo: 'V2RayAggregator',
+      // This repo's default branch is `master`, not `main`; the raw URL 404s
+      // on `main`.
+      branch: 'master',
+      filePath: 'Eternity.txt',
+      // ~200 lines: ss, trojan, vmess.
     ),
-    // Add more hardcoded trusted sources
   ];
 
-  /// Get all enabled trusted sources
-  static List<ConfigSource> getEnabled() =>
-    sources.where((s) => s.isEnabled).toList();
-
-  /// Find source by ID
-  static ConfigSource? getById(String id) {
-    try {
-      return sources.firstWhere((s) => s.id == id);
-    } catch (e) {
-      return null;
-    }
-  }
+  /// IDs of the built-in sources, so stored user state can be matched to them.
+  static Set<String> get ids => sources.map((s) => s.id).toSet();
 }

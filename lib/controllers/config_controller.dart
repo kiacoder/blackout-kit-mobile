@@ -59,30 +59,66 @@ class ConfigController extends GetxController {
   }
 
   /// Load all sources
+  ///
+  /// Stored state must win over the built-in defaults. The old code merged
+  /// `[...trusted, ...stored]` and then de-duplicated keeping the *first*
+  /// occurrence, so the hardcoded default — which always has `isEnabled: true`
+  /// — silently overwrote whatever the user had saved. Turning a repository off
+  /// in Settings therefore did nothing: the toggle snapped back on the next
+  /// load. Built-in sources are still listed when disabled (they used to vanish
+  /// entirely, because `TrustedSources.getEnabled()` filtered them out), so the
+  /// switch has something to render in its off position.
   Future<void> loadSources() async {
     try {
-      // Start with trusted sources
-      final trustedSources = TrustedSources.getEnabled();
+      // `trusted-1` / `trusted-2` were the original placeholder sources and
+      // point at repositories that have never existed. They were persisted to
+      // storage by the first fetch, so an upgraded install would otherwise keep
+      // showing two permanently dead entries alongside the real ones.
+      const retiredIds = {'trusted-1', 'trusted-2'};
 
-      // Add stored sources from config service
-      final storedSources = configService.getAllSources();
-      final allSources = [...trustedSources, ...storedSources];
-
-      // Remove duplicates by ID
-      final uniqueSources = <ConfigSource>[];
-      final seen = <String>{};
-      for (final source in allSources) {
-        if (!seen.contains(source.id)) {
-          uniqueSources.add(source);
-          seen.add(source.id);
+      final stored = <String, ConfigSource>{};
+      for (final s in configService.getAllSources()) {
+        if (retiredIds.contains(s.id)) {
+          await configService.deleteSource(s.id);
+          continue;
         }
+        stored[s.id] = s;
       }
 
-      sources.value = uniqueSources;
-      _log.i('Loaded ${uniqueSources.length} sources');
+      final merged = <ConfigSource>[
+        // Built-in sources, with the user's own state substituted where it
+        // exists.
+        for (final defaultSource in TrustedSources.sources)
+          stored[defaultSource.id] ?? defaultSource,
+        // Anything the user added themselves.
+        ...stored.values.where((s) => !TrustedSources.ids.contains(s.id)),
+      ];
+
+      sources.value = merged;
+      _log.i('Loaded ${merged.length} sources');
     } catch (e) {
       _log.e('Error loading sources: $e');
     }
+  }
+
+  /// Enable or disable a source and persist the choice.
+  ///
+  /// The rebuild assigns a new list to `sources.value` rather than mutating in
+  /// place, so the `Obx` around the switch is guaranteed to repaint.
+  Future<void> toggleSource(String sourceId, bool enabled) async {
+    final index = sources.indexWhere((s) => s.id == sourceId);
+    if (index == -1) {
+      _log.w('toggleSource: no source with id $sourceId');
+      return;
+    }
+
+    final updated = sources[index].copyWith(isEnabled: enabled);
+    final next = List<ConfigSource>.of(sources);
+    next[index] = updated;
+    sources.value = next;
+
+    await configService.saveSource(updated);
+    _log.i('${enabled ? 'Enabled' : 'Disabled'} source: ${updated.name}');
   }
 
   /// Fetch configs from a source and save to local storage
@@ -129,13 +165,25 @@ class ConfigController extends GetxController {
     return totalSaved;
   }
 
-  /// Test all configs
-  Future<void> testAllConfigs() async {
+  /// Test configs, bounded and concurrent.
+  ///
+  /// `TesterService.testConfigs` probes strictly one at a time, at up to
+  /// 4s x 3 attempts = 12s for an unreachable host. While the built-in sources
+  /// 404'd that never mattered because there was nothing to test. With a real
+  /// source the first fetch yields ~7.6k configs, so a cold start would have
+  /// blocked for hours on the home screen. `testConfigsConcurrently` was
+  /// written for this case but never wired up; [limit] additionally bounds the
+  /// sample so startup stays responsive.
+  Future<void> testAllConfigs({int limit = 150, int concurrency = 8}) async {
     try {
       isLoading.value = true;
-      _log.i('Testing ${allConfigs.length} configs');
+      final toTest = allConfigs.take(limit).toList();
+      _log.i('Testing ${toTest.length} of ${allConfigs.length} configs');
 
-      final results = await testerService.testConfigs(allConfigs);
+      final results = await testerService.testConfigsConcurrently(
+        toTest,
+        concurrency: concurrency,
+      );
 
       // Store results
       for (final result in results) {
@@ -176,12 +224,20 @@ class ConfigController extends GetxController {
           .toList();
     }
 
-    // Filter by source
+    // Filter by source.
+    //
+    // `getConfigsBySource` re-reads the whole Hive box, so calling it per
+    // config was O(n^2) — 7.6k configs meant tens of millions of comparisons
+    // plus a full box scan for each one. Resolve the source's hashes once.
     if (filterSource.value != 'all') {
+      final sourceHashes = configService
+          .getConfigsBySource(filterSource.value)
+          .map((c) => c.getHash())
+          .toSet();
       filtered = filtered
           .where((c) =>
-            testResults[c.getHash()]?.configHash == c.getHash() ||
-            configService.getConfigsBySource(filterSource.value).contains(c))
+            testResults.containsKey(c.getHash()) ||
+            sourceHashes.contains(c.getHash()))
           .toList();
     }
 
@@ -257,8 +313,10 @@ class ConfigController extends GetxController {
   /// Remove source
   Future<bool> removeSource(String sourceId) async {
     try {
-      // In production, also delete associated configs
+      // Deleting from storage is what actually removes it: dropping it from the
+      // in-memory list alone means the next loadSource() brings it back.
       sources.removeWhere((s) => s.id == sourceId);
+      await configService.deleteSource(sourceId);
       _log.i('Removed source: $sourceId');
       return true;
     } catch (e) {

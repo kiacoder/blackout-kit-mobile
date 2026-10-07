@@ -22,6 +22,19 @@ class GitHubService {
   static const Duration _repoTtl = Duration(hours: 1);
   static const String _githubApi = 'https://api.github.com';
 
+  /// Filenames to guess when a source does not name one.
+  static const List<String> _defaultCandidateFiles = [
+    'configs.txt',
+    'subscription.txt',
+    'sub.txt',
+    'all.txt',
+    'vpn.txt',
+    'nodes.txt',
+    'v2ray.txt',
+    'All_Configs_Sub.txt',
+    'README.md',
+  ];
+
   GitHubService({Dio? client, Logger? logger})
       : _client = client ?? Dio(),
         _log = logger ?? Logger();
@@ -180,19 +193,15 @@ class GitHubService {
         }
       }
 
-      // Try multiple common config & subscription filenames in repos
-      final candidateFiles = filePattern != null
-          ? [filePattern]
-          : [
-              'configs.txt',
-              'subscription.txt',
-              'sub.txt',
-              'all.txt',
-              'vpn.txt',
-              'nodes.txt',
-              'v2ray.txt',
-              'README.md',
-            ];
+      // An explicit filePath (set on the built-in sources) points straight at
+      // the file known to hold configs, so the common case costs one request.
+      // It is tried first but is not trusted blindly: if it 404s or parses to
+      // nothing, the generic guesses below still run.
+      final candidateFiles = <String>[
+        if (source.filePath != null) source.filePath!,
+        if (filePattern != null) filePattern,
+        ..._defaultCandidateFiles,
+      ];
 
       for (final filename in candidateFiles) {
         final content = await fetchRawFile(

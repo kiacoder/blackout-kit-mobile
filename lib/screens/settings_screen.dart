@@ -251,14 +251,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             trailing: Switch(
                               value: source.isEnabled,
-                              onChanged: (value) async {
-                                final updated = source.copyWith(
-                                  isEnabled: value,
-                                );
-                                await _configController.configService
-                                    .saveSource(updated);
-                                await _configController.loadSources();
-                              },
+                              // Goes through the controller, which updates the
+                              // observable list and persists. Writing to
+                              // configService directly and reloading used to
+                              // lose the change: loadSources() merged the
+                              // hardcoded defaults ahead of stored state, so
+                              // the saved `isEnabled: false` was discarded and
+                              // the switch snapped back on.
+                              onChanged: (value) =>
+                                _configController.toggleSource(source.id, value),
                             ),
                             onTap: () => _showSourceDetails(context, source),
                           ),

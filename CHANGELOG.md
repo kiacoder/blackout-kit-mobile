@@ -5,6 +5,34 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.4] - 2026-10-07
+
+### Fixed
+- **CI APK builds now work**: `android/gradle.properties` carried a tracked
+  `org.gradle.java.home=C:/Users/kiacoder/java17`. Because the file is committed,
+  that Windows path was also evaluated on `ubuntu-latest`, and every tagged build
+  failed at configuration time with `Java home supplied is invalid`. Gradle falls
+  back to `JAVA_HOME`, which CI sets explicitly, so the line was removed.
+- **Version no longer silently `1`**: `android/app/build.gradle` read
+  `flutter.versionCode` / `flutter.versionName`. Those are *methods* in Flutter
+  3.22.0 (CI) but *getters* in Flutter 3.24.0 (dev machine), so the build failed
+  on CI while working locally; and both implementations fall back to `1` / `1.0`
+  when `local.properties` is missing, which it always is on a runner. The version
+  is now parsed from `pubspec.yaml`, so `1.0.0-beta.4+4` yields versionName
+  `1.0.0-beta.4` and versionCode `4`.
+
+### Changed
+- **One APK build, not two**: `build.yml` and `release.yml` both triggered on `v*`
+  and both built and uploaded identically named APKs to the same release. APK
+  production now lives only in `build.yml`, which also supports manual dispatch
+  and always uploads an Actions artifact.
+
+### Note on beta.3
+- The `v1.0.0-beta.3` tag was created at `9625761`, *before* `252a9be` bundled
+  sing-box and tun2socks, and its two workflows both failed, so no CI-built APK
+  was ever produced for it. The APKs currently attached to that release were not
+  built by CI. beta.4 is built from `main` and includes `252a9be`.
+
 ## [1.0.0-beta.3] - 2026-10-06
 
 ### Added

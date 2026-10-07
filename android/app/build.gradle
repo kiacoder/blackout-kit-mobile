@@ -13,6 +13,35 @@ if (hasReleaseKey) {
     keystorePropertiesFile.withReader("UTF-8") { reader -> keystoreProperties.load(reader) }
 }
 
+// App version comes from pubspec.yaml, NOT from `flutter.versionCode` /
+// `flutter.versionName`. Two independent reasons:
+//
+// 1. Those are not stable across Flutter versions. In Flutter 3.22.0 (what CI
+//    pins) FlutterExtension declares them as *methods* — versionCode() /
+//    versionName() — so the Groovy property access `flutter.versionCode` fails
+//    configuration with "Could not get unknown property 'versionCode' for
+//    extension 'flutter'". Flutter 3.24.0 (the dev machine) turned them into
+//    getVersionCode()/getVersionName(), which is why the same file builds fine
+//    locally and failed every tagged build on CI.
+//
+// 2. Even with the right syntax the value is read from `local.properties`,
+//    falling back to "1" / "1.0". That file is gitignored and absent on the
+//    runner, so a green CI build would still have shipped versionCode 1.
+//
+// pubspec.yaml is tracked and is the single source of truth, so both machines
+// agree. "1.0.0-beta.4+4" -> versionName "1.0.0-beta.4", versionCode 4.
+def pubspecVersion = {
+    def pubspecFile = rootProject.file("../pubspec.yaml")
+    def matcher = pubspecFile.text =~ /(?m)^version:\s*(\S+)/
+    if (!matcher.find()) {
+        throw new GradleException("No 'version:' line found in ../pubspec.yaml")
+    }
+    return matcher.group(1)
+}()
+def versionParts = pubspecVersion.tokenize('+')
+def flutterVersionName = versionParts[0]
+def flutterVersionCode = versionParts.size() > 1 ? versionParts[1] : '1'
+
 android {
     namespace = "com.blackoutkit.vpn"
     compileSdkVersion 34
@@ -32,8 +61,8 @@ android {
         // manifest merger hard-fails when the app asks for a lower one.
         minSdkVersion 24
         targetSdkVersion 34
-        versionCode flutter.versionCode
-        versionName flutter.versionName
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
 
         // NOTE: deliberately no `ndk.abiFilters` here. AGP rejects it outright
         // when ABI splits are requested — "Conflicting configuration :

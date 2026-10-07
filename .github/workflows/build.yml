@@ -4,10 +4,18 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual build. Lets you produce APKs from any commit (from the Actions tab,
+  # "Run workflow") without minting a tag. APKs land in the run's Artifacts,
+  # and are only attached to a Release when the run is on a tag.
+  workflow_dispatch:
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+
+    permissions:
+      # Needed by softprops/action-gh-release to attach the APKs.
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -17,6 +25,11 @@ jobs:
         with:
           # Must be 17: android/app/build.gradle sets sourceCompatibility 17 and
           # jvmTarget "17". This was '11' and could not compile the project.
+          #
+          # Do NOT reintroduce `org.gradle.java.home` in android/gradle.properties:
+          # that file is tracked, so any absolute path in it is evaluated on this
+          # runner too. A Windows path there failed every build with
+          # "Java home supplied is invalid".
           java-version: '17'
           distribution: 'temurin'
 
@@ -38,7 +51,17 @@ jobs:
           flutter build apk --release --split-per-abi \
             --target-platform android-arm,android-arm64
 
+      - name: Upload APK artifacts
+        # Always, so workflow_dispatch runs still yield something downloadable.
+        uses: actions/upload-artifact@v4
+        with:
+          name: blackout-kit-mobile-apks
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
+
       - name: Upload APKs to Release
+        # Only meaningful on a tag; a dispatched run has no release to attach to.
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
           files: |

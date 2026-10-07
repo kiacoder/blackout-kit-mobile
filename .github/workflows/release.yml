@@ -28,49 +28,15 @@ jobs:
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'alpha') }}
 
-  build_apk:
-    runs-on: ubuntu-latest
-    needs: release
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          # Must be 17: android/app/build.gradle sets sourceCompatibility 17 and
-          # jvmTarget "17". This was '11' and could not compile the project.
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build APKs
-        # Per-ABI APKs. --target-platform is required because
-        # android/app/build.gradle no longer sets ndk.abiFilters (AGP rejects
-        # that combination outright when ABI splits are requested).
-        run: |
-          flutter build apk --release --split-per-abi \
-            --target-platform android-arm,android-arm64
-
-      - name: Upload APKs
-        uses: softprops/action-gh-release@v1
-        with:
-          # Previous path was `build/app/outputs/flutter-app-release.apk`, which
-          # has never existed — the real directory is `flutter-apk/`. The release
-          # step uploaded nothing and still reported success.
-          files: |
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          tag_name: ${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # build_apk was removed on 2026-10-07.
+  #
+  # It duplicated build.yml exactly: same runner, same Java/Flutter setup, same
+  # `flutter build apk --release --split-per-abi`, same two files uploaded with
+  # softprops/action-gh-release. Both workflows fire on the same tag push, so
+  # two jobs raced to upload identically-named assets to the same release.
+  #
+  # APK production now lives in exactly one place — build.yml — which also
+  # supports workflow_dispatch. This file only creates the release object.
 
   # build_ios was removed on 2026-09-19.
   #

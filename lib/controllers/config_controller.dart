@@ -93,7 +93,24 @@ class ConfigController extends GetxController {
     ever(allConfigs, (_) => _invalidateFilterCache());
     ever(testResults, (_) => _invalidateFilterCache());
 
+    // Persist every measurement so a restart does not wipe the tester back to
+    // "Untested" for thousands of servers (and connectFastest back to probing
+    // blind). Writes are cheap: one small Hive record per result.
+    ever(testResults, (Map<String, TestResult> results) {
+      for (final result in results.values) {
+        configService.saveTestResult(result);
+      }
+    });
+
     _log.i('ConfigController initialized');
+
+    // Hydrate stored measurements before the config list so the UI renders
+    // with results on the very first frame.
+    final stored = configService.loadTestResults();
+    if (stored.isNotEmpty) {
+      testResults.addAll(stored);
+      _log.i('Restored ${stored.length} stored test results');
+    }
 
     // Load existing data
     await loadConfigs();
@@ -252,10 +269,10 @@ class ConfigController extends GetxController {
         concurrency: concurrency,
       );
 
-      // Store results
-      for (final result in results) {
-        testResults[result.configHash] = result;
-      }
+      // Store results in ONE mutation: the persistence watcher below saves
+      // on every map change, so per-result puts would trigger O(n²) Hive
+      // writes across the batch.
+      testResults.addAll({for (final r in results) r.configHash: r});
 
       // Calculate rankings
       final rankings = testerService.rankConfigs(results);

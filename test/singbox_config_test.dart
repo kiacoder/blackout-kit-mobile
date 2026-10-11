@@ -110,7 +110,12 @@ Endpoint = awg.server.com:51820
       expect(proxy['server_port'], 51820);
       expect(proxy['private_key'], 'MY_PRIVATE_KEY');
       expect(proxy['peer_public_key'], 'MY_PEER_PUB_KEY');
-      expect(proxy['reserved'], [4, 50, 90]);
+      // Junk-packet params go in sing-box's `amnezia` block. They used to be
+      // stuffed into `reserved` — the 3-byte WireGuard header field, which is
+      // a WARP thing — so AWG servers were dialled as vanilla WireGuard and
+      // failed the handshake instantly.
+      expect(proxy['reserved'], isNull);
+      expect(proxy['amnezia'], {'jc': 4, 'jmin': 50, 'jmax': 90});
     });
   });
 

@@ -7,7 +7,6 @@
 /// was the one the censor had just refused. Refused is now a failure.
 library;
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';

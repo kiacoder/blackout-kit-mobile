@@ -5,6 +5,81 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.9] - 2026-10-11
+
+Deep bug sweep across the Dart and native layers (two independent line-by-line
+reviews). This release fixes the real causes of "engines start to fail" and
+"the tester doesn't work".
+
+### Fixed
+- **`getEngineInfo` hardcoded `singboxAvailable: true` while no sing-box
+  binary is bundled (P0).** The Dart pre-flight therefore believed
+  Hysteria2 / TUIC / AmneziaWG / WARP configs were servable, ranked them like
+  any other server, and the engine refused them the moment it was asked to
+  dial — the reported "engines start to fail". Availability is now a real
+  check for `libsingbox.so` in `nativeLibraryDir`; when absent, those
+  protocols are reported unavailable and the pre-flight filters them out
+  instead of failing mid-connect.
+- **AmneziaWG junk-packet parameters were emitted into the WireGuard
+  `reserved` field (P1).** `reserved` is the 3-byte WireGuard header field
+  (a WARP thing), not AWG obfuscation — AWG servers were dialled as vanilla
+  WireGuard and failed the handshake instantly. The parameters now go into
+  sing-box's `amnezia` block.
+- **Test results were never persisted (P1).** Every restart wiped the tester
+  back to "Untested" for the whole library, dropped the rankings and the
+  fastest-config banner, and forced connectFastest to probe blind. Results
+  now persist to Hive and hydrate on startup.
+- **`TestResult.fromJson` demoted every loaded result to `notTested` (P1).**
+  `toJson` stores `"TestStatus.success"` but the parser built
+  `'TestStatus.TestStatus.success'` and silently fell back to notTested. The
+  parser accepts both forms now.
+- **Dedup never re-attributed configs to their new source (P1).** Configs
+  fetched under a retired/renamed source id kept the stale `sourceId`
+  forever, so per-source counters read a permanent 0 with a full library.
+  A dedup hit under a new source id now rewrites the stored attribution.
+- **The native `'error'` status was silently dropped (P1).** When the engine
+  died with the kill switch off, the service tore the tunnel down but Dart
+  kept showing "Connected" with a ticking uptime. The status is now handled
+  and carries the real failure reason from the native side.
+- **`XrayEngine.controller` was not `@Volatile` and stop was unsynchronised
+  (P1).** Written on the establish worker thread, cleared from the main
+  thread — a stale read could skip `stopLoop()` and leave the core running
+  against a closed TUN fd.
+- **The TUN fd was closed twice (P1).** The Xray tun inbound takes ownership
+  of the fd it is handed; handing it the raw fd meant teardown's later
+  `close()` targeted a possibly-recycled descriptor. The engine now gets its
+  own duplicated descriptor.
+- **A half-started core leaked when `startLoop()` threw or `isRunning` was
+  false (P1).** The failed controller is now stopped explicitly.
+- **The 20s connect timeout left a half-built tunnel running (P2).** On
+  timeout the plugin now also posts a disconnect so Dart state and tunnel
+  reality stay consistent.
+- **Reachability progress counted double (P2).** `onProgress` fires a
+  `testing` event at probe start plus a terminal event; both consumers
+  counted both, so progress bars completed at 50% real progress.
+- **`ConfigService.getConfigCount()` could return -1** on a fresh box.
+  Counts real keys now.
+- **Speed Test screen: every WORKING server displayed "Failed" in red**
+  because throughput is never measured and the row rendered
+  `speedMbps == null → "Failed"`. Rows now show Working/Failed plus latency;
+  "Test All" uses the same bounded concurrent sample as the home screen
+  instead of walking the entire library sequentially (thousands of configs ×
+  up to 12s each = days).
+- **Settings repository rows now show a LIVE per-source config count**
+  (counted from the config box) instead of the stored fetch-time snapshot.
+
+### Known issue (open)
+- The tunnel installs only an IPv4 address and a `0.0.0.0/0` route. On
+  dual-stack networks IPv6 traffic bypasses the tunnel entirely (a leak,
+  not a crash). Needs a deliberate design pass — add an IPv6 address +
+  `::/0` route and v6 support in the tun inbound, or block v6 — before it
+  can be fixed without hardware to verify on.
+
+### Tests
+- `test/services/test_result_persistence_test.dart` — persistence round-trip,
+  status parsing, per-source live counts, dedup re-attribution.
+- `test/singbox_config_test.dart` updated for the `amnezia` block contract.
+
 ## [1.0.0-beta.8] - 2026-10-11
 
 ### Fixed

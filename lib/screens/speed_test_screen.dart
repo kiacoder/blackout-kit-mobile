@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../controllers/config_controller.dart';
 import '../controllers/connection_controller.dart';
 import '../models/config.dart';
+import '../models/test_result.dart';
 
 class SpeedTestScreen extends StatefulWidget {
   const SpeedTestScreen({Key? key}) : super(key: key);
@@ -28,6 +29,15 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     _connectionController = Get.find<ConnectionController>();
   }
 
+  /// How many configs one benchmark run probes, and how.
+  ///
+  /// "Test All" used to walk the ENTIRE library sequentially — with a real
+  /// source that is thousands of configs at up to 12s each, i.e. days. The
+  /// home screen already settled on a bounded concurrent sample; the benchmark
+  /// uses the same budget so the two surfaces agree.
+  static const int _benchmarkSample = 150;
+  static const int _benchmarkConcurrency = 16;
+
   Future<void> _runFullBenchmark() async {
     final configs = _configController.allConfigs;
     if (configs.isEmpty) {
@@ -40,31 +50,48 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       return;
     }
 
+    final sample = configs.take(_benchmarkSample).toList();
     setState(() {
       _isTesting = true;
       _testedCount = 0;
-      _totalToTest = configs.length;
+      _totalToTest = sample.length;
+      _currentTestingConfig = sample.first;
     });
 
-    for (int i = 0; i < configs.length; i++) {
-      if (!mounted) break;
-      final config = configs[i];
-      setState(() {
-        _currentTestingConfig = config;
-        _testedCount = i + 1;
-      });
+    _configController.testerService.onProgress = (hash, status) {
+      // Only terminal events count — a 'testing' event fires at probe start
+      // and would double the progress bar.
+      if (status == TestStatus.testing) return;
+      if (!mounted) return;
+      setState(() => _testedCount++);
+    };
 
-      await _configController.testConfig(config);
+    try {
+      final results =
+          await _configController.testerService.testConfigsConcurrently(
+        sample,
+        concurrency: _benchmarkConcurrency,
+      );
+      for (final result in results) {
+        _configController.testResults[result.configHash] = result;
+      }
+    } finally {
+      _configController.testerService.onProgress = null;
     }
 
     if (mounted) {
+      final working = _configController.testResults.values
+          .where((r) => sample.any((c) => c.getHash() == r.configHash))
+          .where((r) => r.isWorking)
+          .length;
       setState(() {
         _isTesting = false;
         _currentTestingConfig = null;
       });
       Get.snackbar(
         'Benchmark Complete',
-        'Tested $_totalToTest configurations successfully!',
+        '$working of ${sample.length} servers responded '
+        '(library holds ${configs.length} configs)',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -186,7 +213,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                         ),
                         if (result != null)
                           Text(
-                            '${result.speedMbps?.toStringAsFixed(1)} Mbps • ${result.latencyMs}ms ping',
+                            // No Mbps claim — throughput is not measured.
+                            '${result.latencyMs ?? '?'}ms ping • ${result.reliability.toStringAsFixed(0)}% reliable',
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                           ),
                       ],
@@ -266,9 +294,13 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
+                              // Throughput is never measured (see
+                              // TesterService) — the old code rendered
+                              // speedMbps, which is always null, so every
+                              // WORKING server showed "Failed" in red.
                               Text(
-                                result.speedMbps != null
-                                    ? '${result.speedMbps!.toStringAsFixed(1)} Mbps'
+                                result.isWorking
+                                    ? 'Working'
                                     : 'Failed',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
@@ -276,7 +308,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                                 ),
                               ),
                               Text(
-                                result.latencyMs != null ? '${result.latencyMs}ms' : 'Timeout',
+                                result.latencyMs != null ? '${result.latencyMs}ms' : 'No response',
                                 style: TextStyle(fontSize: 11, color: theme.hintColor),
                               ),
                             ],

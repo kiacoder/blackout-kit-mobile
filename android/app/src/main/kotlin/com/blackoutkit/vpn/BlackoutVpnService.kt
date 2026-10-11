@@ -269,14 +269,33 @@ class BlackoutVpnService : VpnService() {
             holdTunnelOnFailure = holdOnFailure
             XrayEngine.unexpectedStopListener = { reason -> onEngineDied(reason) }
 
+            // The Xray tun inbound takes OWNERSHIP of the fd it is handed and
+            // closes it when the core stops. Handing it the raw fd of `tun`
+            // means teardown()'s later close() targets a recycled descriptor.
+            // The engine gets its own dup and closes only that.
+            val engineFd = try {
+                ParcelFileDescriptor.dup(fd)
+            } catch (e: Exception) {
+                Log.e(TAG, "could not duplicate the tun fd: ${e.message}")
+                lastError = "Could not duplicate the tun fd: ${e.message}"
+                notifyStatus("error")
+                return false
+            }
+
             // The engine must be up before we claim success, otherwise all
             // traffic would be black-holed by the default route just installed.
-            val engineOk = startEngine(protocol, xrayConfig, singboxConfig, fd.fd, socksPort)
+            val engineOk = startEngine(protocol, xrayConfig, singboxConfig, engineFd.fd, socksPort)
             if (!engineOk) {
                 if (lastError == null) {
                     lastError = "Engine failed to start for protocol '$protocol'"
                 }
                 Log.e(TAG, lastError!!)
+                // The engine never took the descriptor; close our dup so it
+                // does not leak across reconnect attempts.
+                try {
+                    engineFd.close()
+                } catch (_: Exception) {
+                }
                 notifyStatus("error")
                 return false
             }

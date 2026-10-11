@@ -240,7 +240,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             subtitle: Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Text(
-                                '${source.owner}/${source.repo} (${source.branch ?? "main"})',
+                                '${source.owner}/${source.repo} (${source.branch ?? "main"})'
+                                ' — ${_configController.configService.countConfigsBySource()[source.id] ?? 0} configs',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -649,13 +650,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Branch: ${source.branch}',
               style: TextStyle(fontSize: 12, color: theme.hintColor),
             ),
-            if (source.configCount != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Configs: ${source.configCount}',
-                style: TextStyle(fontSize: 12, color: theme.hintColor),
-              ),
-            ],
+            const SizedBox(height: 8),
+            Text(
+              // Live count from the config box, not the source record's stored
+              // snapshot: a freshly created source reads 0 from configCount
+              // even when its configs are already in the library.
+              'Configs: ${_configController.configService.countConfigsBySource()[source.id] ?? 0}',
+              style: TextStyle(fontSize: 12, color: theme.hintColor),
+            ),
             if (source.lastFetched != null) ...[
               const SizedBox(height: 8),
               Text(

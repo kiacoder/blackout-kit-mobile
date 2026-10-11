@@ -69,6 +69,12 @@ object XrayEngine {
     var unexpectedStopListener: ((String) -> Unit)? = null
 
     private val envInitialized = AtomicBoolean(false)
+
+    // Written from the establish worker thread, cleared from the main thread
+    // (teardown / onRevoke / onDestroy). Without @Volatile the main thread can
+    // observe a stale null and skip stopLoop(), leaving the core running
+    // against a closed TUN fd.
+    @Volatile
     private var controller: CoreController? = null
 
     /** Set immediately before an intentional stop so the callback can tell the difference. */
@@ -206,6 +212,14 @@ object XrayEngine {
             created.startLoop(configJson, tunFd)
 
             if (!created.isRunning) {
+                // A half-started controller must be stopped explicitly —
+                // leaving it unassigned means teardown() has no handle and
+                // the native core keeps running with nobody owning it.
+                try {
+                    created.stopLoop()
+                } catch (t: Throwable) {
+                    Log.w(TAG, "stopLoop after failed start: ${t.message}")
+                }
                 lastError = "Xray core reported that it failed to start"
                 Log.e(TAG, lastError!!)
                 return false
@@ -234,16 +248,18 @@ object XrayEngine {
 
     /** Tears the core down. Safe to call when nothing is running. */
     fun stop() {
-        val current = controller ?: return
-        controller = null
-        stoppingIntentionally = true
-        try {
-            current.stopLoop()
-            Log.i(TAG, "core stopped")
-        } catch (t: Throwable) {
-            Log.w(TAG, "error stopping core: ${t.message}")
-        } finally {
-            stoppingIntentionally = false
+        synchronized(this) {
+            val current = controller ?: return
+            controller = null
+            stoppingIntentionally = true
+            try {
+                current.stopLoop()
+                Log.i(TAG, "core stopped")
+            } catch (t: Throwable) {
+                Log.w(TAG, "error stopping core: ${t.message}")
+            } finally {
+                stoppingIntentionally = false
+            }
         }
     }
 

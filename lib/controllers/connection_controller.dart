@@ -128,6 +128,9 @@ class ConnectionController extends GetxController {
       statusMessage.value = 'Testing ${toProbe.length} server(s)...';
       var probed = 0;
       testerService.onProgress = (hash, status) {
+        // onProgress fires a 'testing' event at probe start AND a terminal
+        // event at the end — counting both reported double progress.
+        if (status == TestStatus.testing) return;
         probed++;
         statusMessage.value = 'Testing servers... $probed/${toProbe.length}';
       };

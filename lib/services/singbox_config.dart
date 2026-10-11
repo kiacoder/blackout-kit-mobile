@@ -190,7 +190,17 @@ class SingboxConfigBuilder {
             'pre_shared_key': c.presharedKey,
           'local_address': ['10.0.0.2/32'],
           'mtu': 1420,
-          'reserved': [c.junkCount, c.junkMin, c.junkMax],
+          // `reserved` is the 3-byte WireGuard header field (a WARP thing),
+          // NOT AmneziaWG obfuscation — stuffing the junk-packet numbers in
+          // there dialed AWG servers as vanilla WireGuard and the handshake
+          // died instantly. The junk parameters belong in sing-box's
+          // `amnezia` block (only honoured by sing-box builds with AWG
+          // support; a vanilla wireguard outbound must not receive it).
+          'amnezia': {
+            'jc': c.junkCount,
+            'jmin': c.junkMin,
+            'jmax': c.junkMax,
+          },
         };
 
       case WarpConfig c:

@@ -145,8 +145,13 @@ class TestResult {
 
 TestStatus _parseTestStatus(String? status) {
   if (status == null) return TestStatus.notTested;
+  // Accept both the raw enum name ("success") and the full toString form
+  // ("TestStatus.success") — toJson stores the latter, and building
+  // 'TestStatus.$status' from it used to produce 'TestStatus.TestStatus.success',
+  // silently demoting every loaded result to notTested.
+  final name = status.split('.').last;
   return TestStatus.values.firstWhere(
-    (e) => e.toString() == 'TestStatus.$status',
+    (e) => e.name == name,
     orElse: () => TestStatus.notTested,
   );
 }

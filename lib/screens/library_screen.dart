@@ -408,9 +408,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         style: TextStyle(fontSize: 12, color: theme.hintColor),
                       ),
                       Text(
-                        result.speedMbps != null
-                            ? '${result.speedMbps!.toStringAsFixed(1)} Mbps'
-                            : 'N/A',
+                        // Throughput is never measured — show latency instead
+                        // of a perpetual "N/A" Mbps readout.
+                        result.latencyMs != null ? '${result.latencyMs}ms' : 'N/A',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

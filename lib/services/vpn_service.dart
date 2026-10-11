@@ -271,7 +271,7 @@ class VPNService {
     switch (call.method) {
       case 'onStatusChanged':
         final status = call.arguments['status'] as String?;
-        _handleStatusChange(status);
+        _handleStatusChange(status, error: call.arguments['error'] as String?);
         break;
       case 'onError':
         final error = call.arguments['error'] as String?;
@@ -282,7 +282,7 @@ class VPNService {
     }
   }
 
-  void _handleStatusChange(String? status) {
+  void _handleStatusChange(String? status, {String? error}) {
     switch (status) {
       case 'connected':
         _status = VPNStatus.connected;
@@ -308,6 +308,16 @@ class VPNService {
         _lastError = 'The proxy stopped, so traffic is being blocked. '
             'Reconnect to restore access.';
         _log.w('VPN status changed: blocked (kill switch holding the tunnel)');
+        break;
+      case 'error':
+        // The engine died with the kill switch OFF and the tunnel was torn
+        // down. This used to fall into default and be ignored, leaving the
+        // UI showing "Connected" with a ticking uptime over a dead tunnel.
+        _status = VPNStatus.error;
+        _lastError = (error != null && error.isNotEmpty)
+            ? error
+            : 'The VPN engine stopped unexpectedly. Reconnect to try again.';
+        _log.e('VPN status changed: error — $_lastError');
         break;
       default:
         _log.w('Unknown status: $status');

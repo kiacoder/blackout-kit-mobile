@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import java.io.File
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -44,7 +45,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             it.setMethodCallHandler(this)
         }
         BlackoutVpnService.statusListener = { status ->
-            main.post { channel?.invokeMethod("onStatusChanged", mapOf("status" to status)) }
+            // Carry the failure reason with the status so Dart can show the
+            // real error (e.g. why the engine died) instead of a generic one.
+            main.post {
+                channel?.invokeMethod(
+                    "onStatusChanged",
+                    mapOf("status" to status, "error" to BlackoutVpnService.lastError)
+                )
+            }
         }
     }
 
@@ -98,16 +106,29 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
      */
     private fun engineInfoMap(): Map<String, Any?> {
         val xrayVersion = XrayEngine.version()
+        // sing-box runs as a subprocess engine, which needs its .so inside the
+        // APK's nativeLibraryDir. Reporting it available without the binary
+        // made the Dart pre-flight pass hysteria2/tuic/amneziawg/warp configs,
+        // which then failed instantly inside EngineRunner — "engines start to
+        // fail". Gate the claim on the file actually being present.
+        val singboxSo = File(
+            appContext?.applicationInfo?.nativeLibraryDir ?: "",
+            "libsingbox.so"
+        )
+        val singboxAvailable = singboxSo.exists()
         return mapOf(
             "xrayAvailable" to (xrayVersion != null),
             "xrayVersion" to xrayVersion,
             "xrayProtocols" to
                 listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard"),
-            "singboxAvailable" to true,
+            "singboxAvailable" to singboxAvailable,
             "singboxProtocols" to
-                listOf("hysteria2", "tuic", "amneziawg", "warp"),
+                if (singboxAvailable) listOf("hysteria2", "tuic", "amneziawg", "warp")
+                else emptyList<String>(),
             "unavailableProtocols" to
-                listOf("openvpn", "psiphon")
+                (listOf("openvpn", "psiphon") +
+                    if (singboxAvailable) emptyList()
+                    else listOf("hysteria2", "tuic", "amneziawg", "warp"))
         )
     }
 
@@ -209,6 +230,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
         main.postDelayed({
             if (pendingConnect != null) {
+                // Stop the service too: establish() may still complete after
+                // this and would otherwise leave a live tunnel whose Dart
+                // state already reported failure — UI and reality diverged.
+                ctx.startService(
+                    Intent(ctx, BlackoutVpnService::class.java).apply {
+                        action = BlackoutVpnService.ACTION_DISCONNECT
+                    }
+                )
                 resolveConnect(false, "Timed out waiting for the tunnel to come up")
             }
         }, CONNECT_TIMEOUT_MS)

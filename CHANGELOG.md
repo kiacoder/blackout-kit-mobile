@@ -5,6 +5,18 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.13] - 2026-10-11
+
+### Fixed
+- **XUDP base key, second attempt: the gomobile JNI bridge mangled raw
+  high bytes (P0).** beta.12 passed the raw 32 digest bytes through a Java
+  string in ISO-8859-1 — but the Java→Go string border re-encodes to
+  UTF-8, so every byte above 0x7F became a multi-byte sequence, and the
+  core received a mangled key it counted as length 0 ("BaseKey must be 32
+  bytes: âQyXÛÎ=*… len 0" — captured from the device). The key is now 32
+  digest bytes masked into 0x01–0x7F, which survive the UTF-8 round trip
+  byte-exactly: single-byte sequences only, count intact.
+
 ## [1.0.0-beta.12] - 2026-10-11
 
 ### Fixed

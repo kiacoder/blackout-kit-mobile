@@ -5,6 +5,19 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.10] - 2026-10-11
+
+### Fixed
+- **IPv6 leak closed (kill-switch style).** The tunnel used to install only
+  an IPv4 address and a `0.0.0.0/0` route, so on dual-stack networks IPv6
+  traffic bypassed the tunnel entirely. The tunnel now also routes `::/0`
+  into the TUN *without* giving the interface an IPv6 address: v6 packets
+  enter the tunnel and are dropped (nothing leaks), and apps fall back to
+  IPv4 per Happy Eyeballs, which is proxied normally. This is the same
+  approach used by NetGuard-class apps. Granting real IPv6 through the core
+  (v6 address + v6 gateway in the tun inbound) remains future work that
+  needs on-device verification.
+
 ## [1.0.0-beta.9] - 2026-10-11
 
 Deep bug sweep across the Dart and native layers (two independent line-by-line

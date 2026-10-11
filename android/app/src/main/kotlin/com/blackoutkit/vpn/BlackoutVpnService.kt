@@ -215,6 +215,15 @@ class BlackoutVpnService : VpnService() {
                 .setMtu(VPN_MTU)
                 .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
                 .addRoute("0.0.0.0", 0)
+                // IPv6 blackhole (kill switch for v6): route ::/0 into the TUN
+                // WITHOUT giving the interface an IPv6 address. v6 packets
+                // enter the tunnel, find no v6 netstack on the other side, and
+                // are dropped — nothing bypasses the tunnel on dual-stack
+                // networks. Apps fall back to IPv4 per Happy Eyeballs and that
+                // traffic is proxied normally. Adding a real v6 address
+                // instead would require the core's tun inbound to be verified
+                // v6-capable on hardware first; leaking was not an option.
+                .addRoute("::", 0)
 
             // DNS leak prevention: every resolver the tunnel advertises is one
             // we control. The system resolver is never offered, so queries

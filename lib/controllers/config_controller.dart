@@ -23,6 +23,33 @@ class ConfigController extends GetxController {
   final RxList<ConfigRanking> rankings = RxList<ConfigRanking>();
 
   final RxBool isLoading = RxBool(false);
+
+  /// Network refresh / testing in flight. Kept apart from [isLoading] on
+  /// purpose: the library used to show a full-screen "Loading repositories &
+  /// configs..." spinner whenever ANY network work ran — including the startup
+  /// refresh and the reachability tests — so opening the Library mid-startup
+  /// hid the whole stored list behind a spinner for minutes. The list should
+  /// render stored configs immediately; refresh progress is a banner.
+  final RxBool isRefreshing = RxBool(false);
+  final RxString refreshStatus = RxString('');
+
+  /// Refcount under [isRefreshing]: several sources fetch concurrently and
+  /// each one would otherwise clear the flag the moment it finishes.
+  int _refreshCount = 0;
+
+  void _refreshBegin([String? status]) {
+    _refreshCount++;
+    isRefreshing.value = true;
+    if (status != null) refreshStatus.value = status;
+  }
+
+  void _refreshEnd() {
+    _refreshCount = (_refreshCount - 1).clamp(0, 1 << 30);
+    if (_refreshCount == 0) {
+      isRefreshing.value = false;
+      refreshStatus.value = '';
+    }
+  }
   final RxString filterProtocol = RxString('all');
   final RxString filterSource = RxString('all');
   final RxString sortBy = RxString('speed'); // speed, name, recently_added
@@ -153,7 +180,7 @@ class ConfigController extends GetxController {
   /// Fetch configs from a source and save to local storage
   Future<int> fetchFromSource(ConfigSource source) async {
     try {
-      isLoading.value = true;
+      _refreshBegin('Fetching ${source.name}...');
       _log.i('Fetching from ${source.name}');
 
       final configs = await githubService.fetchConfigsFromSource(source);
@@ -179,19 +206,30 @@ class ConfigController extends GetxController {
       _log.e('Error fetching from source: $e');
       return 0;
     } finally {
-      isLoading.value = false;
+      _refreshEnd();
     }
   }
 
-  /// Fetch from all enabled sources
+  /// Fetch from all enabled sources.
+  ///
+  /// Sources run concurrently: each one costs up to a couple of dozen HTTP
+  /// round-trips when its candidate filenames miss, and running them one after
+  /// another turned a single slow/unreachable host into minutes of loading.
   Future<int> fetchFromAllSources({bool force = false}) async {
-    int totalSaved = 0;
-    for (final source in sources.where((s) => s.isEnabled)) {
-      if (force || source.needsRefresh) {
-        totalSaved += await fetchFromSource(source);
-      }
+    final targets = sources
+        .where((s) => s.isEnabled && (force || s.needsRefresh))
+        .toList();
+    if (targets.isEmpty) return 0;
+
+    _refreshBegin('Updating ${targets.length} source(s)...');
+    try {
+      final saved = await Future.wait(
+        targets.map((source) => fetchFromSource(source)),
+      );
+      return saved.fold<int>(0, (sum, n) => sum + n);
+    } finally {
+      _refreshEnd();
     }
-    return totalSaved;
   }
 
   /// Test configs, bounded and concurrent.
@@ -205,7 +243,7 @@ class ConfigController extends GetxController {
   /// sample so startup stays responsive.
   Future<void> testAllConfigs({int limit = 150, int concurrency = 8}) async {
     try {
-      isLoading.value = true;
+      _refreshBegin('Testing configs...');
       final toTest = allConfigs.take(limit).toList();
       _log.i('Testing ${toTest.length} of ${allConfigs.length} configs');
 
@@ -227,7 +265,7 @@ class ConfigController extends GetxController {
     } catch (e) {
       _log.e('Error testing configs: $e');
     } finally {
-      isLoading.value = false;
+      _refreshEnd();
     }
   }
 

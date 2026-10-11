@@ -5,6 +5,40 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.8] - 2026-10-11
+
+### Fixed
+- **The library could sit on "Loading repositories & configs..." for many
+  minutes.** Two compounding causes, both felt hardest behind censorship:
+  - `GitHubService` used a bare `Dio()` with **no timeouts**. A host that
+    blackholes the connection (typical for `raw.githubusercontent.com` behind
+    censorship) hung for the OS-level TCP timeout — minutes — per URL, and a
+    source whose filename misses tries up to a couple of dozen URLs. Requests
+    now give up at 8s (connect/send) / 20s (receive).
+  - The Library screen showed a full-screen spinner whenever *any* network
+    work ran, including the startup refresh and the reachability tests,
+    because they all flipped the same `isLoading`. Sources now fetch
+    concurrently under a refcounted `isRefreshing`, and the Library renders
+    its stored list immediately with refresh progress shown as a banner.
+- **Connect picked censored servers and the engine died instantly.** The
+  reachability probe counted a TCP **connection refused (RST)** as "reachable"
+  because a RST proves the host is alive. Behind censorship that is poisonous:
+  DPI boxes answer blocked destinations with an *instant* RST, so the probe
+  reported "reachable in 2 ms", `connectFastest` crowned the fastest server in
+  the list — the one the censor had just refused — and the engine errored the
+  moment it dialled. A refused port is now a probe failure with a
+  self-explanatory error. (`ECONNREFUSED` 111/61 plus Windows 10061.)
+- **"Finding fastest config..." could hang for ~5 minutes of dead silence.**
+  The pre-flight re-probed 150 candidates at 3 attempts × 4s with only 6 in
+  flight, and re-probed servers the library had already measured as dead. It
+  now skips known-failed results, probes once at a 3s timeout with 16 in
+  flight, and streams live progress ("Testing servers... 37/150") into the
+  status line.
+
+### Tests
+- `test/services/tester_probe_test.dart` — a listening port measures as
+  working; a refused port is a failure, not "reachable".
+
 ## [1.0.0-beta.7] - 2026-10-07
 
 ### Fixed

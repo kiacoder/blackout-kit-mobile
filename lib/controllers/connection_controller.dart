@@ -49,6 +49,15 @@ class ConnectionController extends GetxController {
   /// measurements to hand it.
   static const int _maxProbeCandidates = 150;
 
+  /// Pre-flight probe budget. The full TesterService defaults (3 attempts x
+  /// 4s timeout at concurrency 6) mean 150 unreachable candidates take ~5
+  /// minutes of "Finding fastest config..." — and behind censorship nearly
+  /// every host IS unreachable, so almost all probes ran the full 12s. The
+  /// pre-flight only needs ONE answer: does this server respond at all.
+  static const int _probeAttempts = 1;
+  static const Duration _probeTimeout = Duration(seconds: 3);
+  static const int _probeConcurrency = 16;
+
   bool get isConnected => state.value == ConnectionState.connected;
 
   DateTime? _connectionStartTime;
@@ -96,12 +105,45 @@ class ConnectionController extends GetxController {
       }
 
       final candidateHashes = candidates.map((c) => c.getHash()).toSet();
-      // `testConfigs` probes strictly one config at a time at up to 4s x 3
-      // attempts. With thousands of candidates that is hours of blocking, so
-      // the fallback is the concurrent tester over a bounded sample instead.
-      final probeSample = candidates.take(_maxProbeCandidates).toList();
-      final results = (testResults ??
-              await testerService.testConfigsConcurrently(probeSample))
+
+      // Split what we already know from what we still have to probe. Results
+      // handed in by the library let us skip servers that already failed —
+      // re-probing 150 of them was minutes of dead air behind censorship.
+      final known = <TestResult>[];
+      final knownFailed = <String>{};
+      for (final r in testResults ?? const <TestResult>[]) {
+        if (!candidateHashes.contains(r.configHash)) continue;
+        if (r.isWorking) {
+          known.add(r);
+        } else {
+          knownFailed.add(r.configHash);
+        }
+      }
+
+      final toProbe = candidates
+          .where((c) => !knownFailed.contains(c.getHash()))
+          .take(_maxProbeCandidates)
+          .toList();
+
+      statusMessage.value = 'Testing ${toProbe.length} server(s)...';
+      var probed = 0;
+      testerService.onProgress = (hash, status) {
+        probed++;
+        statusMessage.value = 'Testing servers... $probed/${toProbe.length}';
+      };
+      List<TestResult> probedResults;
+      try {
+        probedResults = await testerService.testConfigsConcurrently(
+          toProbe,
+          concurrency: _probeConcurrency,
+          attempts: _probeAttempts,
+          timeout: _probeTimeout,
+        );
+      } finally {
+        testerService.onProgress = null;
+      }
+
+      final results = [...known, ...probedResults]
           .where((r) => candidateHashes.contains(r.configHash))
           .toList();
       final fastest = testerService.getFastestConfig(results);

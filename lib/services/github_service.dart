@@ -36,8 +36,19 @@ class GitHubService {
   ];
 
   GitHubService({Dio? client, Logger? logger})
-      : _client = client ?? Dio(),
+      : _client = client ?? _defaultClient(),
         _log = logger ?? Logger();
+
+  /// Dio gives every request an unbounded timeout by default: a host that
+  /// blackholes the connection (common for raw.githubusercontent.com behind
+  /// censorship) hangs at the OS TCP timeout — minutes per URL — and
+  /// fetchConfigsFromSource tries up to a couple of dozen URLs per source.
+  /// That was the "Loading repositories & configs..." forever bug.
+  static Dio _defaultClient() => Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 8),
+        sendTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 20),
+      ));
 
   /// Fetch raw file content from GitHub repo
   /// Returns null if file not found or network error

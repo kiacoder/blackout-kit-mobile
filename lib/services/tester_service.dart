@@ -182,10 +182,14 @@ class TesterService {
 
   /// Opens a TCP connection to [host]:[port] and times it.
   ///
-  /// A refused connection still counts as reachable: the host answered with a
-  /// RST, which proves the network path works. That matters for UDP-only
-  /// protocols such as WireGuard, where the port will never accept TCP but the
-  /// host is plainly alive. A timeout means nothing came back at all.
+  /// A refused connection (RST) does NOT count as reachable. Counting it was
+  /// meant to flatter UDP-only protocols such as WireGuard, but behind
+  /// censorship it is actively poisonous: DPI boxes answer blocked destinations
+  /// with an instant RST, so the probe reported "reachable in 2 ms", the
+  /// selector crowned the *fastest* server in the list — the one the censor
+  /// had just refused — and the engine died the moment it dialled it. A refused
+  /// port is a server we cannot use, full stop; a WireGuard host whose TCP
+  /// port refuses is still served fine because its outbound never dials TCP.
   Future<_Probe> _probe(String host, int port, Duration timeout) async {
     final stopwatch = Stopwatch()..start();
     try {
@@ -198,11 +202,15 @@ class TesterService {
       final message = e.message.toLowerCase();
       final refused = message.contains('refused') ||
           e.osError?.errorCode == 111 || // Linux/Android ECONNREFUSED
-          e.osError?.errorCode == 61; // macOS ECONNREFUSED
+          e.osError?.errorCode == 61 || // macOS ECONNREFUSED
+          e.osError?.errorCode == 10061; // Windows WSAECONNREFUSED
 
       if (refused) {
-        // Host is up, it just does not speak TCP on this port.
-        return _Probe(reachable: true, latencyMs: stopwatch.elapsedMilliseconds);
+        return _Probe.failed(
+          'Connection refused by $host:$port — the host answered with a '
+          'rejection, which behind censorship usually means the censor, '
+          'not the server',
+        );
       }
       return _Probe.failed(e.message);
     } on TimeoutException {

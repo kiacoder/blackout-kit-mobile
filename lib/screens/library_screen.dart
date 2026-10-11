@@ -78,11 +78,46 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
       body: Column(
         children: [
+          // Refresh banner — non-blocking progress for fetch/test work.
+          Obx(() {
+            if (!_configController.isRefreshing.value) {
+              return const SizedBox.shrink();
+            }
+            return Material(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _configController.refreshStatus.value.isEmpty
+                            ? 'Updating repositories & configs...'
+                            : _configController.refreshStatus.value,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
           // Filter bar
           _buildFilterBar(context),
           // Config list
           Expanded(
             child: Obx(() {
+              // Only a storage load blocks the list. Network refresh and the
+              // reachability tests used to flip the same flag, so opening the
+              // Library mid-startup hid thousands of stored configs behind a
+              // spinner for minutes. Refresh progress is now a banner instead.
               if (_configController.isLoading.value) {
                 return const Center(
                   child: Column(

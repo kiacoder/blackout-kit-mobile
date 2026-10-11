@@ -3,7 +3,6 @@ package com.blackoutkit.vpn
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
-import android.util.Base64
 import android.util.Log
 import go.Seq
 import libv2ray.CoreCallbackHandler
@@ -162,7 +161,15 @@ object XrayEngine {
         }
     }
 
-    /** XUDP needs a per-install 32-byte key; a device-bound SHA-256 is enough. */
+    /**
+     * XUDP needs a per-install 32-byte key.
+     *
+     * The core reads this env var AS the key itself and checks
+     * `len(value) == 32` — the first attempt Base64-encoded the digest into a
+     * 44-character string and every connect died with "BaseKey must be 32
+     * bytes". The raw digest bytes (exactly 32) are passed through in
+     * ISO-8859-1, which maps all 256 byte values 1:1 onto chars and back.
+     */
     private fun xudpBaseKey(context: Context): String {
         val seed = try {
             Settings.Secure.getString(
@@ -173,7 +180,7 @@ object XrayEngine {
             null
         } ?: "blackout-kit"
         val digest = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray())
-        return Base64.encodeToString(digest, Base64.NO_WRAP or Base64.URL_SAFE)
+        return String(digest, Charsets.ISO_8859_1)
     }
 
     /** Human-readable core version, or null if the AAR is missing. */

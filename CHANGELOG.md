@@ -5,6 +5,19 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.12] - 2026-10-11
+
+### Fixed
+- **THE first-connect blocker (found from the first real device error!):
+  the XUDP base key was the wrong length (P0).** `xudpBaseKey` SHA-256'd a
+  device seed into exactly 32 bytes — then Base64-encoded them into a
+  44-character string. The core reads that env var AS the key itself and
+  requires precisely 32 bytes, so every connect died at core init with
+  "xray.xudp.basekey: invalid value (BaseKey must be 32 bytes)". The raw
+  digest bytes now pass through unchanged (ISO-8859-1, byte-exact).
+  This single line was why no VLESS/VMess/Trojan/SS/WireGuard config could
+  ever start the engine on device.
+
 ## [1.0.0-beta.11] - 2026-10-11
 
 ### Fixed

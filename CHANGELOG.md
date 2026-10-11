@@ -5,6 +5,26 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.11] - 2026-10-11
+
+### Fixed
+- **The real engine failure reason was trapped in the engine object (P1).**
+  When `XrayEngine.start()` failed, its detailed `lastError` ("Xray core
+  rejected the configuration: ...") never reached `BlackoutVpnService`,
+  which fell back to the generic "Engine failed to start for protocol
+  'vless'" — hiding exactly the message needed to debug the first on-device
+  run. The engine's and runner's own errors are now surfaced verbatim to
+  the UI.
+
+### Validation
+- All six protocol shapes the Dart `XrayConfigBuilder` emits (VLESS
+  REALITY/TCP, VLESS WS+TLS, VLESS plain, VLESS gRPC+TLS, VMess WS, SS)
+  were validated against a real Xray 26.3.27 core with `xray run -test`:
+  **every configuration parses clean**, including the `tun` inbound shape.
+  The first on-device engine failure is therefore NOT a config-grammar
+  problem; beta.11's verbose error will name the actual cause.
+- `tool/emit_xray_config.dart` added to reproduce the validation.
+
 ## [1.0.0-beta.10] - 2026-10-11
 
 ### Fixed

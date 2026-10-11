@@ -295,9 +295,13 @@ class BlackoutVpnService : VpnService() {
             // traffic would be black-holed by the default route just installed.
             val engineOk = startEngine(protocol, xrayConfig, singboxConfig, engineFd.fd, socksPort)
             if (!engineOk) {
-                if (lastError == null) {
-                    lastError = "Engine failed to start for protocol '$protocol'"
-                }
+                // The engine sets its own lastError with the REAL reason
+                // ("Xray core rejected the configuration: ..."). It used to
+                // stay trapped in XrayEngine while the UI got this generic
+                // fallback, making remote debugging impossible.
+                lastError = XrayEngine.lastError
+                    ?: EngineRunner.lastError
+                    ?: "Engine failed to start for protocol '$protocol'"
                 Log.e(TAG, lastError!!)
                 // The engine never took the descriptor; close our dup so it
                 // does not leak across reconnect attempts.

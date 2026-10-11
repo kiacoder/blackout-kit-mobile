@@ -274,7 +274,7 @@ class BlackoutVpnService : VpnService() {
             // means teardown()'s later close() targets a recycled descriptor.
             // The engine gets its own dup and closes only that.
             val engineFd = try {
-                ParcelFileDescriptor.dup(fd)
+                ParcelFileDescriptor.fromFd(fd.fd)
             } catch (e: Exception) {
                 Log.e(TAG, "could not duplicate the tun fd: ${e.message}")
                 lastError = "Could not duplicate the tun fd: ${e.message}"

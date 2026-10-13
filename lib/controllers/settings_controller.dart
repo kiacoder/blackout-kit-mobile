@@ -58,12 +58,17 @@ class SettingsController extends GetxController {
   /// Initialize Hive box and load settings
   Future<void> _initSettings() async {
     try {
-      _settingsBox = await Hive.openBox(_settingsBoxName);
-      _loadSettings();
+      await initializeForTest();
       _log.i('SettingsController initialized with persistent storage');
     } catch (e) {
       _log.e('Error opening settings Hive box: $e');
     }
+  }
+
+  @visibleForTesting
+  Future<void> initializeForTest() async {
+    _settingsBox = await Hive.openBox(_settingsBoxName);
+    _loadSettings();
   }
 
   /// Load settings from persistent storage

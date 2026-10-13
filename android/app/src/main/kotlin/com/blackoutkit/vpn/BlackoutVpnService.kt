@@ -277,6 +277,7 @@ class BlackoutVpnService : VpnService() {
             // startup is caught too.
             holdTunnelOnFailure = holdOnFailure
             XrayEngine.unexpectedStopListener = { reason -> onEngineDied(reason) }
+            EngineRunner.onUnexpectedExit = { reason -> onEngineDied(reason) }
 
             // The Xray tun inbound takes OWNERSHIP of the fd it is handed and
             // closes it when the core stops. Handing it the raw fd of `tun`
@@ -357,8 +358,10 @@ class BlackoutVpnService : VpnService() {
         if (!xrayConfig.isNullOrBlank()) {
             Log.w(TAG, "ignoring an Xray config supplied for non-Xray '$protocol'")
         }
-        if (!singboxConfig.isNullOrBlank()) {
-            EngineRunner.writeConfig(this, singboxConfig)
+        if (!singboxConfig.isNullOrBlank() && !EngineRunner.writeConfig(this, singboxConfig)) {
+            lastError = EngineRunner.lastError ?: "Could not write the sing-box config."
+            Log.e(TAG, lastError!!)
+            return false
         }
         return EngineRunner.start(
             context = this,
@@ -384,6 +387,7 @@ class BlackoutVpnService : VpnService() {
 
     private fun teardown() {
         XrayEngine.unexpectedStopListener = null
+        EngineRunner.onUnexpectedExit = null
         holdTunnelOnFailure = false
         XrayEngine.stop()
         EngineRunner.stop()

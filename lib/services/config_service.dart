@@ -1,6 +1,6 @@
 /// Config service for loading, saving, and parsing VPN configs.
 /// Replicates Blackout Kit CLI's config/manager.py pattern:
-/// - Local persistence with Hive (encrypted)
+/// - Local persistence with Hive (currently not encrypted at rest)
 /// - Atomic file I/O (write-temp + move)
 /// - Deduplication by config hash
 /// - Config validation before storage

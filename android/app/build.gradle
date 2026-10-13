@@ -152,6 +152,8 @@ flutter {
 }
 
 dependencies {
+    testImplementation "junit:junit:4.13.2"
+
     // Xray core as an Android library (2dust/AndroidLibXrayLite, LGPL-3.0).
     // The AAR ships libgojni.so for all four ABIs plus the geoip/geosite
     // databases (excluded above), and exposes

@@ -1,16 +1,17 @@
 # Blackout Kit Mobile - Open-Source VPN App
 
-A trustworthy, open-source VPN client for Android and iOS built with Flutter. Fetches VPN configurations from GitHub, auto-tests them for reachability, and provides one-tap VPN connection.
+An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
 
-**Status**: v1.0.0-beta.3 — Android tunnel implemented and building; not yet verified on hardware
+**Status**: v1.0.0-beta.13 — Android VPN service and in-process Xray core are implemented. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on hardware.
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process
-> behind it. It **compiles, packages, and passes its unit tests**, but it has
-> **never been run on a physical device** — no device was available while it was
-> written. Treat the first run as a smoke test, not a working build.
->
-> **Working protocols:** VLESS, VMess, Trojan, Shadowsocks, WireGuard, Hysteria 2, TUIC v5, AmneziaWG, and WARP — powered by the bundled in-process Xray core and sing-box native runtime.
+	> behind it. The beta.11–beta.13 release notes record device-guided debugging,
+	> but local process/SOCKS readiness does not establish end-to-end traffic.
+	> Subprocess-backed tunnel traffic still needs a physical-device test.
+
+
+> **Xray-core protocols:** VLESS, VMess, Trojan, Shadowsocks, and WireGuard. Sing-box-backed Hysteria 2, TUIC, AmneziaWG, and WARP are gated on bundled-runtime capability and local process/SOCKS readiness; readiness does not verify end-to-end traffic.
 >
 > [PHASES.md](PHASES.md) carries the authoritative, current phase status.
 
@@ -24,7 +25,7 @@ A trustworthy, open-source VPN client for Android and iOS built with Flutter. Fe
 - Share-link parsing for 11 protocols (`vless://`, `vmess://`, `trojan://`,
   `ss://`, `hy2://`, `tuic://`, WireGuard `.conf`, `.ovpn`, AmneziaWG)
 - Auto-deduplication by SHA256 hash
-- Local encrypted storage with Hive
+- Local Hive persistence; config and settings data are currently not encrypted at rest
 
 🟡 **Automatic Testing**
 - Real TCP reachability and latency measurement per config
@@ -62,7 +63,7 @@ A trustworthy, open-source VPN client for Android and iOS built with Flutter. Fe
 ### Tech Stack
 - **Framework**: Flutter 3.22+
 - **State Management**: GetX (reactive .obs, dependency injection)
-- **Local Storage**: Hive (encrypted key-value)
+- **Local Storage**: Hive key-value persistence (currently unencrypted at rest)
 - **VPN Bridge**: Platform channels (Android/iOS native)
 - **Testing**: Unit + Integration tests
 
@@ -221,12 +222,13 @@ On a physical device (**nothing below has ever been run**):
 - GitHub service with caching
 - Config persistence
 
-### Phase 2 — VPN engine ✅ Complete
+### Phase 2 — VPN engine ✅ Android implementation complete; traffic verification incomplete
 - Real `VpnService` tunnel in Kotlin (`BlackoutVpnService`)
 - Xray core bundled and running **in-process** via `libv2ray` (`XrayEngine`)
 - Dart-side Xray config generation with a `tun` inbound
 - Connection state machine, honest error surfacing
-- **Working protocols:** VLESS, VMess, Trojan, Shadowsocks, WireGuard
+- **Xray-core protocols:** VLESS, VMess, Trojan, Shadowsocks, WireGuard
+- Sing-box-backed protocols require packaged runtime capability and a local SOCKS5 readiness handshake; this does not verify end-to-end tunnel traffic.
 
 ### Phase 3 — Security features ✅ Complete (corrected design)
 - **Split tunneling** — `addAllowedApplication` / `addDisallowedApplication`,
@@ -276,11 +278,17 @@ On a physical device (**nothing below has ever been run**):
       from this list after the bundled `libgojni.so` was found to contain
       `xray.proxy.wireguard`; it now runs in-process with no new dependency and
       no licence change. The remaining four — Hysteria2, TUIC, AmneziaWG and
-      WARP — still need sing-box, which is GPL-3.0 while this project is MIT, so
-      that remains a licensing decision as well as a technical one.
+      WARP — are now covered by packaged `libsingbox.so` + `libtun2socks.so`
+      binaries (arm64-v8a / armeabi-v7a). A connect attempt additionally checks
+      child-process liveness and a local SOCKS5 readiness handshake before the
+      service reports connected; **this still does not verify end-to-end
+      traffic** — that requires the on-device test below. Note sing-box is
+      GPL-3.0 while this project is MIT; it ships as a separate native library.
 - [ ] iOS native layer (`NEVPNManager`) — currently unregistered mocks
-- [ ] **On-device verification of the tunnel (never run on real hardware)**
-      — `integration_test/native_tunnel_test.dart` is written and waiting
+- [ ] **On-device verification of the tunnel** — `integration_test/native_tunnel_test.dart`
+      is written and waiting; device-level runs captured during beta.11–beta.13
+      debugging drove real fixes (error propagation, XUDP base key), but a full
+      pass including subprocess-backed traffic is still open
 - [ ] Current IP display — the native side returns a hardcoded `null`
 - [ ] Localization coverage — the app shell is translated into 9 languages; ~96
       strings in `lib/screens` and `lib/widgets` are still English-only
@@ -364,7 +372,7 @@ Open-source under the MIT License. See [LICENSE](LICENSE) for details.
 
 - Flutter and Dart teams for the framework
 - GetX author for the state management library
-- Hive for encrypted local storage
+- Hive for local persistence (currently unencrypted at rest)
 - Community members testing and contributing
 
 ## Support

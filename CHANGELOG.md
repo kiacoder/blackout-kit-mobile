@@ -13,9 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   string in ISO-8859-1 — but the Java→Go string border re-encodes to
   UTF-8, so every byte above 0x7F became a multi-byte sequence, and the
   core received a mangled key it counted as length 0 ("BaseKey must be 32
-  bytes: âQyXÛÎ=*… len 0" — captured from the device). The key is now 32
-  digest bytes masked into 0x01–0x7F, which survive the UTF-8 round trip
-  byte-exactly: single-byte sequences only, count intact.
+  bytes: âQyXÛÎ=*… len 0" — captured from the device). The key was changed to
+  ASCII-safe bytes, but device testing showed Xray expects the setting in
+  unpadded URL-safe Base64 rather than as literal key bytes; see the unreleased
+  follow-up below.
 
 ## [1.0.0-beta.12] - 2026-10-11
 
@@ -462,7 +463,24 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+### Added
+- **Subprocess engine startup checks.** For sing-box-backed protocols (Hysteria2, TUIC, AmneziaWG, WARP), `EngineRunner` no longer reports success the instant both processes launch. Both children must survive a bounded startup window, and sing-box must answer a real local SOCKS5 greeting on its configured `listen_port`, before the VPN service reports connected. A daemon monitor thread then watches both children: an unexpected exit now drives the same engine-died path as the in-process Xray core — tearing the tunnel down with the real reason, or holding the interface open when the kill switch is on. A failed sing-box config write now fails the connect attempt with the actual write error instead of a downstream launch failure. These checks prove process and listener readiness only — end-to-end tunnel traffic still requires a physical-device test.
+- **JVM unit tests for the subprocess lifecycle** (`android/app/src/test/.../SubprocessLifecycleTest.kt`): the local SOCKS5 readiness handshake against a loopback fake server, immediate child-exit rejection, later-exit detection, and reverse-order cleanup — no emulator or device required.
+
+### Changed
+- **Settings switches that could not control their stated behavior are now disabled with accurate explanations** (their stored values are preserved):
+  - *Block Non-VPN Traffic* — system-wide lockdown is controlled by Android's Always-on VPN + "Block connections without VPN"; the in-app switch never wired to it. The tile now says so.
+  - *Show Notifications* — the VPN foreground notification is required by Android while the tunnel is active and cannot be hidden by the app.
+  - *Log Local Connection* — no separate local connection history is implemented.
+- **Settings → About now shows the real version from package metadata** (`package_info_plus`) instead of the hardcoded `1.0.0-beta.3` string.
+
+### Docs
+- Honesty pass across README / QUICKSTART / ARCHITECTURE / PHASES: Hive storage is documented as **unencrypted at rest** (previous "encrypted" claims were not backed by any cipher in the code; enabling encryption in-place would strand existing data, so it needs a designed backup-first migration); the iOS VPN layer is marked **not implemented**; protocol support is scoped explicitly — VLESS/VMess/Trojan/Shadowsocks/WireGuard run on the in-process Xray core, while the sing-box-backed protocols are gated on bundled-runtime capability plus the new local readiness checks, which do not verify end-to-end traffic.
+
 ### Fixed
+- XUDP base-key initialization now passes the 32-byte digest as unpadded
+  URL-safe Base64, matching Xray's `RawURLEncoding` environment parser while
+  keeping the gomobile-bound string ASCII-safe.
 - **Repository names rendered one letter per line in Settings → Repositories.**
   No code was splitting the string; the tile's usable width was collapsing and
   `Text` soft-wrapped down to a single glyph per line. `overflow: ellipsis`

@@ -73,7 +73,7 @@ abstract class Config {
 
 **Why**: Protocol-agnostic interface. UI works with any Config subclass.
 
-### 4. Atomic Persistence
+### 4. Local Persistence (currently unencrypted)
 
 **Location**: `lib/services/config_service.dart` → `saveConfig()`
 
@@ -84,7 +84,7 @@ Hive handles atomic writes internally:
 await _configBox.put(configHash, config.toMap());
 ```
 
-**Why**: Prevents corruption if app crashes mid-write.
+**Security note**: Hive config, source, result, and settings boxes are opened without an encryption cipher in the current implementation. Treat sensitive configuration values as unencrypted local data. Enabling encryption in-place is not safe without a separately designed, backup-first migration that preserves existing boxes on failure.
 
 ### 5. State Machine Pattern
 
@@ -170,7 +170,7 @@ Obx(() => Text('Configs: ${allConfigs.length}'))
    ↓
 3. GitHubService.fetchConfigsFromSource() [cache check → GitHub API]
    ↓
-4. ConfigService.saveConfigs() [dedup by hash → Hive storage]
+4. ConfigService.saveConfigs() [dedup by hash → local Hive storage; currently unencrypted]
    ↓
 5. User taps Connect or ConnectFastest
    ↓
@@ -314,7 +314,7 @@ flutter test integration_test/app_flow_test.dart
 - ❌ Closed-source binaries (all code is open-source)
 
 ### Data Handling
-- Configs stored encrypted in Hive (device-specific key)
+- Configs persisted in Hive without at-rest encryption in the current implementation; sensitive values remain readable from app storage
 - No telemetry or analytics (optional, local only)
 - No account creation (all local)
 - Speed tests never send metadata to Blackout Kit

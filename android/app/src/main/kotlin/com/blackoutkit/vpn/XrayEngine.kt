@@ -3,6 +3,7 @@ package com.blackoutkit.vpn
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import android.util.Base64
 import android.util.Log
 import go.Seq
 import libv2ray.CoreCallbackHandler
@@ -162,18 +163,9 @@ object XrayEngine {
     }
 
     /**
-     * XUDP needs a per-install 32-byte key.
-     *
-     * The core reads this env value AS the key itself and requires exactly
-     * 32 BYTES. Two constraints shape how the bytes travel:
-     *  - base64 text is wrong (44 chars ≠ 32 bytes — the first attempt);
-     *  - raw bytes > 0x7F are wrong too: the gomobile JNI bridge re-encodes
-     *    Java strings to UTF-8, so high bytes become multi-byte sequences
-     *    and the core ends up with a mangled, miscounted key ("len 0" — the
-     *    second attempt).
-     * The safe corridor is exactly 32 bytes, each in 0x01–0x7F: single-byte
-     * UTF-8 everywhere, so the byte count survives the Java→Go trip intact.
-     * Each digest byte is masked to 7 bits and 0x00 is lifted to 0x01.
+     * XUDP reads this setting as unpadded URL-safe Base64 and decodes it to a
+     * 32-byte per-install key. URL-safe Base64 remains ASCII across gomobile's
+     * Java-to-Go string conversion.
      */
     private fun xudpBaseKey(context: Context): String {
         val seed = try {
@@ -185,11 +177,7 @@ object XrayEngine {
             null
         } ?: "blackout-kit"
         val digest = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray())
-        val safe = ByteArray(32) { i ->
-            val b = (digest[i].toInt() and 0x7F)
-            (if (b == 0) 0x01 else b).toByte()
-        }
-        return String(safe, Charsets.US_ASCII)
+        return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
     }
 
     /** Human-readable core version, or null if the AAR is missing. */

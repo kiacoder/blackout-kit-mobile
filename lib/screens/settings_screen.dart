@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../controllers/config_controller.dart';
 import '../controllers/settings_controller.dart';
@@ -21,12 +22,25 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final SettingsController _settingsController;
   late final ConfigController _configController;
+  String _appVersion = 'Loading…';
 
   @override
   void initState() {
     super.initState();
     _settingsController = Get.find<SettingsController>();
     _configController = Get.find<ConfigController>();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() => _appVersion = info.version);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _appVersion = 'Unknown');
+    }
   }
 
   @override
@@ -63,12 +77,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 )),
                 Obx(() => SwitchListTile(
                   title: const Text('Block Non-VPN Traffic'),
-                  subtitle:
-                    const Text('Only allow traffic through VPN tunnel'),
+                  subtitle: const Text(
+                    'Managed by Android: enable Always-on VPN and “Block connections without VPN” in system settings. This switch does not control system lockdown.',
+                  ),
                   value: _settingsController.blockNonVPNTraffic.value,
-                  onChanged: (value) {
-                    _settingsController.blockNonVPNTraffic.value = value;
-                  },
+                  onChanged: null,
                 )),
                 Obx(() => SwitchListTile(
                   title: const Text('Split Tunneling'),
@@ -138,9 +151,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 )),
                 Obx(() => SwitchListTile(
                   title: const Text('Show Notifications'),
-                  subtitle: const Text('Notify on connection changes'),
+                  subtitle: const Text(
+                    'The Android VPN foreground notification is required while connected and cannot be hidden by this setting.',
+                  ),
                   value: _settingsController.showNotifications.value,
-                  onChanged: _settingsController.toggleNotifications,
+                  onChanged: null,
                 )),
                 Obx(() => SwitchListTile(
                   title: const Text('Analytics'),
@@ -277,11 +292,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Obx(() => SwitchListTile(
                   title: const Text('Log Local Connection'),
-                  subtitle: const Text('Log connection attempts to local storage'),
+                  subtitle: const Text(
+                    'Connection attempts are not currently stored as a separate local history.',
+                  ),
                   value: _settingsController.logLocalConnection.value,
-                  onChanged: (value) {
-                    _settingsController.logLocalConnection.value = value;
-                  },
+                  onChanged: null,
                 )),
                 ListTile(
                   title: const Text('System Logs & Inspector'),
@@ -299,10 +314,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               context: context,
               title: 'About',
               children: [
-                const ListTile(
-                  title: Text('App Version'),
-                  subtitle: Text('1.0.0-beta.3'),
-                  leading: Icon(Icons.info_outline),
+                ListTile(
+                  title: const Text('App Version'),
+                  subtitle: Text(_appVersion),
+                  leading: const Icon(Icons.info_outline),
                 ),
                 ListTile(
                   title: const Text('GitHub'),

@@ -3,6 +3,7 @@ package com.blackoutkit.vpn
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Subprocess-based engine runner, for protocols the in-process Xray core
@@ -14,13 +15,10 @@ import java.io.File
  * through here — [XrayEngine] links them straight into the process and Xray
  * binds the TUN itself, so no SOCKS hop is needed.
  *
- * ## Current status: not yet functional
- *
- * The `jniLibs/<abi>/lib*.so` binaries this class expects are **not bundled in
- * the repository**. It is kept because the packaging contract is sound and the
- * failure mode is correct, but every protocol routed here currently fails with
- * an explicit "binaries are not bundled" error rather than pretending to
- * connect.
+ * The native libraries are bundled for the packaged ARM ABIs. This only
+ * establishes that subprocesses can be launched; it does not prove tunnel traffic
+ * is working. The runner therefore checks both process liveness during startup
+ * and watches both children for unexpected exit.
  *
  * Binaries are named `lib*.so` on purpose: Android only permits `exec()` from
  * `nativeLibraryDir` (API 29+ blocks execution from `filesDir`), and the APK
@@ -59,6 +57,21 @@ object EngineRunner {
 
     private var tun2socksProcess: Process? = null
     private var engineProcess: Process? = null
+    private var monitorThread: Thread? = null
+    private val intentionalStop = AtomicBoolean(false)
+    @Volatile
+    var onUnexpectedExit: ((String) -> Unit)? = null
+
+    internal var processLauncher: (List<String>) -> Process = { command ->
+        ProcessBuilder(command).redirectErrorStream(true).start()
+    }
+    internal var startupWaitMs: Long = 750
+    internal var readinessProbe: (String, Int, Int) -> Boolean = LocalSocksReadiness::await
+    internal var readinessPortProvider: (Context, String) -> Int = { _, config ->
+        Regex("\\\"listen_port\\\"\\s*:\\s*(\\d+)").find(config)
+            ?.groupValues?.get(1)?.toIntOrNull() ?: 0
+    }
+    internal var lifecycle = SubprocessLifecycle()
 
     fun start(context: Context, tunFd: Int, socksPort: Int, protocol: String): Boolean {
         lastError = null
@@ -96,17 +109,52 @@ object EngineRunner {
         }
 
         return try {
-            engineProcess = ProcessBuilder(
-                enginePath.absolutePath, "run", "-c", configFile.absolutePath
-            ).redirectErrorStream(true).start()
+            intentionalStop.set(false)
+            engineProcess = processLauncher(
+                listOf(enginePath.absolutePath, "run", "-c", configFile.absolutePath)
+            )
 
-            tun2socksProcess = ProcessBuilder(
-                tun2socksPath.absolutePath,
-                "-fd", tunFd.toString(),
-                "-socks", "127.0.0.1:$socksPort"
-            ).redirectErrorStream(true).start()
+            tun2socksProcess = processLauncher(
+                listOf(
+                    tun2socksPath.absolutePath,
+                    "-fd", tunFd.toString(),
+                    "-socks", "127.0.0.1:$socksPort"
+                )
+            )
 
-            Log.i(TAG, "engine up: $engineName, socks=127.0.0.1:$socksPort, tunFd=$tunFd")
+            val children = listOfNotNull(engineProcess, tun2socksProcess)
+            val startupError = lifecycle.awaitStartup(children, startupWaitMs)
+            if (startupError != null) {
+                lastError = startupError
+                stop()
+                return false
+            }
+            val readinessPort = readinessPortProvider(context, configFile.readText())
+            if (readinessPort !in 1..65535 || !readinessProbe("127.0.0.1", readinessPort, 500)) {
+                lastError = "sing-box did not accept a local SOCKS5 readiness handshake."
+                stop()
+                return false
+            }
+
+            monitorThread = Thread({
+                while (!intentionalStop.get()) {
+                    val childrenNow = listOfNotNull(engineProcess, tun2socksProcess)
+                    val exited = lifecycle.exitedProcess(childrenNow)
+                    if (exited != null) {
+                        val reason = "Engine process exited unexpectedly (code ${runCatching { exited.exitValue() }.getOrNull() ?: "unknown"})."
+                        lastError = reason
+                        if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
+                        return@Thread
+                    }
+                    try {
+                        Thread.sleep(100)
+                    } catch (_: InterruptedException) {
+                        return@Thread
+                    }
+                }
+            }, "blackout-engine-monitor").apply { isDaemon = true; start() }
+
+            Log.i(TAG, "engine processes remained alive and accepted a local SOCKS5 handshake: $engineName, socks=127.0.0.1:$readinessPort, tunFd=$tunFd")
             true
         } catch (e: Exception) {
             lastError = "Engine launch failed: ${e.message}"
@@ -117,13 +165,10 @@ object EngineRunner {
     }
 
     fun stop() {
-        for (process in listOf(tun2socksProcess, engineProcess)) {
-            try {
-                process?.destroy()
-            } catch (e: Exception) {
-                Log.w(TAG, "failed to stop engine process: ${e.message}")
-            }
-        }
+        intentionalStop.set(true)
+        monitorThread?.interrupt()
+        monitorThread = null
+        lifecycle.stop(listOfNotNull(tun2socksProcess, engineProcess))
         tun2socksProcess = null
         engineProcess = null
     }

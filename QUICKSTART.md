@@ -11,17 +11,14 @@ Get up and running with Blackout Kit Mobile in 5 minutes. 🚀
 2. Enable "Install from Unknown Sources" in Settings → Security
 3. Tap the APK file to install
 
-**iOS:**
-1. Download the IPA from [GitHub Releases](https://github.com/blackout-kit/blackout-kit-mobile/releases)
-2. Use Xcode or third-party tool to install on device
+**iOS:** The iOS VPN layer is not implemented; iOS installation and VPN connection are not currently supported.
 
 ### First Run
 
-1. **App Opens** → Fetches configs from hardcoded trusted repos (Mullvad, Windscribe, etc.)
-2. **Wait for Tests** → App tests all configs for speed/reliability (~3-5 min)
-3. **Home Screen** → Shows fastest working server
-4. **Connect** → Tap big button to connect
-5. **Check** → Verify IP changed at https://whatismyipaddress.com
+1. **App Opens** → Loads configured GitHub config sources.
+2. **Test** → The app checks config-server reachability and latency; this does not verify VPN traffic.
+3. **Connect** → Android asks for VPN consent, then establishes the local tunnel.
+4. **Verify separately** → Test traffic and DNS on a physical device; process/listener readiness alone does not prove an exit path works.
 
 ### Add Custom VPN Sources
 
@@ -150,8 +147,8 @@ flutter pub upgrade
 The app uses these core patterns (full details in `ARCHITECTURE.md`):
 
 1. **GetX** - State management with reactive observables (`.obs`)
-2. **Hive** - Encrypted local storage for configs
-3. **Platform Channels** - Native Android/iOS VPN integration
+2. **Hive** - Local persistence; current config/settings boxes are not encrypted at rest
+3. **Platform Channels** - Android VPN integration; iOS VPN is not implemented
 4. **Registry Pattern** - Engine discovery (prep for V2 extensibility)
 5. **Factory Pattern** - Protocol-agnostic config parsing
 

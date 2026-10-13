@@ -1,6 +1,6 @@
 /// Blackout Kit Mobile - Main entry point
 /// Flutter VPN app with config-based architecture
-/// GetX for state management, Hive for encrypted storage
+/// GetX for state management, Hive for local persistence
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';

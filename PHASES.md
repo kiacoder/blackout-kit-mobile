@@ -19,14 +19,14 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 - [x] Hardcoded trusted config sources (GitHub repositories)
 - [x] GitHub API service with caching (1-hour TTL)
 - [x] Config parsing and validation (factory pattern)
-- [x] Local persistence with Hive (encrypted key-value storage)
+- [x] Local persistence with Hive (key-value storage; current boxes are not encrypted at rest)
 - [x] Project structure following architectural patterns
 - [x] Dependency injection with GetX services
 
 ### Technical Decisions
 
 - **State Management:** GetX (reactive observables, simplicity)
-- **Local Storage:** Hive (encrypted, no schema migrations needed)
+- **Local Storage:** Hive (currently unencrypted at rest; encryption requires a backup-first migration design)
 - **Config Format:** Parse from GitHub raw URIs (WireGuard, OpenVPN, Shadowsocks)
 - **Architecture:** Registry + Factory + State Machine patterns
 
@@ -50,8 +50,8 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 > `isConnected = true` and returned a fabricated `192.168.1.x` address without ever
 > calling `VpnService.Builder.establish()`. Removing them was correct, but the Dart
 > layer was never updated, so every one of the 29 platform-channel calls threw
-> `MissingPluginException` on Android. The real native layer now exists again; the
-> engine binaries it needs are still pending.
+> `MissingPluginException` on Android. The real native layer now exists again, and
+> the engine binaries it needs are packaged (see below).
 
 ### Deliverables
 
@@ -66,7 +66,16 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 - [x] Xray engine bundled — `libv2ray.aar` (AndroidLibXrayLite, LGPL-3.0) v26.9.9
 - [x] `XrayEngine.kt` — in-process core wrapper (`Seq.setContext` → `initCoreEnv` → `startLoop`)
 - [x] `lib/services/xray_config.dart` — Dart builder for the Xray JSON, incl. the `tun` inbound
-- [ ] sing-box + tun2socks bundled — **blocks Hysteria2 / TUIC / WireGuard / AmneziaWG / WARP**
+- [x] sing-box (`libsingbox.so`) + tun2socks (`libtun2socks.so`) packaged for
+      arm64-v8a / armeabi-v7a — unblocks Hysteria2 / TUIC / AmneziaWG / WARP at the
+      packaging level. **Caveat:** launch plus the local SOCKS5 readiness handshake
+      are unit-tested on the JVM; end-to-end traffic through this path is still
+      unverified on hardware. WireGuard does not use this path (served in-process
+      by the Xray core).
+- [x] Subprocess readiness & monitoring — `EngineRunner` requires both children to
+      survive a bounded startup window and sing-box to answer a local SOCKS5
+      greeting before the service reports connected; unexpected child exit
+      propagates into the VPN service state (teardown, or kill-switch hold)
 - [ ] iOS `NEVPNManager` integration (existing Swift files are unregistered mocks)
 
 ### Technical Features

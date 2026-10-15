@@ -206,13 +206,21 @@ class ConfigController extends GetxController {
         sourceId: source.id,
       );
 
-      // Update source with config count
+      // Update source with config count (and clear any previous failure).
       final updated = source.copyWith(
         configCount: saved,
         lastFetched: DateTime.now(),
-        error: null,
+        clearError: true,
       );
       await configService.saveSource(updated);
+      // Keep the in-memory list in step with the saved source, so a source
+      // that just failed does not keep showing its old error afterwards.
+      final sourceIndex = sources.indexWhere((s) => s.id == source.id);
+      if (sourceIndex != -1) {
+        final nextSources = List<ConfigSource>.of(sources);
+        nextSources[sourceIndex] = updated;
+        sources.value = nextSources;
+      }
 
       // Reload configs
       await loadConfigs();
@@ -221,6 +229,21 @@ class ConfigController extends GetxController {
       return saved;
     } catch (e) {
       _log.e('Error fetching from source: $e');
+      // Record the failure on the source so the Library can tell "every fetch
+      // failed" apart from "there are no configs" — the screen used to render
+      // the same empty state for both and the user had no way to see why the
+      // list was blank (or that a retry might help).
+      final reason = e.toString();
+      final failed = source.copyWith(
+        error: reason.length > 120 ? '${reason.substring(0, 120)}…' : reason,
+      );
+      await configService.saveSource(failed);
+      final index = sources.indexWhere((s) => s.id == source.id);
+      if (index != -1) {
+        final next = List<ConfigSource>.of(sources);
+        next[index] = failed;
+        sources.value = next;
+      }
       return 0;
     } finally {
       _refreshEnd();

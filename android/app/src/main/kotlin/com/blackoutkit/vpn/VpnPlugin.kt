@@ -8,7 +8,12 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.Patterns
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.net.URL
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -30,6 +35,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private var pendingPrepare: MethodChannel.Result? = null
     private var pendingConnect: MethodChannel.Result? = null
 
+    /// Loopback SOCKS port of the most recent connect, used to dial the core
+    /// for the exit-IP fetch. Matches VpnService.defaultSocksPort.
+    private var lastSocksPort: Int = BlackoutVpnService.DEFAULT_SOCKS_PORT
+
     private val main = Handler(Looper.getMainLooper())
 
     companion object {
@@ -37,6 +46,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         private const val CHANNEL = "com.blackoutkit.vpn/service"
         private const val PREPARE_REQUEST = 0xB10C
         private const val CONNECT_TIMEOUT_MS = 20_000L
+        private const val IP_ECHO_URL = "https://api.ipify.org"
+        private const val IP_FETCH_TIMEOUT_MS = 8_000
     }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -70,17 +81,26 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             "disconnect" -> handleDisconnect(result)
             "isRunning" -> result.success(BlackoutVpnService.isRunning)
             "getStatus" -> result.success(statusMap())
-            // Deliberately unimplemented — not an oversight.
+            // The exit address of the tunnel, fetched THROUGH the core's
+            // loopback SOCKS inbound.
             //
-            // The tunnel's own address (10.111.222.1) is not the exit IP the user
-            // wants to see. Fetching the real one over HTTP from inside the app is
-            // unreliable here: a VPN app's own traffic may not traverse its own
-            // tunnel, so the request could report the *unprotected* address. That
-            // is worse than showing nothing.
+            // Why the tunnel and not a direct request: this app is a
+            // disallowed application of its own VPN (addDisallowedApplication),
+            // so a plain HTTP fetch from the app bypasses the tunnel and would
+            // report the *unprotected* address — worse than showing nothing.
+            // Dialing 127.0.0.1:<socksPort> instead sends the request through
+            // the core, which forwards it via the configured outbound.
             //
-            // The UI hides the row when this is null, so the app degrades
-            // honestly. See the Phase 3 note in PHASES.md.
-            "getConnectedIP" -> result.success(null)
+            // Both engine families expose that inbound with noauth: the Xray
+            // config's "socks" inbound and the sing-box config's socks inbound,
+            // each built on VpnService.defaultSocksPort (10808).
+            //
+            // Known trade-off, documented in PHASES.md: the echo hostname is
+            // resolved by the system resolver (visible to the local network)
+            // before the connection is dialed through SOCKS. The check is
+            // user-triggered (once per connect), so it leaks one hostname on
+            // demand rather than passively leaking browsing DNS.
+            "getConnectedIP" -> handleGetConnectedIP(result)
             "getEngineInfo" -> result.success(engineInfoMap())
             else -> result.notImplemented()
         }
@@ -180,6 +200,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         pendingConnect = result
         BlackoutVpnService.connectResultCallback = { ok -> resolveConnect(ok) }
 
+        // Remember the port the core's SOCKS inbound listens on so
+        // getConnectedIP can dial the tunnel later.
+        lastSocksPort = call.argument<Int>("socksPort") ?: BlackoutVpnService.DEFAULT_SOCKS_PORT
+
         val intent = Intent(ctx, BlackoutVpnService::class.java).apply {
             action = BlackoutVpnService.ACTION_CONNECT
             putExtra(BlackoutVpnService.EXTRA_PROTOCOL, call.argument<String>("protocol"))
@@ -274,6 +298,86 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             result.success(true)
         } catch (e: Exception) {
             result.error("DISCONNECT_FAILED", e.message, null)
+        }
+    }
+
+    // ─────────────────────────── exit IP ───────────────────────────────────
+
+    /**
+     * Fetches the tunnel's exit address off the Flutter platform thread and
+     * resolves with the address, or null when it cannot be determined.
+     *
+     * The request goes through the core's loopback SOCKS inbound (see the
+     * getConnectedIP dispatch comment): a direct fetch would bypass the
+     * tunnel because this app is a disallowed application of its own VPN and
+     * would report the unprotected address instead.
+     */
+    private fun handleGetConnectedIP(result: MethodChannel.Result) {
+        if (!BlackoutVpnService.isRunning) {
+            // Nothing to ask — the tunnel is not up.
+            result.success(null)
+            return
+        }
+        val socksPort = lastSocksPort
+        Thread {
+            val ip = fetchExitIpThroughTunnel(socksPort)
+            main.post {
+                if (ip != null) {
+                    result.success(ip)
+                } else {
+                    result.success(null)
+                }
+            }
+        }.start()
+    }
+
+    private fun fetchExitIpThroughTunnel(socksPort: Int): String? {
+        if (socksPort <= 0 || socksPort > 65535) {
+            Log.w(TAG, "Refusing to dial an out-of-range SOCKS port: $socksPort")
+            return null
+        }
+        var conn: HttpURLConnection? = null
+        return try {
+            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+            conn = (URL(IP_ECHO_URL).openConnection(proxy) as HttpURLConnection).apply {
+                connectTimeout = IP_FETCH_TIMEOUT_MS
+                readTimeout = IP_FETCH_TIMEOUT_MS
+                requestMethod = "GET"
+                doInput = true
+                instanceFollowRedirects = false
+            }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                Log.w(TAG, "Exit-IP echo returned HTTP $code")
+                return null
+            }
+            val body = conn.inputStream.bufferedReader().use { it.readText() }.trim()
+            if (looksLikeIp(body)) body else run {
+                Log.w(TAG, "Exit-IP echo returned a non-address body")
+                null
+            }
+        } catch (e: Exception) {
+            // A failed probe must never surface as an error to the UI: the
+            // status row simply stays hidden, which is the honest degradation.
+            Log.w(TAG, "Exit-IP fetch failed: ${e.javaClass.simpleName}: ${e.message}")
+            null
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /** True for an IPv4 literal (or a colon-separated IPv6 literal). */
+    private fun looksLikeIp(value: String): Boolean {
+        if (value.isEmpty()) return false
+        if (Patterns.IP_ADDRESS.matcher(value).matches()) return true
+        // IPv6 from the echo service on a v6-only exit: hex groups joined by
+        // colons. Deliberately narrow — no zone ids, no embedded IPv4.
+        if (!value.contains(':')) return false
+        val groups = value.split(':')
+        if (groups.size < 3 || groups.size > 8) return false
+        return groups.all { group ->
+            (group.isEmpty() && value.contains("::")) ||
+                (group.isNotEmpty() && group.length <= 4 && group.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' })
         }
     }
 

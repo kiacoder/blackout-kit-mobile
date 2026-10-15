@@ -133,6 +133,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
               final filtered = _configController.getFilteredConfigs();
 
+              // A fetch that failed used to be indistinguishable from "no
+              // configs": both rendered the same empty state, so the user had
+              // no way to see *why* the list was blank (or that retrying might
+              // fix it). Show the recorded per-source errors instead when the
+              // whole library is empty and any source carries one.
+              final libraryEmpty = _configController.allConfigs.isEmpty;
+              if (filtered.isEmpty && libraryEmpty) {
+                final failedSources = _configController.sources
+                    .where((s) => s.error != null && s.error!.isNotEmpty)
+                    .toList();
+                if (failedSources.isNotEmpty) {
+                  return _buildErrorState(context, failedSources);
+                }
+              }
+
               // Render a window, not the whole list. A real source returns
               // thousands of configs; handing all of them to the builder made
               // opening the library stall.
@@ -228,6 +243,97 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
               );
             }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Error state for an empty library: names the sources that failed, shows a
+  /// short reason each, and offers a retry. Distinct from the plain "no
+  /// configs" empty state so a network failure can never look like data loss.
+  Widget _buildErrorState(BuildContext context, List<dynamic> failedSources) {
+    final theme = Theme.of(context);
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _configController.fetchFromAllSources(force: true);
+      },
+      child: ListView(
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.cloud_off,
+                  size: 64,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Could not load your configs',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'Your saved configs are not lost — the update failed. '
+                    'Check your connection and try again.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.textTheme.bodySmall?.color,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // The failing sources, with the reason the controller recorded
+                // on the model (network error, rate limit, auth, ...).
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final source in failedSources)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.error_outline,
+                                  size: 16, color: Colors.red),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${source.name}: ${source.error}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await _configController.fetchFromAllSources(force: true);
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
           ),
         ],
       ),

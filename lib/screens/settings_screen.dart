@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../controllers/config_controller.dart';
 import '../controllers/settings_controller.dart';
+import '../services/kill_switch_service.dart';
 import '../services/vpn_service.dart';
 import 'logs_screen.dart';
 import 'split_tunneling_screen.dart';
@@ -75,14 +76,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _settingsController.killSwitchEnabled.value,
                   onChanged: _settingsController.toggleKillSwitch,
                 )),
-                Obx(() => SwitchListTile(
+                // Was a switch that could never move (Android owns this
+                // setting; there is no API). Now it is what the user actually
+                // needs: one tap to the system screen where "Always-on VPN"
+                // and "Block connections without VPN" live — the same deep-link
+                // the kill-switch flow already uses.
+                ListTile(
+                  leading: const Icon(Icons.shield_outlined),
                   title: const Text('Block Non-VPN Traffic'),
                   subtitle: const Text(
-                    'Managed by Android: enable Always-on VPN and “Block connections without VPN” in system settings. This switch does not control system lockdown.',
+                    'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.',
                   ),
-                  value: _settingsController.blockNonVPNTraffic.value,
-                  onChanged: null,
-                )),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Get.find<KillSwitchService>().openSystemSettings(),
+                ),
                 Obx(() => SwitchListTile(
                   title: const Text('Split Tunneling'),
                   subtitle: const Text('Route selected apps outside VPN'),
@@ -148,14 +155,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   )),
                   leading: const Icon(Icons.language),
                   onTap: _showLanguageDialog,
-                )),
-                Obx(() => SwitchListTile(
-                  title: const Text('Show Notifications'),
-                  subtitle: const Text(
-                    'The Android VPN foreground notification is required while connected and cannot be hidden by this setting.',
-                  ),
-                  value: _settingsController.showNotifications.value,
-                  onChanged: null,
                 )),
                 Obx(() => SwitchListTile(
                   title: const Text('Analytics'),
@@ -290,14 +289,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               context: context,
               title: 'Advanced & Diagnostics',
               children: [
-                Obx(() => SwitchListTile(
-                  title: const Text('Log Local Connection'),
-                  subtitle: const Text(
-                    'Connection attempts are not currently stored as a separate local history.',
-                  ),
-                  value: _settingsController.logLocalConnection.value,
-                  onChanged: null,
-                )),
                 ListTile(
                   title: const Text('System Logs & Inspector'),
                   subtitle: const Text('View, filter, copy, and export real-time application logs'),

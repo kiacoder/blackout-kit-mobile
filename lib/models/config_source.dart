@@ -64,6 +64,9 @@ class ConfigSource {
     int? configCount,
     bool? isEnabled,
     String? error,
+    // A plain `error: null` cannot clear a recorded failure because it
+    // coalesces back to the old value; pass clearError: true instead.
+    bool clearError = false,
   }) {
     return ConfigSource(
       id: id ?? this.id,
@@ -76,7 +79,7 @@ class ConfigSource {
       lastFetched: lastFetched ?? this.lastFetched,
       configCount: configCount ?? this.configCount,
       isEnabled: isEnabled ?? this.isEnabled,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 

@@ -109,13 +109,17 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 
 - [x] Home screen with big connect button
 - [x] Real-time connection status display (localized — see Phase 5)
-- [ ] Current IP address display — **not delivered.** `VpnPlugin` answers
-  `getConnectedIP` with a hardcoded `null`, so the row never renders. The UI
-  degrades honestly rather than showing a placeholder, but the feature does not
-  exist. Implementing it needs a decision: the tunnel's own address
-  (`10.111.222.1`) is not the exit IP the user wants, and fetching the exit IP
-  over HTTP is unreliable here because a VPN app's own traffic may not traverse
-  its own tunnel.
+- [x] Current IP address display — **delivered 2026-10-15.** `VpnPlugin`
+  answers `getConnectedIP` by fetching `https://api.ipify.org` **through the
+  core's loopback SOCKS inbound** (`127.0.0.1:10808`, noauth — the Xray "socks"
+  inbound and the sing-box socks inbound), which is the approach this document
+  prescribes at the bottom of Phase 3 ("dial the core's loopback SOCKS
+  inbound"). The fetch runs on a background thread with an 8 s timeout and
+  validates the response is an address literal; any failure returns `null` and
+  the row stays hidden, so the UI still degrades honestly.
+  Known trade-off: the echo hostname is resolved by the system resolver
+  (visible to the local network) before the SOCKS dial — one hostname per
+  connect, user-triggered, not a passive browse-time DNS leak.
 - [x] Quick stats (latency, configs, working count, reliability)
 - [x] Config library screen with filtering and sorting
 - [x] Settings screen with preferences
@@ -201,15 +205,23 @@ no hint, so it is worth knowing.
 ### Deliverables
 
 #### Testing Infrastructure ✓
-- [x] 134 unit tests that compile and pass, in five files:
-  - `test/config_parsing_test.dart` (43) — share-link parsing for every protocol,
+- [x] 155 unit tests that compile and pass, in nine files:
+  - `test/config_parsing_test.dart` (45) — share-link parsing for every protocol,
     WireGuard `.conf` section handling, and a reload round-trip for all six
-  - `test/xray_config_test.dart` (40) — Xray JSON, `tun` inbound, REALITY
+  - `test/xray_config_test.dart` (42) — Xray JSON, `tun` inbound, REALITY
     validation, routing, and the `wireguard` outbound
   - `test/vpn_session_options_test.dart` (20) — builder-time option validation and precedence
+  - `test/singbox_config_test.dart` (8) — sing-box config generation for Hysteria2,
+    TUIC, WireGuard junk params, mixed inbound, split tunneling and DNS proxying
+  - `test/settings_claims_test.dart` (2) — plaintext Hive boxes open without
+    migration, dormant preferences survive storage
   - `test/services/engine_availability_test.dart` (17) — engine capability gating
     and the engine-hub runnable rule
   - `test/services/localization_service_test.dart` (14) — translation key parity across 9 languages
+  - `test/services/test_result_persistence_test.dart` (5) — regression tests for
+    test-result persistence across app restarts
+  - `test/services/tester_probe_test.dart` (2) — regression tests for the
+    reachability probe's treatment of refused connections
 - [x] Legacy suite quarantined to `test_legacy/` with a per-category failure write-up
 - [x] GitHub Actions CI/CD (test.yml) - automated testing on every push
 - [x] GitHub Actions CI/CD (build.yml) - APK/IPA builds on version tags
@@ -348,7 +360,7 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
 - [x] **`test/services/engine_availability_test.dart`** — 13 tests covering the gating
       contract, including the fail-open behaviour when the platform reports nothing
       and a case asserting WireGuard is now allowed.
-      Suite is now 134 tests.
+      Suite is now 155 tests.
 - [x] **Unused geo data excluded** — `androidResources.ignoreAssetsPattern` drops
       `geoip.dat` / `geosite.dat` / `geoip-only-cn-private.dat`. **Measured** saving
       on disk: 7.5 MB. (The three files are ~28 MB raw, but they deflate ~3.8:1
@@ -367,7 +379,7 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
 - [x] **Docs re-verified against the filesystem** — `PHASES.md` and `README.md` both
       named test files that do not exist (`test/models/config_test.dart`,
       `test/services/tester_service_test.dart`, …) and claimed "~40+ unit tests" and
-      "✅ Speed testing accurate". Corrected; the real suite is 134 tests and no code
+      "✅ Speed testing accurate". Corrected; the real suite is 155 tests and no code
       path measures throughput.
 - [x] **Language setting was a no-op** — `LocalizationService` was never registered
       with GetX, and `GetMaterialApp` had no `translations` / `locale`, so picking a
@@ -379,7 +391,9 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
       `GetMaterialApp.locale` inside an `Obx`.
 - [x] **`getConnectedIP` was an undocumented stub** — the native side answers with a
       hardcoded `null`, and Phase 3 listed "Current IP address display" as delivered.
-      Claim corrected and the stub now says why it exists.
+      Claim corrected and the stub now says why it exists. **(Resolved 2026-10-15:
+      the stub is gone — the exit IP is fetched through the core's loopback SOCKS
+      inbound; see the Phase 3 deliverables entry above.)**
 - [x] **Channel surface audited** — every `invokeMethod` call in `lib/` was diffed
       against the Kotlin handlers. All 7 `VpnPlugin` and 4 `NetworkPlugin` methods
       line up; no dead calls remain.
@@ -476,8 +490,9 @@ Consequences:
       wired up, and the constraint is now documented at the exclusion site in
       `BlackoutVpnService.kt` and on `VPNService.getConnectedIP`. Any future
       in-tunnel probe must dial the core's loopback SOCKS inbound instead.
-      The same constraint is why `getConnectedIP` cannot be implemented by
-      fetching an IP-echo URL from Dart.
+      **2026-10-15: that is now how it is done** — `VpnPlugin.handleGetConnectedIP`
+      fetches the IP echo through the core's SOCKS inbound. The same constraint is
+      why the exit IP cannot be fetched from Dart.
 
 ### Remaining Deliverables
 
@@ -680,7 +695,7 @@ Legend: ✅ shipped · ⚠️ shipped but not verified on a physical device · �
 ### v1.0 (Current)
 
 - ✅ Config fetching from GitHub works
-- ✅ 134 unit tests compile and pass
+- ✅ 155 unit tests compile and pass
 - ✅ All screens build and render
 - ✅ Error handling is wired up
 - ✅ Xray engine bundled; the five protocols it serves are gated in the UI
@@ -789,7 +804,9 @@ Want to help? Check these resources:
 Five protocols blocked on a sing-box runtime ❌ | **On-device verification still pending** ⚠️ |
 v2.0+ Visionary 🔮
 
-**Last Updated:** 2026-09-19 (UI honesty pass — screens no longer advertise engines and
+**Last Updated:** 2026-10-14 (test-count audit — suite recounted at 155 tests across nine
+files; docs updated to match; APK size figures still need a fresh build to re-verify.
+Earlier: 2026-09-19 UI honesty pass — screens no longer advertise engines and
 protocols this build cannot run; see the correction notes above)
 **Maintained By:** Blackout Kit Contributors  
 **Next Review:** after the first successful on-device connection

@@ -464,6 +464,27 @@ reviews). This release fixes the real causes of "engines start to fail" and
 ## [Unreleased]
 
 ### Added
+- **Current IP address display (Phase 3 deliverable, previously an honest stub).**
+  `VpnPlugin.getConnectedIP` now fetches the exit address of the tunnel by
+  dialing `https://api.ipify.org` through the core's loopback SOCKS inbound
+  (`127.0.0.1:10808`, noauth) — the approach PHASES.md prescribed at the
+  exclusion-site note ("any future in-tunnel probe must dial the core's
+  loopback SOCKS inbound"). A direct fetch was never an option: the app is a
+  disallowed application of its own VPN, so it would report the *unprotected*
+  address. The request runs on a background thread with an 8 s timeout, the
+  response is validated as an address literal, and any failure returns `null`
+  so the status row stays hidden exactly as before. Known trade-off: the echo
+  hostname is resolved by the system resolver before the SOCKS dial — one
+  hostname per connect, user-triggered, not a passive browse-time DNS leak.
+- **Library screen error state.** A failed config fetch used to render the same
+  "No configs found" empty state as a genuinely empty library, so the user had
+  no way to see *why* the list was blank. `ConfigController.fetchFromSource`
+  now records the failure on the source (`ConfigSource.error`, truncated to
+  120 characters) and clears it on the next success (new `clearError` flag on
+  `copyWith`, because a plain `error: null` used to coalesce back to the old
+  value). The screen shows a distinct error state naming the failing sources
+  and their reasons, with a Retry button. New model tests:
+  `test/models/config_source_test.dart`.
 - **Subprocess engine startup checks.** For sing-box-backed protocols (Hysteria2, TUIC, AmneziaWG, WARP), `EngineRunner` no longer reports success the instant both processes launch. Both children must survive a bounded startup window, and sing-box must answer a real local SOCKS5 greeting on its configured `listen_port`, before the VPN service reports connected. A daemon monitor thread then watches both children: an unexpected exit now drives the same engine-died path as the in-process Xray core — tearing the tunnel down with the real reason, or holding the interface open when the kill switch is on. A failed sing-box config write now fails the connect attempt with the actual write error instead of a downstream launch failure. These checks prove process and listener readiness only — end-to-end tunnel traffic still requires a physical-device test.
 - **JVM unit tests for the subprocess lifecycle** (`android/app/src/test/.../SubprocessLifecycleTest.kt`): the local SOCKS5 readiness handshake against a loopback fake server, immediate child-exit rejection, later-exit detection, and reverse-order cleanup — no emulator or device required.
 

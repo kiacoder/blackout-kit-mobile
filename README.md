@@ -145,14 +145,18 @@ flutter run --release -d <device-id>
 flutter test
 ```
 
-134 tests across five files:
+155 tests across nine files:
 
 ```bash
 flutter test test/config_parsing_test.dart
 flutter test test/xray_config_test.dart
 flutter test test/vpn_session_options_test.dart
+flutter test test/settings_claims_test.dart
+flutter test test/singbox_config_test.dart
 flutter test test/services/engine_availability_test.dart
 flutter test test/services/localization_service_test.dart
+flutter test test/services/test_result_persistence_test.dart
+flutter test test/services/tester_probe_test.dart
 ```
 
 If `flutter test` dies with `WebSocketException: Invalid WebSocket upgrade request`,
@@ -240,8 +244,9 @@ On a physical device (**nothing below has ever been run**):
   The earlier "activate after connecting" design was not implementable.
 
 ### Phase 4 — Tests, docs, release ✅ Complete
-- 134 real unit tests covering Xray config generation, option validation,
-  share-link parsing and engine-availability gating
+- 155 real unit tests covering Xray config generation, option validation,
+  share-link parsing, engine-availability gating, sing-box config, settings
+  claims, test-result persistence and probe behaviour
 - R8 + resource shrinking
 - **APK size:** fat release APK 109.8 MB (down from 354 MB debug); per-ABI splits
   **57.6 MB (arm64-v8a) / 52.6 MB (armeabi-v7a)**

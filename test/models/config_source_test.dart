@@ -19,7 +19,7 @@ void main() {
       repo: 'repo',
       branch: 'main',
       filePath: 'configs.txt',
-      type: SourceType.github,
+      type: SourceType.githubRepo,
       error: error,
     );
   }

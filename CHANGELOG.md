@@ -463,6 +463,38 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.21] - 2026-10-16
+
+### Added
+- **Disabling a repository now hides its configs everywhere — without
+  deleting them.** A new `visibleConfigs` view drives the library, the
+  scanner and all testing: only configs from ENABLED sources are shown and
+  tested (manual configs are always visible). The stored records are
+  untouched — re-enabling a source brings every config straight back, and
+  the home screen shows both counts (`visible/stored`) so the distinction
+  is explicit.
+- **Config detail sheet is fully reactive with richer states.** Status chip:
+  Working / Failed / Untested / Testing. Animated progress bar with the
+  probed endpoint while a test runs. Last-failure reason shown for failed
+  configs. New **Test now** button runs a single-config test with the
+  result persisted into the same store as batch tests.
+- **Action logging.** `DebugService.logAction` records every meaningful
+  action — connected / disconnected / connect_failed, scan started /
+  verified / exhausted, source enabled / disabled / fetched / removed,
+  config deleted / tested, batch tests, and key settings changes — all
+  visible in the logs screen with a ⚡ prefix.
+
+### Fixed
+- **Config update notifications were misleading.** A refresh that found no
+  new configs used to either say nothing or imply a large update had
+  landed. Each source now reports exactly `+N new config(s)` or `up to date
+  (no new configs)`.
+
+### Changed
+- Home stats no longer count configs from disabled sources: `Configs`
+  shows `visible/stored`, and tested/working are computed over visible
+  configs only — the numbers now reflect what the app will actually use.
+
 ## [1.0.0-beta.20] - 2026-10-16
 
 ### Fixed

@@ -19,12 +19,33 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      # The release body is the changelog section for THIS version, not the
+      # whole file. `bodyFile: CHANGELOG.md` published every historical entry
+      # on every release page, which buried the notes that matter.
+      - name: Extract release notes
+        id: notes
+        run: |
+          TAG="${{ steps.version.outputs.version }}"
+          # Changelog headings carry the version without the tag's leading 'v'.
+          VERSION="${TAG#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "No changelog section found for $VERSION - falling back to a pointer."
+            printf 'See CHANGELOG.md for the full history. Release %s.\n' "$TAG" > release_notes.md
+          fi
+          echo "--- release notes ---"
+          cat release_notes.md
+
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.version.outputs.version }}
           name: Release ${{ steps.version.outputs.version }}
-          bodyFile: CHANGELOG.md
+          bodyFile: release_notes.md
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'alpha') }}
 

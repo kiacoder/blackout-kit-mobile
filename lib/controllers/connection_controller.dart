@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
+import 'config_controller.dart';
 import '../models/config.dart';
 import '../models/test_result.dart';
 import '../models/vpn_session_options.dart';

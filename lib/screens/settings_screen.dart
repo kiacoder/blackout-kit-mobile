@@ -210,6 +210,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _settingsController.siteCheckEnabled.value,
                   onChanged: _settingsController.setSiteCheckEnabled,
                 )),
+                Obx(() => SwitchListTile(
+                  title: const Text('Verbose core logs'),
+                  subtitle: const Text(
+                    'Core reports every packet decision to logcat — for '
+                    'diagnosing a connected-but-nothing-loads tunnel',
+                  ),
+                  value: _settingsController.coreDebugLogs.value,
+                  onChanged: _settingsController.setCoreDebugLogs,
+                )),
                 Obx(() => ListTile(
                   title: const Text('Site Check Websites'),
                   subtitle: Text(

@@ -9,6 +9,7 @@ import 'package:logger/logger.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/localization_service.dart';
 import '../services/debug_service.dart';
+import '../services/xray_config.dart';
 
 class SettingsController extends GetxController {
   static const String _settingsBoxName = 'settings';
@@ -33,6 +34,11 @@ class SettingsController extends GetxController {
 
   /// Resolver used when [dnsLeakPreventionEnabled] is on.
   final RxString customDnsServer = RxString('1.1.1.1');
+
+  /// Verbose core logs: the generated Xray config logs at 'debug' so the
+  /// TUN data path (packet dispositions, routing, DNS) is visible in logcat
+  /// through the core's status callback. Diagnosis tool — noisy otherwise.
+  final RxBool coreDebugLogs = RxBool(false);
 
   final RxString theme = RxString('system'); // system, light, dark
   final RxBool showSpeedInTray = RxBool(true);
@@ -167,6 +173,9 @@ class SettingsController extends GetxController {
           ? sanitizeSiteCheckUrls(savedUrls.cast<String>())
           : List<String>.from(defaultSiteCheckUrls);
 
+      coreDebugLogs.value = _settingsBox.get('coreDebugLogs', defaultValue: false);
+      XrayConfigBuilder.coreLogLevel = coreDebugLogs.value ? 'debug' : 'warning';
+
       // Apply initial theme mode & wakelock
       _applyTheme(theme.value);
       _applyKeepScreenAwake(keepScreenAwake.value);
@@ -203,6 +212,7 @@ class SettingsController extends GetxController {
 
       await _settingsBox.put('siteCheckEnabled', siteCheckEnabled.value);
       await _settingsBox.put('siteCheckUrls', siteCheckUrls.toList());
+      await _settingsBox.put('coreDebugLogs', coreDebugLogs.value);
 
       _log.i('Settings saved to storage');
     } catch (e) {
@@ -319,6 +329,15 @@ class SettingsController extends GetxController {
     saveSettings();
     _log.i('Site check: $value');
     _action('setting_site_check', {'value': value});
+  }
+
+  /// Toggle verbose core logging (Xray config log level debug/warning).
+  void setCoreDebugLogs(bool value) {
+    coreDebugLogs.value = value;
+    XrayConfigBuilder.coreLogLevel = value ? 'debug' : 'warning';
+    saveSettings();
+    _log.i('Core debug logs: $value');
+    _action('setting_core_debug_logs', {'value': value});
   }
 
   /// Replace the site-check host list with [raw] (sanitised first).

@@ -463,6 +463,25 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.22] - 2026-10-16
+
+### Added
+- **Verbose core logs (Settings toggle).** The generated Xray config can now
+  log at `debug`, making the core report every TUN packet disposition,
+  routing decision and DNS query through its status callback into logcat.
+  This is the diagnostic tool for the "connected but nothing loads" report.
+
+### Verified against upstream (no defect found on our side)
+- The TUN inbound config shape was checked against Xray-core's actual
+  parser (`infra/conf/tun.go`): `mtu` (defaults to 1500), `gateway`, `dns`
+  and `userLevel` are all real, correctly-cased fields; `gateway` is not
+  required on Android — the netstack impersonates packet destinations, so
+  the app→tun→proxy path needs nothing else.
+- The fd handoff matches upstream `AndroidTun` exactly: `xray.tun.fd` env →
+  `SetNonblock` → `F_DUPFD_CLOEXEC` dup.
+- The bundled core is current (ships the newest transports), so a stale
+  tun implementation is ruled out.
+
 ## [1.0.0-beta.21] - 2026-10-16
 
 ### Added

@@ -52,6 +52,12 @@ bool isXrayProtocol(String protocol) => kXrayProtocols.contains(protocol);
 
 /// Builds the full Xray JSON document for [config].
 class XrayConfigBuilder {
+  /// Core log level for every generated config. 'warning' in normal use;
+  /// switch to 'debug' (Settings → Verbose core logs) when diagnosing the
+  /// TUN data path — the core then reports every packet disposition and
+  /// routing decision through onEmitStatus into logcat.
+  static String coreLogLevel = 'warning';
+
   /// Loopback SOCKS port. Must match [BlackoutVpnService.DEFAULT_SOCKS_PORT].
   final int socksPort;
 
@@ -130,7 +136,7 @@ class XrayConfigBuilder {
 
     final document = <String, dynamic>{
       'log': {
-        'loglevel': 'warning',
+        'loglevel': coreLogLevel,
         'access': 'none',
         'error': 'none',
       },

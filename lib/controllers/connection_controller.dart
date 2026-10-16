@@ -51,9 +51,19 @@ class ConnectionController extends GetxController {
   final RxBool isDNSLeakPreventionEnabled = RxBool(false);
   final RxBool isSplitTunnelingEnabled = RxBool(false);
 
-  /// Cap on how many candidates `connectFastest` probes when the caller has no
-  /// measurements to hand it.
-  static const int _maxProbeCandidates = 150;
+  /// Batched full-scan: the candidate list is walked in groups of this size.
+  /// Each batch is TCP-probed, its survivors site-checked and connect-verified
+  /// in rank order, and only a fully exhausted batch advances to the next one.
+  static const int _probeBatchSize = 50;
+
+  /// How many of a batch's TCP-passing candidates get the (expensive)
+  /// headless site check. The rest keep their TCP rank.
+  static const int _siteCheckShortlistSize = 3;
+
+  /// Per-batch connect-attempt budget. Each attempt is a full connect plus a
+  /// live site fetch (~5-10 s), so 10 bounds a bad batch to a few minutes
+  /// while still walking every survivor of a healthy one.
+  static const int _maxConnectAttemptsPerBatch = 10;
 
   /// Pre-flight probe budget. The full TesterService defaults (3 attempts x
   /// 4s timeout at concurrency 6) mean 150 unreachable candidates take ~5
@@ -63,12 +73,6 @@ class ConnectionController extends GetxController {
   static const int _probeAttempts = 1;
   static const Duration _probeTimeout = Duration(seconds: 3);
   static const int _probeConcurrency = 16;
-
-  /// How many ranked candidates the connect loop will actually try, each
-  /// verified through the live tunnel before it is accepted. Bounds the
-  /// worst case: 5 attempts x (connect + site fetches) instead of an
-  /// unbounded walk over 150 configs.
-  static const int _maxConnectAttempts = 5;
 
   bool get isConnected => state.value == ConnectionState.connected;
 
@@ -119,156 +123,168 @@ class ConnectionController extends GetxController {
 
       final candidateHashes = candidates.map((c) => c.getHash()).toSet();
 
-      // Split what we already know from what we still have to probe. Results
-      // handed in by the library let us skip servers that already failed —
-      // re-probing 150 of them was minutes of dead air behind censorship.
-      final known = <TestResult>[];
+      // Results handed in by the library let us skip servers that already
+      // failed — re-probing thousands of them was dead air behind censorship.
       final knownFailed = <String>{};
       for (final r in testResults ?? const <TestResult>[]) {
-        if (!candidateHashes.contains(r.configHash)) continue;
-        if (r.isWorking) {
-          known.add(r);
-        } else {
+        if (!r.isWorking && candidateHashes.contains(r.configHash)) {
           knownFailed.add(r.configHash);
         }
       }
 
-      final toProbe = candidates
+      // Batched full-scan. The list is walked in batches of 50: probe the
+      // batch, site-check and connect-verify its survivors in rank order,
+      // and only when the WHOLE batch is exhausted move to the next one.
+      // With 7,000 sources this scans everything eventually — slow, but it
+      // does not give up, and the status line always shows where it is.
+      final toScan = candidates
           .where((c) => !knownFailed.contains(c.getHash()))
-          .take(_maxProbeCandidates)
           .toList();
+      final totalBatches = (toScan.length / _probeBatchSize).ceil();
+      _log.i('Batched scan: ${toScan.length} configs in $totalBatches '
+          'batch(es) of $_probeBatchSize');
 
-      statusMessage.value = 'Testing ${toProbe.length} server(s)...';
-      var probed = 0;
-      testerService.onProgress = (hash, status) {
-        // onProgress fires a 'testing' event at probe start AND a terminal
-        // event at the end — counting both reported double progress.
-        if (status == TestStatus.testing) return;
-        probed++;
-        statusMessage.value = 'Testing servers... $probed/${toProbe.length}';
-      };
-      List<TestResult> probedResults;
-      try {
-        probedResults = await testerService.testConfigsConcurrently(
-          toProbe,
-          concurrency: _probeConcurrency,
-          attempts: _probeAttempts,
-          timeout: _probeTimeout,
-        );
-      } finally {
-        testerService.onProgress = null;
-      }
+      for (var batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        final batch =
+            toScan.skip(batchIndex * _probeBatchSize).take(_probeBatchSize).toList();
+        final batchHashes = batch.map((c) => c.getHash()).toSet();
+        final batchLabel =
+            'batch ${batchIndex + 1}/$totalBatches';
 
-      final results = [...known, ...probedResults]
-          .where((r) => candidateHashes.contains(r.configHash))
-          .toList();
-      final working = testerService.getWorkingConfigs(results);
-
-      if (working.isEmpty) {
-        state.value = ConnectionState.error;
-        statusMessage.value = 'No working configs found';
-        return false;
-      }
-
-      // Site check: the TCP probe proved the *path* to each server; this
-      // proves the config can actually carry traffic, by starting a headless
-      // core instance per shortlisted candidate and fetching the user's check
-      // hosts through it. Only Xray-family candidates can be probed this way;
-      // everything else keeps its TCP rank. Every failure mode here (engine
-      // refuses, tunnel already up, check disabled) degrades to the TCP
-      // ranking rather than blocking the connect.
-      final check = siteCheckService;
-      var reports = const <String, SiteCheckReport>{};
-      if (check != null && check.enabled && working.isNotEmpty) {
         state.value = ConnectionState.selecting;
-        statusMessage.value = 'Verifying websites through top configs...';
-        working.sort((a, b) => (a.latencyMs ?? 1 << 30)
-            .compareTo(b.latencyMs ?? 1 << 30));
-        final shortlist = working
-            .map((r) => candidates.firstWhereOrNull(
-                (c) => c.getHash() == r.configHash))
-            .whereType<Config>()
-            .toList();
+        statusMessage.value = 'Pinging $batchLabel (${batch.length} servers)...';
+        var probed = 0;
+        testerService.onProgress = (hash, status) {
+          // onProgress fires a 'testing' event at probe start AND a terminal
+          // event at the end — counting both reported double progress.
+          if (status == TestStatus.testing) return;
+          probed++;
+          statusMessage.value =
+              'Pinging $batchLabel... $probed/${batch.length}';
+        };
+        List<TestResult> probedResults;
         try {
-          reports = await check.checkConfigs(shortlist);
-        } catch (e) {
-          _log.w('Site check stage failed, falling back to TCP rank: $e');
-          reports = const {};
+          probedResults = await testerService.testConfigsConcurrently(
+            batch,
+            concurrency: _probeConcurrency,
+            attempts: _probeAttempts,
+            timeout: _probeTimeout,
+          );
+        } finally {
+          testerService.onProgress = null;
         }
-      }
 
-      // Rank everything once: verified-usable candidates first (best tunnel
-      // latency), then everything else by TCP latency. This is the order the
-      // connect loop below walks.
-      int rank(TestResult r) {
-        final report = reports[r.configHash];
-        if (report == null || !report.supported) return 1;
-        if (!report.isUsable) return 0;
-        return 2;
-      }
+        final working = testerService
+            .getWorkingConfigs(probedResults)
+            .where((r) => batchHashes.contains(r.configHash))
+            .toList()
+          ..sort((a, b) => (a.latencyMs ?? 1 << 30)
+              .compareTo(b.latencyMs ?? 1 << 30));
 
-      working.sort((a, b) {
-        final byStage = rank(a).compareTo(rank(b));
-        if (byStage != 0) return byStage;
-        return (a.latencyMs ?? 1 << 30).compareTo(b.latencyMs ?? 1 << 30);
-      });
+        if (working.isEmpty) {
+          _log.i('$batchLabel: no server answered');
+          continue;
+        }
 
-      // Connect loop with live verification. A config can pass every
-      // pre-connect probe and still black-hole real traffic once the TUN
-      // interface is up — so after each successful connect, the tunnel
-      // itself is asked to fetch the check hosts through its own SOCKS
-      // inbound. A tunnel that cannot do that is disconnected and the next
-      // candidate gets its chance, instead of leaving the user stuck on a
-      // "connected" notification that loads nothing.
-      final verify = siteCheckService;
-      final liveVerifyEnabled =
-          verify != null && verify.enabled && verify.liveCheckHosts.isNotEmpty;
-      final attemptLimit = liveVerifyEnabled
-          ? (working.length < _maxConnectAttempts
-              ? working.length
-              : _maxConnectAttempts)
-          : 1;
-
-      for (var attempt = 0; attempt < attemptLimit; attempt++) {
-        final result = working[attempt];
-        final config = candidates.firstWhereOrNull(
-          (c) => c.getHash() == result.configHash,
-        );
-        if (config == null) continue;
-
-        if (attemptLimit > 1) {
+        // Site check: the TCP probe proved the *path* to each server; the
+        // headless-core check proves the config can actually carry traffic.
+        // Only the batch's fastest few get this (expensive) treatment; the
+        // rest keep their TCP rank. Failures degrade to TCP order.
+        final check = siteCheckService;
+        var reports = const <String, SiteCheckReport>{};
+        if (check != null && check.enabled) {
           statusMessage.value =
-              'Connecting (attempt ${attempt + 1}/$attemptLimit)...';
+              'Verifying websites, $batchLabel...';
+          final shortlist = working
+              .take(_siteCheckShortlistSize)
+              .map((r) => batch.firstWhereOrNull(
+                  (c) => c.getHash() == r.configHash))
+              .whereType<Config>()
+              .toList();
+          try {
+            reports = await check.checkConfigs(shortlist);
+          } catch (e) {
+            _log.w('Site check stage failed, falling back to TCP rank: $e');
+            reports = const {};
+          }
         }
 
-        final connected = await connect(config, testResult: result);
-        if (!connected) continue;
-        if (!liveVerifyEnabled) return true;
+        // Rank the batch: verified-usable first (best tunnel latency), then
+        // everything else by TCP latency.
+        int rank(TestResult r) {
+          final report = reports[r.configHash];
+          if (report == null || !report.supported) return 1;
+          if (!report.isUsable) return 0;
+          return 2;
+        }
 
-        state.value = ConnectionState.testing;
-        statusMessage.value =
-            'Checking websites through the tunnel (attempt ${attempt + 1})...';
-        final alive = await verify!.verifyLiveConnection();
-        if (alive) {
-          state.value = ConnectionState.connected;
+        working.sort((a, b) {
+          final byStage = rank(a).compareTo(rank(b));
+          if (byStage != 0) return byStage;
+          return (a.latencyMs ?? 1 << 30).compareTo(b.latencyMs ?? 1 << 30);
+        });
+
+        // Connect loop with live verification. A config can pass every
+        // pre-connect probe and still black-hole real traffic once the TUN
+        // interface is up — so after each successful connect, the tunnel
+        // itself is asked to fetch the check hosts through its own SOCKS
+        // inbound. A tunnel that cannot do that is disconnected and the
+        // next candidate in the batch gets its chance.
+        final verify = siteCheckService;
+        final liveVerifyEnabled =
+            verify != null && verify.enabled && verify.liveCheckHosts.isNotEmpty;
+        final attemptLimit = liveVerifyEnabled
+            ? (working.length < _maxConnectAttemptsPerBatch
+                ? working.length
+                : _maxConnectAttemptsPerBatch)
+            : 1;
+
+        for (var attempt = 0; attempt < attemptLimit; attempt++) {
+          final result = working[attempt];
+          final config = batch.firstWhereOrNull(
+            (c) => c.getHash() == result.configHash,
+          );
+          if (config == null) continue;
+
           statusMessage.value =
-              'Connected to ${config.displayName} — verified';
-          _log.i('Live verification passed for ${config.displayName}');
-          return true;
+              'Connecting ($batchLabel, config ${attempt + 1})...';
+
+          final connected = await connect(config, testResult: result);
+          if (!connected) continue;
+          if (!liveVerifyEnabled) return true;
+
+          state.value = ConnectionState.testing;
+          statusMessage.value =
+              'Checking websites through the tunnel ($batchLabel, config ${attempt + 1})...';
+          final alive = await verify!.verifyLiveConnection();
+          if (alive) {
+            state.value = ConnectionState.connected;
+            statusMessage.value =
+                'Connected to ${config.displayName} — verified';
+            _log.i('Live verification passed for ${config.displayName} '
+                '($batchLabel)');
+            return true;
+          }
+
+          _log.w('Tunnel came up but could not reach any check host '
+              '(${config.displayName}, $batchLabel) — trying the next '
+              'candidate');
+          await disconnect();
         }
-
-        _log.w('Tunnel came up but could not reach any check host '
-            '(${config.displayName}) — trying the next candidate');
-        await disconnect();
+        // Whole batch exhausted — the outer loop advances to the next 50.
+        _log.i('$batchLabel exhausted: $attemptLimit connect attempt(s) '
+            'failed live verification');
       }
 
-      if (liveVerifyEnabled) {
-        state.value = ConnectionState.error;
-        statusMessage.value =
-            'Connected to $attemptLimit config(s) but none could load '
-            'websites. All candidates may be blocked — refresh your sources '
-            'or disable the site check to connect anyway.';
-      }
+      state.value = ConnectionState.error;
+      final verificationOn = siteCheckService != null &&
+          siteCheckService.enabled &&
+          siteCheckService.liveCheckHosts.isNotEmpty;
+      statusMessage.value = verificationOn
+          ? 'Scanned all ${toScan.length} configs but none could load '
+              'websites. Refresh your sources or disable the site check to '
+              'connect anyway.'
+          : 'No working configs found';
       return false;
     } catch (e) {
       state.value = ConnectionState.error;

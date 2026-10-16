@@ -463,6 +463,26 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.19] - 2026-10-16
+
+### Added
+- **Before / Now IP + location on the home screen.** The card shows the
+  address and place the user had before the tunnel (direct lookup — the app
+  is a disallowed application of its own VPN, so a direct fetch always sees
+  the real address) and the exit address + city/country/flag fetched
+  **through** the tunnel via the new `tunnelFetch` channel method. Unresolved
+  lookups hide rather than show a wrong place. Both identities are cached in
+  Hive: the last known home location stays visible during a blockade, when
+  no lookup can succeed.
+
+### Notes
+- Config persistence was already blockade-proof (every fetched config is
+  stored additively in Hive, deduplicated by hash, and the library reads
+  from storage — a dead GitHub changes nothing about what is already
+  downloaded); the error state already says saved configs are not lost.
+- 6 new unit tests for response parsing, flag building and cache round
+  trips.
+
 ## [1.0.0-beta.18] - 2026-10-16
 
 ### Added

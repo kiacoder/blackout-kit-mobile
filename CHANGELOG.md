@@ -463,6 +463,22 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.17] - 2026-10-16
+
+### Fixed
+- **Self-healing connect loop: a tunnel that comes up but loads nothing no
+  longer strands the user.** First hardware reports showed the tunnel
+  connecting (notification on) while no traffic flowed — a config can pass
+  every pre-connect probe and still black-hole real traffic once the TUN
+  interface is up. `connectFastest` now walks ranked candidates (site-check-
+  verified first, then TCP latency) and after each successful connect asks
+  the live tunnel itself to fetch the check hosts through its own loopback
+  SOCKS inbound (port 10808). A tunnel that cannot reach a single host is
+  disconnected and the next candidate is tried — up to 5 attempts — with the
+  status line showing each attempt. If every attempt dead-ends, the error
+  says so honestly instead of pretending to be connected. With the site
+  check disabled the flow is unchanged (single connect, no verification).
+
 ## [1.0.0-beta.16] - 2026-10-16
 
 ### Added

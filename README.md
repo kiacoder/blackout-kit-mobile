@@ -145,7 +145,7 @@ flutter run --release -d <device-id>
 flutter test
 ```
 
-155 tests across nine files:
+162 tests across nine files:
 
 ```bash
 flutter test test/config_parsing_test.dart
@@ -244,7 +244,7 @@ On a physical device (**nothing below has ever been run**):
   The earlier "activate after connecting" design was not implementable.
 
 ### Phase 4 — Tests, docs, release ✅ Complete
-- 155 real unit tests covering Xray config generation, option validation,
+- 162 real unit tests covering Xray config generation, option validation,
   share-link parsing, engine-availability gating, sing-box config, settings
   claims, test-result persistence and probe behaviour
 - R8 + resource shrinking

@@ -574,4 +574,57 @@ Endpoint = i.com:51820
       expect(protocols.toSet(), {'vless', 'vmess', 'trojan', 'hysteria2', 'tuic', 'shadowsocks'});
     });
   });
+
+  group('uuid format validation', () {
+    // A non-empty but malformed id used to sail through validate(), get
+    // written into the engine config verbatim, and die deep inside the core
+    // with a generic init error. These tests pin the fail-fast behaviour.
+    const canonical = '11111111-1111-1111-1111-111111111111';
+
+    test('vless accepts a canonical uuid', () {
+      final config = ConfigParser.parse('vless://$canonical@a.com:443') as VlessConfig;
+      expect(config.validate(), isTrue);
+    });
+
+    test('vless rejects a malformed uuid', () {
+      final config = ConfigParser.parse('vless://not-a-uuid@a.com:443') as VlessConfig;
+      expect(config.validate(), isFalse);
+    });
+
+    test('vmess rejects a malformed uuid', () {
+      final payload = jsonEncode({
+        'add': 'a.com', 'port': '443', 'id': 'short-id', 'ps': 'bad vmess',
+      });
+      final config = ConfigParser.parse(
+        'vmess://${base64.encode(utf8.encode(payload))}',
+      ) as VmessConfig;
+      expect(config.validate(), isFalse);
+    });
+
+    test('vmess accepts a canonical uuid', () {
+      final payload = jsonEncode({
+        'add': 'a.com', 'port': '443', 'id': canonical, 'ps': 'ok vmess',
+      });
+      final config = ConfigParser.parse(
+        'vmess://${base64.encode(utf8.encode(payload))}',
+      ) as VmessConfig;
+      expect(config.validate(), isTrue);
+    });
+
+    test('tuic rejects a non-uuid credential', () {
+      // Real-world scrapers emit placeholders like `uuid-here`; TUIC v5
+      // requires a real UUID, so the config must not validate.
+      final config = ConfigParser.parse(
+        'tuic://uuid-here:pass@f.com:443?sni=f.com&congestion_control=bbr',
+      ) as TuicConfig;
+      expect(config.validate(), isFalse);
+    });
+
+    test('tuic accepts a canonical uuid', () {
+      final config = ConfigParser.parse(
+        'tuic://$canonical:pass@f.com:443?sni=f.com&congestion_control=bbr',
+      ) as TuicConfig;
+      expect(config.validate(), isTrue);
+    });
+  });
 }

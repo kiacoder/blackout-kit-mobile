@@ -5,6 +5,30 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
+/// Canonical RFC 4122 UUID shape: 8-4-4-4-12 hex digits.
+///
+/// VMess, VLESS and TUIC all embed a UUID as the client identity. A
+/// non-empty but malformed id passes a naive emptiness check, is happily
+/// written into the generated engine config, and then fails deep inside
+/// the core with a generic init error that gives the user nothing to act
+/// on. Rejecting the shape here fails the config at validation time with
+/// a clear cause instead.
+bool isValidUuid(String s) {
+  if (s.length != 36) return false;
+  for (var i = 0; i < 36; i++) {
+    final c = s.codeUnitAt(i);
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (c != 0x2D) return false; // '-'
+    } else {
+      final isDigit = c >= 0x30 && c <= 0x39;
+      final isUpperHex = c >= 0x41 && c <= 0x46;
+      final isLowerHex = c >= 0x61 && c <= 0x66;
+      if (!isDigit && !isUpperHex && !isLowerHex) return false;
+    }
+  }
+  return true;
+}
+
 /// Base proxy config class (protocol-agnostic)
 abstract class Config {
   String get protocol;
@@ -518,7 +542,7 @@ class VlessConfig extends Config {
   /// is an error.
   @override
   bool validate() {
-    if (address.isEmpty || port <= 0 || uuid.isEmpty) return false;
+    if (address.isEmpty || port <= 0 || !isValidUuid(uuid)) return false;
     if (security.toLowerCase() == 'reality') {
       return publicKey != null && publicKey!.isNotEmpty;
     }
@@ -603,7 +627,8 @@ class VmessConfig extends Config {
   @override Future<bool> connect() async => true;
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
-  @override bool validate() => address.isNotEmpty && port > 0 && uuid.isNotEmpty;
+  @override bool validate() =>
+      address.isNotEmpty && port > 0 && isValidUuid(uuid);
 
   /// vmess://BASE64(JSON)
   static VmessConfig? fromUri(String uri, {String? customName}) {
@@ -775,7 +800,8 @@ class TuicConfig extends Config {
   @override Future<bool> connect() async => true;
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
-  @override bool validate() => address.isNotEmpty && port > 0 && uuid.isNotEmpty;
+  @override bool validate() =>
+      address.isNotEmpty && port > 0 && isValidUuid(uuid);
 
   /// tuic://uuid:password@host:port?sni=...
   static TuicConfig? fromUri(String uri, {String? customName}) {

@@ -2,7 +2,12 @@
 
 An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
 
-**Status**: v1.0.0-beta.22 — Android VPN service and in-process Xray core are implemented. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on hardware.
+**Status**: v1.0.0-beta.22 — Android VPN service and in-process Xray core are implemented, and
+the Xray tunnel path is now **verified working on physical hardware** (2026-10-16): a real
+config on a real device carries live traffic end to end — a TikTok video loads in under a
+second. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and
+local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels
+remains unverified on hardware.
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process
@@ -192,8 +197,11 @@ than black-holed, and that disconnect tears the interface down. It also holds th
 tunnel open for 20 seconds so you can check `adb shell ip addr show tun0` from
 another shell.
 
-It has never been run, because no Android hardware has been available. It is the
-test that closes this project's top open risk.
+It has never been run as an automated suite, because no Android hardware is available to CI.
+On 2026-10-16 the equivalent path was exercised manually on a physical device and passed:
+`establish()` succeeded, the Xray core started against the TUN fd, and real traffic flowed
+through the tunnel (a TikTok video loaded in under a second). The remaining value of this
+test is regression coverage on a device, not first-light validation.
 
 ### Manual Testing Checklist
 

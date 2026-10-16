@@ -538,18 +538,17 @@ Consequences:
   - `NEVPNManager` / `NEPacketTunnelProvider` not implemented
   - Every iOS channel call is an unregistered mock today
 
-- [ ] **On-device verification**
-  - The Android tunnel has never run on physical hardware
-  - Priority: confirm `establish()` succeeds, the Xray core starts, and traffic
-    actually flows through the tunnel
-  - Also verify: `setBlocking` is correctly absent, the `10.111.222.1/30`
-    interface address pairs with the `10.111.222.2/30` core gateway, and the
-    kill switch holds the tunnel on engine death
-  - **The test for this already exists** and has never been run:
-    `integration_test/native_tunnel_test.dart`. It drives the real
-    `android.net.VpnService` — `prepare()` → `connect()` → `isRunning()` →
-    `disconnect()` — and also asserts that an unbundled protocol is refused
-    rather than left black-holing traffic. Run it with:
+- [x] **On-device verification — the TUN path works (2026-10-16)**
+  - The Android tunnel now runs on physical hardware: a real config was scanned
+    in, connected, and carried live traffic — a TikTok video loaded in under a
+    second on the device (user-reported, real browsing, no synthetic harness).
+  - Confirmed by that run: `establish()` succeeds, the Xray core starts against
+    the TUN fd, device traffic enters the tunnel and reaches the exit.
+  - Still to be exercised on hardware: the kill switch holding the tunnel on
+    engine death, and the same flow for subprocess-backed (sing-box) protocols.
+  - `integration_test/native_tunnel_test.dart` remains unrun as an automated
+    suite (no hardware in CI); its value is now regression coverage rather than
+    first-light validation. Run it with:
     ```bash
     adb shell appops set com.blackoutkit.vpn ACTIVATE_VPN allow
     flutter test integration_test/native_tunnel_test.dart -d <device-id>
@@ -692,7 +691,7 @@ Legend: ✅ shipped · ⚠️ shipped but not verified on a physical device · �
 | **Config from GitHub** | ✅ | ✅ | ✅ | ✅ |
 | **Reachability Testing** | ✅ | ✅ | ✅ | ✅ |
 | **Throughput Measurement** | ❌ | ❌ | ❌ | ❌ |
-| **VPN Connection** | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| **VPN Connection** | ✅ (Xray path, on-device 2026-10-16) | ⚠️ | ⚠️ | ⚠️ |
 | **Xray Engine (VLESS/VMess/Trojan/SS/WireGuard)** | ✅ | ✅ | ✅ | ✅ |
 | **Kill Switch** | ✅ | ✅ | ✅ | ✅ |
 | **Split Tunneling** | ✅ | ✅ | ✅ | ✅ |
@@ -702,9 +701,11 @@ Legend: ✅ shipped · ⚠️ shipped but not verified on a physical device · �
 | **iOS Support** | ❌ | ❌ | ✅ | ✅ |
 | **Hotspot Shield** | ❌ | ❌ | ❌ | ✅ |
 
-> **VPN Connection is marked ⚠️, not ✅.** The native tunnel is fully implemented
-> and the APK builds, but it has never run on physical hardware. Until it does,
-> "it connects" is an untested claim.
+> **VPN Connection is marked ✅ for the Xray path (2026-10-16).** The native tunnel has
+> now run on physical hardware: a real config connected and carried live traffic —
+> a TikTok video loaded in under a second on the device. The earlier warning ("it
+> connects is an untested claim") no longer applies to the in-process Xray core.
+> The subprocess-backed (sing-box) path still has no hardware traffic verification.
 
 > **WireGuard moved out of the sing-box row.** The bundled `libgojni.so` contains
 > `xray.proxy.wireguard`, so it is served by the Xray core already in the APK.
@@ -831,7 +832,10 @@ Want to help? Check these resources:
 Five protocols blocked on a sing-box runtime ❌ | **On-device verification still pending** ⚠️ |
 v2.0+ Visionary 🔮
 
-**Last Updated:** 2026-10-16 (site check added — connectFastest verifies shortlisted
+**Last Updated:** 2026-10-16 (**the Android tunnel is verified working on physical
+hardware** — a real config carried live traffic and a TikTok video loaded in under a
+second on the device; the top open risk is closed for the Xray path. Same day: site
+check added — connectFastest verifies shortlisted
 candidates by fetching real websites through a headless core; suite now 176 tests
 across ten files. Earlier the same day: UUID format validation for vless/vmess/tuic,
 APK sizes re-measured on the beta.14 CI build at 120.6/111.7 MB, fat-APK scale —

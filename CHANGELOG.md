@@ -463,6 +463,14 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+### Verified on hardware
+- **The Android tunnel works on a physical device (2026-10-16).** A real config
+  connected and carried live traffic end to end — a TikTok video loaded in
+  under a second on the device. This closes the project's longest-standing
+  open risk for the in-process Xray path. Docs (README, PHASES) updated from
+  "never run on hardware" to the verified state; the subprocess-backed
+  sing-box path still has no hardware traffic verification.
+
 ## [1.0.0-beta.22] - 2026-10-16
 
 ### Added

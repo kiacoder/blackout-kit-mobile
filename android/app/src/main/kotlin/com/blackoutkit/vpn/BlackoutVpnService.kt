@@ -88,6 +88,29 @@ class BlackoutVpnService : VpnService() {
             private set
 
         /**
+         * Identity of the live tunnel, readable from the plugin without
+         * binding.
+         *
+         * Needed for state reconciliation: Android may kill the Flutter
+         * process while this foreground service keeps the tunnel up, so a
+         * reopened app must be able to ask "is a tunnel running, and which
+         * config is it?" and adopt it instead of showing "not connected"
+         * under a live VPN notification icon.
+         */
+        @Volatile
+        var activeProtocolId: String? = null
+            private set
+
+        @Volatile
+        var activeDisplayName: String? = null
+            private set
+
+        /** Wall-clock start of the current tunnel, for uptime restoration. */
+        @Volatile
+        var connectedAtMs: Long = 0L
+            private set
+
+        /**
          * One-shot hook the plugin uses to resolve its MethodChannel call only
          * after establish() has actually succeeded or failed.
          */
@@ -317,6 +340,9 @@ class BlackoutVpnService : VpnService() {
             activeProtocol = protocol
             activeName = displayName
             isRunning = true
+            activeProtocolId = protocol
+            activeDisplayName = displayName
+            connectedAtMs = System.currentTimeMillis()
             lastError = null
             Log.i(TAG, "tunnel up: $displayName ($protocol) tun=${fd.fd} socks=$socksPort")
             notifyStatus("connected")
@@ -400,6 +426,9 @@ class BlackoutVpnService : VpnService() {
         isRunning = false
         activeProtocol = null
         activeName = null
+        activeProtocolId = null
+        activeDisplayName = null
+        connectedAtMs = 0L
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {

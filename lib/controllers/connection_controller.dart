@@ -3,6 +3,7 @@
 /// Replicates CLI's ConnectionService state machine pattern.
 
 import 'dart:async';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 import '../models/config.dart';
@@ -27,7 +28,7 @@ enum ConnectionState {
   error,
 }
 
-class ConnectionController extends GetxController {
+class ConnectionController extends GetxController with WidgetsBindingObserver {
   final VPNService vpnService;
   final TesterService testerService;
   final KillSwitchService killSwitchService;
@@ -112,6 +113,100 @@ class ConnectionController extends GetxController {
     super.onInit();
     _log.i('ConnectionController initialized');
     _initIpInfo();
+    // Android may kill the Flutter process while the foreground VpnService
+    // keeps the tunnel up. On a fresh start (and on every resume) the Dart
+    // state must be reconciled with the native truth, or the UI shows
+    // "not connected" under a live VPN notification icon.
+    WidgetsBinding.instance.addObserver(this);
+    reconcileWithNativeService();
+  }
+
+  @override
+  void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopUptimeCounter();
+    debugService.logInfo('ConnectionController closing');
+    super.onClose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back to the foreground is exactly when a desync becomes visible.
+    if (state == AppLifecycleState.resumed) {
+      reconcileWithNativeService();
+    }
+  }
+
+  /// Brings the Dart state in line with what the native service is actually
+  /// doing, in both directions:
+  ///
+  /// - **Native running, Dart idle** (process was killed, tunnel survived):
+  ///   adopt it — restore the selected config by name/protocol, rebuild the
+  ///   uptime from the native start timestamp, and re-fetch the exit info.
+  /// - **Native stopped, Dart connected** (engine died or the tunnel was
+  ///   revoked): drop to idle instead of claiming a connection that is gone.
+  ///
+  /// Safe to call at any time; a no-op when the two already agree.
+  Future<void> reconcileWithNativeService() async {
+    try {
+      final status = await vpnService.getStatus();
+      final nativeRunning = status['isRunning'] == true;
+
+      if (nativeRunning && !isConnected) {
+        final name = status['name'] as String?;
+        final protocol = status['protocol'] as String?;
+        Config? config;
+        try {
+          final configController = Get.find<ConfigController>();
+          config = configController.allConfigs.firstWhereOrNull(
+            (c) =>
+                (name == null || c.displayName == name) &&
+                (protocol == null || c.protocol == protocol),
+          );
+        } catch (_) {
+          // ConfigController not registered yet — adopt without the object.
+        }
+
+        selectedConfig.value = config;
+        state.value = ConnectionState.connected;
+        statusMessage.value = config != null
+            ? 'Restored: ${config.displayName} (tunnel was already running)'
+            : 'Restored connection (tunnel was already running)';
+
+        final startedAtMs = (status['connectedAtMs'] as num?)?.toInt() ?? 0;
+        _connectionStartTime = startedAtMs > 0
+            ? DateTime.fromMillisecondsSinceEpoch(startedAtMs)
+            : DateTime.now();
+        _startUptimeCounter();
+        _fetchConnectedIP();
+
+        _log.i('Adopted a running native tunnel'
+            '${config != null ? " (${config.displayName})" : ""}');
+        debugService.logAction('state_reconciled', {
+          'adopted': true,
+          'config': name ?? 'unknown',
+          'protocol': protocol ?? 'unknown',
+        });
+      } else if (!nativeRunning && isConnected) {
+        state.value = ConnectionState.idle;
+        statusMessage.value = 'Tunnel ended';
+        selectedConfig.value = null;
+        selectedConfigResult.value = null;
+        connectedIP.value = null;
+        exitIpInfo.value = null;
+        connectionUptime.value = 0;
+        _connectionStartTime = null;
+        _stopUptimeCounter();
+        _log.w('Native tunnel is gone while the UI thought it was connected');
+        debugService.logAction('state_reconciled', {
+          'adopted': false,
+          'reason': 'native tunnel gone',
+        });
+      }
+    } catch (e) {
+      // Reconciliation is a repair, never a blocker.
+      _log.w('State reconciliation failed: $e');
+    }
   }
 
   /// Loads the cached home identity first (visible immediately, even
@@ -725,12 +820,5 @@ class ConnectionController extends GetxController {
     if (service != null) {
       exitIpInfo.value = await service.fetchExit();
     }
-  }
-
-  @override
-  void onClose() {
-    _stopUptimeCounter();
-    debugService.logInfo('ConnectionController closing');
-    super.onClose();
   }
 }

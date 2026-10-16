@@ -2,7 +2,7 @@
 
 An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
 
-**Status**: v1.0.0-beta.19 — Android VPN service and in-process Xray core are implemented. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on hardware.
+**Status**: v1.0.0-beta.20 — Android VPN service and in-process Xray core are implemented. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on hardware.
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process

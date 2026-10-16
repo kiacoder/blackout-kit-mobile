@@ -463,6 +463,18 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.20] - 2026-10-16
+
+### Fixed
+- **The site check was serial — now parallel (up to ~8x faster per check).**
+  `probeSites` fetched the check hosts one after another on a single thread,
+  so a check cost N × timeout (8 hosts × 10 s = 80 s per candidate, minutes
+  per scan batch). The fetches now run on a small thread pool, so the whole
+  host set costs about one host's time. This was the entire reason the
+  batched scan felt glacial: the scan logic itself (batch math, ranking,
+  live verification, advance-on-exhaustion) was verified correct — the
+  fetch pipeline underneath it was just sequential.
+
 ## [1.0.0-beta.19] - 2026-10-16
 
 ### Added

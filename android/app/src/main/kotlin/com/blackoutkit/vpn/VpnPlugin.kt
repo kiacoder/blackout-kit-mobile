@@ -482,7 +482,36 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
 
         Thread {
-            val outcomes = urls.map { url -> probeSiteThroughSocks(url, socksPort, timeoutMs) }
+            // Fetch the hosts in parallel: sequential fetching made the site
+            // check cost N x timeout (8 hosts x 10 s = 80 s per candidate),
+            // which across a batched scan of hundreds of candidates turned a
+            // minute of work into an hour. Parallel, the whole set costs
+            // about one host's time.
+            val pool = java.util.concurrent.Executors.newFixedThreadPool(
+                minOf(urls.size, 8)
+            )
+            val outcomes = try {
+                val futures = urls.map { url ->
+                    pool.submit(java.util.concurrent.Callable {
+                        probeSiteThroughSocks(url, socksPort, timeoutMs)
+                    })
+                }
+                futures.map { future ->
+                    try {
+                        future.get(timeoutMs + 2_000L)
+                    } catch (e: Exception) {
+                        mapOf(
+                            "host" to "",
+                            "ok" to false,
+                            "statusCode" to null,
+                            "latencyMs" to null,
+                            "error" to (e.message ?: e.javaClass.simpleName),
+                        )
+                    }
+                }
+            } finally {
+                pool.shutdownNow()
+            }
             main.post { result.success(outcomes) }
         }.start()
     }

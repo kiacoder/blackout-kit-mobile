@@ -15,6 +15,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "never run on hardware" to the verified state; the subprocess-backed
   sing-box path still has no hardware traffic verification.
 
+## [1.0.0-beta.25] - 2026-10-16
+
+### Fixed
+- **Case-sensitive URI schemes were silently dropping configs.** Share-link
+  parsing dispatched on `startsWith('vless://')`, `'VMESS://'`, `'SS://'` and
+  friends — case-sensitive — so any list that spells its schemes in upper or
+  mixed case had those lines discarded without a word. `ConfigParser.
+  normalizeScheme()` now lower-cases ONLY the scheme (UUIDs, passwords and
+  base64 payloads must stay byte-identical) and is applied both in the
+  `parse()` dispatch and inside every `fromUri` guard. 5 new tests cover it,
+  including a mixed-case multi-line list.
+
+### Changed
+- `EngineRunner` lower-cases the protocol before its engine-map lookup, so a
+  caller passing `Hysteria2` gets a real answer instead of "no engine is
+  mapped".
+
+### Audited (no defect found)
+- The whole Dart↔Kotlin contract: method names, argument keys and result keys
+  in both directions; channel names vs plugin registration; manifest service
+  name vs Gradle namespace
+- Protocol sets identical on both sides; sing-box JSON keys snake_case, Xray
+  keys as its schema requires
+- Every Hive box name and every settings put/get key pair; the config map
+  writer vs its reader; native library names vs the packaged `.so` files
+
 ## [1.0.0-beta.24] - 2026-10-16
 
 ### Fixed

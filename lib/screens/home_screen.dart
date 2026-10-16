@@ -166,6 +166,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
+              if (config != null) ...[
+                const SizedBox(height: 8),
+                _buildIpIdentityRow(),
+              ],
               const SizedBox(height: 8),
               Text(
                 _connectionController.statusMessage.value,
@@ -182,8 +186,73 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Widget _buildConnectButton() {
-    return Obx(() {
+  /// Before / now identity card: the address and place the user had before
+  /// the tunnel, and the exit address + location fetched through it. Rows
+  /// hide themselves when their lookup has not resolved — showing nothing is
+  /// more honest than showing the wrong place.
+  Widget _buildIpIdentityRow() {
+    final home = _connectionController.homeIpInfo.value;
+    final exit = _connectionController.exitIpInfo.value;
+
+    final homeLabel = (home == null || home.isEmpty)
+        ? null
+        : '${home.ip} — ${home.placeLabel.isEmpty ? 'location unknown' : home.placeLabel}';
+    final exitLabel = (exit == null || exit.isEmpty)
+        ? null
+        : '${exit.ip} — ${exit.placeLabel.isEmpty ? 'location unknown' : exit.placeLabel}';
+
+    TextStyle rowStyle(bool accent) => TextStyle(
+          fontSize: 12,
+          color: accent ? Colors.lightBlueAccent : Colors.grey,
+        );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.withAlpha(26),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.home_outlined,
+                  size: 14, color: Colors.grey),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  homeLabel ?? 'Your real IP: unavailable',
+                  style: rowStyle(false),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.shield_outlined,
+                  size: 14, color: Colors.lightBlueAccent),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  exitLabel ?? 'Exit location: resolving…',
+                  style: rowStyle(true),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectButton() {    return Obx(() {
       final isConnected = _connectionController.isConnected;
       final isConnecting = _connectionController.state.value ==
           ConnectionState.connecting;

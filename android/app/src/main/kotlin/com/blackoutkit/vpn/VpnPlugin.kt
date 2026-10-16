@@ -102,6 +102,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             // demand rather than passively leaking browsing DNS.
             "getConnectedIP" -> handleGetConnectedIP(result)
             "getEngineInfo" -> result.success(engineInfoMap())
+            "tunnelFetch" -> handleTunnelFetch(call, result)
             "probeStart" -> handleProbeStart(call, result)
             "probeStop" -> handleProbeStop(result)
             "probeSites" -> handleProbeSites(call, result)
@@ -335,6 +336,23 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun fetchExitIpThroughTunnel(socksPort: Int): String? {
+        val body = fetchBodyThroughSocks(IP_ECHO_URL, socksPort, IP_FETCH_TIMEOUT_MS)
+            ?: return null
+        return if (looksLikeIp(body)) body else run {
+            Log.w(TAG, "Exit-IP echo returned a non-address body")
+            null
+        }
+    }
+
+    /**
+     * GETs [urlStr] through the loopback SOCKS inbound and returns the body.
+     *
+     * Used for the exit-IP echo and for the geo lookup of the exit address —
+     * the request must leave THROUGH the tunnel or it describes the wrong
+     * location. A null return means "could not fetch"; callers degrade to
+     * hiding the row rather than showing an error.
+     */
+    fun fetchBodyThroughSocks(urlStr: String, socksPort: Int, timeoutMs: Int): String? {
         if (socksPort <= 0 || socksPort > 65535) {
             Log.w(TAG, "Refusing to dial an out-of-range SOCKS port: $socksPort")
             return null
@@ -342,31 +360,50 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         var conn: HttpURLConnection? = null
         return try {
             val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-            conn = (URL(IP_ECHO_URL).openConnection(proxy) as HttpURLConnection).apply {
-                connectTimeout = IP_FETCH_TIMEOUT_MS
-                readTimeout = IP_FETCH_TIMEOUT_MS
+            conn = (URL(urlStr).openConnection(proxy) as HttpURLConnection).apply {
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
                 requestMethod = "GET"
                 doInput = true
-                instanceFollowRedirects = false
+                instanceFollowRedirects = true
             }
             val code = conn.responseCode
             if (code !in 200..299) {
-                Log.w(TAG, "Exit-IP echo returned HTTP $code")
+                Log.w(TAG, "Tunnel fetch returned HTTP $code for $urlStr")
                 return null
             }
-            val body = conn.inputStream.bufferedReader().use { it.readText() }.trim()
-            if (looksLikeIp(body)) body else run {
-                Log.w(TAG, "Exit-IP echo returned a non-address body")
-                null
-            }
+            conn.inputStream.bufferedReader().use { it.readText() }
         } catch (e: Exception) {
             // A failed probe must never surface as an error to the UI: the
             // status row simply stays hidden, which is the honest degradation.
-            Log.w(TAG, "Exit-IP fetch failed: ${e.javaClass.simpleName}: ${e.message}")
+            Log.w(TAG, "Tunnel fetch failed: ${e.javaClass.simpleName}: ${e.message}")
             null
         } finally {
             conn?.disconnect()
         }
+    }
+
+    /**
+     * Fetches [url] through the live tunnel's loopback SOCKS inbound and
+     * returns the response body, or null on any failure. Powers the
+     * "where is the exit" geo lookup on the home screen — the same request
+     * made directly would report the UNPROTECTED address, because this app
+     * is a disallowed application of its own VPN.
+     */
+    private fun handleTunnelFetch(call: MethodCall, result: MethodChannel.Result) {
+        val urlStr = call.argument<String>("url") ?: ""
+        val socksPort = call.argument<Int>("socksPort")
+            ?: BlackoutVpnService.DEFAULT_SOCKS_PORT
+        val timeoutMs = (call.argument<Int>("timeoutMs") ?: 10_000)
+            .coerceIn(1_000, 30_000)
+        if (urlStr.isBlank()) {
+            result.error("BAD_ARGS", "url is required", null)
+            return
+        }
+        Thread {
+            val body = fetchBodyThroughSocks(urlStr, socksPort, timeoutMs)
+            main.post { result.success(body) }
+        }.start()
     }
 
     // ── Headless probe engine (site check) ────────────────────────────────

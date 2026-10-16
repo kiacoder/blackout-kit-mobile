@@ -322,6 +322,31 @@ class VPNService {
     }
   }
 
+  /// Fetches [url] through the live tunnel's loopback SOCKS inbound and
+  /// returns the response body, or null on any failure.
+  ///
+  /// Used for the exit-address geo lookup: a direct request from this app
+  /// would bypass the tunnel (the app is a disallowed application of its own
+  /// VPN) and describe the wrong location.
+  Future<String?> tunnelFetch(
+    String url, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    try {
+      return await platform.invokeMethod<String>('tunnelFetch', {
+        'url': url,
+        'socksPort': defaultSocksPort,
+        'timeoutMs': timeout.inMilliseconds,
+      });
+    } on PlatformException catch (e) {
+      _log.w('Tunnel fetch failed: ${e.message}');
+      return null;
+    } catch (e) {
+      _log.w('Tunnel fetch failed: $e');
+      return null;
+    }
+  }
+
   /// Handle method calls from native side
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {

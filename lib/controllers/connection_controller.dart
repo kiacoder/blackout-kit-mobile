@@ -11,6 +11,7 @@ import '../models/vpn_session_options.dart';
 import '../services/vpn_service.dart';
 import '../services/tester_service.dart';
 import '../services/site_check_service.dart';
+import '../services/ip_info_service.dart';
 import '../services/kill_switch_service.dart';
 import '../services/dns_leak_prevention_service.dart';
 import '../services/split_tunneling_service.dart';
@@ -38,6 +39,11 @@ class ConnectionController extends GetxController {
   /// real websites through a headless core instance. Null (or a disabled
   /// service) degrades selection to pure TCP-latency ranking.
   final SiteCheckService? siteCheckService;
+
+  /// Optional IP identity service: resolves the home (pre-tunnel) and exit
+  /// addresses + locations shown on the home screen. Null keeps those rows
+  /// hidden.
+  final IpInfoService? ipInfoService;
   final Logger _log;
 
   // Observable state
@@ -91,13 +97,42 @@ class ConnectionController extends GetxController {
     required this.splitTunnelingService,
     required this.debugService,
     this.siteCheckService,
+    this.ipInfoService,
     Logger? logger,
   }) : _log = logger ?? Logger();
+
+  // IP identity shown on the home screen: what the address/location were
+  // before the tunnel (direct lookup, cached) and what they are now
+  // (fetched through the exit).
+  final Rx<IpInfo?> homeIpInfo = Rx<IpInfo?>(null);
+  final Rx<IpInfo?> exitIpInfo = Rx<IpInfo?>(null);
 
   @override
   void onInit() {
     super.onInit();
     _log.i('ConnectionController initialized');
+    _initIpInfo();
+  }
+
+  /// Loads the cached home identity first (visible immediately, even
+  /// offline), then refreshes it from the network.
+  Future<void> _initIpInfo() async {
+    final service = ipInfoService;
+    if (service == null) return;
+    homeIpInfo.value = service.cachedHome();
+    final fresh = await service.fetchHome();
+    if (!fresh.isEmpty && isConnected) return;
+    homeIpInfo.value = fresh;
+  }
+
+  /// Refreshes the home identity when the tunnel is down, so the "before"
+  /// row stays current.
+  Future<void> refreshHomeIpInfo() async {
+    if (isConnected) return;
+    final service = ipInfoService;
+    if (service == null) return;
+    final fresh = await service.fetchHome();
+    if (!fresh.isEmpty) homeIpInfo.value = fresh;
   }
 
   /// Connect with fastest available config
@@ -455,9 +490,12 @@ class ConnectionController extends GetxController {
         selectedConfig.value = null;
         selectedConfigResult.value = null;
         connectedIP.value = null;
+        exitIpInfo.value = null;
         connectionUptime.value = 0;
         _connectionStartTime = null;
         debugService.logInfo('VPN disconnected');
+        // Unawaited: the home row refreshes in the background.
+        refreshHomeIpInfo();
         return true;
       } else {
         state.value = ConnectionState.error;
@@ -660,6 +698,12 @@ class ConnectionController extends GetxController {
       connectedIP.value = ip;
     } catch (e) {
       _log.e('Error fetching connected IP: $e');
+    }
+    // Where is the exit? Only a request that leaves THROUGH the tunnel can
+    // answer that; a direct one would describe the unprotected address.
+    final service = ipInfoService;
+    if (service != null) {
+      exitIpInfo.value = await service.fetchExit();
     }
   }
 

@@ -14,6 +14,7 @@ import 'services/config_service.dart';
 import 'services/github_service.dart';
 import 'services/tester_service.dart';
 import 'services/site_check_service.dart';
+import 'services/ip_info_service.dart';
 import 'services/vpn_service.dart';
 import 'services/kill_switch_service.dart';
 import 'services/dns_leak_prevention_service.dart';
@@ -80,6 +81,10 @@ void main() async {
     ),
   );
 
+  final ipInfoService = IpInfoService(vpnService: vpnService, logger: logger);
+  await ipInfoService.initialize();
+  Get.put<IpInfoService>(ipInfoService);
+
   Get.put<ConnectionController>(
     ConnectionController(
       vpnService: vpnService,
@@ -89,6 +94,7 @@ void main() async {
       splitTunnelingService: splitTunnelingService,
       debugService: debugService,
       siteCheckService: Get.find<SiteCheckService>(),
+      ipInfoService: ipInfoService,
       logger: logger,
     ),
   );

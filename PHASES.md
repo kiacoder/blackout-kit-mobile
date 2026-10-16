@@ -205,7 +205,7 @@ no hint, so it is worth knowing.
 ### Deliverables
 
 #### Testing Infrastructure ✓
-- [x] 162 unit tests that compile and pass, in nine files:
+- [x] 176 unit tests that compile and pass, in ten files:
   - `test/config_parsing_test.dart` (52) — share-link parsing for every protocol,
     WireGuard `.conf` section handling, UUID format validation for vless/vmess/tuic,
     and a reload round-trip for all six
@@ -393,6 +393,21 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
       shape) now backs all three validators; because `validate()` also gates library
       import, bad configs are dropped at import time. Seven new tests;
       the suite is now 162 tests.
+- [x] **Site check — candidates verified against real websites (2026-10-16).**
+      A TCP probe proves the path to a server, not that the config carries
+      traffic (bad credentials, REALITY key mismatch, censor black-holing the
+      exit all leave the handshake green). `connectFastest` now shortlists the
+      fastest TCP-passing candidates and checks each in a **headless core
+      instance**: a SOCKS-only Xray config (`tunEnabled: false`, no VpnService,
+      no consent dialog, no device routing changes) runs per candidate and the
+      user's check hosts are HTTPS-fetched through its loopback SOCKS inbound.
+      Any HTTP response passes; only connect failures/timeouts count against
+      the config. Selection prefers verified-usable configs, tunnel latency
+      breaks ties, and every failure mode degrades to pure TCP ranking.
+      Defaults: google.com, gemini.google.com, youtube.com, crunchyroll.com,
+      instagram.com, facebook.com (+ recommended github.com, wikipedia.org);
+      editable in Settings, switchable off entirely. 14 new tests; the suite
+      is now 176 tests across ten files.
 - [x] **Language setting was a no-op** — `LocalizationService` was never registered
       with GetX, and `GetMaterialApp` had no `translations` / `locale`, so picking a
       language persisted a preference and changed nothing on screen.
@@ -707,7 +722,7 @@ Legend: ✅ shipped · ⚠️ shipped but not verified on a physical device · �
 ### v1.0 (Current)
 
 - ✅ Config fetching from GitHub works
-- ✅ 162 unit tests compile and pass
+- ✅ 176 unit tests compile and pass
 - ✅ All screens build and render
 - ✅ Error handling is wired up
 - ✅ Xray engine bundled; the five protocols it serves are gated in the UI
@@ -816,9 +831,11 @@ Want to help? Check these resources:
 Five protocols blocked on a sing-box runtime ❌ | **On-device verification still pending** ⚠️ |
 v2.0+ Visionary 🔮
 
-**Last Updated:** 2026-10-16 (UUID format validation added for vless/vmess/tuic —
-suite now 162 tests across nine files; APK sizes re-measured on the beta.14 CI build
-at 120.6/111.7 MB, fat-APK scale — split-per-abi status needs re-verification.
+**Last Updated:** 2026-10-16 (site check added — connectFastest verifies shortlisted
+candidates by fetching real websites through a headless core; suite now 176 tests
+across ten files. Earlier the same day: UUID format validation for vless/vmess/tuic,
+APK sizes re-measured on the beta.14 CI build at 120.6/111.7 MB, fat-APK scale —
+split-per-abi status needs re-verification.
 Earlier: 2026-10-14 test-count audit — suite recounted at 155 tests across nine
 files; docs updated to match.
 Earlier: 2026-09-19 UI honesty pass — screens no longer advertise engines and

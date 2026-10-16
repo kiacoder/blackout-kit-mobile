@@ -254,7 +254,7 @@ git push origin v1.0.0
 
 **4. Monitor CI/CD**
 - Watch GitHub Actions: Settings → Actions
-- Verify `test.yml` passes (160+ tests)
+- Verify `test.yml` passes (170+ tests)
 - Verify `build.yml` succeeds (per-ABI APKs attached to the release; no iOS builds — the iOS job was removed)
 - Verify `release.yml` creates release page
 

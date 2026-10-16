@@ -2,7 +2,7 @@
 
 An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
 
-**Status**: v1.0.0-beta.15 — Android VPN service and in-process Xray core are implemented. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on hardware.
+**Status**: v1.0.0-beta.16 — Android VPN service and in-process Xray core are implemented. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on hardware.
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process
@@ -29,8 +29,12 @@ An open-source VPN client for Android, built with Flutter. It fetches VPN config
 
 🟡 **Automatic Testing**
 - Real TCP reachability and latency measurement per config
+- **Site check**: top candidates are verified by fetching real websites
+  *through* them in a headless core instance (no VPN interface, no consent
+  dialog) — a TCP handshake alone cannot prove a config carries traffic.
+  Host list is editable in Settings; the stage can be switched off entirely.
 - Reliability scoring (0-100%) from repeated probes
-- Config ranking by latency
+- Config ranking by verified site reachability, then latency
 - Non-blocking UI during tests
 - **Throughput is not measured.** The earlier "speed test" derived a number from
   the config hash and never contacted anything; it has been removed rather than
@@ -145,7 +149,7 @@ flutter run --release -d <device-id>
 flutter test
 ```
 
-162 tests across nine files:
+176 tests across ten files:
 
 ```bash
 flutter test test/config_parsing_test.dart
@@ -157,6 +161,7 @@ flutter test test/services/engine_availability_test.dart
 flutter test test/services/localization_service_test.dart
 flutter test test/services/test_result_persistence_test.dart
 flutter test test/services/tester_probe_test.dart
+flutter test test/services/site_check_settings_test.dart
 ```
 
 If `flutter test` dies with `WebSocketException: Invalid WebSocket upgrade request`,
@@ -244,7 +249,7 @@ On a physical device (**nothing below has ever been run**):
   The earlier "activate after connecting" design was not implementable.
 
 ### Phase 4 — Tests, docs, release ✅ Complete
-- 162 real unit tests covering Xray config generation, option validation,
+- 176 real unit tests covering Xray config generation, option validation,
   share-link parsing, engine-availability gating, sing-box config, settings
   claims, test-result persistence and probe behaviour
 - R8 + resource shrinking

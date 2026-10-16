@@ -10,7 +10,7 @@ Phase 4 focused on three critical areas: **Testing**, **Polish**, and **Release 
 
 ### 1️⃣ Testing Infrastructure ✅
 
-**Unit Tests** (162 tests across nine files)
+**Unit Tests** (176 tests across ten files)
 - `test/config_parsing_test.dart` - Share-link parsing for every protocol, UUID format validation, reload round-trip
 - `test/xray_config_test.dart` - Xray JSON generation, REALITY validation, routing
 - `test/vpn_session_options_test.dart` - Builder-time option validation and precedence
@@ -20,6 +20,7 @@ Phase 4 focused on three critical areas: **Testing**, **Polish**, and **Release 
 - `test/services/engine_availability_test.dart` - Engine gating contract (fail-open behavior)
 - `test/services/localization_service_test.dart` - Localization wiring
 - `test/services/test_result_persistence_test.dart` / `test/services/tester_probe_test.dart` - Latency probing and persistence
+- `test/services/site_check_settings_test.dart` - Site-check settings sanitisation, report scoring and config selection
 
 **CI/CD Workflows**
 - `.github/workflows/test.yml` - Automated testing on every push
@@ -114,7 +115,7 @@ blackout-kit-mobile/
 ## 📊 Quality Metrics
 
 ### Test Coverage
-- **Unit Tests:** 162 tests across nine files (models, services, controllers, widgets)
+- **Unit Tests:** 176 tests across ten files (models, services, controllers, widgets)
 - **Integration Tests:** 3 suites in `integration_test/` (app flow, engine hub, native tunnel — the native tunnel suite is written and waiting for a physical-device run)
 - **Test Suites:** 
   - Config parsing (WireGuard, OpenVPN, Shadowsocks)

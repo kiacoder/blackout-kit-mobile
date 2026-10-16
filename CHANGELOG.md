@@ -463,6 +463,33 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.16] - 2026-10-16
+
+### Added
+- **Site check: candidate configs are now verified against real websites, not
+  just pinged.** A TCP probe proves the network path to a config's server —
+  it cannot prove the config carries traffic (bad credentials, a REALITY key
+  mismatch or a censor black-holing the exit all leave the handshake green).
+  `connectFastest` therefore shortlists the fastest TCP-passing candidates
+  and checks each one in a **headless core instance**: a SOCKS-only Xray
+  config (`tunEnabled: false`) runs without VpnService, consent dialogs or
+  any change to the device's routing, and each check host is fetched through
+  the core's loopback SOCKS inbound. Any HTTP response counts as reachable —
+  even a 403 proves the round trip through the exit — while connect failures
+  and timeouts count against the config. Selection prefers verified-usable
+  configs (most reachable hosts first), uses tunnel latency as the tie-break,
+  and every failure mode (engine refuses, tunnel already up, stage disabled)
+  degrades to the previous pure-TCP ranking.
+- **Settings → Site Check.** A toggle (default on) and an editable host list
+  (one host per line, sanitised on input, defaults restored if everything is
+  removed). Defaults: google.com, gemini.google.com, youtube.com,
+  crunchyroll.com, instagram.com, facebook.com — plus github.com and
+  wikipedia.org, chosen as high-uptime global fronts where "unreachable
+  through this config" means the config is broken, not the site.
+- 14 new unit tests covering URL sanitisation, report scoring and the
+  pickBest ranking. The suite is now 176 tests across ten files (183
+  including the integration suites on CI).
+
 ## [1.0.0-beta.15] - 2026-10-16
 
 ### Fixed

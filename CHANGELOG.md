@@ -463,6 +463,21 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.18] - 2026-10-16
+
+### Added
+- **Batched full-scan: `connectFastest` now walks ALL configs, not just a
+  lucky window.** With thousands of sources, one probe pass was a lottery.
+  The candidate list is scanned in batches of 50: TCP-probe the batch, run
+  the headless site check on its fastest survivors, then connect and
+  live-verify them in rank order (up to 10 per batch). Only a fully
+  exhausted batch advances to the next 50 — so with 7,000 configs the scan
+  eventually tries everything, while the status line always shows which
+  batch is being scanned. Known-failed results from the library are skipped
+  up front. Connection may take longer when the first batches are all
+  blocked; that is the scan working, and it beats a "connected" notification
+  that loads nothing.
+
 ## [1.0.0-beta.17] - 2026-10-16
 
 ### Fixed

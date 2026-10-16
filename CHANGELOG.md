@@ -15,6 +15,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "never run on hardware" to the verified state; the subprocess-backed
   sing-box path still has no hardware traffic verification.
 
+## [1.0.0-beta.24] - 2026-10-16
+
+### Fixed
+- **Audit of the whole "process died while native kept running" class found
+  three more desyncs:**
+  - **Native status pushes never reached the UI.** `VPNService` updated its
+    own private status and stopped there, so when the engine died, the user
+    revoked the VPN in system settings, or another VPN app took over, the app
+    kept showing "Connected" with a ticking uptime over a dead tunnel. The
+    service now exposes `onStatusChanged`; the controller subscribes and drops
+    to error/idle with the real reason, stopping the uptime.
+  - **Reconciliation could hijack an in-flight scan** by adopting a candidate
+    tunnel mid-scan (native running + Dart not "connected" includes the
+    selecting/connecting/testing states). Adoption is now gated to idle/error.
+  - **Two settings were advertised but dead:** `autoConnect` and
+    `autoTestInterval` had no consumers at all.
+    - Auto-connect now works, and runs *after* startup reconciliation so an
+      adopted tunnel is never double-connected.
+    - Auto-test interval now drives a **foreground-only liveness watchdog**:
+      while the app is open and connected, the tunnel is asked to load a check
+      host every N minutes; a tunnel that stopped carrying traffic is reported
+      instead of pretending to work. Returning to the app also triggers an
+      immediate check. Its subtitle now says exactly that (and that 0
+      disables it) — a background Dart timer would be killed with the process.
+
 ## [1.0.0-beta.23] - 2026-10-16
 
 ### Fixed

@@ -82,6 +82,13 @@ class XrayConfigBuilder {
   /// modern TLS/REALITY setups and every mainstream client ships it disabled.
   final bool muxEnabled;
 
+  /// Whether to emit the `tun` inbound. The live VPN tunnel needs it; a
+  /// headless probe instance (site checks against a candidate config) must
+  /// NOT have it, because there is no interface fd to hand the core — with
+  /// `tunEnabled: false` the config carries only the loopback SOCKS inbound,
+  /// and the core runs purely as a local proxy.
+  final bool tunEnabled;
+
   const XrayConfigBuilder({
     this.socksPort = 10808,
     this.httpPort,
@@ -92,6 +99,7 @@ class XrayConfigBuilder {
     this.bypassPrivateRanges = true,
     this.bypassDomains = const [],
     this.muxEnabled = false,
+    this.tunEnabled = true,
   });
 
   /// Private + link-local ranges that should never enter the proxy.
@@ -236,18 +244,22 @@ class XrayConfigBuilder {
 
     // The TUN inbound is what actually captures device traffic. libv2ray
     // exports the fd via `xray.tun.fd`; this block tells Xray to use it.
-    inbounds.add({
-      'tag': 'tun',
-      'protocol': 'tun',
-      'settings': {
-        'name': 'xray0',
-        'mtu': mtu,
-        'gateway': [gatewayCidr],
-        'dns': dnsServers,
-        'userLevel': 8,
-      },
-      'sniffing': sniffing,
-    });
+    // A headless probe instance (tunEnabled: false) omits it — see the
+    // field documentation.
+    if (tunEnabled) {
+      inbounds.add({
+        'tag': 'tun',
+        'protocol': 'tun',
+        'settings': {
+          'name': 'xray0',
+          'mtu': mtu,
+          'gateway': [gatewayCidr],
+          'dns': dnsServers,
+          'userLevel': 8,
+        },
+        'sniffing': sniffing,
+      });
+    }
 
     return inbounds;
   }

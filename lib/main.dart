@@ -13,6 +13,7 @@ import 'controllers/settings_controller.dart';
 import 'services/config_service.dart';
 import 'services/github_service.dart';
 import 'services/tester_service.dart';
+import 'services/site_check_service.dart';
 import 'services/vpn_service.dart';
 import 'services/kill_switch_service.dart';
 import 'services/dns_leak_prevention_service.dart';
@@ -66,6 +67,19 @@ void main() async {
     ),
   );
 
+  // Settings first: the site-check service reads the toggle and host list,
+  // and the connection controller consumes the service.
+  final settingsController = SettingsController(logger: logger);
+  Get.put<SettingsController>(settingsController);
+
+  Get.put<SiteCheckService>(
+    SiteCheckService(
+      vpnService: vpnService,
+      settings: settingsController,
+      logger: logger,
+    ),
+  );
+
   Get.put<ConnectionController>(
     ConnectionController(
       vpnService: vpnService,
@@ -74,12 +88,9 @@ void main() async {
       dnsLeakPreventionService: dnsLeakPreventionService,
       splitTunnelingService: splitTunnelingService,
       debugService: debugService,
+      siteCheckService: Get.find<SiteCheckService>(),
       logger: logger,
     ),
-  );
-
-  Get.put<SettingsController>(
-    SettingsController(logger: logger),
   );
 
   runApp(const BlackoutKitApp());

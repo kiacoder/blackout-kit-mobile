@@ -10,6 +10,7 @@ import '../models/test_result.dart';
 import '../models/vpn_session_options.dart';
 import '../services/vpn_service.dart';
 import '../services/tester_service.dart';
+import '../services/site_check_service.dart';
 import '../services/kill_switch_service.dart';
 import '../services/dns_leak_prevention_service.dart';
 import '../services/split_tunneling_service.dart';
@@ -32,6 +33,11 @@ class ConnectionController extends GetxController {
   final DNSLeakPreventionService dnsLeakPreventionService;
   final SplitTunnelingService splitTunnelingService;
   final DebugService debugService;
+
+  /// Optional site-check stage: verifies shortlisted candidates by fetching
+  /// real websites through a headless core instance. Null (or a disabled
+  /// service) degrades selection to pure TCP-latency ranking.
+  final SiteCheckService? siteCheckService;
   final Logger _log;
 
   // Observable state
@@ -74,6 +80,7 @@ class ConnectionController extends GetxController {
     required this.dnsLeakPreventionService,
     required this.splitTunnelingService,
     required this.debugService,
+    this.siteCheckService,
     Logger? logger,
   }) : _log = logger ?? Logger();
 
@@ -149,7 +156,42 @@ class ConnectionController extends GetxController {
       final results = [...known, ...probedResults]
           .where((r) => candidateHashes.contains(r.configHash))
           .toList();
-      final fastest = testerService.getFastestConfig(results);
+      final working = testerService.getWorkingConfigs(results);
+
+      if (working.isEmpty) {
+        state.value = ConnectionState.error;
+        statusMessage.value = 'No working configs found';
+        return false;
+      }
+
+      // Site check: the TCP probe proved the *path* to each server; this
+      // proves the config can actually carry traffic, by starting a headless
+      // core instance per shortlisted candidate and fetching the user's check
+      // hosts through it. Only Xray-family candidates can be probed this way;
+      // everything else keeps its TCP rank. Every failure mode here (engine
+      // refuses, tunnel already up, check disabled) degrades to the TCP
+      // ranking rather than blocking the connect.
+      final check = siteCheckService;
+      var reports = const <String, SiteCheckReport>{};
+      if (check != null && check.enabled && working.isNotEmpty) {
+        state.value = ConnectionState.selecting;
+        statusMessage.value = 'Verifying websites through top configs...';
+        working.sort((a, b) => (a.latencyMs ?? 1 << 30)
+            .compareTo(b.latencyMs ?? 1 << 30));
+        final shortlist = working
+            .map((r) => candidates.firstWhereOrNull(
+                (c) => c.getHash() == r.configHash))
+            .whereType<Config>()
+            .toList();
+        try {
+          reports = await check.checkConfigs(shortlist);
+        } catch (e) {
+          _log.w('Site check stage failed, falling back to TCP rank: $e');
+          reports = const {};
+        }
+      }
+
+      final fastest = SiteCheckService.pickBest(working, candidates, reports);
 
       if (fastest == null) {
         state.value = ConnectionState.error;

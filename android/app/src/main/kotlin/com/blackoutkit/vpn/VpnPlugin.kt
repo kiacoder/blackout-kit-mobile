@@ -102,6 +102,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             // demand rather than passively leaking browsing DNS.
             "getConnectedIP" -> handleGetConnectedIP(result)
             "getEngineInfo" -> result.success(engineInfoMap())
+            "probeStart" -> handleProbeStart(call, result)
+            "probeStop" -> handleProbeStop(result)
+            "probeSites" -> handleProbeSites(call, result)
             else -> result.notImplemented()
         }
     }
@@ -361,6 +364,145 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             // status row simply stays hidden, which is the honest degradation.
             Log.w(TAG, "Exit-IP fetch failed: ${e.javaClass.simpleName}: ${e.message}")
             null
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    // ── Headless probe engine (site check) ────────────────────────────────
+    //
+    // A candidate config is judged by more than a TCP handshake: Dart builds
+    // a SOCKS-only Xray config (no tun inbound), this side runs it in the
+    // bundled core with tunFd = 0, and the check URLs are then fetched
+    // THROUGH the core's loopback SOCKS inbound. The core never touches the
+    // device's routing — no VpnService, no consent dialog, no interface.
+
+    /** One headless core instance at a time; guarded against the live tunnel. */
+    private val probeLock = Any()
+
+    private fun handleProbeStart(call: MethodCall, result: MethodChannel.Result) {
+        val ctx = appContext
+        if (ctx == null) {
+            result.error("NO_CONTEXT", "Plugin is not attached to a Flutter engine", null)
+            return
+        }
+        if (BlackoutVpnService.isRunning) {
+            result.error(
+                "BUSY",
+                "The VPN tunnel is up - the site check needs the core exclusively. " +
+                    "Disconnect first, or skip the site check.",
+                null
+            )
+            return
+        }
+        val configJson = call.argument<String>("xrayConfig")
+        if (configJson.isNullOrBlank()) {
+            result.error("BAD_ARGS", "xrayConfig is required", null)
+            return
+        }
+        Thread {
+            // startLoop blocks until the core is up or has thrown; off the
+            // main thread, same as the service path.
+            val ok = XrayEngine.startProxyOnly(ctx, configJson)
+            main.post {
+                if (ok) {
+                    result.success(true)
+                } else {
+                    result.error(
+                        "PROBE_START_FAILED",
+                        XrayEngine.lastError ?: "The Xray core failed to start",
+                        null
+                    )
+                }
+            }
+        }.start()
+    }
+
+    private fun handleProbeStop(result: MethodChannel.Result) {
+        synchronized(probeLock) {
+            try {
+                XrayEngine.stop()
+                result.success(true)
+            } catch (t: Throwable) {
+                result.error("PROBE_STOP_FAILED", t.message, null)
+            }
+        }
+    }
+
+    private fun handleProbeSites(call: MethodCall, result: MethodChannel.Result) {
+        val socksPort = call.argument<Int>("socksPort") ?: 0
+        val urls = call.argument<List<String>>("urls") ?: emptyList()
+        val timeoutMs = (call.argument<Int>("timeoutMs") ?: 10_000)
+            .coerceIn(1_000, 30_000)
+
+        if (socksPort <= 0 || socksPort > 65535) {
+            result.error("BAD_ARGS", "socksPort is out of range", null)
+            return
+        }
+        if (urls.isEmpty()) {
+            result.error("BAD_ARGS", "urls must not be empty", null)
+            return
+        }
+
+        Thread {
+            val outcomes = urls.map { url -> probeSiteThroughSocks(url, socksPort, timeoutMs) }
+            main.post { result.success(outcomes) }
+        }.start()
+    }
+
+    /**
+     * Fetches one URL through the loopback SOCKS inbound.
+     *
+     * Any HTTP response counts as a pass — the point of the check is whether
+     * traffic *flows through the config*, and even a 403 or a captive-portal
+     * 302 proves the round trip completed through the remote exit. Only
+     * connect failures and timeouts count as failures, because those are the
+     * cases where the config demonstrably cannot carry traffic.
+     */
+    private fun probeSiteThroughSocks(
+        host: String,
+        socksPort: Int,
+        timeoutMs: Int
+    ): Map<String, Any?> {
+        var conn: HttpURLConnection? = null
+        val startedAt = System.currentTimeMillis()
+        return try {
+            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+            conn = (URL("https://$host").openConnection(proxy) as HttpURLConnection).apply {
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
+                requestMethod = "GET"
+                doInput = true
+                instanceFollowRedirects = false
+            }
+            val code = conn.responseCode
+            // Drain a little so the connection is fully established and the
+            // timing reflects a real round trip, then release it.
+            try {
+                conn.inputStream.use { it.read() }
+            } catch (_: Throwable) {
+                // Error-stream bodies (403 pages and the like) are fine too.
+                try {
+                    conn.errorStream?.use { it.read() }
+                } catch (_: Throwable) {
+                }
+            }
+            mapOf(
+                "host" to host,
+                "ok" to true,
+                "statusCode" to code,
+                "latencyMs" to (System.currentTimeMillis() - startedAt),
+                "error" to null,
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Site check failed for $host: ${e.javaClass.simpleName}: ${e.message}")
+            mapOf(
+                "host" to host,
+                "ok" to false,
+                "statusCode" to null,
+                "latencyMs" to null,
+                "error" to (e.message ?: e.javaClass.simpleName),
+            )
         } finally {
             conn?.disconnect()
         }

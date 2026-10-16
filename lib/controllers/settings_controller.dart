@@ -47,6 +47,56 @@ class SettingsController extends GetxController {
   final RxInt autoTestIntervalMinutes = RxInt(60); // Re-test configs every N minutes
   final RxBool logLocalConnection = RxBool(false);
 
+  /// Site check: after the TCP latency probe, qualifying candidates are
+  /// started in a headless core instance and the URLs below are fetched
+  /// *through* them, so a config is judged by real reachability and not just
+  /// by a TCP handshake to its server.
+  final RxBool siteCheckEnabled = RxBool(true);
+
+  /// Hosts fetched through the probe tunnel. Stored as plain hostnames;
+  /// [sanitizeSiteCheckUrls] normalises whatever the user typed.
+  final RxList<String> siteCheckUrls = RxList<String>(defaultSiteCheckUrls);
+
+  /// Default verification hosts. The user's list: the sites they actually
+  /// want to work, plus github.com and wikipedia.org — high-uptime, global
+  /// anycast fronts that are cheap to fetch and rarely blocked wholesale,
+  /// so a config that cannot reach them is broken, not the site.
+  static const List<String> defaultSiteCheckUrls = [
+    'google.com',
+    'gemini.google.com',
+    'youtube.com',
+    'crunchyroll.com',
+    'instagram.com',
+    'facebook.com',
+    'github.com',
+    'wikipedia.org',
+  ];
+
+  /// Normalises user input into host entries: lower-case, scheme and path
+  /// stripped, empty and duplicate entries removed. Returns the defaults if
+  /// nothing usable remains, so an over-eager edit can never empty the check.
+  static List<String> sanitizeSiteCheckUrls(Iterable<String> raw) {
+    final hosts = <String>[];
+    for (final entry in raw) {
+      var host = entry.trim().toLowerCase();
+      if (host.isEmpty) continue;
+      final scheme = RegExp(r'^https?://');
+      if (scheme.hasMatch(host)) host = host.replaceFirst(scheme, '');
+      // Cut path/query/port: only the host part is the check target.
+      host = host.split(RegExp(r'[/?#]')).first;
+      host = host.split(':').first;
+      // Reject anything that is not a plausible hostname.
+      if (!RegExp(r'^[a-z0-9.-]+$').hasMatch(host) ||
+          !host.contains('.') ||
+          host.startsWith('.') ||
+          host.endsWith('.')) {
+        continue;
+      }
+      if (!hosts.contains(host)) hosts.add(host);
+    }
+    return hosts.isEmpty ? List<String>.from(defaultSiteCheckUrls) : hosts;
+  }
+
   SettingsController({Logger? logger}) : _log = logger ?? Logger();
 
   @override
@@ -102,6 +152,12 @@ class SettingsController extends GetxController {
       autoTestIntervalMinutes.value = _settingsBox.get('autoTestIntervalMinutes', defaultValue: 60);
       logLocalConnection.value = _settingsBox.get('logLocalConnection', defaultValue: false);
 
+      siteCheckEnabled.value = _settingsBox.get('siteCheckEnabled', defaultValue: true);
+      final savedUrls = _settingsBox.get('siteCheckUrls');
+      siteCheckUrls.value = savedUrls is List && savedUrls.isNotEmpty
+          ? sanitizeSiteCheckUrls(savedUrls.cast<String>())
+          : List<String>.from(defaultSiteCheckUrls);
+
       // Apply initial theme mode & wakelock
       _applyTheme(theme.value);
       _applyKeepScreenAwake(keepScreenAwake.value);
@@ -135,6 +191,9 @@ class SettingsController extends GetxController {
       await _settingsBox.put('autoSelectFastest', autoSelectFastest.value);
       await _settingsBox.put('autoTestIntervalMinutes', autoTestIntervalMinutes.value);
       await _settingsBox.put('logLocalConnection', logLocalConnection.value);
+
+      await _settingsBox.put('siteCheckEnabled', siteCheckEnabled.value);
+      await _settingsBox.put('siteCheckUrls', siteCheckUrls.toList());
 
       _log.i('Settings saved to storage');
     } catch (e) {
@@ -241,6 +300,28 @@ class SettingsController extends GetxController {
     autoTestIntervalMinutes.value = minutes;
     saveSettings();
     _log.i('Auto-test interval set to: $minutes minutes');
+  }
+
+  /// Toggle the site check stage.
+  void setSiteCheckEnabled(bool value) {
+    siteCheckEnabled.value = value;
+    saveSettings();
+    _log.i('Site check: $value');
+  }
+
+  /// Replace the site-check host list with [raw] (sanitised first).
+  void setSiteCheckUrls(Iterable<String> raw) {
+    final hosts = sanitizeSiteCheckUrls(raw);
+    siteCheckUrls.assignAll(hosts);
+    saveSettings();
+    _log.i('Site check URLs: $hosts');
+  }
+
+  /// Reset the site-check host list to the defaults.
+  void resetSiteCheckUrls() {
+    siteCheckUrls.assignAll(defaultSiteCheckUrls);
+    saveSettings();
+    _log.i('Site check URLs reset to defaults');
   }
 
   /// Set the app language.

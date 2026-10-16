@@ -266,6 +266,62 @@ class VPNService {
     }
   }
 
+  // ── Headless probe engine (site check) ──────────────────────────────────
+  //
+  // These three methods run a *second* core instance that serves a loopback
+  // SOCKS inbound only — no VpnService, no tun fd, no consent dialog — so a
+  // candidate config can be exercised end to end before it is selected.
+  // Refuses with BUSY while the live tunnel is up: both share the singleton
+  // XrayEngine, and a probe must never tear the tunnel down.
+
+  /// Starts the headless probe core with [xrayConfig] (must be a SOCKS-only
+  /// config — `XrayConfigBuilder(tunEnabled: false)`). Returns false with a
+  /// reason in [lastError] when the core refuses the config.
+  Future<bool> probeStart(String xrayConfig) async {
+    try {
+      final result = await platform.invokeMethod<bool>('probeStart', {
+        'xrayConfig': xrayConfig,
+      });
+      return result ?? false;
+    } on PlatformException catch (e) {
+      _lastError = e.message ?? e.code;
+      _log.w('Probe start failed: ${e.message}');
+      return false;
+    }
+  }
+
+  /// Stops the headless probe core. Safe to call when nothing is running.
+  Future<void> probeStop() async {
+    try {
+      await platform.invokeMethod('probeStop');
+    } catch (e) {
+      _log.w('Probe stop failed: $e');
+    }
+  }
+
+  /// Fetches [urls] through the probe core's loopback SOCKS inbound.
+  /// Returns one map per URL: {host, ok, statusCode, latencyMs, error}.
+  Future<List<Map<String, dynamic>>> probeSites(
+    int socksPort,
+    List<String> urls, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    try {
+      final result = await platform.invokeMethod<List>('probeSites', {
+        'socksPort': socksPort,
+        'urls': urls,
+        'timeoutMs': timeout.inMilliseconds,
+      });
+      if (result == null) return const [];
+      return result
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } on PlatformException catch (e) {
+      _log.w('Site check failed: ${e.message}');
+      return const [];
+    }
+  }
+
   /// Handle method calls from native side
   Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {

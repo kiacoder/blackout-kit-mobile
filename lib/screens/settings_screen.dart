@@ -201,6 +201,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.timer_outlined),
                   onTap: _showTestIntervalDialog,
                 )),
+                Obx(() => SwitchListTile(
+                  title: const Text('Site Check'),
+                  subtitle: const Text(
+                    'Verify candidate configs by fetching real websites '
+                    'through them, not just pinging the server',
+                  ),
+                  value: _settingsController.siteCheckEnabled.value,
+                  onChanged: _settingsController.setSiteCheckEnabled,
+                )),
+                Obx(() => ListTile(
+                  title: const Text('Site Check Websites'),
+                  subtitle: Text(
+                    _settingsController.siteCheckUrls.join(', '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  leading: const Icon(Icons.public),
+                  onTap: _showSiteCheckUrlsDialog,
+                )),
               ],
             ),
             // Repositories Section
@@ -579,6 +598,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
         )),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  /// Edit the site-check host list: one host per line (or comma separated).
+  /// Saved through the controller's sanitiser, which strips schemes/paths,
+  /// drops invalid entries and falls back to the defaults if nothing usable
+  /// remains.
+  void _showSiteCheckUrlsDialog() {
+    final controller = TextEditingController(
+      text: _settingsController.siteCheckUrls.join('\n'),
+    );
+
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Site Check Websites'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: TextField(
+            controller: controller,
+            maxLines: 8,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: 'One host per line',
+              hintText: 'google.com\nyoutube.com',
+              helperText:
+                  'Checked through each candidate config. Defaults are '
+                  'restored if everything is removed.',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _settingsController.resetSiteCheckUrls();
+              controller.text = _settingsController.siteCheckUrls.join('\n');
+            },
+            child: const Text('Reset to defaults'),
+          ),
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _settingsController.setSiteCheckUrls(
+                controller.text.split(RegExp(r'[\n,]')),
+              );
+              Get.back();
+            },
+            child: const Text('Save'),
+          ),
         ],
       ),
     );

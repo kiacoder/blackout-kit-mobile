@@ -627,4 +627,58 @@ Endpoint = i.com:51820
       expect(config.validate(), isTrue);
     });
   });
+
+  group('scheme casing', () {
+    // Community config lists spell schemes however their generator felt like
+    // it: an uppercase or mixed-case scheme used to fail every case-sensitive
+    // guard and the line was dropped silently.
+    const uuid = '11111111-1111-1111-1111-111111111111';
+
+    test('normalizeScheme lower-cases only the scheme', () {
+      expect(
+        ConfigParser.normalizeScheme('VLESS://$uuid@a.com:443?x=1'),
+        'vless://$uuid@a.com:443?x=1',
+      );
+      // Credentials and payloads must stay byte-identical.
+      const mixed = 'VMESS://eyJhIjoidUFiQyJ9@b.com:443';
+      expect(ConfigParser.normalizeScheme(mixed), 'vmess://eyJhIjoidUFiQyJ9@b.com:443');
+      // No scheme at all: untouched.
+      expect(ConfigParser.normalizeScheme('[Interface]'), '[Interface]');
+    });
+
+    test('an uppercase VLESS scheme still parses', () {
+      final config = ConfigParser.parse(
+        'VLESS://$uuid@a.com:443?security=tls&sni=a.com',
+      );
+      expect(config, isA<VlessConfig>());
+      expect(config!.validate(), isTrue);
+    });
+
+    test('a mixed-case VMess scheme still parses', () {
+      final payload = base64.encode(utf8.encode(
+        '{"v":"2","ps":"mixed","add":"b.com","port":"443","id":"$uuid","aid":"0","net":"ws","type":"none","host":"","path":"/","tls":""}',
+      ));
+      final config = ConfigParser.parse('Vmess://$payload');
+      expect(config, isA<VmessConfig>());
+    });
+
+    test('an uppercase TUIC scheme still parses', () {
+      final config = ConfigParser.parse(
+        'TUIC://$uuid@c.com:443?congestion_control=bbr',
+      );
+      expect(config, isA<TuicConfig>());
+    });
+
+    test('a mixed-case list parses every line', () {
+      final payload = base64.encode(utf8.encode(
+        '{"v":"2","ps":"mixed","add":"b.com","port":"443","id":"$uuid","aid":"0","net":"ws","type":"none","host":"","path":"/","tls":""}',
+      ));
+      final configs = ConfigParser.parseMultiple([
+        'vless://$uuid@a.com:443?security=tls',
+        'VMESS://$payload',
+        'Trojan://$uuid@c.com:443?sni=c.com',
+      ].join('\n'));
+      expect(configs.length, 3);
+    });
+  });
 }

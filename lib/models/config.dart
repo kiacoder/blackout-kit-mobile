@@ -427,6 +427,7 @@ class ShadowsocksConfig extends Config {
   /// Parse ss:// URI format (supports plain & base64 encoded)
   static ShadowsocksConfig? fromUri(String uri, {String? customName}) {
     try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
       if (!uri.startsWith('ss://')) return null;
 
       String nameFromHash = customName ?? '';
@@ -552,6 +553,7 @@ class VlessConfig extends Config {
   /// vless://UUID@host:port?security=...&sni=...#name
   static VlessConfig? fromUri(String uri, {String? customName}) {
     try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
       if (!uri.startsWith('vless://')) return null;
       final u = ConfigParser.tryParseUri(uri);
       if (u == null) return null;
@@ -633,6 +635,7 @@ class VmessConfig extends Config {
   /// vmess://BASE64(JSON)
   static VmessConfig? fromUri(String uri, {String? customName}) {
     try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
       if (!uri.startsWith('vmess://')) return null;
       final encoded = uri.substring(8).trim().split('#')[0];
       final normalized = base64.normalize(encoded);
@@ -691,6 +694,7 @@ class TrojanConfig extends Config {
   /// trojan://password@host:port?sni=...#name
   static TrojanConfig? fromUri(String uri, {String? customName}) {
     try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
       if (!uri.startsWith('trojan://')) return null;
       final u = ConfigParser.tryParseUri(uri);
       if (u == null) return null;
@@ -752,6 +756,7 @@ class Hysteria2Config extends Config {
   /// hy2://password@host:port?sni=...&insecure=1
   static Hysteria2Config? fromUri(String uri, {String? customName}) {
     try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
       if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://') && !uri.startsWith('hysteria://')) return null;
       final u = ConfigParser.tryParseUri(uri);
       if (u == null) return null;
@@ -806,6 +811,7 @@ class TuicConfig extends Config {
   /// tuic://uuid:password@host:port?sni=...
   static TuicConfig? fromUri(String uri, {String? customName}) {
     try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
       if (!uri.startsWith('tuic://')) return null;
       final u = ConfigParser.tryParseUri(uri);
       if (u == null) return null;
@@ -1094,7 +1100,11 @@ class ConfigParser {
 
   static Config? parse(String text, {String? customName}) {
     try {
-      final trimmed = text.trim();
+      // Normalise the scheme before dispatching: the guards below are
+      // case-sensitive, so a list that spells `VMESS://` or `Vless://` — which
+      // community config lists do — used to be dropped silently. Only the
+      // scheme is touched; credentials and base64 payloads stay byte-identical.
+      final trimmed = ConfigParser.normalizeScheme(text.trim());
       // URI-based single-line protocols
       if (trimmed.startsWith('vless://'))       return VlessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vmess://'))       return VmessConfig.fromUri(trimmed, customName: customName);
@@ -1121,6 +1131,22 @@ class ConfigParser {
   }
 
   /// Parse all configs from multi-line text, Base64 subscriptions, or embedded markdown
+  /// Lower-cases ONLY the URI scheme, leaving everything after `://` exactly
+  /// as it was.
+  ///
+  /// Share links are dispatched with case-sensitive `startsWith` guards, so an
+  /// uppercase or mixed-case scheme (`VLESS://`, `Vmess://`, `SS://`) failed
+  /// every guard and the line was silently discarded. Lower-casing the whole
+  /// URI would be wrong: UUIDs, passwords and base64 payloads are
+  /// case-sensitive.
+  static String normalizeScheme(String uri) {
+    final separator = uri.indexOf('://');
+    if (separator <= 0) return uri;
+    final scheme = uri.substring(0, separator);
+    if (scheme == scheme.toLowerCase()) return uri;
+    return scheme.toLowerCase() + uri.substring(separator);
+  }
+
   static List<Config> parseMultiple(String text) {
     if (text.trim().isEmpty) return [];
 

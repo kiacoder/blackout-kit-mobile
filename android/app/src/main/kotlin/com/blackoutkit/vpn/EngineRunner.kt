@@ -78,7 +78,11 @@ object EngineRunner {
         stop()
 
         val libDir = context.applicationInfo.nativeLibraryDir
-        val engineName = ENGINE_FOR_PROTOCOL[protocol]
+        // Lower-cased for the same reason BlackoutVpnService lower-cases before
+        // its own set lookup: the map keys are lowercase, and a caller that
+        // ever passes "Hysteria2" would otherwise get a misleading "no engine
+        // is mapped" refusal.
+        val engineName = ENGINE_FOR_PROTOCOL[protocol.lowercase()]
 
         if (engineName == null) {
             lastError = "No engine is mapped for protocol '$protocol'."

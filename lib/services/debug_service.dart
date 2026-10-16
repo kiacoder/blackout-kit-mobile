@@ -51,6 +51,19 @@ class DebugService extends GetxService {
     _logger.i('Debug service initialized');
   }
 
+  /// Records a discrete user or system action in the log buffer.
+  ///
+  /// Every meaningful thing the app does — connect, disconnect, toggle a
+  /// source, delete a config, fetch results — goes through here so the logs
+  /// screen can answer "what happened?" without a debugger attached.
+  void logAction(String action, [Map<String, dynamic>? details]) {
+    final detail = (details == null || details.isEmpty)
+        ? ''
+        : ' ' +
+            details.entries.map((e) => '${e.key}=${e.value}').join(' ');
+    log('⚡ $action$detail', level: Level.info);
+  }
+
   /// Log a message at specified level
   void log(
     String message, {

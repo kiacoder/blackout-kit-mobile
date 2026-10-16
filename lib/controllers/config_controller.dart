@@ -9,6 +9,7 @@ import '../models/test_result.dart';
 import '../services/config_service.dart';
 import '../services/github_service.dart';
 import '../services/tester_service.dart';
+import '../services/debug_service.dart';
 
 class ConfigController extends GetxController {
   final ConfigService configService;
@@ -18,6 +19,13 @@ class ConfigController extends GetxController {
 
   // Observable state
   final RxList<Config> allConfigs = RxList<Config>();
+
+  /// Hash → sourceId for every stored config. Lets [visibleConfigs] hide
+  /// configs whose source is disabled without touching stored records.
+  final RxMap<String, String> sourceIdByHash = RxMap<String, String>();
+
+  /// Configs currently being single-tested (hashes), for progress states.
+  final RxSet<String> testingHashes = RxSet<String>();
   final RxList<ConfigSource> sources = RxList<ConfigSource>();
   final RxMap<String, TestResult> testResults = RxMap<String, TestResult>();
   final RxList<ConfigRanking> rankings = RxList<ConfigRanking>();
@@ -123,12 +131,27 @@ class ConfigController extends GetxController {
       isLoading.value = true;
       final configs = configService.getAllConfigs();
       allConfigs.value = configs;
+      sourceIdByHash.value = configService.loadHashToSource();
       _log.i('Loaded ${configs.length} configs');
     } catch (e) {
       _log.e('Error loading configs: $e');
     } finally {
       isLoading.value = false;
     }
+  }
+
+  /// Configs whose source is currently enabled (manual configs — no source —
+  /// are always visible).
+  ///
+  /// Disabling a repository in Settings hides its configs from the library,
+  /// the scanner and all testing, but the stored records are untouched:
+  /// re-enabling the source brings every config straight back.
+  List<Config> get visibleConfigs {
+    final enabled = sources.where((s) => s.isEnabled).map((s) => s.id).toSet();
+    return allConfigs.where((c) {
+      final sid = sourceIdByHash[c.getHash()];
+      return sid == null || enabled.contains(sid);
+    }).toList();
   }
 
   /// Load all sources
@@ -192,6 +215,19 @@ class ConfigController extends GetxController {
 
     await configService.saveSource(updated);
     _log.i('${enabled ? 'Enabled' : 'Disabled'} source: ${updated.name}');
+    _action(
+      enabled ? 'source_enabled' : 'source_disabled',
+      {'source': updated.name},
+    );
+  }
+
+  /// Best-effort action logging: ConfigController has no injected
+  /// DebugService, and logging must never break the action itself.
+  void _action(String action, [Map<String, dynamic>? details]) {
+    try {
+      final debug = Get.find<DebugService>();
+      debug.logAction(action, details);
+    } catch (_) {}
   }
 
   /// Fetch configs from a source and save to local storage
@@ -224,6 +260,19 @@ class ConfigController extends GetxController {
 
       // Reload configs
       await loadConfigs();
+
+      // An honest update message: `saved` counts only NEW configs (duplicates
+      // are coalesced by hash), so "saved 0" is a normal no-change refresh,
+      // not a failure — and the old UI either said nothing or implied a big
+      // update had landed.
+      refreshStatus.value = saved > 0
+          ? '${source.name}: +$saved new config(s)'
+          : '${source.name}: up to date (no new configs)';
+      _action('source_fetched', {
+        'source': source.name,
+        'fetched': configs.length,
+        'new': saved,
+      });
 
       _log.i('Saved $saved configs from ${source.name}');
       return saved;
@@ -284,8 +333,10 @@ class ConfigController extends GetxController {
   Future<void> testAllConfigs({int limit = 150, int concurrency = 8}) async {
     try {
       _refreshBegin('Testing configs...');
-      final toTest = allConfigs.take(limit).toList();
-      _log.i('Testing ${toTest.length} of ${allConfigs.length} configs');
+      final toTest = visibleConfigs.take(limit).toList();
+      _log.i('Testing ${toTest.length} of ${allConfigs.length} configs '
+          '(${visibleConfigs.length} visible)');
+      _action('batch_test_started', {'configs': toTest.length});
 
       final results = await testerService.testConfigsConcurrently(
         toTest,
@@ -346,7 +397,7 @@ class ConfigController extends GetxController {
   }
 
   List<Config> _computeFilteredConfigs() {
-    var filtered = allConfigs.toList();
+    var filtered = visibleConfigs.toList();
 
     // Filter by protocol
     if (filterProtocol.value != 'all') {
@@ -446,9 +497,11 @@ class ConfigController extends GetxController {
     try {
       // Deleting from storage is what actually removes it: dropping it from the
       // in-memory list alone means the next loadSource() brings it back.
+      final name = sources.firstWhereOrNull((s) => s.id == sourceId)?.name;
       sources.removeWhere((s) => s.id == sourceId);
       await configService.deleteSource(sourceId);
       _log.i('Removed source: $sourceId');
+      _action('source_removed', {'source': name ?? sourceId});
       return true;
     } catch (e) {
       _log.e('Error removing source: $e');
@@ -456,8 +509,36 @@ class ConfigController extends GetxController {
     }
   }
 
+  /// Tests ONE config on demand (config detail sheet).
+  ///
+  /// States exposed through [testingHashes] and [testResults]: the sheet can
+  /// show idle → testing (animated bar) → OK (latency) / Failed (reason).
+  /// The result is stored through the same path as batch tests, so it is
+  /// persisted and feeds the rankings and stats.
+  Future<TestResult?> testSingleConfig(Config config) async {
+    final hash = config.getHash();
+    if (testingHashes.contains(hash)) return null;
+    testingHashes.add(hash);
+    try {
+      final result = await testerService.testConfig(config);
+      testResults[hash] = result;
+      _action('config_tested', {
+        'config': config.displayName,
+        'ok': result.isWorking,
+        'latency': result.latencyMs,
+      });
+      return result;
+    } catch (e) {
+      _log.e('Single test failed for ${config.displayName}: $e');
+      return null;
+    } finally {
+      testingHashes.remove(hash);
+    }
+  }
+
   /// Delete config
   Future<bool> deleteConfig(Config config) async {
+    _action('config_deleted', {'config': config.displayName});
     try {
       await configService.deleteConfig(config.getHash());
       allConfigs.remove(config);
@@ -472,18 +553,25 @@ class ConfigController extends GetxController {
 
   /// Get config statistics
   Map<String, dynamic> getStats() {
-    final working = allConfigs
+    final visible = visibleConfigs;
+    final working = visible
         .where((c) => testResults[c.getHash()]?.isWorking ?? false)
         .length;
+    final tested = visible
+        .where((c) => testResults.containsKey(c.getHash()))
+        .length;
 
-    final protocols = allConfigs.map((c) => c.protocol).toSet().toList();
+    final protocols = visible.map((c) => c.protocol).toSet().toList();
 
     return {
-      'total': allConfigs.length,
+      // What the user can see and use right now — NOT the raw stored count,
+      // which includes configs from disabled sources.
+      'total': visible.length,
+      'stored': allConfigs.length,
+      'tested': tested,
       'working': working,
-      'tested': testResults.length,
       'protocols': protocols,
-      'sources': sources.length,
+      'sources': sources.where((s) => s.isEnabled).length,
       'average_reliability':
         testerService.getAverageReliability(testResults.values.toList()),
     };

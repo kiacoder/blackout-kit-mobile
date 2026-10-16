@@ -178,6 +178,10 @@ class ConnectionController extends GetxController {
       final totalBatches = (toScan.length / _probeBatchSize).ceil();
       _log.i('Batched scan: ${toScan.length} configs in $totalBatches '
           'batch(es) of $_probeBatchSize');
+      debugService.logAction('scan_started', {
+        'configs': toScan.length,
+        'batches': totalBatches,
+      });
 
       for (var batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         final batch =
@@ -298,6 +302,12 @@ class ConnectionController extends GetxController {
                 'Connected to ${config.displayName} — verified';
             _log.i('Live verification passed for ${config.displayName} '
                 '($batchLabel)');
+            debugService.logAction('scan_verified', {
+              'config': config.displayName,
+              'attempt': attempt + 1,
+              'batch': batchIndex + 1,
+              'total_batches': totalBatches,
+            });
             return true;
           }
 
@@ -321,6 +331,7 @@ class ConnectionController extends GetxController {
               'websites. Refresh your sources or disable the site check to '
               'connect anyway.'
           : 'No working configs found';
+      debugService.logAction('scan_exhausted', {'configs': toScan.length});
       return false;
     } catch (e) {
       state.value = ConnectionState.error;
@@ -385,6 +396,10 @@ class ConnectionController extends GetxController {
       if (success) {
         state.value = ConnectionState.connected;
         statusMessage.value = 'Connected to ${config.displayName}';
+        debugService.logAction('connected', {
+          'config': config.displayName,
+          'protocol': config.protocol,
+        });
         _connectionStartTime = DateTime.now();
         _startUptimeCounter();
         _fetchConnectedIP();
@@ -410,6 +425,10 @@ class ConnectionController extends GetxController {
       } else {
         state.value = ConnectionState.error;
         statusMessage.value = vpnService.lastError ?? 'Failed to connect';
+        debugService.logAction('connect_failed', {
+          'config': config.displayName,
+          'reason': vpnService.lastError ?? 'unknown',
+        });
         return false;
       }
     } catch (e) {
@@ -494,6 +513,7 @@ class ConnectionController extends GetxController {
         connectionUptime.value = 0;
         _connectionStartTime = null;
         debugService.logInfo('VPN disconnected');
+        debugService.logAction('disconnected');
         // Unawaited: the home row refreshes in the background.
         refreshHomeIpInfo();
         return true;

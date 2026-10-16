@@ -442,7 +442,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final cardColor = theme.cardColor;
 
     Get.bottomSheet(
-      Container(
+      Obx(() {
+        final result = _configController.testResults[config.getHash()];
+        final isTesting =
+            _configController.testingHashes.contains(config.getHash());
+        return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: cardColor,
@@ -476,19 +480,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: result?.isWorking == true
-                        ? Colors.green.withOpacity(0.2)
-                        : Colors.grey.withOpacity(0.2),
+                    color: isTesting
+                        ? Colors.orange.withOpacity(0.2)
+                        : result?.isWorking == true
+                            ? Colors.green.withOpacity(0.2)
+                            : (result != null && !result.isWorking)
+                                ? Colors.red.withOpacity(0.2)
+                                : Colors.grey.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    result?.isWorking == true ? '✓ Working' : '✗ Untested',
+                    isTesting
+                        ? '⏳ Testing…'
+                        : result?.isWorking == true
+                            ? '✓ Working'
+                            : (result != null && !result.isWorking)
+                                ? '✗ Failed'
+                                : '• Untested',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: result?.isWorking == true
-                          ? Colors.green
-                          : Colors.grey,
+                      color: isTesting
+                          ? Colors.orange
+                          : result?.isWorking == true
+                              ? Colors.green
+                              : (result != null && !result.isWorking)
+                                  ? Colors.red
+                                  : Colors.grey,
                     ),
                   ),
                 ),
@@ -561,6 +579,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ],
               ),
             ],
+            if (isTesting) ...[
+              const SizedBox(height: 16),
+              const LinearProgressIndicator(),
+              const SizedBox(height: 4),
+              Text(
+                'Probing ${config.address}:${config.port}…',
+                style: TextStyle(fontSize: 11, color: theme.hintColor),
+              ),
+            ],
+            if (result != null && result.isWorking == false) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Last failure: ${result.error ?? 'no response'}',
+                style: TextStyle(fontSize: 11, color: theme.colorScheme.error),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
             const SizedBox(height: 24),
             Row(
               children: [
@@ -579,6 +615,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                IconButton(
+                  tooltip: isTesting ? 'Testing…' : 'Test now',
+                  onPressed: isTesting
+                      ? null
+                      : () => _configController.testSingleConfig(config),
+                  icon: isTesting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.bolt, size: 28),
+                ),
                 IconButton(
                   icon: const Icon(Icons.edit_note, size: 28),
                   tooltip: 'Edit & Share QR',
@@ -606,7 +655,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ],
         ),
-      ),
+      );
+      }),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),

@@ -214,6 +214,29 @@ class ConfigService {
     }
   }
 
+  /// Hash → sourceId for every stored config, in one pass.
+  ///
+  /// Lets the controller hide configs that belong to a disabled source
+  /// without touching the stored records — disabling a source must hide its
+  /// configs from the library, testing and the scanner, never delete them.
+  Map<String, String> loadHashToSource() {
+    final map = <String, String>{};
+    try {
+      for (final key in _configBox.keys) {
+        if (key is! String || !key.startsWith('config_')) continue;
+        final data = _configBox.get(key);
+        if (data is! Map) continue;
+        final sourceId = data['sourceId'];
+        if (sourceId is String && sourceId.isNotEmpty) {
+          map[key.substring('config_'.length)] = sourceId;
+        }
+      }
+    } catch (e) {
+      _log.e('Error building hash→source map: $e');
+    }
+    return map;
+  }
+
   /// Get configs by protocol
   List<Config> getConfigsByProtocol(String protocol) {
     return getAllConfigs()

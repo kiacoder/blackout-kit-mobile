@@ -8,6 +8,7 @@ import 'package:hive/hive.dart';
 import 'package:logger/logger.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/localization_service.dart';
+import '../services/debug_service.dart';
 
 class SettingsController extends GetxController {
   static const String _settingsBoxName = 'settings';
@@ -98,6 +99,14 @@ class SettingsController extends GetxController {
   }
 
   SettingsController({Logger? logger}) : _log = logger ?? Logger();
+
+  /// Best-effort action logging: settings changes are user actions and must
+  /// be visible in the logs screen. Logging must never break the action.
+  void _action(String action, [Map<String, dynamic>? details]) {
+    try {
+      Get.find<DebugService>().logAction(action, details);
+    } catch (_) {}
+  }
 
   @override
   void onInit() {
@@ -206,6 +215,7 @@ class SettingsController extends GetxController {
     autoConnect.value = value;
     saveSettings();
     _log.i('Auto-connect: $value');
+    _action('setting_auto_connect', {'value': value});
   }
 
   /// Toggle kill switch
@@ -293,6 +303,7 @@ class SettingsController extends GetxController {
     autoSelectFastest.value = value;
     saveSettings();
     _log.i('Auto-select fastest: $value');
+    _action('setting_auto_select_fastest', {'value': value});
   }
 
   /// Set auto-test interval
@@ -307,6 +318,7 @@ class SettingsController extends GetxController {
     siteCheckEnabled.value = value;
     saveSettings();
     _log.i('Site check: $value');
+    _action('setting_site_check', {'value': value});
   }
 
   /// Replace the site-check host list with [raw] (sanitised first).
@@ -315,6 +327,7 @@ class SettingsController extends GetxController {
     siteCheckUrls.assignAll(hosts);
     saveSettings();
     _log.i('Site check URLs: $hosts');
+    _action('setting_site_check_urls', {'count': hosts.length, 'hosts': hosts});
   }
 
   /// Reset the site-check host list to the defaults.

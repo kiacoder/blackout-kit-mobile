@@ -47,8 +47,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // Get available configs
-    final configs = _configController.allConfigs;
+    // Get available configs (only from enabled sources)
+    final configs = _configController.visibleConfigs;
     if (configs.isEmpty) {
       _showSnackbar('No configs available', Colors.orange);
       return;
@@ -348,8 +348,8 @@ class _HomeScreenState extends State<HomeScreen> {
               Icons.speed,
             ),
             _buildStatCard(
-              'Total Configs',
-              '${stats['total']}',
+              'Configs (visible/stored)',
+              '${stats['total']}/${stats['stored']}',
               Icons.settings,
             ),
             _buildStatCard(
@@ -398,8 +398,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildConfigInfo() {
     return Obx(() {
-      final configs = _configController.allConfigs;
-
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Card(
@@ -417,7 +415,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Loaded: ${configs.length} configs',
+                  'Visible: ${_configController.visibleConfigs.length} configs '
+                  '(stored: ${_configController.allConfigs.length}) — '
+                  'disabled sources stay saved but are hidden and untested',
                   style: const TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 8),

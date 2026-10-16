@@ -132,6 +132,48 @@ class SiteCheckService {
 
   bool get enabled => _settings.siteCheckEnabled.value;
 
+  /// Hosts used for live verification (empty when the stage is disabled).
+  /// Capped: the live check runs on the connect critical path and four
+  /// hosts are enough to distinguish "tunnel carries traffic" from
+  /// "notification says connected, nothing loads".
+  static const int maxLiveCheckHosts = 4;
+
+  List<String> get liveCheckHosts =>
+      _settings.siteCheckUrls.take(maxLiveCheckHosts).toList();
+
+  /// Verifies the CURRENTLY CONNECTED tunnel by fetching [liveCheckHosts]
+  /// through its loopback SOCKS inbound (port 10808).
+  ///
+  /// This is the missing feedback loop: a config can pass every pre-connect
+  /// probe and still black-hole real traffic once the TUN interface is up.
+  /// Dialing the live tunnel's own SOCKS port answers the only question that
+  /// matters — does this tunnel, right now, move traffic to the wider web?
+  ///
+  /// Returns true when at least one host answered, and true vacuously when
+  /// the site check is disabled (the user opted out of verification).
+  Future<bool> verifyLiveConnection({
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final hosts = liveCheckHosts;
+    if (hosts.isEmpty) return true;
+    try {
+      final outcomes = await _vpnService.probeSites(
+        VPNService.defaultSocksPort,
+        hosts,
+        timeout: timeout,
+      );
+      final reachable = outcomes.where((o) => o['ok'] == true).length;
+      _log.i('Live tunnel check: $reachable/${hosts.length} hosts reachable');
+      return reachable > 0;
+    } catch (e) {
+      // A failed verification probe must not itself break the connection
+      // flow — but it also must not bless a dead tunnel. Treat the check as
+      // failed so the caller falls through to the next candidate.
+      _log.w('Live tunnel check errored: $e');
+      return false;
+    }
+  }
+
   /// Checks [configs] (already TCP-verified, fastest first) and returns a
   /// report per config, in input order. Returns an empty map when the check
   /// is disabled, the list is empty, or every candidate is a non-Xray

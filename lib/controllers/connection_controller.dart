@@ -64,6 +64,12 @@ class ConnectionController extends GetxController {
   static const Duration _probeTimeout = Duration(seconds: 3);
   static const int _probeConcurrency = 16;
 
+  /// How many ranked candidates the connect loop will actually try, each
+  /// verified through the live tunnel before it is accepted. Bounds the
+  /// worst case: 5 attempts x (connect + site fetches) instead of an
+  /// unbounded walk over 150 configs.
+  static const int _maxConnectAttempts = 5;
+
   bool get isConnected => state.value == ConnectionState.connected;
 
   DateTime? _connectionStartTime;
@@ -191,26 +197,79 @@ class ConnectionController extends GetxController {
         }
       }
 
-      final fastest = SiteCheckService.pickBest(working, candidates, reports);
-
-      if (fastest == null) {
-        state.value = ConnectionState.error;
-        statusMessage.value = 'No working configs found';
-        return false;
+      // Rank everything once: verified-usable candidates first (best tunnel
+      // latency), then everything else by TCP latency. This is the order the
+      // connect loop below walks.
+      int rank(TestResult r) {
+        final report = reports[r.configHash];
+        if (report == null || !report.supported) return 1;
+        if (!report.isUsable) return 0;
+        return 2;
       }
 
-      // Find the config object matching this result
-      final config = candidates.firstWhereOrNull(
-        (c) => c.getHash() == fastest.configHash,
-      );
+      working.sort((a, b) {
+        final byStage = rank(a).compareTo(rank(b));
+        if (byStage != 0) return byStage;
+        return (a.latencyMs ?? 1 << 30).compareTo(b.latencyMs ?? 1 << 30);
+      });
 
-      if (config == null) {
-        state.value = ConnectionState.error;
-        statusMessage.value = 'Config not found';
-        return false;
+      // Connect loop with live verification. A config can pass every
+      // pre-connect probe and still black-hole real traffic once the TUN
+      // interface is up — so after each successful connect, the tunnel
+      // itself is asked to fetch the check hosts through its own SOCKS
+      // inbound. A tunnel that cannot do that is disconnected and the next
+      // candidate gets its chance, instead of leaving the user stuck on a
+      // "connected" notification that loads nothing.
+      final verify = siteCheckService;
+      final liveVerifyEnabled =
+          verify != null && verify.enabled && verify.liveCheckHosts.isNotEmpty;
+      final attemptLimit = liveVerifyEnabled
+          ? (working.length < _maxConnectAttempts
+              ? working.length
+              : _maxConnectAttempts)
+          : 1;
+
+      for (var attempt = 0; attempt < attemptLimit; attempt++) {
+        final result = working[attempt];
+        final config = candidates.firstWhereOrNull(
+          (c) => c.getHash() == result.configHash,
+        );
+        if (config == null) continue;
+
+        if (attemptLimit > 1) {
+          statusMessage.value =
+              'Connecting (attempt ${attempt + 1}/$attemptLimit)...';
+        }
+
+        final connected = await connect(config, testResult: result);
+        if (!connected) continue;
+        if (!liveVerifyEnabled) return true;
+
+        state.value = ConnectionState.testing;
+        statusMessage.value =
+            'Checking websites through the tunnel (attempt ${attempt + 1})...';
+        final alive = await verify!.verifyLiveConnection();
+        if (alive) {
+          state.value = ConnectionState.connected;
+          statusMessage.value =
+              'Connected to ${config.displayName} — verified';
+          _log.i('Live verification passed for ${config.displayName}');
+          return true;
+        }
+
+        _log.w('Tunnel came up but could not reach any check host '
+            '(${config.displayName}) — trying the next candidate');
+        await disconnect();
       }
 
-      return await connect(config, testResult: fastest);
+      if (liveVerifyEnabled) {
+        state.value = ConnectionState.error;
+        statusMessage.value =
+            'Connected to $attemptLimit config(s) but none could load '
+            'websites. All candidates may be blocked — refresh your sources '
+            'or disable the site check to connect anyway.';
+      }
+      return false;
     } catch (e) {
       state.value = ConnectionState.error;
       statusMessage.value = 'Error: $e';

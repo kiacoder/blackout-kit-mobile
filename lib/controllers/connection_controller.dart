@@ -277,9 +277,10 @@ class ConnectionController extends GetxController {
       }
 
       state.value = ConnectionState.error;
-      final verificationOn = siteCheckService != null &&
-          siteCheckService.enabled &&
-          siteCheckService.liveCheckHosts.isNotEmpty;
+      final check2 = siteCheckService;
+      final verificationOn = check2 != null &&
+          check2.enabled &&
+          check2.liveCheckHosts.isNotEmpty;
       statusMessage.value = verificationOn
           ? 'Scanned all ${toScan.length} configs but none could load '
               'websites. Refresh your sources or disable the site check to '

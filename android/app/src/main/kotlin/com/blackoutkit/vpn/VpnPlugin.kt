@@ -498,7 +498,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 }
                 futures.map { future ->
                     try {
-                        future.get(timeoutMs + 2_000L)
+                        future.get(
+                            timeoutMs + 2_000L,
+                            java.util.concurrent.TimeUnit.MILLISECONDS
+                        )
                     } catch (e: Exception) {
                         mapOf(
                             "host" to "",

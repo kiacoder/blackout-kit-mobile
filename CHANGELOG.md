@@ -5,6 +5,291 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Verified on hardware
+- **The Android tunnel works on a physical device (2026-10-16).** A real config
+  connected and carried live traffic end to end — a TikTok video loaded in
+  under a second on the device. This closes the project's longest-standing
+  open risk for the in-process Xray path. Docs (README, PHASES) updated from
+  "never run on hardware" to the verified state; the subprocess-backed
+  sing-box path still has no hardware traffic verification.
+
+## [1.0.0-beta.23] - 2026-10-16
+
+### Fixed
+- **The app no longer claims "not connected" while a tunnel is actually
+  running.** Android kills the Flutter process while the foreground
+  VpnService keeps the tunnel up, so after 10-30 minutes in the background a
+  reopened app started from a fresh, idle state - showing "not connected"
+  underneath a live VPN notification icon. The app now reconciles with the
+  native service on start and on every resume:
+  - native running + UI idle -> **adopt the tunnel**: the selected config is
+    restored by name/protocol, uptime is rebuilt from the native start
+    timestamp, the exit address/location are re-fetched, and the action is
+    logged
+  - native stopped + UI connected -> drop to idle instead of claiming a
+    connection that is gone
+  - a re-attached engine is now pushed the current status immediately, so it
+    never starts blind; getStatus reports protocol, name, start time and
+    SOCKS port
+
+## [1.0.0-beta.22] - 2026-10-16
+
+### Added
+- **Verbose core logs (Settings toggle).** The generated Xray config can now
+  log at `debug`, making the core report every TUN packet disposition,
+  routing decision and DNS query through its status callback into logcat.
+  This is the diagnostic tool for the "connected but nothing loads" report.
+
+### Verified against upstream (no defect found on our side)
+- The TUN inbound config shape was checked against Xray-core's actual
+  parser (`infra/conf/tun.go`): `mtu` (defaults to 1500), `gateway`, `dns`
+  and `userLevel` are all real, correctly-cased fields; `gateway` is not
+  required on Android — the netstack impersonates packet destinations, so
+  the app→tun→proxy path needs nothing else.
+- The fd handoff matches upstream `AndroidTun` exactly: `xray.tun.fd` env →
+  `SetNonblock` → `F_DUPFD_CLOEXEC` dup.
+- The bundled core is current (ships the newest transports), so a stale
+  tun implementation is ruled out.
+
+## [1.0.0-beta.21] - 2026-10-16
+
+### Added
+- **Disabling a repository now hides its configs everywhere — without
+  deleting them.** A new `visibleConfigs` view drives the library, the
+  scanner and all testing: only configs from ENABLED sources are shown and
+  tested (manual configs are always visible). The stored records are
+  untouched — re-enabling a source brings every config straight back, and
+  the home screen shows both counts (`visible/stored`) so the distinction
+  is explicit.
+- **Config detail sheet is fully reactive with richer states.** Status chip:
+  Working / Failed / Untested / Testing. Animated progress bar with the
+  probed endpoint while a test runs. Last-failure reason shown for failed
+  configs. New **Test now** button runs a single-config test with the
+  result persisted into the same store as batch tests.
+- **Action logging.** `DebugService.logAction` records every meaningful
+  action — connected / disconnected / connect_failed, scan started /
+  verified / exhausted, source enabled / disabled / fetched / removed,
+  config deleted / tested, batch tests, and key settings changes — all
+  visible in the logs screen with a ⚡ prefix.
+
+### Fixed
+- **Config update notifications were misleading.** A refresh that found no
+  new configs used to either say nothing or imply a large update had
+  landed. Each source now reports exactly `+N new config(s)` or `up to date
+  (no new configs)`.
+
+### Changed
+- Home stats no longer count configs from disabled sources: `Configs`
+  shows `visible/stored`, and tested/working are computed over visible
+  configs only — the numbers now reflect what the app will actually use.
+
+## [1.0.0-beta.20] - 2026-10-16
+
+### Fixed
+- **The site check was serial — now parallel (up to ~8x faster per check).**
+  `probeSites` fetched the check hosts one after another on a single thread,
+  so a check cost N × timeout (8 hosts × 10 s = 80 s per candidate, minutes
+  per scan batch). The fetches now run on a small thread pool, so the whole
+  host set costs about one host's time. This was the entire reason the
+  batched scan felt glacial: the scan logic itself (batch math, ranking,
+  live verification, advance-on-exhaustion) was verified correct — the
+  fetch pipeline underneath it was just sequential.
+
+## [1.0.0-beta.19] - 2026-10-16
+
+### Added
+- **Before / Now IP + location on the home screen.** The card shows the
+  address and place the user had before the tunnel (direct lookup — the app
+  is a disallowed application of its own VPN, so a direct fetch always sees
+  the real address) and the exit address + city/country/flag fetched
+  **through** the tunnel via the new `tunnelFetch` channel method. Unresolved
+  lookups hide rather than show a wrong place. Both identities are cached in
+  Hive: the last known home location stays visible during a blockade, when
+  no lookup can succeed.
+
+### Notes
+- Config persistence was already blockade-proof (every fetched config is
+  stored additively in Hive, deduplicated by hash, and the library reads
+  from storage — a dead GitHub changes nothing about what is already
+  downloaded); the error state already says saved configs are not lost.
+- 6 new unit tests for response parsing, flag building and cache round
+  trips.
+
+## [1.0.0-beta.18] - 2026-10-16
+
+### Added
+- **Batched full-scan: `connectFastest` now walks ALL configs, not just a
+  lucky window.** With thousands of sources, one probe pass was a lottery.
+  The candidate list is scanned in batches of 50: TCP-probe the batch, run
+  the headless site check on its fastest survivors, then connect and
+  live-verify them in rank order (up to 10 per batch). Only a fully
+  exhausted batch advances to the next 50 — so with 7,000 configs the scan
+  eventually tries everything, while the status line always shows which
+  batch is being scanned. Known-failed results from the library are skipped
+  up front. Connection may take longer when the first batches are all
+  blocked; that is the scan working, and it beats a "connected" notification
+  that loads nothing.
+
+## [1.0.0-beta.17] - 2026-10-16
+
+### Fixed
+- **Self-healing connect loop: a tunnel that comes up but loads nothing no
+  longer strands the user.** First hardware reports showed the tunnel
+  connecting (notification on) while no traffic flowed — a config can pass
+  every pre-connect probe and still black-hole real traffic once the TUN
+  interface is up. `connectFastest` now walks ranked candidates (site-check-
+  verified first, then TCP latency) and after each successful connect asks
+  the live tunnel itself to fetch the check hosts through its own loopback
+  SOCKS inbound (port 10808). A tunnel that cannot reach a single host is
+  disconnected and the next candidate is tried — up to 5 attempts — with the
+  status line showing each attempt. If every attempt dead-ends, the error
+  says so honestly instead of pretending to be connected. With the site
+  check disabled the flow is unchanged (single connect, no verification).
+
+## [1.0.0-beta.16] - 2026-10-16
+
+### Added
+- **Site check: candidate configs are now verified against real websites, not
+  just pinged.** A TCP probe proves the network path to a config's server —
+  it cannot prove the config carries traffic (bad credentials, a REALITY key
+  mismatch or a censor black-holing the exit all leave the handshake green).
+  `connectFastest` therefore shortlists the fastest TCP-passing candidates
+  and checks each one in a **headless core instance**: a SOCKS-only Xray
+  config (`tunEnabled: false`) runs without VpnService, consent dialogs or
+  any change to the device's routing, and each check host is fetched through
+  the core's loopback SOCKS inbound. Any HTTP response counts as reachable —
+  even a 403 proves the round trip through the exit — while connect failures
+  and timeouts count against the config. Selection prefers verified-usable
+  configs (most reachable hosts first), uses tunnel latency as the tie-break,
+  and every failure mode (engine refuses, tunnel already up, stage disabled)
+  degrades to the previous pure-TCP ranking.
+- **Settings → Site Check.** A toggle (default on) and an editable host list
+  (one host per line, sanitised on input, defaults restored if everything is
+  removed). Defaults: google.com, gemini.google.com, youtube.com,
+  crunchyroll.com, instagram.com, facebook.com — plus github.com and
+  wikipedia.org, chosen as high-uptime global fronts where "unreachable
+  through this config" means the config is broken, not the site.
+- 14 new unit tests covering URL sanitisation, report scoring and the
+  pickBest ranking. The suite is now 176 tests across ten files (183
+  including the integration suites on CI).
+
+## [1.0.0-beta.15] - 2026-10-16
+
+### Fixed
+- **Malformed UUIDs are now rejected at validation instead of failing inside the
+  core.** VMess, VLESS and TUIC embed a UUID as the client identity, but
+  `validate()` only checked that the id was non-empty. A malformed-but-non-empty
+  id (common in public share-link scrapers) passed validation, was written into
+  the generated engine config verbatim, and died deep inside Xray/sing-box with
+  a generic init error the user could not act on. A shared `isValidUuid()`
+  helper (RFC 4122 shape: 8-4-4-4-12 hex) now backs all three validators, and
+  because `validate()` also gates library import, such configs are dropped at
+  import time with a clear cause.
+
+### Added
+- Seven new unit tests pinning the fail-fast behaviour for vless, vmess and
+  tuic (malformed ids rejected, canonical ids accepted). The suite is now
+  162 tests across nine files.
+
+### Docs
+- Documentation refresh across all markdown files: test counts corrected
+  (155 → 162), `PHASE4_SUMMARY.md` test-file list replaced with the files that
+  actually exist, APK size figures re-measured on the beta.14 CI build
+  (120.6/111.7 MB — fat-APK scale; `--split-per-abi` status flagged for
+  re-verification), `DEPLOYMENT.md` CI checks updated (no iOS builds — the iOS
+  job was removed), `ARCHITECTURE.md` lazy-loading note corrected, and
+  Last Updated stamps refreshed.
+
+## [1.0.0-beta.14] - 2026-10-16
+
+### Added
+- **Current IP address display (Phase 3 deliverable, previously an honest stub).**
+  `VpnPlugin.getConnectedIP` now fetches the exit address of the tunnel by
+  dialing `https://api.ipify.org` through the core's loopback SOCKS inbound
+  (`127.0.0.1:10808`, noauth) — the approach PHASES.md prescribed at the
+  exclusion-site note ("any future in-tunnel probe must dial the core's
+  loopback SOCKS inbound"). A direct fetch was never an option: the app is a
+  disallowed application of its own VPN, so it would report the *unprotected*
+  address. The request runs on a background thread with an 8 s timeout, the
+  response is validated as an address literal, and any failure returns `null`
+  so the status row stays hidden exactly as before. Known trade-off: the echo
+  hostname is resolved by the system resolver before the SOCKS dial — one
+  hostname per connect, user-triggered, not a passive browse-time DNS leak.
+- **Library screen error state.** A failed config fetch used to render the same
+  "No configs found" empty state as a genuinely empty library, so the user had
+  no way to see *why* the list was blank. `ConfigController.fetchFromSource`
+  now records the failure on the source (`ConfigSource.error`, truncated to
+  120 characters) and clears it on the next success (new `clearError` flag on
+  `copyWith`, because a plain `error: null` used to coalesce back to the old
+  value). The screen shows a distinct error state naming the failing sources
+  and their reasons, with a Retry button. New model tests:
+  `test/models/config_source_test.dart`.
+- **Subprocess engine startup checks.** For sing-box-backed protocols (Hysteria2, TUIC, AmneziaWG, WARP), `EngineRunner` no longer reports success the instant both processes launch. Both children must survive a bounded startup window, and sing-box must answer a real local SOCKS5 greeting on its configured `listen_port`, before the VPN service reports connected. A daemon monitor thread then watches both children: an unexpected exit now drives the same engine-died path as the in-process Xray core — tearing the tunnel down with the real reason, or holding the interface open when the kill switch is on. A failed sing-box config write now fails the connect attempt with the actual write error instead of a downstream launch failure. These checks prove process and listener readiness only — end-to-end tunnel traffic still requires a physical-device test.
+- **JVM unit tests for the subprocess lifecycle** (`android/app/src/test/.../SubprocessLifecycleTest.kt`): the local SOCKS5 readiness handshake against a loopback fake server, immediate child-exit rejection, later-exit detection, and reverse-order cleanup — no emulator or device required.
+
+### Changed
+- **Settings switches that could not control their stated behavior are now disabled with accurate explanations** (their stored values are preserved):
+  - *Block Non-VPN Traffic* — system-wide lockdown is controlled by Android's Always-on VPN + "Block connections without VPN"; the in-app switch never wired to it. The tile now says so.
+  - *Show Notifications* — the VPN foreground notification is required by Android while the tunnel is active and cannot be hidden by the app.
+  - *Log Local Connection* — no separate local connection history is implemented.
+- **Settings → About now shows the real version from package metadata** (`package_info_plus`) instead of the hardcoded `1.0.0-beta.3` string.
+
+### Docs
+- Honesty pass across README / QUICKSTART / ARCHITECTURE / PHASES: Hive storage is documented as **unencrypted at rest** (previous "encrypted" claims were not backed by any cipher in the code; enabling encryption in-place would strand existing data, so it needs a designed backup-first migration); the iOS VPN layer is marked **not implemented**; protocol support is scoped explicitly — VLESS/VMess/Trojan/Shadowsocks/WireGuard run on the in-process Xray core, while the sing-box-backed protocols are gated on bundled-runtime capability plus the new local readiness checks, which do not verify end-to-end traffic.
+
+### Fixed
+- XUDP base-key initialization now passes the 32-byte digest as unpadded
+  URL-safe Base64, matching Xray's `RawURLEncoding` environment parser while
+  keeping the gomobile-bound string ASCII-safe.
+- **Repository names rendered one letter per line in Settings → Repositories.**
+  No code was splitting the string; the tile's usable width was collapsing and
+  `Text` soft-wrapped down to a single glyph per line. `overflow: ellipsis`
+  alone does not prevent this — it needs an explicit `maxLines`. The source name
+  and the `owner/repo (branch)` subtitle are now capped at one line with an
+  ellipsis, and the wrapping column stretches to the section's full width.
+- **Engine names in the Engine Hub had the same defect** — `overflow: ellipsis`
+  inside a `Flexible` with no `maxLines`. Capped at one line.
+- The repository detail sheet now caps its title at two lines instead of
+  wrapping indefinitely.
+
+### Planned
+- Native buildVariants for different feature sets
+- Reproducible builds with published checksums
+- In-app update checking
+- Custom app icon themes
+- Export/import of config sources
+- Web dashboard for config management (optional, separate project)
+
+---
+
+## How to Upgrade
+
+### From v1.0-beta to v1.1
+- Backup your config sources (in Settings)
+- Uninstall the old app
+- Install the new version
+- Your settings will be preserved (stored in encrypted local storage)
+
+### Reporting Issues
+If you encounter bugs in any version:
+1. Check [existing issues](https://github.com/blackout-kit/blackout-kit-mobile/issues)
+2. Open a new issue with:
+   - Device model and OS version
+   - App version
+   - Steps to reproduce
+   - Error messages or logs
+
+### Security Issues
+For security vulnerabilities, please email security@blackout-kit.dev instead of opening public issues.
+
+---
+
+**Maintained by**: Blackout Kit Contributors  
+**License**: MIT  
+**Repository**: https://github.com/blackout-kit/blackout-kit-mobile
+
 ## [1.0.0-beta.13] - 2026-10-11
 
 ### Fixed
@@ -460,269 +745,3 @@ reviews). This release fixes the real causes of "engines start to fail" and
 - Reverse-engineered Hotspot Shield protocol
 - Ultra-fast connection (proprietary optimization)
 - All features without their proprietary app
-
-## [Unreleased]
-
-### Verified on hardware
-- **The Android tunnel works on a physical device (2026-10-16).** A real config
-  connected and carried live traffic end to end — a TikTok video loaded in
-  under a second on the device. This closes the project's longest-standing
-  open risk for the in-process Xray path. Docs (README, PHASES) updated from
-  "never run on hardware" to the verified state; the subprocess-backed
-  sing-box path still has no hardware traffic verification.
-
-## [1.0.0-beta.22] - 2026-10-16
-
-### Added
-- **Verbose core logs (Settings toggle).** The generated Xray config can now
-  log at `debug`, making the core report every TUN packet disposition,
-  routing decision and DNS query through its status callback into logcat.
-  This is the diagnostic tool for the "connected but nothing loads" report.
-
-### Verified against upstream (no defect found on our side)
-- The TUN inbound config shape was checked against Xray-core's actual
-  parser (`infra/conf/tun.go`): `mtu` (defaults to 1500), `gateway`, `dns`
-  and `userLevel` are all real, correctly-cased fields; `gateway` is not
-  required on Android — the netstack impersonates packet destinations, so
-  the app→tun→proxy path needs nothing else.
-- The fd handoff matches upstream `AndroidTun` exactly: `xray.tun.fd` env →
-  `SetNonblock` → `F_DUPFD_CLOEXEC` dup.
-- The bundled core is current (ships the newest transports), so a stale
-  tun implementation is ruled out.
-
-## [1.0.0-beta.21] - 2026-10-16
-
-### Added
-- **Disabling a repository now hides its configs everywhere — without
-  deleting them.** A new `visibleConfigs` view drives the library, the
-  scanner and all testing: only configs from ENABLED sources are shown and
-  tested (manual configs are always visible). The stored records are
-  untouched — re-enabling a source brings every config straight back, and
-  the home screen shows both counts (`visible/stored`) so the distinction
-  is explicit.
-- **Config detail sheet is fully reactive with richer states.** Status chip:
-  Working / Failed / Untested / Testing. Animated progress bar with the
-  probed endpoint while a test runs. Last-failure reason shown for failed
-  configs. New **Test now** button runs a single-config test with the
-  result persisted into the same store as batch tests.
-- **Action logging.** `DebugService.logAction` records every meaningful
-  action — connected / disconnected / connect_failed, scan started /
-  verified / exhausted, source enabled / disabled / fetched / removed,
-  config deleted / tested, batch tests, and key settings changes — all
-  visible in the logs screen with a ⚡ prefix.
-
-### Fixed
-- **Config update notifications were misleading.** A refresh that found no
-  new configs used to either say nothing or imply a large update had
-  landed. Each source now reports exactly `+N new config(s)` or `up to date
-  (no new configs)`.
-
-### Changed
-- Home stats no longer count configs from disabled sources: `Configs`
-  shows `visible/stored`, and tested/working are computed over visible
-  configs only — the numbers now reflect what the app will actually use.
-
-## [1.0.0-beta.20] - 2026-10-16
-
-### Fixed
-- **The site check was serial — now parallel (up to ~8x faster per check).**
-  `probeSites` fetched the check hosts one after another on a single thread,
-  so a check cost N × timeout (8 hosts × 10 s = 80 s per candidate, minutes
-  per scan batch). The fetches now run on a small thread pool, so the whole
-  host set costs about one host's time. This was the entire reason the
-  batched scan felt glacial: the scan logic itself (batch math, ranking,
-  live verification, advance-on-exhaustion) was verified correct — the
-  fetch pipeline underneath it was just sequential.
-
-## [1.0.0-beta.19] - 2026-10-16
-
-### Added
-- **Before / Now IP + location on the home screen.** The card shows the
-  address and place the user had before the tunnel (direct lookup — the app
-  is a disallowed application of its own VPN, so a direct fetch always sees
-  the real address) and the exit address + city/country/flag fetched
-  **through** the tunnel via the new `tunnelFetch` channel method. Unresolved
-  lookups hide rather than show a wrong place. Both identities are cached in
-  Hive: the last known home location stays visible during a blockade, when
-  no lookup can succeed.
-
-### Notes
-- Config persistence was already blockade-proof (every fetched config is
-  stored additively in Hive, deduplicated by hash, and the library reads
-  from storage — a dead GitHub changes nothing about what is already
-  downloaded); the error state already says saved configs are not lost.
-- 6 new unit tests for response parsing, flag building and cache round
-  trips.
-
-## [1.0.0-beta.18] - 2026-10-16
-
-### Added
-- **Batched full-scan: `connectFastest` now walks ALL configs, not just a
-  lucky window.** With thousands of sources, one probe pass was a lottery.
-  The candidate list is scanned in batches of 50: TCP-probe the batch, run
-  the headless site check on its fastest survivors, then connect and
-  live-verify them in rank order (up to 10 per batch). Only a fully
-  exhausted batch advances to the next 50 — so with 7,000 configs the scan
-  eventually tries everything, while the status line always shows which
-  batch is being scanned. Known-failed results from the library are skipped
-  up front. Connection may take longer when the first batches are all
-  blocked; that is the scan working, and it beats a "connected" notification
-  that loads nothing.
-
-## [1.0.0-beta.17] - 2026-10-16
-
-### Fixed
-- **Self-healing connect loop: a tunnel that comes up but loads nothing no
-  longer strands the user.** First hardware reports showed the tunnel
-  connecting (notification on) while no traffic flowed — a config can pass
-  every pre-connect probe and still black-hole real traffic once the TUN
-  interface is up. `connectFastest` now walks ranked candidates (site-check-
-  verified first, then TCP latency) and after each successful connect asks
-  the live tunnel itself to fetch the check hosts through its own loopback
-  SOCKS inbound (port 10808). A tunnel that cannot reach a single host is
-  disconnected and the next candidate is tried — up to 5 attempts — with the
-  status line showing each attempt. If every attempt dead-ends, the error
-  says so honestly instead of pretending to be connected. With the site
-  check disabled the flow is unchanged (single connect, no verification).
-
-## [1.0.0-beta.16] - 2026-10-16
-
-### Added
-- **Site check: candidate configs are now verified against real websites, not
-  just pinged.** A TCP probe proves the network path to a config's server —
-  it cannot prove the config carries traffic (bad credentials, a REALITY key
-  mismatch or a censor black-holing the exit all leave the handshake green).
-  `connectFastest` therefore shortlists the fastest TCP-passing candidates
-  and checks each one in a **headless core instance**: a SOCKS-only Xray
-  config (`tunEnabled: false`) runs without VpnService, consent dialogs or
-  any change to the device's routing, and each check host is fetched through
-  the core's loopback SOCKS inbound. Any HTTP response counts as reachable —
-  even a 403 proves the round trip through the exit — while connect failures
-  and timeouts count against the config. Selection prefers verified-usable
-  configs (most reachable hosts first), uses tunnel latency as the tie-break,
-  and every failure mode (engine refuses, tunnel already up, stage disabled)
-  degrades to the previous pure-TCP ranking.
-- **Settings → Site Check.** A toggle (default on) and an editable host list
-  (one host per line, sanitised on input, defaults restored if everything is
-  removed). Defaults: google.com, gemini.google.com, youtube.com,
-  crunchyroll.com, instagram.com, facebook.com — plus github.com and
-  wikipedia.org, chosen as high-uptime global fronts where "unreachable
-  through this config" means the config is broken, not the site.
-- 14 new unit tests covering URL sanitisation, report scoring and the
-  pickBest ranking. The suite is now 176 tests across ten files (183
-  including the integration suites on CI).
-
-## [1.0.0-beta.15] - 2026-10-16
-
-### Fixed
-- **Malformed UUIDs are now rejected at validation instead of failing inside the
-  core.** VMess, VLESS and TUIC embed a UUID as the client identity, but
-  `validate()` only checked that the id was non-empty. A malformed-but-non-empty
-  id (common in public share-link scrapers) passed validation, was written into
-  the generated engine config verbatim, and died deep inside Xray/sing-box with
-  a generic init error the user could not act on. A shared `isValidUuid()`
-  helper (RFC 4122 shape: 8-4-4-4-12 hex) now backs all three validators, and
-  because `validate()` also gates library import, such configs are dropped at
-  import time with a clear cause.
-
-### Added
-- Seven new unit tests pinning the fail-fast behaviour for vless, vmess and
-  tuic (malformed ids rejected, canonical ids accepted). The suite is now
-  162 tests across nine files.
-
-### Docs
-- Documentation refresh across all markdown files: test counts corrected
-  (155 → 162), `PHASE4_SUMMARY.md` test-file list replaced with the files that
-  actually exist, APK size figures re-measured on the beta.14 CI build
-  (120.6/111.7 MB — fat-APK scale; `--split-per-abi` status flagged for
-  re-verification), `DEPLOYMENT.md` CI checks updated (no iOS builds — the iOS
-  job was removed), `ARCHITECTURE.md` lazy-loading note corrected, and
-  Last Updated stamps refreshed.
-
-## [1.0.0-beta.14] - 2026-10-16
-
-### Added
-- **Current IP address display (Phase 3 deliverable, previously an honest stub).**
-  `VpnPlugin.getConnectedIP` now fetches the exit address of the tunnel by
-  dialing `https://api.ipify.org` through the core's loopback SOCKS inbound
-  (`127.0.0.1:10808`, noauth) — the approach PHASES.md prescribed at the
-  exclusion-site note ("any future in-tunnel probe must dial the core's
-  loopback SOCKS inbound"). A direct fetch was never an option: the app is a
-  disallowed application of its own VPN, so it would report the *unprotected*
-  address. The request runs on a background thread with an 8 s timeout, the
-  response is validated as an address literal, and any failure returns `null`
-  so the status row stays hidden exactly as before. Known trade-off: the echo
-  hostname is resolved by the system resolver before the SOCKS dial — one
-  hostname per connect, user-triggered, not a passive browse-time DNS leak.
-- **Library screen error state.** A failed config fetch used to render the same
-  "No configs found" empty state as a genuinely empty library, so the user had
-  no way to see *why* the list was blank. `ConfigController.fetchFromSource`
-  now records the failure on the source (`ConfigSource.error`, truncated to
-  120 characters) and clears it on the next success (new `clearError` flag on
-  `copyWith`, because a plain `error: null` used to coalesce back to the old
-  value). The screen shows a distinct error state naming the failing sources
-  and their reasons, with a Retry button. New model tests:
-  `test/models/config_source_test.dart`.
-- **Subprocess engine startup checks.** For sing-box-backed protocols (Hysteria2, TUIC, AmneziaWG, WARP), `EngineRunner` no longer reports success the instant both processes launch. Both children must survive a bounded startup window, and sing-box must answer a real local SOCKS5 greeting on its configured `listen_port`, before the VPN service reports connected. A daemon monitor thread then watches both children: an unexpected exit now drives the same engine-died path as the in-process Xray core — tearing the tunnel down with the real reason, or holding the interface open when the kill switch is on. A failed sing-box config write now fails the connect attempt with the actual write error instead of a downstream launch failure. These checks prove process and listener readiness only — end-to-end tunnel traffic still requires a physical-device test.
-- **JVM unit tests for the subprocess lifecycle** (`android/app/src/test/.../SubprocessLifecycleTest.kt`): the local SOCKS5 readiness handshake against a loopback fake server, immediate child-exit rejection, later-exit detection, and reverse-order cleanup — no emulator or device required.
-
-### Changed
-- **Settings switches that could not control their stated behavior are now disabled with accurate explanations** (their stored values are preserved):
-  - *Block Non-VPN Traffic* — system-wide lockdown is controlled by Android's Always-on VPN + "Block connections without VPN"; the in-app switch never wired to it. The tile now says so.
-  - *Show Notifications* — the VPN foreground notification is required by Android while the tunnel is active and cannot be hidden by the app.
-  - *Log Local Connection* — no separate local connection history is implemented.
-- **Settings → About now shows the real version from package metadata** (`package_info_plus`) instead of the hardcoded `1.0.0-beta.3` string.
-
-### Docs
-- Honesty pass across README / QUICKSTART / ARCHITECTURE / PHASES: Hive storage is documented as **unencrypted at rest** (previous "encrypted" claims were not backed by any cipher in the code; enabling encryption in-place would strand existing data, so it needs a designed backup-first migration); the iOS VPN layer is marked **not implemented**; protocol support is scoped explicitly — VLESS/VMess/Trojan/Shadowsocks/WireGuard run on the in-process Xray core, while the sing-box-backed protocols are gated on bundled-runtime capability plus the new local readiness checks, which do not verify end-to-end traffic.
-
-### Fixed
-- XUDP base-key initialization now passes the 32-byte digest as unpadded
-  URL-safe Base64, matching Xray's `RawURLEncoding` environment parser while
-  keeping the gomobile-bound string ASCII-safe.
-- **Repository names rendered one letter per line in Settings → Repositories.**
-  No code was splitting the string; the tile's usable width was collapsing and
-  `Text` soft-wrapped down to a single glyph per line. `overflow: ellipsis`
-  alone does not prevent this — it needs an explicit `maxLines`. The source name
-  and the `owner/repo (branch)` subtitle are now capped at one line with an
-  ellipsis, and the wrapping column stretches to the section's full width.
-- **Engine names in the Engine Hub had the same defect** — `overflow: ellipsis`
-  inside a `Flexible` with no `maxLines`. Capped at one line.
-- The repository detail sheet now caps its title at two lines instead of
-  wrapping indefinitely.
-
-### Planned
-- Native buildVariants for different feature sets
-- Reproducible builds with published checksums
-- In-app update checking
-- Custom app icon themes
-- Export/import of config sources
-- Web dashboard for config management (optional, separate project)
-
----
-
-## How to Upgrade
-
-### From v1.0-beta to v1.1
-- Backup your config sources (in Settings)
-- Uninstall the old app
-- Install the new version
-- Your settings will be preserved (stored in encrypted local storage)
-
-### Reporting Issues
-If you encounter bugs in any version:
-1. Check [existing issues](https://github.com/blackout-kit/blackout-kit-mobile/issues)
-2. Open a new issue with:
-   - Device model and OS version
-   - App version
-   - Steps to reproduce
-   - Error messages or logs
-
-### Security Issues
-For security vulnerabilities, please email security@blackout-kit.dev instead of opening public issues.
-
----
-
-**Maintained by**: Blackout Kit Contributors  
-**License**: MIT  
-**Repository**: https://github.com/blackout-kit/blackout-kit-mobile

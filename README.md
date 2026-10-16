@@ -2,7 +2,7 @@
 
 An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
 
-**Status**: v1.0.0-beta.22 — Android VPN service and in-process Xray core are implemented, and
+**Status**: v1.0.0-beta.23 — Android VPN service and in-process Xray core are implemented, and
 the Xray tunnel path is now **verified working on physical hardware** (2026-10-16): a real
 config on a real device carries live traffic end to end — a TikTok video loads in under a
 second. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and

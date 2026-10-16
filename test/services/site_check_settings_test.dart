@@ -139,8 +139,8 @@ void main() {
       final configs = [_config('slow-but-real'), _config('tcp-fast')];
       final results = [_result('tcp-fast', 50), _result('slow-but-real', 400)];
       final reports = {
-        'slow-but-real': _report('slow-but-real',
-            reachable: 6, bestLatency: 900),
+        _config('slow-but-real').getHash():
+            _report('slow-but-real', reachable: 6, bestLatency: 900),
       };
 
       final best = SiteCheckService.pickBest(results, configs, reports);
@@ -151,8 +151,8 @@ void main() {
       final configs = [_config('a'), _config('b')];
       final results = [_result('a', 100), _result('b', 200)];
       final reports = {
-        'a': _report('a', reachable: 7, bestLatency: 500),
-        'b': _report('b', reachable: 7, bestLatency: 250),
+        _config('a').getHash(): _report('a', reachable: 7, bestLatency: 500),
+        _config('b').getHash(): _report('b', reachable: 7, bestLatency: 250),
       };
 
       expect(
@@ -175,7 +175,9 @@ void main() {
       // Both are effectively "no data"; the faster TCP one must win.
       final configs = [_config('a'), _config('b')];
       final results = [_result('a', 300), _result('b', 90)];
-      final reports = {'a': _report('a', reachable: 0, supported: false)};
+      final reports = {
+        _config('a').getHash(): _report('a', reachable: 0, supported: false),
+      };
 
       expect(
         SiteCheckService.pickBest(results, configs, reports)!.configHash,

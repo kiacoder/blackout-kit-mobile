@@ -110,7 +110,7 @@ class SiteCheckReport {
 
 /// Runs the site check for candidate configs through a headless core.
 class SiteCheckService {
-  final VpnService _vpnService;
+  final VPNService _vpnService;
   final SettingsController _settings;
   final Logger _log;
 
@@ -123,7 +123,7 @@ class SiteCheckService {
   static const Duration defaultUrlTimeout = Duration(seconds: 10);
 
   SiteCheckService({
-    required VpnService vpnService,
+    required VPNService vpnService,
     required SettingsController settings,
     Logger? logger,
   })  : _vpnService = vpnService,

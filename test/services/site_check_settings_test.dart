@@ -6,10 +6,8 @@
 /// on device, not here — these tests pin the decision logic that must not
 /// regress.
 
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 
 import 'package:blackout_kit_mobile/controllers/settings_controller.dart';
 import 'package:blackout_kit_mobile/models/config.dart';

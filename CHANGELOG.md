@@ -463,6 +463,8 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.14] - 2026-10-16
+
 ### Added
 - **Current IP address display (Phase 3 deliverable, previously an honest stub).**
   `VpnPlugin.getConnectedIP` now fetches the exit address of the tunnel by

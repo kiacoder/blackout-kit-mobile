@@ -463,6 +463,33 @@ reviews). This release fixes the real causes of "engines start to fail" and
 
 ## [Unreleased]
 
+## [1.0.0-beta.15] - 2026-10-16
+
+### Fixed
+- **Malformed UUIDs are now rejected at validation instead of failing inside the
+  core.** VMess, VLESS and TUIC embed a UUID as the client identity, but
+  `validate()` only checked that the id was non-empty. A malformed-but-non-empty
+  id (common in public share-link scrapers) passed validation, was written into
+  the generated engine config verbatim, and died deep inside Xray/sing-box with
+  a generic init error the user could not act on. A shared `isValidUuid()`
+  helper (RFC 4122 shape: 8-4-4-4-12 hex) now backs all three validators, and
+  because `validate()` also gates library import, such configs are dropped at
+  import time with a clear cause.
+
+### Added
+- Seven new unit tests pinning the fail-fast behaviour for vless, vmess and
+  tuic (malformed ids rejected, canonical ids accepted). The suite is now
+  162 tests across nine files.
+
+### Docs
+- Documentation refresh across all markdown files: test counts corrected
+  (155 → 162), `PHASE4_SUMMARY.md` test-file list replaced with the files that
+  actually exist, APK size figures re-measured on the beta.14 CI build
+  (120.6/111.7 MB — fat-APK scale; `--split-per-abi` status flagged for
+  re-verification), `DEPLOYMENT.md` CI checks updated (no iOS builds — the iOS
+  job was removed), `ARCHITECTURE.md` lazy-loading note corrected, and
+  Last Updated stamps refreshed.
+
 ## [1.0.0-beta.14] - 2026-10-16
 
 ### Added

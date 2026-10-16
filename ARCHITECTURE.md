@@ -298,7 +298,7 @@ flutter test integration_test/app_flow_test.dart
 
 ### UI
 - **Speed tests run in background isolate**: Non-blocking
-- **Large config lists**: Use ListView with lazy loading (not implemented yet)
+- **Large config lists**: `ListView.builder` lazy loading (implemented in the Library screen)
 - **Animations**: Subtle, low cost (connect button gradient pulse)
 
 ## Security & Privacy

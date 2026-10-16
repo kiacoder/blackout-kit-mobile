@@ -2,11 +2,11 @@
 
 An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
 
-**Status**: v1.0.0-beta.14 — Android VPN service and in-process Xray core are implemented. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on hardware.
+**Status**: v1.0.0-beta.15 — Android VPN service and in-process Xray core are implemented. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on hardware.
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process
-	> behind it. The beta.11–beta.13 release notes record device-guided debugging,
+	> behind it. The beta.11–beta.14 release notes record device-guided debugging,
 	> but local process/SOCKS readiness does not establish end-to-end traffic.
 	> Subprocess-backed tunnel traffic still needs a physical-device test.
 
@@ -291,7 +291,7 @@ On a physical device (**nothing below has ever been run**):
       GPL-3.0 while this project is MIT; it ships as a separate native library.
 - [ ] iOS native layer (`NEVPNManager`) — currently unregistered mocks
 - [ ] **On-device verification of the tunnel** — `integration_test/native_tunnel_test.dart`
-      is written and waiting; device-level runs captured during beta.11–beta.13
+      is written and waiting; device-level runs captured during beta.11–beta.14
       debugging drove real fixes (error propagation, XUDP base key), but a full
       pass including subprocess-backed traffic is still open
 - [ ] Current IP display — the native side returns a hardcoded `null`

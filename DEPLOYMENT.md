@@ -254,8 +254,8 @@ git push origin v1.0.0
 
 **4. Monitor CI/CD**
 - Watch GitHub Actions: Settings → Actions
-- Verify `test.yml` passes (40+ tests)
-- Verify `build.yml` succeeds (APK + IPA created)
+- Verify `test.yml` passes (160+ tests)
+- Verify `build.yml` succeeds (per-ABI APKs attached to the release; no iOS builds — the iOS job was removed)
 - Verify `release.yml` creates release page
 
 **5. Create Release Notes**
@@ -452,5 +452,5 @@ git push origin :v1.0.0  # or use GitHub web interface
 
 **Questions?** Check GitHub Discussions or email security@blackout-kit.dev
 
-**Last Updated:** 2026-01-15  
+**Last Updated:** 2026-10-16  
 **Maintained By:** Blackout Kit Contributors

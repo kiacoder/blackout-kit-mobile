@@ -188,6 +188,6 @@ Security review checklist for dependencies:
 
 ---
 
-**Last Updated**: 2026-01-15  
+**Last Updated**: 2026-10-16  
 **Maintained By**: Blackout Kit Security Team  
 **Contact**: security@blackout-kit.dev

@@ -205,9 +205,10 @@ no hint, so it is worth knowing.
 ### Deliverables
 
 #### Testing Infrastructure ✓
-- [x] 155 unit tests that compile and pass, in nine files:
-  - `test/config_parsing_test.dart` (45) — share-link parsing for every protocol,
-    WireGuard `.conf` section handling, and a reload round-trip for all six
+- [x] 162 unit tests that compile and pass, in nine files:
+  - `test/config_parsing_test.dart` (52) — share-link parsing for every protocol,
+    WireGuard `.conf` section handling, UUID format validation for vless/vmess/tuic,
+    and a reload round-trip for all six
   - `test/xray_config_test.dart` (42) — Xray JSON, `tun` inbound, REALITY
     validation, routing, and the `wireguard` outbound
   - `test/vpn_session_options_test.dart` (20) — builder-time option validation and precedence
@@ -369,6 +370,10 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
       `--split-per-abi`), x86 libs stripped via `packagingOptions` instead.
       **Measured** splits: 57.6 MB (arm64-v8a) / 52.6 MB (armeabi-v7a).
       Now 60.2 MB / 55.2 MB per ABI.
+      *(Re-measured 2026-10-16 on the v1.0.0-beta.14 CI build: the attached
+      APKs are 120.6 MB / 111.7 MB — fat-APK scale again, so whether
+      `--split-per-abi` is still taking effect needs code-level
+      re-verification. The 60.2/55.2 figures above are historical.)*
 - [x] **CI was broken and is now fixed** (`build.yml`, `release.yml`):
   - Java was pinned to **11** while the project requires **17** — CI could not compile
   - `release.yml` uploaded `build/app/outputs/flutter-app-release.apk`, a path that
@@ -381,6 +386,13 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
       `test/services/tester_service_test.dart`, …) and claimed "~40+ unit tests" and
       "✅ Speed testing accurate". Corrected; the real suite is 155 tests and no code
       path measures throughput.
+- [x] **Malformed UUIDs rejected at validation (2026-10-16).** VMess, VLESS and TUIC
+      `validate()` only checked that the id was non-empty, so a malformed-but-non-empty
+      UUID passed, was written into the engine config verbatim, and failed deep inside
+      the core with a generic init error. A shared `isValidUuid()` helper (RFC 4122
+      shape) now backs all three validators; because `validate()` also gates library
+      import, bad configs are dropped at import time. Seven new tests;
+      the suite is now 162 tests.
 - [x] **Language setting was a no-op** — `LocalizationService` was never registered
       with GetX, and `GetMaterialApp` had no `translations` / `locale`, so picking a
       language persisted a preference and changed nothing on screen.
@@ -695,7 +707,7 @@ Legend: ✅ shipped · ⚠️ shipped but not verified on a physical device · �
 ### v1.0 (Current)
 
 - ✅ Config fetching from GitHub works
-- ✅ 155 unit tests compile and pass
+- ✅ 162 unit tests compile and pass
 - ✅ All screens build and render
 - ✅ Error handling is wired up
 - ✅ Xray engine bundled; the five protocols it serves are gated in the UI
@@ -804,8 +816,11 @@ Want to help? Check these resources:
 Five protocols blocked on a sing-box runtime ❌ | **On-device verification still pending** ⚠️ |
 v2.0+ Visionary 🔮
 
-**Last Updated:** 2026-10-14 (test-count audit — suite recounted at 155 tests across nine
-files; docs updated to match; APK size figures still need a fresh build to re-verify.
+**Last Updated:** 2026-10-16 (UUID format validation added for vless/vmess/tuic —
+suite now 162 tests across nine files; APK sizes re-measured on the beta.14 CI build
+at 120.6/111.7 MB, fat-APK scale — split-per-abi status needs re-verification.
+Earlier: 2026-10-14 test-count audit — suite recounted at 155 tests across nine
+files; docs updated to match.
 Earlier: 2026-09-19 UI honesty pass — screens no longer advertise engines and
 protocols this build cannot run; see the correction notes above)
 **Maintained By:** Blackout Kit Contributors  

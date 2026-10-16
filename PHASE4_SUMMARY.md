@@ -10,12 +10,16 @@ Phase 4 focused on three critical areas: **Testing**, **Polish**, and **Release 
 
 ### 1️⃣ Testing Infrastructure ✅
 
-**Unit Tests** (~40+ tests)
-- `test/models/config_test.dart` - Config parsing, validation, protocol-specific tests
-- `test/services/github_service_test.dart` - GitHub API, caching, rate limiting
-- `test/services/config_service_test.dart` - Config persistence, deduplication, encryption
-- `test/controllers/config_controller_test.dart` - Filtering, sorting, state management
-- `test/controllers/connection_controller_test.dart` - VPN state machine, connection lifecycle
+**Unit Tests** (162 tests across nine files)
+- `test/config_parsing_test.dart` - Share-link parsing for every protocol, UUID format validation, reload round-trip
+- `test/xray_config_test.dart` - Xray JSON generation, REALITY validation, routing
+- `test/vpn_session_options_test.dart` - Builder-time option validation and precedence
+- `test/singbox_config_test.dart` - sing-box config generation for Hysteria2/TUIC/WireGuard
+- `test/settings_claims_test.dart` - Settings claims vs. actual behavior
+- `test/models/config_source_test.dart` - Config source error recording
+- `test/services/engine_availability_test.dart` - Engine gating contract (fail-open behavior)
+- `test/services/localization_service_test.dart` - Localization wiring
+- `test/services/test_result_persistence_test.dart` / `test/services/tester_probe_test.dart` - Latency probing and persistence
 
 **CI/CD Workflows**
 - `.github/workflows/test.yml` - Automated testing on every push
@@ -110,8 +114,8 @@ blackout-kit-mobile/
 ## 📊 Quality Metrics
 
 ### Test Coverage
-- **Unit Tests:** 40+ tests across models, services, controllers
-- **Integration Tests:** 8+ tests for complete workflows
+- **Unit Tests:** 162 tests across nine files (models, services, controllers, widgets)
+- **Integration Tests:** 3 suites in `integration_test/` (app flow, engine hub, native tunnel — the native tunnel suite is written and waiting for a physical-device run)
 - **Test Suites:** 
   - Config parsing (WireGuard, OpenVPN, Shadowsocks)
   - GitHub API (caching, rate limiting, error handling)

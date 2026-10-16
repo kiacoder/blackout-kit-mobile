@@ -196,7 +196,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Obx(() => ListTile(
                   title: const Text('Auto-Test Interval'),
                   subtitle: Text(
-                    '${_settingsController.autoTestIntervalMinutes.value} minutes',
+                    '${_settingsController.autoTestIntervalMinutes.value} minutes — '
+                    'while the app is open, re-checks that the tunnel still loads '
+                    'websites (0 disables)',
+                    maxLines: 3,
                   ),
                   leading: const Icon(Icons.timer_outlined),
                   onTap: _showTestIntervalDialog,

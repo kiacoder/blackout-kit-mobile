@@ -25,6 +25,14 @@ class VPNService {
   String? _connectedConfigHash;
   String? _lastError;
 
+  /// Fires on every status the native service pushes.
+  ///
+  /// Without this hook the pushed statuses only updated this object's private
+  /// `_status` while the UI kept rendering "Connected" with a ticking uptime
+  /// over a tunnel that had already died, been revoked by the system, or been
+  /// replaced by another VPN app. The controller subscribes to reconcile.
+  void Function(String status, String? error)? onStatusChanged;
+
   /// Loopback port the bundled engine exposes its SOCKS listener on.
   /// Must match BlackoutVpnService.DEFAULT_SOCKS_PORT on the native side.
   static const int defaultSocksPort = 10808;
@@ -364,8 +372,7 @@ class VPNService {
   }
 
   void _handleStatusChange(String? status, {String? error}) {
-    switch (status) {
-      case 'connected':
+    switch (status) {      case 'connected':
         _status = VPNStatus.connected;
         _log.i('VPN status changed: connected');
         break;
@@ -402,6 +409,12 @@ class VPNService {
         break;
       default:
         _log.w('Unknown status: $status');
+    }
+    // Always notify — including 'disconnected' and the failure statuses.
+    try {
+      onStatusChanged?.call(status ?? 'unknown', _lastError);
+    } catch (e) {
+      _log.w('Status listener threw: $e');
     }
   }
 

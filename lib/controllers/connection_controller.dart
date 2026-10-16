@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 import 'config_controller.dart';
+import 'settings_controller.dart';
 import '../models/config.dart';
 import '../models/test_result.dart';
 import '../models/vpn_session_options.dart';
@@ -87,6 +88,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   DateTime? _connectionStartTime;
   Timer? _uptimeTimer;
 
+  /// Foreground-only liveness watchdog (see [_startLivenessWatchdog]).
+  Timer? _livenessTimer;
+
   /// Cached native capability report. Engine support is fixed for the lifetime
   /// of the process, so probing once is enough.
   EngineAvailability? _engineAvailability;
@@ -119,12 +123,119 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     // state must be reconciled with the native truth, or the UI shows
     // "not connected" under a live VPN notification icon.
     WidgetsBinding.instance.addObserver(this);
-    reconcileWithNativeService();
+    // React to the native service's status pushes. Without this the UI kept
+    // claiming "Connected" (with a ticking uptime) after the engine died, the
+    // user revoked the VPN in system settings, or another VPN app took over.
+    vpnService.onStatusChanged = _onNativeStatus;
+    reconcileWithNativeService().then((_) => _maybeAutoConnect());
+    _startLivenessWatchdog();
+  }
+
+  /// True when adopting a running native tunnel cannot fight an operation
+  /// already in flight (a scan connects and disconnects candidates, so
+  /// adoption must stay out of its way).
+  bool get _canAdopt =>
+      state.value == ConnectionState.idle || state.value == ConnectionState.error;
+
+  /// Handles a status pushed by the native service.
+  void _onNativeStatus(String status, String? error) {
+    switch (status) {
+      case 'connected':
+        // A tunnel came up behind the app's back (re-attached engine, or a
+        // connect that outlived the process).
+        if (_canAdopt) reconcileWithNativeService();
+        break;
+      case 'disconnected':
+        if (isConnected) {
+          state.value = ConnectionState.idle;
+          statusMessage.value = 'Tunnel ended';
+          selectedConfig.value = null;
+          connectedIP.value = null;
+          exitIpInfo.value = null;
+          connectionUptime.value = 0;
+          _connectionStartTime = null;
+          _stopUptimeCounter();
+          debugService.logAction('tunnel_lost', {'reason': 'disconnected'});
+        }
+        break;
+      case 'error':
+      case 'blocked':
+        // The engine died (with or without the kill switch holding the
+        // interface open) or the tunnel was torn down. Say so, and stop the
+        // uptime that would otherwise keep ticking over a dead tunnel.
+        if (isConnected || state.value == ConnectionState.connecting) {
+          state.value = ConnectionState.error;
+          statusMessage.value =
+              error ?? 'The tunnel stopped unexpectedly. Reconnect to retry.';
+          connectedIP.value = null;
+          exitIpInfo.value = null;
+          connectionUptime.value = 0;
+          _connectionStartTime = null;
+          _stopUptimeCounter();
+          debugService.logAction('tunnel_lost', {
+            'reason': status,
+            'detail': error ?? '',
+          });
+        }
+        break;
+    }
+  }
+
+  /// Connects on launch when the user asked for it, but only after
+  /// reconciliation has had its say — adopting a tunnel that survived the
+  /// process is not the same as starting a new one.
+  Future<void> _maybeAutoConnect() async {
+    try {
+      if (isConnected || !_canAdopt) return;
+      final settings = Get.find<SettingsController>();
+      if (!settings.autoConnect.value) return;
+      final configController = Get.find<ConfigController>();
+      final configs = configController.visibleConfigs;
+      if (configs.isEmpty) return;
+      _log.i('Auto-connect is on — starting a scan');
+      debugService.logAction('auto_connect');
+      await connectFastest(configs);
+    } catch (e) {
+      _log.w('Auto-connect skipped: $e');
+    }
+  }
+
+  /// Foreground liveness watchdog: while the app is open and connected, the
+  /// tunnel is asked to fetch the check hosts periodically. A tunnel that
+  /// stops carrying traffic (a common way for a long-lived connection to die)
+  /// is reported instead of silently pretending to work.
+  ///
+  /// Foreground-only by design: a background Dart timer would be killed with
+  /// the process anyway, and pretending otherwise would be a lie.
+  void _startLivenessWatchdog() {
+    _livenessTimer?.cancel();
+    int minutes;
+    try {
+      minutes = Get.find<SettingsController>().autoTestIntervalMinutes.value;
+    } catch (_) {
+      return;
+    }
+    if (minutes <= 0) return;
+    _livenessTimer = Timer.periodic(Duration(minutes: minutes), (_) async {
+      if (!isConnected) return;
+      final verify = siteCheckService;
+      if (verify == null || !verify.enabled) return;
+      final alive = await verify.verifyLiveConnection();
+      if (alive || !isConnected) return;
+      _log.w('Liveness check failed on a connected tunnel');
+      state.value = ConnectionState.error;
+      statusMessage.value =
+          'The tunnel is up but nothing loads — reconnect to pick another '
+          'server';
+      debugService.logAction('liveness_failed');
+    });
   }
 
   @override
   void onClose() {
     WidgetsBinding.instance.removeObserver(this);
+    vpnService.onStatusChanged = null;
+    _livenessTimer?.cancel();
     _stopUptimeCounter();
     debugService.logInfo('ConnectionController closing');
     super.onClose();
@@ -134,8 +245,26 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Coming back to the foreground is exactly when a desync becomes visible.
     if (state == AppLifecycleState.resumed) {
-      reconcileWithNativeService();
+      reconcileWithNativeService().then((_) {
+        _startLivenessWatchdog();
+        // A tunnel that is up but dead is the classic "left it running for
+        // half an hour" failure; check it as soon as the user looks at it.
+        _verifyTunnelAlive();
+      });
     }
+  }
+
+  /// Asks the live tunnel to load a check host and reports failure honestly.
+  Future<void> _verifyTunnelAlive() async {
+    if (!isConnected) return;
+    final verify = siteCheckService;
+    if (verify == null || !verify.enabled) return;
+    final alive = await verify.verifyLiveConnection();
+    if (alive || !isConnected) return;
+    state.value = ConnectionState.error;
+    statusMessage.value =
+        'The tunnel is up but nothing loads — reconnect to pick another server';
+    debugService.logAction('liveness_failed', {'trigger': 'resume'});
   }
 
   /// Brings the Dart state in line with what the native service is actually
@@ -153,7 +282,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final status = await vpnService.getStatus();
       final nativeRunning = status['isRunning'] == true;
 
-      if (nativeRunning && !isConnected) {
+      if (nativeRunning && _canAdopt && !isConnected) {
         final name = status['name'] as String?;
         final protocol = status['protocol'] as String?;
         Config? config;

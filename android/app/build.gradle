@@ -107,6 +107,14 @@ android {
     }
 
     packagingOptions {
+        // Extract native libs to disk at install time. WITHOUT this, AGP keeps
+        // libsingbox.so / libtun2socks.so inside the APK (extractNativeLibs
+        // defaults to false) and nothing ever appears in nativeLibraryDir -
+        // which made VpnPlugin report singboxAvailable=false and made
+        // EngineRunner refuse every Hysteria2 / TUIC / AmneziaWG config with
+        // "needs an engine that is not bundled in this build". sing-box and
+        // tun2socks run as subprocesses and need a real file to exec.
+        //
         // libv2ray.aar ships libgojni.so for four ABIs at ~35 MB each. Shipping
         // all four took the debug APK to 354 MB. x86 and x86_64 are emulator-only,
         // so arm64-v8a + armeabi-v7a cover every real device.
@@ -117,6 +125,9 @@ android {
         // arm64-v8a + armeabi-v7a cover every real Android device in use. The
         // x86/x86_64 copies are emulator-only and are dead weight in a shipped
         // APK. If you ever need them back, delete the two `exclude` lines below.
+        // Extract to nativeLibraryDir at install time (see the comment above).
+        jniLibs.useLegacyPackaging = true
+
         exclude 'lib/x86/**'
         exclude 'lib/x86_64/**'
     }

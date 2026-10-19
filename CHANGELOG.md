@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.29] - 2026-10-19
+
+### Fixed
+- **Hysteria2, TUIC and AmneziaWP configs were refused with "needs an engine
+  that is not bundled in this build".** Root cause: AGP keeps native libraries
+  *inside* the APK (`useLegacyPackaging` defaults to false), so
+  `libsingbox.so` / `libtun2socks.so` never appeared in `nativeLibraryDir` —
+  the capability probe reported sing-box unavailable and `EngineRunner`
+  refused every sing-box-family config before even trying. The packaging now
+  extracts native libs at install time (`jniLibs.useLegacyPackaging = true`),
+  so the subprocess engines can actually be exec'd, which is what they always
+  required.
+
 ## [1.0.0-beta.28] - 2026-10-19
 
 ### Fixed

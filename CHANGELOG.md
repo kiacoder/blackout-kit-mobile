@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.31] - 2026-10-19
+
+### Fixed
+- **VLESS-TLS and Trojan-TLS tunnels were rejected by the bundled Xray core.**
+  The config builder still emitted `allowInsecure`, which Xray 25.x removed —
+  its presence alone is a config error ("The feature allowInsecure has been
+  removed"), so every security=tls tunnel died with
+  "Failed to build TLS config". The field is no longer emitted; TLS relies on
+  valid certificates and a matching serverName (the 8443 inbound serves real
+  Let's Encrypt certs). Self-signed endpoints will need the migrated
+  pinning fields (pinnedPeerCertSha256) in a future release.
+
 ## [1.0.0-beta.30] - 2026-10-19
 
 ### Fixed

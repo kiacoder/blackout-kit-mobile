@@ -553,17 +553,16 @@ class XrayConfigBuilder {
       TrojanConfig c => c.fingerprint,
       _ => null,
     };
-    final allowInsecure = switch (config) {
-      TrojanConfig c => c.allowInsecure,
-      VlessConfig c => c.allowInsecure,
-      _ => false,
-    };
-
     stream['security'] = 'tls';
+    // Xray 25.x REMOVED allowInsecure — its mere presence is a config error
+    // ("The feature allowInsecure has been removed"), which killed every
+    // security=tls tunnel on the bundled core. TLS now relies on valid
+    // certificates and a matching serverName. Self-signed endpoints need the
+    // migrated pinning fields (pinnedPeerCertSha256 / verifyPeerCertByName)
+    // once the app carries cert hashes.
     stream['tlsSettings'] = {
       if (sni != null && sni.isNotEmpty) 'serverName': sni,
       'fingerprint': _orDefault(fingerprint, 'chrome'),
-      'allowInsecure': allowInsecure,
     };
     return stream;
   }

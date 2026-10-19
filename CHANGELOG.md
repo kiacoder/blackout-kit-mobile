@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.30] - 2026-10-19
+
+### Fixed
+- **Sing-box engine start was starved on real devices.** The startup wait was
+  750 ms and the readiness probe 500 ms — loading a 47 MB binary and parsing a
+  config takes 1–3 s on mid-range hardware, so the tunnel was torn down before
+  the engine ever came up. Startup now allows 3 s and the SOCKS5 readiness
+  handshake 2 s.
+- **Engine failures now name the real cause.** The generated config is
+  validated with sing-box's own `check` before launch: a config the engine
+  cannot parse (e.g. the AmneziaWG junk-packet block on a build without AWG
+  support) names the exact offending field instead of a generic timeout. Both
+  engine processes log to a file, and the failure message carries its tail —
+  which also removes a pipe-buffer deadlock where an unread engine log could
+  freeze the engine mid-run.
+
 ## [1.0.0-beta.29] - 2026-10-19
 
 ### Fixed

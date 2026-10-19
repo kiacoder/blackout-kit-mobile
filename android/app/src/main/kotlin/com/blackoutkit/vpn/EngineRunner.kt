@@ -65,13 +65,23 @@ object EngineRunner {
     internal var processLauncher: (List<String>) -> Process = { command ->
         ProcessBuilder(command).redirectErrorStream(true).start()
     }
-    internal var startupWaitMs: Long = 750
+    // 750ms starved a cold start on real devices: loading a 47MB binary and
+    // parsing a config takes 1-3s on mid-range hardware, so the startup wait
+    // and the readiness probe must both allow it.
+    internal var startupWaitMs: Long = 3000
     internal var readinessProbe: (String, Int, Int) -> Boolean = LocalSocksReadiness::await
     internal var readinessPortProvider: (Context, String) -> Int = { _, config ->
         Regex("\\\"listen_port\\\"\\s*:\\s*(\\d+)").find(config)
             ?.groupValues?.get(1)?.toIntOrNull() ?: 0
     }
     internal var lifecycle = SubprocessLifecycle()
+
+    private fun engineLogTail(log: File): String = try {
+        val tail = log.readText().takeLast(600)
+        if (tail.isBlank()) "" else "\nengine log: $tail"
+    } catch (_: Exception) {
+        ""
+    }
 
     fun start(context: Context, tunFd: Int, socksPort: Int, protocol: String): Boolean {
         lastError = null
@@ -114,28 +124,52 @@ object EngineRunner {
 
         return try {
             intentionalStop.set(false)
-            engineProcess = processLauncher(
-                listOf(enginePath.absolutePath, "run", "-c", configFile.absolutePath)
-            )
 
-            tun2socksProcess = processLauncher(
+            // Validate the config with sing-box's own checker BEFORE launching.
+            // A config the engine cannot parse (unknown fields, bad TLS material)
+            // used to surface as a generic readiness timeout; the checker names
+            // the exact offending field instead.
+            val check = ProcessBuilder(
+                listOf(enginePath.absolutePath, "check", "-c", configFile.absolutePath)
+            ).redirectErrorStream(true).start()
+            val checkOutput = check.inputStream.bufferedReader().readText()
+            if (check.waitFor() != 0) {
+                lastError = "sing-box rejected the configuration: " + checkOutput.takeLast(500) +
+                    (if (checkOutput.contains("amnezia", ignoreCase = true))
+                        " [this build does not support the AmneziaWG junk-packet block]"
+                    else "")
+                Log.e(TAG, lastError!!)
+                return false
+            }
+
+            // Engine + tun2socks output goes to a file, not a pipe: unread pipes
+            // fill up and deadlock the engine mid-run, and the file gives the
+            // failure paths below something concrete to report.
+            val engineLog = File(configDir(context), "engine.log")
+            val logRedirect = ProcessBuilder.Redirect.appendTo(engineLog)
+
+            engineProcess = ProcessBuilder(
+                listOf(enginePath.absolutePath, "run", "-c", configFile.absolutePath)
+            ).redirectErrorStream(true).redirectOutput(logRedirect).start()
+
+            tun2socksProcess = ProcessBuilder(
                 listOf(
                     tun2socksPath.absolutePath,
                     "-fd", tunFd.toString(),
                     "-socks", "127.0.0.1:$socksPort"
                 )
-            )
+            ).redirectErrorStream(true).redirectOutput(logRedirect).start()
 
             val children = listOfNotNull(engineProcess, tun2socksProcess)
             val startupError = lifecycle.awaitStartup(children, startupWaitMs)
             if (startupError != null) {
-                lastError = startupError
+                lastError = startupError + engineLogTail(engineLog)
                 stop()
                 return false
             }
             val readinessPort = readinessPortProvider(context, configFile.readText())
-            if (readinessPort !in 1..65535 || !readinessProbe("127.0.0.1", readinessPort, 500)) {
-                lastError = "sing-box did not accept a local SOCKS5 readiness handshake."
+            if (readinessPort !in 1..65535 || !readinessProbe("127.0.0.1", readinessPort, 2000)) {
+                lastError = "sing-box did not accept a local SOCKS5 readiness handshake." + engineLogTail(engineLog)
                 stop()
                 return false
             }

@@ -42,17 +42,36 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     super.dispose();
   }
 
+  /// One entry point for every import path (QR, clipboard, file).
+  ///
+  /// A QR code can carry a single link, a newline-separated list, a base64
+  /// subscription, a `sub://` wrapper, a JSON array of links, or a Markdown
+  /// blob with links embedded — [ConfigParser.parseMultiple] understands all of
+  /// them, so the scan path uses it first and only falls back to single-parse.
+  List<Config> _parsePayload(String code) {
+    final multi = ConfigParser.parseMultiple(code);
+    if (multi.isNotEmpty) return multi;
+    final single = ConfigParser.parse(code);
+    return single != null ? <Config>[single] : <Config>[];
+  }
+
   Future<void> _autoCheckClipboard() async {
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data != null && data.text != null && data.text!.isNotEmpty) {
         final text = data.text!.trim();
-        final parsed = ConfigParser.parse(text);
-        if (parsed != null) {
+        final configs = _parsePayload(text);
+        if (configs.length == 1) {
           setState(() {
             _textController.text = text;
-            _parsedConfig = parsed;
+            _parsedConfig = configs.first;
           });
+        } else if (configs.length > 1) {
+          setState(() {
+            _textController.text = text;
+            _parsedConfig = configs.first;
+          });
+          _showMultipleParsedDialog(configs);
         }
       }
     } catch (_) {}
@@ -65,17 +84,21 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     for (final barcode in barcodes) {
       if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
         final code = barcode.rawValue!.trim();
-        final parsed = ConfigParser.parse(code);
-        if (parsed != null) {
-          setState(() {
-            _isScanning = false;
-            _parsedConfig = parsed;
-            _textController.text = code;
-          });
-          HapticFeedback.heavyImpact();
-          _showParsedDialog(parsed);
-          break;
+        final configs = _parsePayload(code);
+        if (configs.isEmpty) continue; // not a config — keep scanning
+
+        setState(() {
+          _isScanning = false;
+          _parsedConfig = configs.first;
+          _textController.text = code;
+        });
+        HapticFeedback.heavyImpact();
+        if (configs.length == 1) {
+          _showParsedDialog(configs.first);
+        } else {
+          _showMultipleParsedDialog(configs);
         }
+        break;
       }
     }
   }

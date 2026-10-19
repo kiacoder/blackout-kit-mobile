@@ -229,7 +229,7 @@ void main() {
 
   group('shadowsocks', () {
     test('parses base64 credentials', () {
-      final credentials = base64.encode(utf8.encode('aes-256-gcm:secret'));
+      final credentials = base64.encode(utf8.encode("aes-256-gcm:secret"));
       final config = ConfigParser.parse('ss://$credentials@d.com:8388')
           as ShadowsocksConfig;
 
@@ -249,7 +249,7 @@ void main() {
     });
 
     test('uses the fragment as the name', () {
-      final credentials = base64.encode(utf8.encode('aes-256-gcm:secret'));
+      final credentials = base64.encode(utf8.encode("aes-256-gcm:secret"));
       final config = ConfigParser.parse('ss://$credentials@d.com:8388#Fast')
           as ShadowsocksConfig;
       expect(config.displayName, 'Fast');
@@ -260,7 +260,7 @@ void main() {
     // Uri.decodeComponent used to throw and void the whole link — silently
     // dropping ~31% of the shadowsocks entries from a real source.
     test('a malformed fragment does not void the config', () {
-      final credentials = base64.encode(utf8.encode('aes-256-gcm:secret'));
+      final credentials = base64.encode(utf8.encode("aes-256-gcm:secret"));
       final config = ConfigParser.parse(
         'ss://$credentials@d.com:8388#100% free VPN 🇯🇵',
       ) as ShadowsocksConfig;
@@ -681,4 +681,96 @@ Endpoint = i.com:51820
       expect(configs.length, 3);
     });
   });
+
+  group('QR payloads', () {
+    String awgConf() => '''
+[Interface]
+PrivateKey = PRIV
+Address = 10.10.10.2/32
+Jc = 5
+Jmin = 50
+Jmax = 80
+S1 = 30
+S2 = 60
+H1 = 12345678
+H2 = 87654321
+H3 = 11223344
+H4 = 44332211
+
+[Peer]
+PublicKey = PUB
+Endpoint = srv1.example.com:39006
+AllowedIPs = 0.0.0.0/0
+''';
+
+    test('awg://<base64 conf> parses into an AmneziaWGConfig', () {
+      final uri = 'awg://${base64.encode(utf8.encode(awgConf()))}';
+      final config = ConfigParser.parse(uri) as AmneziaWGConfig;
+      expect(config.protocol, 'amneziawg');
+      expect(config.endpoint, 'srv1.example.com:39006');
+      expect(config.junkCount, 5);
+      expect(config.junkMax, 80);
+    });
+
+    test('awg://?query builds a conf from the link parameters', () {
+      final uri = 'awg://?private_key=PRIV&address=10.10.10.2/32'
+          '&public_key=PUB&endpoint=srv2.example.com:39006'
+          '&jc=6&jmin=60&jmax=90&h1=11112222';
+      final config = ConfigParser.parse(uri) as AmneziaWGConfig;
+      expect(config.protocol, 'amneziawg');
+      expect(config.endpoint, 'srv2.example.com:39006');
+      expect(config.junkCount, 6);
+      expect(config.junkMin, 60);
+    });
+
+    test('awg:// links survive inside a multi-config QR', () {
+      final blob = [
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443#V',
+        'awg://${base64.encode(utf8.encode(awgConf()))}',
+        'trojan://p@b.com:443#T',
+      ].join('\n');
+      final configs = ConfigParser.parseMultiple(blob);
+      expect(configs.map((c) => c.protocol).toSet(), {'vless', 'amneziawg', 'trojan'});
+    });
+
+    test('sub:// subscription wrappers are unwrapped', () {
+      final plainUris = [
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443#One',
+        'trojan://password@b.com:443#Two',
+      ].join('\n');
+      final payload = 'sub://${base64.encode(utf8.encode(plainUris))}';
+      final configs = ConfigParser.parseMultiple(payload);
+      expect(configs.length, 2);
+      expect(configs[1].protocol, 'trojan');
+    });
+
+    test('JSON arrays of links are fully parsed', () {
+      final payload = json.encode([
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443#One',
+        'ss://${base64.encode(utf8.encode("aes-256-gcm:secret"))}@c.com:8388#Two',
+      ]);
+      final configs = ConfigParser.parseMultiple(payload);
+      expect(configs.length, 2);
+      expect(configs.map((c) => c.protocol).toSet(), {'vless', 'shadowsocks'});
+    });
+
+    test('duplicate links in one QR are imported once', () {
+      const uri = 'vless://11111111-1111-1111-1111-111111111111@a.com:443#Dup';
+      final configs = ConfigParser.parseMultiple('$uri\n$uri\n$uri');
+      expect(configs.length, 1);
+    });
+
+    test('junk around the links keeps the valid ones', () {
+      final blob = [
+        'just text, not a config',
+        '',
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443#Real',
+        'https://example.com/some-page',
+      ].join('\n');
+      final configs = ConfigParser.parseMultiple(blob);
+      expect(configs.length, 1);
+      expect(configs.first.protocol, 'vless');
+    });
+  });
+
 }

@@ -1098,6 +1098,66 @@ class ConfigParser {
     }
   }
 
+  /// Converts an `awg://` link into AmneziaWG conf text.
+  ///
+  /// Two payload shapes are accepted, mirroring the desktop engine:
+  ///   awg://<base64 of the whole .conf>
+  ///   awg://?private_key=…&address=…&endpoint=…&public_key=…&jc=…&h1=…
+  /// A payload that already looks like conf text (`[Interface]` / `Jc =`) is
+  /// returned untouched, so round-tripping a copied conf costs nothing.
+  static String awgUriToConf(String uri) {
+    final lower = uri.toLowerCase();
+    if (!lower.startsWith('awg://') && !lower.startsWith('amneziawg://')) {
+      return uri;
+    }
+    final body = uri.substring(uri.indexOf('://') + 3);
+
+    if (body.startsWith('?')) {
+      final q = Uri.splitQueryString(body);
+      final lines = <String>['[Interface]'];
+      void add(String confKey, List<String> queryKeys) {
+        for (final k in queryKeys) {
+          final v = q[k];
+          if (v != null && v.isNotEmpty) {
+            lines.add('$confKey = $v');
+            return;
+          }
+        }
+      }
+      add('PrivateKey', ['private_key', 'privatekey', 'private']);
+      add('Address', ['address', 'addresses', 'addr']);
+      add('DNS', ['dns']);
+      add('MTU', ['mtu']);
+      for (final obf in ['Jc', 'Jmin', 'Jmax', 'S1', 'S2', 'S3', 'S4',
+                         'H1', 'H2', 'H3', 'H4', 'I1', 'I2', 'I3', 'I4', 'I5']) {
+        add(obf, [obf.toLowerCase(), obf.toLowerCase().replaceAll('m', 'M')]);
+      }
+      lines.add('');
+      lines.add('[Peer]');
+      add('PublicKey', ['public_key', 'publickey', 'public']);
+      add('PresharedKey', ['preshared_key', 'presharedkey']);
+      add('Endpoint', ['endpoint', 'server', 'host']);
+      add('AllowedIPs', ['allowed_ips', 'allowedips']);
+      add('PersistentKeepalive', ['persistentkeepalive', 'keepalive']);
+      return '${lines.join('\n')}\n';
+    }
+
+    // Base64 payload — try standard and url-safe, padding optional.
+    if (body.contains('[Interface]') || body.contains('Jc =') || body.contains('JC =')) {
+      return body;
+    }
+    final cleaned = body.replaceAll(RegExp(r'\s+'), '');
+    for (final padded in [cleaned, cleaned + '=' * ((4 - cleaned.length % 4) % 4)]) {
+      try {
+        final decoded = utf8.decode(base64.decode(base64.normalize(padded)));
+        if (decoded.contains('[Interface]') || decoded.contains('Jc =') || decoded.contains('JC =')) {
+          return decoded;
+        }
+      } catch (_) {}
+    }
+    return body;
+  }
+
   static Config? parse(String text, {String? customName}) {
     try {
       // Normalise the scheme before dispatching: the guards below are
@@ -1113,6 +1173,8 @@ class ConfigParser {
                                                 return Hysteria2Config.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('tuic://'))        return TuicConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('ss://'))          return ShadowsocksConfig.fromUri(trimmed, customName: customName);
+      if (trimmed.startsWith('awg://') || trimmed.startsWith('amneziawg://'))
+                                                return AmneziaWGConfig.fromUri(awgUriToConf(trimmed), customName: customName);
       // File/block content protocols
       if (trimmed.contains('remote ') || trimmed.contains('BEGIN CERTIFICATE') || trimmed.contains('client\n'))
                                                 return OpenVpnConfig.fromUri(trimmed, customName: customName);
@@ -1151,6 +1213,39 @@ class ConfigParser {
     if (text.trim().isEmpty) return [];
 
     var rawText = text.trim();
+
+    // 0. Subscriptions wrapped by a client: sub://BASE64 / subscription://BASE64.
+    //    These contain `://` after de-framing, so the whole-payload base64
+    //    probe below would skip them.
+    final lowerRaw = rawText.toLowerCase();
+    for (final prefix in ['sub://', 'subscription://']) {
+      if (lowerRaw.startsWith(prefix)) {
+        try {
+          final decoded = utf8.decode(base64.decode(base64.normalize(
+              rawText.substring(prefix.length).replaceAll(RegExp(r'\s+'), ''))));
+          if (decoded.trim().isNotEmpty) rawText = decoded.trim();
+        } catch (_) {}
+        break;
+      }
+    }
+
+    // 0b. A JSON array of share links — some subscription tools emit this
+    //     from a QR code instead of newline-separated text.
+    if (rawText.startsWith('[')) {
+      try {
+        final data = jsonDecode(rawText);
+        if (data is List) {
+          final list = <Config>[];
+          final seen = <String>{};
+          for (final entry in data) {
+            if (entry is! String) continue;
+            final c = parse(entry.trim());
+            if (c != null && c.validate() && seen.add(c.rawUri)) list.add(c);
+          }
+          return list;
+        }
+      } catch (_) {}
+    }
 
     // 1. Check if the entire payload is a Base64-encoded subscription
     if (!rawText.contains('://') &&
@@ -1210,7 +1305,7 @@ class ConfigParser {
       }
 
       // Extract embedded URIs from markdown tables, bullet points, or HTML
-      final uriRegex = RegExp(r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic)://[^\s<>"\]]+');
+      final uriRegex = RegExp(r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg)://[^\s<>"\]]+');
       final matches = uriRegex.allMatches(trimmed);
       if (matches.isNotEmpty) {
         for (final match in matches) {

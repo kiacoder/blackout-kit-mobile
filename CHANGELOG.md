@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **QR scanner imports every payload shape, including multi-config codes.** The scan
+  path called `ConfigParser.parse` (single) directly, so a code that was not exactly
+  one share link was ignored silently. Scanner, clipboard and file imports now share
+  one entry point that tries `parseMultiple` first — newline lists, base64
+  subscriptions, `sub://` wrappers, JSON arrays of links, Markdown-embedded links and
+  multi-block WireGuard confs — then falls back to single-parse. One hit opens the
+  detail dialog; several open the "N Configs Found" import-all dialog.
+- **`awg://` links** (base64-of-conf or `?query` parameters) now parse into an
+  AmneziaWG config, and the scheme is recognised inside multi-config payloads.
+  Duplicates inside one payload are imported once; junk around the links is skipped.
+  7 new tests cover every shape.
+
 ## [1.0.0-beta.26] - 2026-10-19
 
 ### Added

@@ -15,5 +15,8 @@ class MainActivity : FlutterActivity() {
         // Host-side facts the Dart layer cannot get on its own: installed apps,
         // app icons, and Android's always-on VPN state.
         flutterEngine.plugins.add(NetworkPlugin())
+
+        // In-app self-update: hands downloaded APKs to the package installer.
+        UpdatePlugin(applicationContext).register(flutterEngine.dartExecutor.binaryMessenger)
     }
 }

@@ -520,7 +520,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           state.value = ConnectionState.testing;
           statusMessage.value =
               'Checking websites through the tunnel ($batchLabel, config ${attempt + 1})...';
-          final alive = await verify!.verifyLiveConnection();
+          final alive = await verify.verifyLiveConnection();
           if (alive) {
             state.value = ConnectionState.connected;
             statusMessage.value =

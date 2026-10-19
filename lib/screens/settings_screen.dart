@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../controllers/config_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../services/kill_switch_service.dart';
+import '../services/update_service.dart';
 import '../services/vpn_service.dart';
 import 'logs_screen.dart';
 import 'split_tunneling_screen.dart';
@@ -58,6 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const _UpdateSection(),
             // VPN Settings Section
             _buildSection(
               context: context,
@@ -823,5 +825,116 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } else {
       return '${date.month}/${date.day}/${date.year}';
     }
+  }
+}
+
+/// In-app self-update: checks GitHub Releases, downloads the arm64 APK and
+/// hands it to the package installer. Self-contained so the settings screen
+/// stays untouched.
+class _UpdateSection extends StatefulWidget {
+  const _UpdateSection();
+
+  @override
+  State<_UpdateSection> createState() => _UpdateSectionState();
+}
+
+class _UpdateSectionState extends State<_UpdateSection> {
+  final UpdateService _service = UpdateService();
+  String _phase = 'idle'; // idle | checking | latest | available | downloading | ready | error
+  String _currentVersion = '';
+  AppUpdate? _update;
+  String _error = '';
+  String? _apkPath;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  Future<void> _check() async {
+    setState(() {
+      _phase = 'checking';
+      _error = '';
+    });
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _currentVersion = '${info.version}+${info.buildNumber}';
+    } catch (_) {
+      _currentVersion = '';
+    }
+    final update = await _service.checkForUpdate();
+    if (!mounted) return;
+    setState(() {
+      _update = update;
+      _phase = update == null ? 'latest' : 'available';
+    });
+  }
+
+  Future<void> _downloadAndInstall() async {
+    final update = _update;
+    if (update == null) return;
+    setState(() => _phase = 'downloading');
+    try {
+      _apkPath = await _service.downloadApk(update);
+      if (!mounted) return;
+      setState(() => _phase = 'ready');
+      await _service.installApk(_apkPath!);
+      // The OS installer takes over from here; the app may be replaced.
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = 'error';
+        _error = e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Card(
+        child: ListTile(
+          leading: Icon(
+            _phase == 'available'
+                ? Icons.system_update_alt
+                : Icons.system_update,
+            color: _phase == 'available' ? Colors.green : null,
+          ),
+          title: Text(
+            switch (_phase) {
+              'checking' => 'Checking for updates...',
+              'latest' => 'App is up to date',
+              'available' => 'Update available: ${_update!.tagName}',
+              'downloading' =>
+                'Downloading ${((_service.progress.value) * 100).toStringAsFixed(0)}%',
+              'ready' => 'Ready to install - tap to open the installer',
+              'error' => 'Update failed: $_error',
+              _ => 'App update',
+            },
+          ),
+          subtitle: Text(
+            _currentVersion.isEmpty ? 'Tap to check for updates' : 'Installed: $_currentVersion',
+          ),
+          trailing: switch (_phase) {
+            'checking' || 'downloading' => const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            'available' => ElevatedButton(
+                onPressed: _downloadAndInstall,
+                child: const Text('Update'),
+              ),
+            'ready' => ElevatedButton(
+                onPressed: () => _service.installApk(_apkPath!),
+                child: const Text('Install'),
+              ),
+            _ => IconButton(onPressed: _check, icon: const Icon(Icons.refresh)),
+          },
+        ),
+      ),
+    );
   }
 }

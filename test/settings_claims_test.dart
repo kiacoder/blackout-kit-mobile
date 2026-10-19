@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
-import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interface.dart';
 import 'package:hive/hive.dart';
 
 import 'package:blackout_kit_mobile/services/config_service.dart';

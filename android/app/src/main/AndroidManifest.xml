@@ -13,6 +13,8 @@
 
     <!-- Android 13+ requires runtime consent to post the VPN status notification. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- In-app self-update: downloading and opening the new APK. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Needed to list installed apps for the split-tunneling picker (Android 11+). -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -58,5 +60,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

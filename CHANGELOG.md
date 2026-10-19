@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **In-app self-updater.** Settings gains an "App update" card: checks GitHub
+  Releases (build-number comparison on `beta.N` tags), downloads the arm64 APK
+  with progress, and hands it to Android's package installer via a new
+  UpdatePlugin channel (REQUEST_INSTALL_PACKAGES + FileProvider added to the
+  manifest). Once installed, this build updates itself from GitHub — no more
+  manual APK transfers.
+
 ## [1.0.0-beta.31] - 2026-10-19
 
 ### Fixed

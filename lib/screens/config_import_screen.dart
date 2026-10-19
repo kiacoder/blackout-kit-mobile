@@ -24,11 +24,19 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   Config? _parsedConfig;
   bool _isScanning = true;
   bool _torchEnabled = false;
+  // Scanner discipline: the camera stream fires continuously while a QR is
+  // in view, so every dialog/save path must be single-flight and gated, or
+  // dialogs stack on each other faster than they can be dismissed.
+  bool _dialogOpen = false;
+  bool _saving = false;
+  String? _lastCode;
+  DateTime? _lastHandledAt;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_handleTabChange);
     _configController = Get.find<ConfigController>();
 
     _autoCheckClipboard();
@@ -36,10 +44,39 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChange);
+    _pauseCamera();
+    _scannerController.dispose();
     _tabController.dispose();
     _textController.dispose();
-    _scannerController.dispose();
     super.dispose();
+  }
+
+  /// Camera helpers. Stopping the camera while a dialog is open is the core
+  /// of the stacking fix: a stopped controller emits no detection events, so
+  /// nothing can re-pop a dialog while the user is reading or tapping it.
+  Future<void> _pauseCamera() async {
+    try {
+      await _scannerController.stop();
+    } catch (_) {}
+  }
+
+  Future<void> _resumeCamera() async {
+    try {
+      await _scannerController.start();
+    } catch (_) {}
+  }
+
+  /// The scan tab keeps its MobileScanner alive while other tabs are shown;
+  /// leaving the tab must pause the camera or detections fire while the user
+  /// types on the text tab.
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) return;
+    if (_tabController.index != 0) {
+      _pauseCamera();
+    } else if (_isScanning && !_dialogOpen) {
+      _resumeCamera();
+    }
   }
 
   /// One entry point for every import path (QR, clipboard, file).
@@ -56,6 +93,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _autoCheckClipboard() async {
+    if (_dialogOpen || _saving) return;
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (data != null && data.text != null && data.text!.isNotEmpty) {
@@ -78,32 +116,54 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   void _onScanDetect(BarcodeCapture capture) {
-    if (!_isScanning) return;
+    // Every gate below exists because the camera stream fires continuously
+    // while a QR is in view: without them each dismissal instantly spawned
+    // the next popup and the dialogs stacked faster than they could be
+    // dismissed.
+    if (!_isScanning || _dialogOpen || _saving) return;
+    if (_tabController.index != 0) return; // scan tab not visible
 
     final barcodes = capture.barcodes;
     for (final barcode in barcodes) {
       if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
         final code = barcode.rawValue!.trim();
+
+        // The camera is still pointed at the payload we just handled:
+        // re-popping the same dialog immediately is the stacking bug. The
+        // cooldown only blocks re-detection of the identical payload; a
+        // different config, or a deliberate Rescan (which clears it), works.
+        final now = DateTime.now();
+        if (code == _lastCode &&
+            _lastHandledAt != null &&
+            now.difference(_lastHandledAt!) < const Duration(seconds: 5)) {
+          return;
+        }
+
         final configs = _parsePayload(code);
         if (configs.isEmpty) continue; // not a config — keep scanning
 
+        _lastCode = code;
+        _lastHandledAt = now;
+        _dialogOpen = true;
         setState(() {
           _isScanning = false;
           _parsedConfig = configs.first;
           _textController.text = code;
         });
+        _pauseCamera();
         HapticFeedback.heavyImpact();
         if (configs.length == 1) {
           _showParsedDialog(configs.first);
         } else {
           _showMultipleParsedDialog(configs);
         }
-        break;
+        return;
       }
     }
   }
 
   Future<void> _pickFile() async {
+    if (_dialogOpen || _saving) return; // one import dialog at a time
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -155,7 +215,10 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _saveConfig(Config config) async {
-    final success = await _configController.configService.saveConfig(config);
+    if (_saving) return; // double-tap guard: one save per dialog
+    _saving = true;
+    try {
+      final success = await _configController.configService.saveConfig(config);
     if (success) {
       await _configController.loadConfigs();
       Get.back();
@@ -173,22 +236,31 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         colorText: Colors.white,
       );
     }
+    } finally {
+      _saving = false;
+    }
   }
 
   Future<void> _saveMultipleConfigs(List<Config> configs) async {
-    final savedCount = await _configController.configService.saveConfigs(configs);
-    await _configController.loadConfigs();
-    Get.back();
-    Get.snackbar(
-      'Imported',
-      'Successfully added $savedCount configs to Library',
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-    );
+    if (_saving) return; // double-tap guard
+    _saving = true;
+    try {
+      final savedCount = await _configController.configService.saveConfigs(configs);
+      await _configController.loadConfigs();
+      Get.back();
+      Get.snackbar(
+        'Imported',
+        'Successfully added $savedCount configs to Library',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } finally {
+      _saving = false;
+    }
   }
 
-  void _showParsedDialog(Config config) {
-    Get.dialog(
+  Future<void> _showParsedDialog(Config config) async {
+    await Get.dialog(
       AlertDialog(
         title: Row(
           children: [
@@ -219,14 +291,13 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              setState(() => _isScanning = true);
-              Get.back();
-            },
+            // Scanning stays off after Cancel: the camera is paused and the
+            // QR is probably still in view - Rescan resumes deliberately.
+            onPressed: () => Get.back(),
             child: const Text('Cancel'),
           ),
           ElevatedButton.icon(
-            onPressed: () => _saveConfig(config),
+            onPressed: _saving ? null : () => _saveConfig(config),
             icon: const Icon(Icons.add),
             label: const Text('Add to Library'),
             style: ElevatedButton.styleFrom(
@@ -237,10 +308,13 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         ],
       ),
     );
+    // The dialog is closed (added, imported or cancelled): allow the next one.
+    _dialogOpen = false;
+    if (mounted) setState(() {});
   }
 
-  void _showMultipleParsedDialog(List<Config> configs) {
-    Get.dialog(
+  Future<void> _showMultipleParsedDialog(List<Config> configs) async {
+    await Get.dialog(
       AlertDialog(
         title: Text('${configs.length} Configs Found'),
         content: SizedBox(
@@ -264,7 +338,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => _saveMultipleConfigs(configs),
+            onPressed: _saving ? null : () => _saveMultipleConfigs(configs),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
@@ -274,6 +348,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         ],
       ),
     );
+    _dialogOpen = false;
+    if (mounted) setState(() {});
   }
 
   @override
@@ -343,17 +419,28 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                     _torchEnabled ? Icons.flash_on : Icons.flash_off,
                     color: Colors.white,
                   ),
-                  onPressed: () {
-                    _scannerController.toggleTorch();
-                    setState(() => _torchEnabled = !_torchEnabled);
-                  },
+                  // Toggling the torch on a stopped controller throws.
+                  onPressed: (_isScanning && !_dialogOpen)
+                      ? () {
+                          _scannerController.toggleTorch();
+                          setState(() => _torchEnabled = !_torchEnabled);
+                        }
+                      : null,
                 ),
                 IconButton(
                   icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
-                  onPressed: () => _scannerController.switchCamera(),
+                  onPressed: (_isScanning && !_dialogOpen)
+                      ? () => _scannerController.switchCamera()
+                      : null,
                 ),
                 ElevatedButton.icon(
-                  onPressed: () => setState(() => _isScanning = true),
+                  onPressed: () {
+                    _lastCode = null;
+                    _lastHandledAt = null;
+                    _dialogOpen = false;
+                    setState(() => _isScanning = true);
+                    _resumeCamera();
+                  },
                   icon: const Icon(Icons.refresh, size: 18),
                   label: const Text('Rescan'),
                 ),

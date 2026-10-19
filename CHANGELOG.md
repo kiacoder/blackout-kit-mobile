@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Release APKs are signed with a stable key (fixes the update failure).** The release
+  build fell back to `signingConfigs.debug` whenever `android/key.properties` was absent —
+  which is always the case in CI, and GitHub-hosted runners mint a *new* debug keystore every
+  run. Consequence: every published APK was signed differently, so installing a new build
+  over an existing one failed with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` ("signatures do not
+  match"). `build.yml` now writes `android/key.properties` from `ANDROID_KEYSTORE_*` secrets
+  when present and warns loudly when they are not.
+- **Build toolchain alignment.** `org.jetbrains.kotlin.android` is applied by its canonical
+  id at the pinned version (1.9.24) instead of the short `kotlin-android` alias, and AGP is
+  bumped 7.3.0 → 7.4.2, the first version that officially supports `compileSdk 34` while
+  staying compatible with the Gradle 7.6.3 wrapper.
+
 ## [1.0.0-beta.27] - 2026-10-19
 
 ### Added

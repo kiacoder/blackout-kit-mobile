@@ -49,6 +49,30 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Set up release signing (optional)
+        # Without stable signing every CI run signs with a FRESH debug keystore —
+        # hosted runners are ephemeral, so each build gets a different debug key.
+        # The result is the classic update failure: installing the new APK over an
+        # existing one fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE (signatures
+        # do not match). Set the ANDROID_KEYSTORE_* secrets once and this step
+        # writes the gitignored android/key.properties the release build reads.
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::ANDROID_KEYSTORE_* secrets are not set - falling back to the debug key. Every runner mints a new debug keystore, so these APKs can never update a previously installed build (INSTALL_FAILED_UPDATE_INCOMPATIBLE)."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release-keystore.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/release-keystore.jks" \
+            "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" \
+            > android/key.properties
+          echo "Release signing configured from secrets."
+
       - name: Build APKs
         # Per-ABI APKs: the Xray core (libgojni.so) is ~35 MB per ABI, so a fat
         # APK is 115.7 MB while each split lands near 64 MB / 58 MB.

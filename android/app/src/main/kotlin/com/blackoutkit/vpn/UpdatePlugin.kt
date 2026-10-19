@@ -18,7 +18,7 @@ import java.io.File
  */
 class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
 
-    fun register(messenger: io.flutter.embedding.engine.dart.DartExecutor) {
+    fun register(messenger: io.flutter.plugin.common.BinaryMessenger) {
         val channel = MethodChannel(messenger, CHANNEL)
         channel.setMethodCallHandler(this)
     }

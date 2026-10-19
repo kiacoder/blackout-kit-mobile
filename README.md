@@ -11,7 +11,7 @@ remains unverified on hardware.
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process
-	> behind it. The beta.11–beta.14 release notes record device-guided debugging,
+	> behind it. Earlier beta releases (archived in [CHANGELOG.md](CHANGELOG.md)) record device-guided debugging,
 	> but local process/SOCKS readiness does not establish end-to-end traffic.
 	> Subprocess-backed tunnel traffic still needs a physical-device test.
 

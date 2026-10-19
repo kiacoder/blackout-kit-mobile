@@ -108,7 +108,10 @@ jobs:
           fi
           TITLE="$TAG"
           JOINED_NOTES="$(tr '\n' ' ' < release_notes.md)"
-          SUMMARY="$(echo "$JOINED_NOTES" | grep -m1 -oE '[-*][[:space:]]*\*\*[^*]+\*\*' | sed -E 's/^[-*][[:space:]]*\*\*([^*]+)\*\*/\1/')"
+          # head -1: the joined changelog is ONE line containing many **bold**
+          # items; grep -o emits every match on it, and a multi-line summary
+          # breaks the GITHUB_OUTPUT file format.
+          SUMMARY="$(echo "$JOINED_NOTES" | grep -m1 -oE '[-*][[:space:]]*\*\*[^*]+\*\*' | sed -E 's/^[-*][[:space:]]*\*\*([^*]+)\*\*/\1/' | head -1)"
           [ -n "$SUMMARY" ] && TITLE="$TAG — $SUMMARY"
           echo "title=$TITLE" >> "$GITHUB_OUTPUT"
           echo "Release notes prepared for $TAG (title: $TITLE)"

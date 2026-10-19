@@ -769,7 +769,7 @@ class Hysteria2Config extends Config {
         password: u.userInfo,
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
-        insecure: _insecure(u.queryParameters),
+        insecure: ConfigParser._insecure(u.queryParameters),
         upMbps: int.tryParse(u.queryParameters['up'] ?? ''),
         downMbps: int.tryParse(u.queryParameters['down'] ?? ''),
         obfs: u.queryParameters['obfs'],
@@ -826,7 +826,7 @@ class TuicConfig extends Config {
         name: name, rawUri: uri, uuid: uuid, password: pwd,
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
-        insecure: _insecure(u.queryParameters),
+        insecure: ConfigParser._insecure(u.queryParameters),
         alpn: u.queryParameters['alpn'],
         congestionControl: u.queryParameters['congestion_control'] ?? 'bbr',
       );

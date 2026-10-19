@@ -40,11 +40,23 @@ jobs:
           echo "--- release notes ---"
           cat release_notes.md
 
+      - name: Resolve release title
+        id: title
+        run: |
+          TAG="${{ steps.version.outputs.version }}"
+          TITLE="$TAG"
+          if [ -s release_notes.md ]; then
+            # First bold item of the version's first bullet, e.g. "**QR scanner ...** — text"
+            SUMMARY="$(grep -m1 -oE '^[[:space:]]*[-*][[:space:]]*\*\*[^*]+\*\*' release_notes.md | sed -E 's/^[[:space:]]*[-*][[:space:]]*\*\*([^*]+)\*\*/\1/')"
+            [ -n "$SUMMARY" ] && TITLE="$TAG — $SUMMARY"
+          fi
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
+          name: ${{ steps.title.outputs.title }}
           bodyFile: release_notes.md
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'alpha') }}

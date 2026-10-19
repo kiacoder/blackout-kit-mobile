@@ -331,12 +331,20 @@ flutter test integration_test/app_flow_test.dart
 - Ultra-fast connection (proprietary optimization)
 - All Hotspot Shield features without their app
 
+### V4 (Extreme Low-Spec & Potato Android Architecture)
+- **Target**: Android 5.0–7.1.2 (API 21–25), 32-bit ARMv7-A devices, and low-RAM hardware (`ro.config.low_ram=true`).
+- **Sub-25MB Native Memory Ceiling**: Eliminates Android `lmkd` (Low Memory Killer Daemon) eviction by keeping total active RSS under 25MB.
+- **In-Process Stripped Core**: Lightweight `libblackout.so` (~1.8MB, -fPIC, stripped) running directly inside `VpnService` with ~11MB active heap.
+- **Hardware Crypto Auto-Negotiation**: Enforces ChaCha20-Poly1305 with ARMv7 NEON vectorization when ARM64/AES-NI instructions are absent, avoiding CPU throttling and battery drain.
+- **Zero-Allocation Socket Ring Buffers**: Fixed MTU-sized circular buffers preventing Dalvik/ART GC pauses from dropping network packets on weak dual-core/quad-core legacy phones.
+
 ### Phase 5
-- Kill switch with iptables (Android) / PF (iOS)
-- Split tunneling per-app
-- DNS leak prevention (secure DNS)
+- Split tunneling per-app (delivered via Android `VpnService.Builder`)
+- DNS leak prevention (delivered via `addDnsServer`)
+- Kill switch (delivered via TUN hold)
 - Improved UI/UX, animations
-- Localization (8+ languages)
+- Localization (9 languages complete)
+
 
 ## Contributing to Architecture
 

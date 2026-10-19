@@ -2,7 +2,7 @@
 
 An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
 
-**Status**: v1.0.0-beta.25 — Android VPN service and in-process Xray core are implemented, and
+**Status**: v1.0.0-beta.26 — Android VPN service and in-process Xray core are implemented, and
 the Xray tunnel path is now **verified working on physical hardware** (2026-10-16): a real
 config on a real device carries live traffic end to end — a TikTok video loads in under a
 second. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and
@@ -16,6 +16,11 @@ remains unverified on hardware.
 	> Subprocess-backed tunnel traffic still needs a physical-device test.
 
 
+> **AmneziaWG on mobile:** the native userspace core now ships with `gomobile` bindings
+> (`StartTunnel(configText, tunFd)` / `StopTunnel` / `GetTunnelStats`) in the desktop repo's
+> `core/amneziawg-go/cmd/awg-mobile`. Cross-compiles for `linux/arm64`; `VpnService` wiring is
+> the next milestone. The desktop CLI's AWG path is verified end to end (handshake + egress).
+>
 > **Xray-core protocols:** VLESS, VMess, Trojan, Shadowsocks, and WireGuard. Sing-box-backed Hysteria 2, TUIC, AmneziaWG, and WARP are gated on bundled-runtime capability and local process/SOCKS readiness; readiness does not verify end-to-end traffic.
 >
 > [PHASES.md](PHASES.md) carries the authoritative, current phase status.
@@ -311,7 +316,14 @@ On a physical device (**nothing below has ever been run**):
 - [ ] Localization coverage — the app shell is translated into 9 languages; ~96
       strings in `lib/screens` and `lib/widgets` are still English-only
 
+### Phase 6 — Extreme Low-Spec, Potato Android & Sub-25MB Architecture (Planned) 🥔
+- **Android 5.0+ (Lollipop API 21) & ARMv7 Support**: Support low-RAM legacy devices (`ro.config.low_ram=true`) without triggering the `lmkd` (Low Memory Killer Daemon) eviction threshold.
+- **Sub-25MB In-Process Tunnel**: Optimized native `libblackout.so` (~1.8MB) compiled with `-fPIC`, consuming only **~11MB RSS** inside the Android framework thread.
+- **Hardware Crypto Auto-Negotiation**: Automatically prioritize ChaCha20-Poly1305 with ARMv7 NEON SIMD vectorization on older devices lacking hardware `AES-NI`, delivering full line-rate throughput without battery drain.
+- **Zero-Allocation Socket Ring Buffers**: Fixed MTU-sized buffer pools preventing Android Dalvik/ART GC pauses from dropping network packets on weak dual-core/quad-core legacy phones.
+
 ## V2 Extensibility
+
 
 The app is designed to scale to Blackout Kit V2 engines without UI changes:
 

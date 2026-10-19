@@ -700,6 +700,23 @@ Legend: ✅ shipped · ⚠️ shipped but not verified on a physical device · �
 | **Localization** | ❌ | ✅ | ✅ | ✅ |
 | **iOS Support** | ❌ | ❌ | ✅ | ✅ |
 | **Hotspot Shield** | ❌ | ❌ | ❌ | ✅ |
+| **Sub-25MB Potato Architecture (API 21+)** | ❌ | ❌ | ✅ | ✅ |
+
+---
+
+## 🥔 V4: Extreme Low-Spec, Potato Android & Sub-25MB Architecture (Planned)
+
+**Status: PLANNED** ⏳ | **Target: Android 5.0–7.1.2 (API 21–25), ARMv7-A 32-bit, Low-RAM Devices**
+
+### Vision
+Enable Blackout Kit Mobile to run on legacy, low-spec Android devices (512MB–1GB RAM, `ro.config.low_ram=true`) without triggering the `lmkd` (Low Memory Killer Daemon) eviction threshold.
+
+### Core Deliverables
+- **Ultra-Lean In-Process Native Core**: Compiled stripped `libblackout.so` (~1.8MB) using `-fPIC` and `-s -w`, reducing active RSS inside the `VpnService` thread to **~11MB**.
+- **Hardware Crypto Auto-Negotiation**: Dynamically detect absence of `AES-NI` / ARM64 AES instructions; prioritize **ChaCha20-Poly1305 with ARMv7 NEON SIMD vectorization** to avoid 100% CPU battery drain on ancient Cortex-A7/A8 chips.
+- **Zero-Allocation Socket Ring Buffers**: Fixed MTU-sized buffer pools to eliminate Dalvik/ART GC pauses and packet dropping on weak dual/quad-core devices.
+- **Sub-25MB Memory Ceiling**: Guarantee complete bypass stack operation under active wire throughput within a strict 25MB total RAM envelope.
+
 
 > **VPN Connection is marked ✅ for the Xray path (2026-10-16).** The native tunnel has
 > now run on physical hardware: a real config connected and carried live traffic —

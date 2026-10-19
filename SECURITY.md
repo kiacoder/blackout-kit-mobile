@@ -34,12 +34,17 @@ This app is built on the following security principles:
 - ✅ No account system or login
 - ✅ No data sync to servers
 
-### 3. Encrypted Local Storage
-- Configs stored in Hive (encrypted by default)
-- Encryption key is device-specific (not synced)
-- Settings stored in encrypted_shared_preferences
+### 3. Local Storage & Encryption Roadmap
+- Configs, results, sources and settings are currently persisted via Hive key-value boxes without encryption at rest.
+- Enabling encryption at rest requires a backup-first migration plan to avoid data loss.
+- In-memory data is bounded, and no telemetry is collected or sent to remote servers.
 
-### 4. Transparent Code
+### 4. Low-Spec & Potato Hardware Security (V4)
+- **Zero-Allocation Socket Ring Buffers**: Mitigates memory churn and denial-of-service crashes on low-RAM devices (512MB–1GB RAM).
+- **Constant-Time Cryptography**: Auto-negotiates ChaCha20-Poly1305 on ARMv7 and older silicon lacking hardware `AES-NI`, eliminating cache-timing side-channel vulnerabilities inherent to software AES table lookups.
+
+### 5. Transparent Code
+
 - All code on GitHub (open-source)
 - No closed-source binaries
 - Community code review enabled

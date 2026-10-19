@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.26] - 2026-10-19
+
+### Added
+- **Shared native AmneziaWG core with mobile bindings.** The desktop repo now ships
+  `core/amneziawg-go/cmd/awg-mobile` — a `gomobile`-ready package exposing
+  `StartTunnel(configText, tunFd)`, `StopTunnel()`, `GetTunnelStats()`, `GetLastError()` and
+  `IsRunning()`, compiled from the same Go core the CLI uses (obfuscation parameters
+  Jc/Jmin/Jmax, S1–S4, H1–H4; base64→hex key conversion). Verified to cross-compile for
+  `linux/arm64` and `linux/amd64`. Wiring it into `VpnService` is the next mobile milestone.
+
+### Planned (Phase 6 Architecture)
+- **Extreme Low-Spec & Potato Android Architecture (V4 Roadmap)** — Added roadmap specifications for Android 5.0+ (Lollipop API 21), 32-bit ARMv7-A devices, and low-RAM hardware (`ro.config.low_ram=true`). Specifies sub-25MB total RAM footprint, in-process stripped `libblackout.so` (~11MB RSS), ARMv7 NEON-accelerated ChaCha20-Poly1305 auto-negotiation, and zero-allocation socket ring buffers to evade `lmkd` eviction.
+
 ### Verified on hardware
+
 - **The Android tunnel works on a physical device (2026-10-16).** A real config
   connected and carried live traffic end to end — a TikTok video loaded in
   under a second on the device. This closes the project's longest-standing

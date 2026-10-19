@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.32] - 2026-10-19
+
+### Fixed
+- **QR scanner: import dialogs no longer stack.** The camera stream fires
+  continuously while a QR is in view; Cancel re-armed scanning with the same
+  code still in frame and each dismissal instantly spawned the next dialog.
+  The camera now pauses while any import dialog is open, a 5s per-payload
+  cooldown blocks instant re-pops, saves are single-flight, the camera pauses
+  on other tabs, and torch/flip are disabled while stopped.
+
+### Added
+- **In-app self-updater** (Settings -> App update): checks GitHub Releases,
+  downloads the arm64 APK with progress and hands it to Android's package
+  installer. From this build on, updates arrive in-app.
+
 ### Added
 - **In-app self-updater.** Settings gains an "App update" card: checks GitHub
   Releases (build-number comparison on `beta.N` tags), downloads the arm64 APK

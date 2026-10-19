@@ -107,7 +107,8 @@ jobs:
             printf 'See CHANGELOG.md for the full history. Release %s.\n' "$TAG" > release_notes.md
           fi
           TITLE="$TAG"
-          SUMMARY="$(grep -m1 -oE '^[[:space:]]*[-*][[:space:]]*\*\*[^*]+\*\*' release_notes.md | sed -E 's/^[[:space:]]*[-*][[:space:]]*\*\*([^*]+)\*\*/\1/')"
+          JOINED_NOTES="$(tr '\n' ' ' < release_notes.md)"
+          SUMMARY="$(echo "$JOINED_NOTES" | grep -m1 -oE '[-*][[:space:]]*\*\*[^*]+\*\*' | sed -E 's/^[-*][[:space:]]*\*\*([^*]+)\*\*/\1/')"
           [ -n "$SUMMARY" ] && TITLE="$TAG — $SUMMARY"
           echo "title=$TITLE" >> "$GITHUB_OUTPUT"
           echo "Release notes prepared for $TAG (title: $TITLE)"

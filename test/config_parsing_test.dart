@@ -773,4 +773,39 @@ AllowedIPs = 0.0.0.0/0
     });
   });
 
+
+  group('insecure flag spellings', () {
+    // The "accept any cert" flag is spelled three different ways in the wild.
+    // A link using a spelling the parser did not know connected with
+    // certificate validation ON -> handshake failure against self-signed
+    // certs (which is what TUIC and Hysteria2 servers actually use).
+    test('TUIC accepts allow_insecure as well as insecure', () {
+      final a = ConfigParser.parse('tuic://a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d:pw@a.com:443?allow_insecure=1') as TuicConfig;
+      final b = ConfigParser.parse('tuic://a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d:pw@a.com:443?insecure=1') as TuicConfig;
+      final c = ConfigParser.parse('tuic://a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d:pw@a.com:443?allowInsecure=1') as TuicConfig;
+      expect(a.insecure, isTrue);
+      expect(b.insecure, isTrue);
+      expect(c.insecure, isTrue);
+    });
+
+    test('TUIC defaults to secure when no flag is given', () {
+      final c = ConfigParser.parse('tuic://a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d:pw@a.com:443') as TuicConfig;
+      expect(c.insecure, isFalse);
+    });
+
+    test('Hysteria2 accepts every spelling', () {
+      for (final q in ['insecure=1', 'allow_insecure=1', 'allowInsecure=1', 'insecure=true', 'insecure=yes']) {
+        final c = ConfigParser.parse('hy2://pw@a.com:443?$q') as Hysteria2Config;
+        expect(c.insecure, isTrue, reason: 'query "$q" must enable insecure');
+      }
+      final d = ConfigParser.parse('hy2://pw@a.com:443') as Hysteria2Config;
+      expect(d.insecure, isFalse);
+    });
+
+    test('insecure=0 stays secure', () {
+      final c = ConfigParser.parse('tuic://a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d:pw@a.com:443?allow_insecure=0') as TuicConfig;
+      expect(c.insecure, isFalse);
+    });
+  });
+
 }

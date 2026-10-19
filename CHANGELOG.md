@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.28] - 2026-10-19
+
+### Fixed
+- **The "accept any certificate" flag is now spelled three ways.** TUIC and Hysteria2
+  links using `insecure=1` (sing-box), `allow_insecure=1` (SIP002/v2rayNG) or
+  `allowInsecure=1` all enable insecure mode; previously only `insecure=1` was
+  recognised, so v2rayNG-style links silently connected with certificate validation
+  ON and failed against every self-signed server cert. 5 new tests cover the
+  spellings and the secure default.
+
 ### Fixed
 - **Release APKs are signed with a stable key (fixes the update failure).** The release
   build fell back to `signingConfigs.debug` whenever `android/key.properties` was absent —

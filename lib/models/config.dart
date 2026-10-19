@@ -769,7 +769,7 @@ class Hysteria2Config extends Config {
         password: u.userInfo,
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
-        insecure: u.queryParameters['insecure'] == '1',
+        insecure: _insecure(u.queryParameters),
         upMbps: int.tryParse(u.queryParameters['up'] ?? ''),
         downMbps: int.tryParse(u.queryParameters['down'] ?? ''),
         obfs: u.queryParameters['obfs'],
@@ -826,7 +826,7 @@ class TuicConfig extends Config {
         name: name, rawUri: uri, uuid: uuid, password: pwd,
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
-        insecure: u.queryParameters['insecure'] == '1',
+        insecure: _insecure(u.queryParameters),
         alpn: u.queryParameters['alpn'],
         congestionControl: u.queryParameters['congestion_control'] ?? 'bbr',
       );
@@ -1156,6 +1156,18 @@ class ConfigParser {
       } catch (_) {}
     }
     return body;
+  }
+
+  /// The "accept any certificate" flag, spelled inconsistently across clients:
+  /// `insecure=1` (sing-box), `allow_insecure=1` (SIP002/v2rayNG), `allowInsecure=1`
+  /// (v2rayNG JSON-style links). A link using a spelling this parser did not know
+  /// silently connected with certificate validation ON, which fails against the
+  /// self-signed certs most servers actually use.
+  static bool _insecure(Map<String, String> q) {
+    final v = q['insecure'] ?? q['allow_insecure'] ?? q['allowInsecure'];
+    if (v == null) return false;
+    final low = v.toLowerCase();
+    return low == '1' || low == 'true' || low == 'yes';
   }
 
   static Config? parse(String text, {String? customName}) {

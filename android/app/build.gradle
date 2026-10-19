@@ -1,6 +1,11 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
+    // The short `kotlin-android` alias resolves to the Kotlin plugin bundled
+    // with Flutter (1.6.x), whose metadata reader rejects every modern
+    // AndroidX/dependency jar ("compiled with an incompatible version of
+    // Kotlin ... expected 1.6.0"). Applying the canonical id uses the version
+    // pinned in android/settings.gradle instead.
+    id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 

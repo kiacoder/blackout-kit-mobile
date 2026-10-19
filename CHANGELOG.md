@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to Blackout Kit Mobile will be documented in this file.
 

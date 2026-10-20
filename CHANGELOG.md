@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.35] - 2026-10-20
+
+### Changed
+- **APKs are now signed with a stable release key.** Every earlier CI build
+  fell back to the debug keystore, and GitHub-hosted runners mint a fresh one
+  per run — so each published APK carried a different signature and installing
+  one over another failed with "package conflicts with an existing package".
+  From this build on, `build.yml` signs from `ANDROID_KEYSTORE_*` secrets and
+  **future updates install in place**. One consequence to plan for: Android
+  never allows a signature change on an installed app, so this first signed
+  build must be installed after **uninstalling** the previous one (app-local
+  data goes with it — re-import your configs afterwards). Every update after
+  that is a normal in-place upgrade.
+
 ## [1.0.0-beta.34] - 2026-10-20
 
 ### Fixed

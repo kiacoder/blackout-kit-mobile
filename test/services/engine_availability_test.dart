@@ -151,7 +151,7 @@ void main() {
             'wireguard',
           ],
           'singboxAvailable': true,
-          'singboxProtocols': ['hysteria2', 'tuic', 'amneziawg', 'warp'],
+          'singboxProtocols': ['hysteria2', 'tuic', 'anytls', 'shadowtls', 'amneziawg', 'warp'],
           'unavailableProtocols': ['openvpn', 'psiphon'],
         });
 

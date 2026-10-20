@@ -833,7 +833,7 @@ AllowedIPs = 0.0.0.0/0
         'anytls://pw1@a.com:39007?sni=x&insecure=1',
         'vless://11111111-1111-1111-1111-111111111111@b.com:443#V',
         'shadowtls://pw2@c.com:39008?sni=y',
-      ].join('\\n');
+      ].join('\n');
       final configs = ConfigParser.parseMultiple(blob);
       expect(configs.map((c) => c.protocol).toSet(), {'anytls', 'vless', 'shadowtls'});
     });

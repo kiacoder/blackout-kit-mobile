@@ -30,8 +30,54 @@ import java.util.concurrent.atomic.AtomicBoolean
 object EngineRunner {
     private const val TAG = "EngineRunner"
 
+    /** Descriptor slot the native launcher duplicates the TUN fd into. */
+    private const val FD_SLOT = 3
+
     /** Always required: the bridge between the TUN fd and the loopback proxy. */
     private const val TUN2SOCKS = "libtun2socks.so"
+
+    /**
+     * Loads libfdlauncher.so, built from android/app/src/main/cpp.
+     *
+     * Java's ProcessBuilder can only map descriptors 0/1/2, and the TUN fd
+     * VpnService hands back is installed through Binder with FD_CLOEXEC set,
+     * so a subprocess never sees it - the engine would fail with EBADF the
+     * moment it touched the tunnel. The native helper forks, dup2()s the
+     * descriptor to slot 3 and execs the engine, which is the only way a
+     * subprocess can carry the tunnel. The Xray engine does not need this:
+     * it takes the fd in-process over JNI.
+     */
+    private external fun nativeSpawnWithFd(
+        path: String, args: Array<String>, fd: Int, logPath: String,
+    ): Int
+
+    /** -1 while the child runs, otherwise its exit code. */
+    private external fun nativePollPid(pid: Int): Int
+
+    /** Blocks until the child is gone; same codes as [nativePollPid]. */
+    private external fun nativeWaitPid(pid: Int): Int
+
+    /** Sends a signal to a launcher-started child (SIGTERM/SIGKILL). */
+    private external fun nativeKillPid(pid: Int, signal: Int): Int
+
+    @Volatile
+    private var nativeLoaded = false
+
+    /**
+     * Loads the launcher once. Every native call site is guarded by
+     * [nativeLoaded] because UnsatisfiedLinkError is an Error, not an
+     * Exception - it would escape the catch blocks and take the app down.
+     */
+    private fun loadNative() {
+        if (nativeLoaded) return
+        try {
+            System.loadLibrary("fdlauncher")
+            nativeLoaded = true
+        } catch (e: UnsatisfiedLinkError) {
+            nativeLoaded = false
+            Log.w(TAG, "fdlauncher native library unavailable: ${e.message}")
+        }
+    }
 
     /**
      * Protocol -> engine binary that can carry it.
@@ -58,6 +104,10 @@ object EngineRunner {
         private set
 
     private var tun2socksProcess: Process? = null
+
+    /** Pid of the tun2socks child started through the native launcher (-1: none). */
+    @Volatile
+    private var tun2socksPid: Int = -1
     private var engineProcess: Process? = null
     private var monitorThread: Thread? = null
     private val intentionalStop = AtomicBoolean(false)
@@ -154,14 +204,40 @@ object EngineRunner {
                 listOf(enginePath.absolutePath, "run", "-c", configFile.absolutePath)
             ).redirectErrorStream(true).redirectOutput(logRedirect).start()
 
-            tun2socksProcess = ProcessBuilder(
-                listOf(
+            // tun2socks needs the TUN descriptor itself. ProcessBuilder cannot
+            // deliver it (see nativeSpawnWithFd), so the launcher forks,
+            // duplicates the fd to slot FD_SLOT and execs the binary. The exit
+            // code is polled by the monitor thread below, like sing-box's.
+            loadNative()
+            if (!nativeLoaded) {
+                lastError = "The native fd launcher is unavailable in this build, so the " +
+                    "tunnel's file descriptor cannot be handed to the engine."
+                stop()
+                return false
+            }
+            tun2socksPid = nativeSpawnWithFd(
+                tun2socksPath.absolutePath,
+                arrayOf(
                     tun2socksPath.absolutePath,
-                    "-fd", tunFd.toString(),
-                    "-socks", "127.0.0.1:$socksPort"
-                )
-            ).redirectErrorStream(true).redirectOutput(logRedirect).start()
+                    "-fd", FD_SLOT.toString(),
+                    "-socks", "127.0.0.1:$socksPort",
+                ),
+                tunFd,
+                engineLog.absolutePath,
+            )
+            if (tun2socksPid <= 0) {
+                lastError = "Could not start tun2socks (native launcher refused). " +
+                    engineLogTail(engineLog)
+                stop()
+                return false
+            }
 
+            if (anyChildDied()) {
+                lastError = "tun2socks exited during startup (code ${tun2socksExitCode()}). " +
+                    engineLogTail(engineLog)
+                stop()
+                return false
+            }
             val children = listOfNotNull(engineProcess, tun2socksProcess)
             val startupError = lifecycle.awaitStartup(children, startupWaitMs)
             if (startupError != null) {
@@ -186,6 +262,15 @@ object EngineRunner {
                         if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
                         return@Thread
                     }
+                    // tun2socks was started through the native launcher, so it
+                    // is not a Process the lifecycle helper can see.
+                    if (nativeLoaded && tun2socksPid > 0 &&
+                        nativePollPid(tun2socksPid) != -1) {
+                        val reason = "tun2socks exited unexpectedly (code ${tun2socksExitCode()})."
+                        lastError = reason
+                        if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
+                        return@Thread
+                    }
                     try {
                         Thread.sleep(100)
                     } catch (_: InterruptedException) {
@@ -204,6 +289,17 @@ object EngineRunner {
         }
     }
 
+    /**
+     * True when the launcher-started tun2socks child has exited. -1 from
+     * [nativePollPid] means "still running", anything else is a status.
+     */
+    private fun anyChildDied(): Boolean =
+        nativeLoaded && tun2socksPid > 0 && nativePollPid(tun2socksPid) != -1
+
+    /** Exit code of the launcher-started tun2socks child, reaped if needed. */
+    private fun tun2socksExitCode(): Int =
+        if (nativeLoaded && tun2socksPid > 0) nativePollPid(tun2socksPid) else -1
+
     fun stop() {
         intentionalStop.set(true)
         monitorThread?.interrupt()
@@ -211,6 +307,26 @@ object EngineRunner {
         lifecycle.stop(listOfNotNull(tun2socksProcess, engineProcess))
         tun2socksProcess = null
         engineProcess = null
+        // tun2socks runs as a launcher-started child: terminate it, then reap
+        // it so it cannot linger as a zombie holding the tunnel down.
+        if (nativeLoaded && tun2socksPid > 0) {
+            val pid = tun2socksPid
+            tun2socksPid = -1
+            try {
+                nativeKillPid(pid, android.system.OsConstants.SIGTERM)
+                var waited = 0
+                while (nativePollPid(pid) == -1 && waited < 500) {
+                    Thread.sleep(25)
+                    waited += 25
+                }
+                if (nativePollPid(pid) == -1) {
+                    nativeKillPid(pid, android.system.OsConstants.SIGKILL)
+                }
+                nativeWaitPid(pid)
+            } catch (e: Throwable) {
+                Log.w(TAG, "could not stop tun2socks pid $pid: ${e.message}")
+            }
+        }
     }
 
     /** Called by Dart before connect() for a subprocess-backed engine. */

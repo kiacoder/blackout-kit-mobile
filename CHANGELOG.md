@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.37] - 2026-10-20
+
+### Fixed
+- **The TUN descriptor could never reach a subprocess engine.** The runner
+  started `tun2socks` with `ProcessBuilder(..., "-fd", <n>, ...)`, but Java can
+  only map descriptors 0/1/2, and the fd `VpnService.establish()` returns is
+  installed through Binder with `FD_CLOEXEC` set - so the child received a
+  descriptor number that did not exist in its own table and died with `EBADF`
+  the moment it touched the tunnel. That is why the in-process Xray engine
+  worked while every sing-box-family engine failed. A small native helper
+  (`android/app/src/main/cpp/fdlauncher.c`, built by CMake as
+  `libfdlauncher.so`) now does what Java cannot: `fork()`,
+  `dup2(tunFd, 3)`, `execv()`, with the child's stdio appended to
+  `engine.log`. Its pid is polled and reaped by the runner, so a dying
+  `tun2socks` is reported with its exit code instead of silently black-holing
+  traffic. If the helper is ever missing from a build, the engine refuses to
+  start with an explicit message rather than hanging.
+
 ## [1.0.0-beta.36] - 2026-10-20
 
 ### Fixed

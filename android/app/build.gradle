@@ -48,6 +48,15 @@ def flutterVersionName = versionParts[0]
 def flutterVersionCode = versionParts.size() > 1 ? versionParts[1] : '1'
 
 android {
+    // Builds libfdlauncher.so, the fork+dup2+exec helper that can pass the
+    // VPN's TUN file descriptor to a subprocess (Java's ProcessBuilder
+    // cannot - it can only map descriptors 0/1/2, and the Binder-installed
+    // tun fd has FD_CLOEXEC set, so the child never sees it).
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
     namespace = "com.blackoutkit.vpn"
     compileSdkVersion 34
 
@@ -68,6 +77,15 @@ android {
         targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+
+        // The fd launcher is built for the same two ABIs the app ships (the
+        // x86/x86_64 AAR libs are stripped in packagingOptions), and CMake is
+        // invoked by Gradle during the Flutter build.
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=none"
+            }
+        }
 
         // NOTE: deliberately no `ndk.abiFilters` here. AGP rejects it outright
         // when ABI splits are requested — "Conflicting configuration :

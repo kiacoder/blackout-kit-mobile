@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Downloaded update APKs (app-specific external files dir). -->
-    <external-files-path name="updates" path="updates/" />
+    <!-- Downloaded update APKs. The updater writes to filesDir/updates/ (the
+         app's internal storage): that root is always available and always the
+         one FileProvider maps, unlike the external app dir which can live on a
+         volume this provider does not cover. -->
+    <files-path name="updates_internal" path="updates/" />
+    <!-- Kept for APKs downloaded by builds before the switch to internal
+         storage, so an in-flight update from an older version still installs. -->
+    <external-files-path name="updates_external" path="updates/" />
 </paths>

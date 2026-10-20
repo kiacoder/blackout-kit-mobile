@@ -1,8 +1,12 @@
 /// Blackout Kit Mobile - in-app self-updater.
 ///
-/// Checks GitHub Releases for a newer beta build, downloads the arm64 APK
-/// into the app-specific external files dir, and hands it to Android's
-/// package installer through the UpdatePlugin platform channel.
+/// Checks GitHub Releases for a newer beta build, downloads the APK that
+/// matches this device's ABI into the app's internal files dir, and hands it
+/// to Android's package installer through the UpdatePlugin platform channel.
+///
+/// Internal storage is deliberate: FileProvider maps `filesDir/updates/`
+/// through `res/xml/file_paths.xml`, whereas the external app dir is not
+/// always the volume that gets mapped ("Failed to find configured root").
 import 'dart:convert';
 import 'dart:io';
 
@@ -21,32 +25,41 @@ class AppUpdate {
     required this.apkSize,
   });
 
-  final String tagName; // e.g. v1.0.0-beta.31
-  final int buildNumber; // 31
+  final String tagName; // e.g. v1.0.0-beta.38
+  final int buildNumber; // 38
   final String notes;
   final String apkUrl;
   final int apkSize;
 
   /// Only beta-tagged builds carry a comparable build number; anything else
   /// (1.0.0 stable, typos) returns null instead of guessing.
-  static AppUpdate? fromReleaseJson(Map<String, dynamic> json) {
+  static AppUpdate? fromReleaseJson(
+    Map<String, dynamic> json, {
+    String abi = 'arm64-v8a',
+  }) {
     final tag = (json['tag_name'] as String? ?? '').trim();
     final m = RegExp(r'beta\.(\d+)$').firstMatch(tag);
     if (m == null) return null;
     final assets =
         (json['assets'] as List? ?? []).whereType<Map<String, dynamic>>().toList();
-    Map<String, dynamic>? apk;
-    for (final a in assets) {
-      if ((a['name'] as String? ?? '') == 'app-arm64-v8a-release.apk') {
-        apk = a;
-        break;
-      }
+    if (assets.isEmpty) return null;
+
+    String nameOf(Map<String, dynamic> a) => (a['name'] as String? ?? '');
+
+    // Prefer the asset for this device's ABI. A 32-bit phone cannot install the
+    // arm64 APK (INSTALL_FAILED_NO_MATCHING_ABIS), and picking by name alone
+    // would hand it exactly that file.
+    Map<String, dynamic>? apk = assets.firstWhere(
+      (a) => nameOf(a) == 'app-$abi-release.apk',
+      orElse: () => <String, dynamic>{},
+    );
+    if (apk.isEmpty) {
+      apk = assets.cast<Map<String, dynamic>?>().firstWhere(
+            (a) => nameOf(a!).endsWith('.apk'),
+            orElse: () => null,
+          );
     }
-    apk ??= assets
-        .cast<Map<String, dynamic>?>()
-        .firstWhere((a) => (a?['name'] as String? ?? '').endsWith('.apk'),
-            orElse: () => null);
-    if (apk == null) return null;
+    if (apk == null || apk.isEmpty) return null;
     return AppUpdate(
       tagName: tag,
       buildNumber: int.parse(m.group(1)!),
@@ -65,6 +78,17 @@ class UpdateService extends GetxService {
   final status = RxString('');
   final progress = RxDouble(0.0);
 
+  /// The ABI the native side reports, used to choose the right APK asset.
+  Future<String> deviceAbi() async {
+    try {
+      final abi = await _channel.invokeMethod<String>('deviceAbi');
+      if (abi != null && abi.isNotEmpty) return abi;
+    } catch (_) {
+      // Older builds / non-Android: fall through to the common case.
+    }
+    return 'arm64-v8a';
+  }
+
   Future<int> installedBuildNumber() async {
     final info = await PackageInfo.fromPlatform();
     return int.tryParse(info.buildNumber) ?? 0;
@@ -73,6 +97,7 @@ class UpdateService extends GetxService {
   /// AppUpdate when the latest release build is newer than the installed one.
   Future<AppUpdate?> checkForUpdate() async {
     try {
+      final abi = await deviceAbi();
       final res = await Dio(BaseOptions(
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 20),
@@ -80,7 +105,10 @@ class UpdateService extends GetxService {
         _apiLatest,
         options: Options(headers: {'User-Agent': 'blackout-kit-mobile'}),
       );
-      final update = AppUpdate.fromReleaseJson(res.data ?? <String, dynamic>{});
+      final update = AppUpdate.fromReleaseJson(
+        res.data ?? <String, dynamic>{},
+        abi: abi,
+      );
       if (update == null) return null;
       if (update.buildNumber <= await installedBuildNumber()) return null;
       return update;
@@ -89,18 +117,28 @@ class UpdateService extends GetxService {
     }
   }
 
-  /// Downloads the arm64 APK into the FileProvider-mapped updates dir.
+  /// Downloads the APK into the FileProvider-mapped internal updates dir.
   Future<String> downloadApk(AppUpdate update) async {
-    final dirs = await getExternalStorageDirectories();
-    if (dirs == null || dirs.isEmpty) {
-      throw const FileSystemException('no external files dir available');
-    }
-    final updatesDir = Directory('${dirs.first.path}/updates')
+    // getApplicationSupportDirectory() is filesDir on Android, which is what
+    // <files-path> in file_paths.xml maps. No permissions involved.
+    final base = await getApplicationSupportDirectory();
+    final updatesDir = Directory('${base.path}/updates')
       ..createSync(recursive: true);
     final file = File('${updatesDir.path}/blackout-${update.tagName}.apk');
 
+    // A stale or partial file from an earlier attempt must not be installed.
+    if (await file.exists()) {
+      try {
+        await file.delete();
+      } catch (_) {}
+    }
+
     status.value = 'Downloading ${update.tagName}...';
-    await Dio().download(
+    progress.value = 0;
+    await Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(minutes: 5),
+    )).download(
       update.apkUrl,
       file.path,
       onReceiveProgress: (done, total) {
@@ -108,6 +146,21 @@ class UpdateService extends GetxService {
       },
       options: Options(headers: {'User-Agent': 'blackout-kit-mobile'}),
     );
+
+    // GitHub answers a rate-limited or failed download with HTML, not an APK.
+    // Catching that here produces "not a valid APK" instead of the installer's
+    // "problem parsing the package".
+    final size = await file.length();
+    if (update.apkSize > 0 && size != update.apkSize) {
+      throw Exception(
+        'Download incomplete: $size of ${update.apkSize} bytes. Try again.',
+      );
+    }
+    if (size < 1024 * 1024) {
+      throw Exception(
+        'The downloaded file is only $size bytes — the server did not send an APK.',
+      );
+    }
     status.value = 'Download complete';
     return file.path;
   }
@@ -117,7 +170,9 @@ class UpdateService extends GetxService {
     try {
       await _channel.invokeMethod('installApk', {'path': path});
     } on PlatformException catch (e) {
-      throw Exception(e.message ?? 'install failed');
+      // The native side already explains ALLOW_UNKNOWN_SOURCES and BAD_APK;
+      // keep that wording instead of flattening it into a generic failure.
+      throw Exception(e.message ?? 'install failed (${e.code})');
     }
   }
 }

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.39] - 2026-10-20
+
+### Fixed
+- **The in-app Update button could not install anything.** Four separate
+  reasons, all fixed:
+  - Android 8+ requires the per-app "install unknown apps" grant, and the
+    updater never checked it — the installer intent simply went nowhere. It now
+    calls `canRequestPackageInstalls()` first, opens the exact settings screen
+    for Blackout Kit, and says so ("turn on Allow from this source, then tap
+    Update again") instead of failing silently.
+  - The install intent carried the `content://` URI only as data. Several OEM
+    installers (Samsung, Xiaomi, Huawei) read the read-grant from
+    `ClipData` and otherwise throw SecurityException; it is now set.
+  - Updates were downloaded to the *external* app dir, which is not always the
+    volume FileProvider maps, so `getUriForFile` could throw "Failed to find
+    configured root". Downloads now go to internal `filesDir/updates/`, which
+    `file_paths.xml` maps explicitly (the external root stays mapped so an
+    in-flight update from an older build still installs).
+  - The APK was never validated. A truncated download or a GitHub HTML error
+    page reached the installer as "problem parsing the package". The download
+    is now size-checked against the release asset, and the native side rejects
+    anything `getPackageArchiveInfo` cannot parse.
+- **The updater always fetched the arm64 APK**, so a 32-bit device downloaded a
+  file it could never install (`INSTALL_FAILED_NO_MATCHING_ABIS`). The native
+  side now reports `Build.SUPPORTED_ABIS` and the matching asset is chosen
+  (arm64-v8a / armeabi-v7a), falling back to any APK.
+- The failure reason now has room to wrap in Settings instead of being clipped
+  to one line, with a Retry button.
+
 ## [1.0.0-beta.38] - 2026-10-20
 
 ### Fixed

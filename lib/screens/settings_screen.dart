@@ -885,7 +885,9 @@ class _UpdateSectionState extends State<_UpdateSection> {
       if (!mounted) return;
       setState(() {
         _phase = 'error';
-        _error = e.toString();
+        // Exception.toString() prefixes "Exception: "; the message alone reads
+        // better in a one-line subtitle.
+        _error = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }
@@ -910,12 +912,21 @@ class _UpdateSectionState extends State<_UpdateSection> {
               'downloading' =>
                 'Downloading ${((_service.progress.value) * 100).toStringAsFixed(0)}%',
               'ready' => 'Ready to install - tap to open the installer',
-              'error' => 'Update failed: $_error',
+              'error' => 'Update failed',
               _ => 'App update',
             },
           ),
+          // The failure reason (missing install permission, truncated
+          // download, ...) is the whole point here, so it gets room to wrap
+          // instead of being clipped to one line in the title.
           subtitle: Text(
-            _currentVersion.isEmpty ? 'Tap to check for updates' : 'Installed: $_currentVersion',
+            _phase == 'error'
+                ? _error
+                : (_currentVersion.isEmpty
+                    ? 'Tap to check for updates'
+                    : 'Installed: $_currentVersion'),
+            maxLines: 5,
+            overflow: TextOverflow.ellipsis,
           ),
           trailing: switch (_phase) {
             'checking' || 'downloading' => const SizedBox(
@@ -931,6 +942,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
                 onPressed: () => _service.installApk(_apkPath!),
                 child: const Text('Install'),
               ),
+            'error' => TextButton(onPressed: _check, child: const Text('Retry')),
             _ => IconButton(onPressed: _check, icon: const Icon(Icons.refresh)),
           },
         ),

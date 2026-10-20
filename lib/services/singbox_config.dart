@@ -73,13 +73,16 @@ class SingboxConfigBuilder {
         'level': 'warn',
         'timestamp': true,
       },
+      // No `sniff` field on the inbound: sing-box 1.11 deprecated it and 1.13
+      // REMOVED it - the whole document fails to decode ("legacy inbound
+      // fields ... inbounds[0]"), which is exactly what the bundled
+      // libsingbox.so did on the phone. Sniffing is a route rule action now.
       'inbounds': [
         {
           'type': 'mixed',
           'tag': 'mixed-in',
           'listen': '127.0.0.1',
           'listen_port': socksPort,
-          'sniff': true,
         },
       ],
       'outbounds': <Map<String, dynamic>>[
@@ -105,6 +108,11 @@ class SingboxConfigBuilder {
               'domain_suffix': bypassDomains,
               'outbound': 'direct',
             },
+          // Sniff LAST of the rules: a sniff action terminates route
+          // evaluation, so putting it first would starve the bypass rules.
+          {
+            'action': 'sniff',
+          },
         ],
         'auto_detect_interface': true,
         'final': 'proxy',
@@ -112,27 +120,43 @@ class SingboxConfigBuilder {
     };
 
     if (routeDnsThroughProxy) {
+      // Typed DNS servers ({"type": ..., "server": ...}): the legacy
+      // `address` form was deprecated in 1.12 and REMOVED in 1.14.
+      //
+      // The old `dns.rules: [{outbound: any, server: remote-dns}]` (an
+      // "outbound DNS rule item") is removed too - that association now lives
+      // in the dial fields: `route.default_domain_resolver` for everything
+      // else, and `domain_resolver` on the proxy outbound so domains dialed
+      // through the tunnel are resolved inside it.
       document['dns'] = {
         'servers': [
           {
+            'type': 'https',
             'tag': 'remote-dns',
-            'address': 'https://cloudflare-dns.com/dns-query',
+            'server': 'cloudflare-dns.com',
             'detour': 'proxy',
           },
           {
+            'type': 'udp',
             'tag': 'local-dns',
-            'address': dnsServers.isNotEmpty ? dnsServers.first : '1.1.1.1',
+            'server': dnsServers.isNotEmpty ? dnsServers.first : '1.1.1.1',
             'detour': 'direct',
-          },
-        ],
-        'rules': [
-          {
-            'outbound': 'any',
-            'server': 'remote-dns',
           },
         ],
         'strategy': 'prefer_ipv4',
       };
+      document['route']!['default_domain_resolver'] = {
+        'server': 'local-dns',
+        'strategy': 'prefer_ipv4',
+      };
+      for (final outbound in document['outbounds']!) {
+        if (outbound['tag'] == 'proxy') {
+          outbound['domain_resolver'] = {
+            'server': 'remote-dns',
+            'strategy': 'prefer_ipv4',
+          };
+        }
+      }
     }
 
     return document;

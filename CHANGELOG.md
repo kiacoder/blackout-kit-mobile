@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.34] - 2026-10-20
+
+### Fixed
+- **Sing-box configs were rejected by the bundled core — every sing-box
+  engine failed to connect.** The generated document still used three field
+  forms that the bundled `libsingbox.so` (sing-box 1.13+) no longer accepts:
+  the legacy `sniff` inbound field (removed in 1.13 — fatal at decode, which
+  is what the phone reported for Hysteria2), the legacy `dns.servers[].address`
+  form (removed in 1.14), and the `dns.rules` outbound item (removed in 1.14).
+  Sniffing is now a `route` rule `action` and is emitted **after** the bypass
+  rules (a sniff action terminates route evaluation); DNS servers are typed
+  (`{"type": "https", "server": ...}`) and the tunnel association lives in the
+  dial fields (`route.default_domain_resolver` + per-outbound
+  `domain_resolver`). The full generated document validates clean against
+  sing-box 1.14.3 with zero deprecation warnings. 4 new tests pin the modern
+  shape so the legacy fields cannot creep back.
+
 ## [1.0.0-beta.33] - 2026-10-20
 
 ### Added

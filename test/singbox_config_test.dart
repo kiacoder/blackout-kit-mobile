@@ -153,4 +153,75 @@ Endpoint = awg.server.com:51820
       expect(jsonDecode(jsonStr), isA<Map<String, dynamic>>());
     });
   });
+
+  group('sing-box 1.13+/1.14 field compliance', () {
+    // The bundled libsingbox.so is 1.13+: any legacy field makes the whole
+    // document fail to decode, which surfaced on the phone as
+    // "sing-box rejected the configuration: ... inbounds[0]: legacy inbound
+    // fields are deprecated in sing-box 1.11.0 and removed in sing-box 1.13.0".
+    // These tests pin the modern equivalents so the regression cannot return.
+
+    test('no legacy sniff field on the inbound; sniff is a route action', () {
+      const builder = SingboxConfigBuilder();
+      final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
+      final doc = builder.build(config);
+
+      final inbounds = doc['inbounds'] as List;
+      final mixed = inbounds.firstWhere((i) => i['type'] == 'mixed') as Map;
+      expect(mixed.containsKey('sniff'), isFalse,
+          reason: 'the `sniff` inbound field was removed in sing-box 1.13');
+
+      final route = doc['route'] as Map;
+      final rules = route['rules'] as List;
+      expect(rules.any((r) => (r as Map)['action'] == 'sniff'), isTrue,
+          reason: 'sniffing must be a route rule action');
+    });
+
+    test('the sniff action comes after the bypass rules', () {
+      // A sniff action terminates route evaluation: first means the bypass
+      // rules never fire.
+      const builder = SingboxConfigBuilder(bypassDomains: ['example.org']);
+      final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
+      final rules = (builder.build(config)['route'] as Map)['rules'] as List;
+
+      final actions = rules.map((r) => (r as Map)['outbound'] ?? (r as Map)['action']).toList();
+      final sniffIndex = rules.indexWhere((r) => (r as Map)['action'] == 'sniff');
+      final bypassIndex = rules.indexWhere((r) => (r as Map)['outbound'] == 'direct');
+      expect(sniffIndex, greaterThan(bypassIndex));
+      expect(actions, isNotEmpty);
+    });
+
+    test('proxied DNS uses typed servers and dial-field resolvers', () {
+      const builder = SingboxConfigBuilder(routeDnsThroughProxy: true);
+      final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
+      final doc = builder.build(config);
+
+      final dns = doc['dns'] as Map;
+      final servers = dns['servers'] as List;
+      // legacy `address` form was removed in sing-box 1.14
+      expect(servers.every((s) => !(s as Map).containsKey('address')), isTrue);
+      expect((servers.first as Map)['type'], 'https');
+      expect((servers.last as Map)['type'], 'udp');
+      // the outbound DNS rule item is removed; the association lives in dial fields
+      expect(dns.containsKey('rules'), isFalse);
+
+      final route = doc['route'] as Map;
+      expect(route['default_domain_resolver'], isNotNull);
+      final proxy = (doc['outbounds'] as List).firstWhere((o) => o['tag'] == 'proxy') as Map;
+      expect(proxy['domain_resolver'], isNotNull);
+    });
+
+    test('without proxied DNS there is no dns block to go stale', () {
+      const builder = SingboxConfigBuilder();
+      final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
+      final doc = builder.build(config);
+
+      expect(doc.containsKey('dns'), isFalse);
+      final route = doc['route'] as Map;
+      expect(route.containsKey('default_domain_resolver'), isFalse);
+      final proxy = (doc['outbounds'] as List).firstWhere((o) => o['tag'] == 'proxy') as Map;
+      expect(proxy.containsKey('domain_resolver'), isFalse);
+    });
+  });
+
 }

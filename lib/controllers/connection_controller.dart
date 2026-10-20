@@ -228,6 +228,10 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           'The tunnel is up but nothing loads — reconnect to pick another '
           'server';
       debugService.logAction('liveness_failed');
+      // Paint the error AND close the interface. Leaving it up left the app
+      // claiming failure while the system VPN stayed established, so traffic
+      // kept being routed into a tunnel that carries nothing.
+      await vpnService.disconnect();
     });
   }
 
@@ -265,6 +269,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     statusMessage.value =
         'The tunnel is up but nothing loads — reconnect to pick another server';
     debugService.logAction('liveness_failed', {'trigger': 'resume'});
+    // Same reason as the watchdog: an error state with a live interface is a
+    // lie the user pays for in dropped traffic.
+    await vpnService.disconnect();
   }
 
   /// Brings the Dart state in line with what the native service is actually

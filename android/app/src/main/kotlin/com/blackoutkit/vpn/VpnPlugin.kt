@@ -45,7 +45,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         private const val TAG = "VpnPlugin"
         private const val CHANNEL = "com.blackoutkit.vpn/service"
         private const val PREPARE_REQUEST = 0xB10C
-        private const val CONNECT_TIMEOUT_MS = 20_000L
+        // A cold start on a slow device has to fit: sing-box `check`,
+        // the 3s engine startup window, the 2s SOCKS readiness probe and
+        // the tun2socks launch. 20s left no headroom and reported a
+        // timeout for tunnels that were about to succeed.
+        private const val CONNECT_TIMEOUT_MS = 35_000L
         private const val IP_ECHO_URL = "https://api.ipify.org"
         private const val IP_FETCH_TIMEOUT_MS = 8_000
     }
@@ -157,14 +161,20 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             "xrayProtocols" to
                 listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard"),
             "singboxAvailable" to singboxAvailable,
+            // amneziawg is NOT here on purpose: the bundled libsingbox.so is a
+            // vanilla build (no `amnezia` option anywhere in the binary), so an
+            // AmneziaWG profile is rejected at config decode time. Advertising
+            // it produced a cryptic "unknown field amnezia" from sing-box
+            // instead of an honest "this build cannot dial it". The desktop CLI
+            // serves AWG through its own native core; mobile does not.
             "singboxProtocols" to
                 if (singboxAvailable)
-                    listOf("hysteria2", "tuic", "anytls", "shadowtls", "amneziawg", "warp")
+                    listOf("hysteria2", "tuic", "anytls", "shadowtls", "warp")
                 else emptyList<String>(),
             "unavailableProtocols" to
-                (listOf("openvpn", "psiphon") +
+                (listOf("openvpn", "psiphon", "amneziawg") +
                     if (singboxAvailable) emptyList()
-                    else listOf("hysteria2", "tuic", "anytls", "shadowtls", "amneziawg", "warp"))
+                    else listOf("hysteria2", "tuic", "anytls", "shadowtls", "warp"))
         )
     }
 

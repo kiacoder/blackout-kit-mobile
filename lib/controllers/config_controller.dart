@@ -1,6 +1,8 @@
 /// Config controller using GetX for state management.
 /// Manages loading, filtering, testing, and ranking of VPN configs.
 
+import 'dart:async';
+
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 import '../models/config.dart';
@@ -80,6 +82,41 @@ class ConfigController extends GetxController {
 
   void _invalidateFilterCache() => _filterEpoch++;
 
+  /// Last `testedAt` written per config hash, so a persist pass only touches
+  /// rows that actually changed. Also what makes the write pass idempotent.
+  final Map<String, DateTime?> _persistedTestedAt = {};
+
+  /// Hashes changed since the last flush.
+  final Set<String> _pendingPersist = {};
+
+  Timer? _persistTimer;
+
+  /// Coalesces a burst of result changes (a scan updates one per config) into
+  /// a single write pass. Without the delay each measurement triggered a pass.
+  void _scheduleResultPersist() {
+    _persistTimer?.cancel();
+    _persistTimer = Timer(const Duration(milliseconds: 750), _flushResultPersist);
+  }
+
+  void _flushResultPersist() {
+    final hashes = _pendingPersist.toList(growable: false);
+    _pendingPersist.clear();
+    for (final hash in hashes) {
+      final result = testResults[hash];
+      if (result == null) continue;
+      _persistedTestedAt[hash] = result.testedAt;
+      configService.saveTestResult(result);
+    }
+  }
+
+  @override
+  void onClose() {
+    // Anything still queued must reach disk: the app may be closing.
+    _persistTimer?.cancel();
+    _flushResultPersist();
+    super.onClose();
+  }
+
   /// Marks [config] as working because the tunnel carrying it came up.
   ///
   /// The library badge is fed by [testResults], and nothing used to write a
@@ -125,13 +162,25 @@ class ConfigController extends GetxController {
     ever(allConfigs, (_) => _invalidateFilterCache());
     ever(testResults, (_) => _invalidateFilterCache());
 
-    // Persist every measurement so a restart does not wipe the tester back to
+    // Persist measurements so a restart does not wipe the tester back to
     // "Untested" for thousands of servers (and connectFastest back to probing
-    // blind). Writes are cheap: one small Hive record per result.
+    // blind).
+    //
+    // This used to write EVERY result on EVERY change. A scan updates one
+    // result per config, so with thousands of configs that is one full Hive
+    // write pass per measurement - quadratic, and it made the scan crawl. Now
+    // only results whose testedAt actually changed are written, and bursts are
+    // coalesced into a single pass.
     ever(testResults, (Map<String, TestResult> results) {
-      for (final result in results.values) {
-        configService.saveTestResult(result);
+      var dirty = false;
+      for (final entry in results.entries) {
+        final saved = _persistedTestedAt[entry.key];
+        if (saved != entry.value.testedAt) {
+          _pendingPersist.add(entry.key);
+          dirty = true;
+        }
       }
+      if (dirty) _scheduleResultPersist();
     });
 
     _log.i('ConfigController initialized');
@@ -140,6 +189,11 @@ class ConfigController extends GetxController {
     // with results on the very first frame.
     final stored = configService.loadTestResults();
     if (stored.isNotEmpty) {
+      // Mark them as persisted up front, otherwise the first change would
+      // rewrite every restored row.
+      for (final entry in stored.entries) {
+        _persistedTestedAt[entry.key] = entry.value.testedAt;
+      }
       testResults.addAll(stored);
       _log.i('Restored ${stored.length} stored test results');
     }

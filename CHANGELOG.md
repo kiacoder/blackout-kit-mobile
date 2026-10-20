@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.42] - 2026-10-20
+
+### Fixed — full audit pass
+- **The liveness watchdog reported a dead tunnel but left it running.** When the
+  periodic check found "connected but nothing loads", it set the error state and
+  stopped there — the system VPN stayed established, so traffic kept being
+  routed into a tunnel that carried nothing, and the notification still said
+  connected. Both the watchdog and the resume-time check now close the
+  interface as well.
+- **Test results were persisted quadratically.** Every change to the results
+  map wrote *every* result to Hive. A scan updates one result per config, so
+  with thousands of configs that is one full write pass per measurement —
+  thousands of writes per scan, and the scan crawled. Persistence is now
+  diff-based (only rows whose `testedAt` changed) and coalesced into a single
+  pass every 750 ms, flushed on close.
+- **AmneziaWG was advertised but cannot work on mobile.** The bundled
+  `libsingbox.so` is a vanilla sing-box build — it contains no `amnezia` option
+  at all — so an AWG profile is rejected at decode time with a cryptic
+  "unknown field amnezia". `amneziawg` is no longer listed as available, so the
+  app refuses it up front with a plain explanation instead of failing inside
+  the core. (The desktop CLI serves AWG through its own native core.)
+- **`setState()` after an await without a `mounted` check** in the import
+  screen (clipboard probe and file picker): leaving the screen while the system
+  dialog was open threw into a swallowed catch and the import silently did
+  nothing.
+- **The Library reported every connect failure as "Could not connect".** The
+  controller already holds the real reason (engine refusal, denied permission,
+  core error); it is now shown, for 6 seconds.
+- **The connect watchdog allowed no headroom.** 20 s had to cover `sing-box
+  check`, the 3 s engine startup window, the 2 s SOCKS probe and the tun2socks
+  launch; on a slow device a tunnel that was about to succeed was reported as a
+  timeout. Raised to 35 s.
+
 ## [1.0.0-beta.41] - 2026-10-20
 
 ### Fixed

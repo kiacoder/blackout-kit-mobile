@@ -678,11 +678,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
         colorText: Colors.white,
       );
     } else {
+      // "Could not connect" told the user nothing. The controller already
+      // holds the specific reason (engine refusal, denied permission, core
+      // error) - show it.
+      final reason = _connectionController.statusMessage.value;
       Get.snackbar(
         'Connection Failed',
-        'Could not connect to ${config.displayName}',
+        reason.isEmpty ? 'Could not connect to ${config.displayName}' : reason,
         backgroundColor: Colors.red,
         colorText: Colors.white,
+        duration: const Duration(seconds: 6),
       );
     }
   }

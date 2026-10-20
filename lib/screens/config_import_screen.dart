@@ -96,6 +96,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     if (_dialogOpen || _saving) return;
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
+      // The clipboard read is an await; the screen can be gone by now.
+      if (!mounted) return;
       if (data != null && data.text != null && data.text!.isNotEmpty) {
         final text = data.text!.trim();
         final configs = _parsePayload(text);
@@ -181,6 +183,10 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         }
 
         if (content.isNotEmpty) {
+          // The picker and the file read are both awaits: the user can leave
+          // this screen while the system dialog is up, and setState on a
+          // disposed State throws.
+          if (!mounted) return;
           final filename = file.name;
           final multiple = ConfigParser.parseMultiple(content);
           final single = ConfigParser.parse(content, customName: filename);

@@ -219,8 +219,16 @@ object EngineRunner {
                 tun2socksPath.absolutePath,
                 arrayOf(
                     tun2socksPath.absolutePath,
-                    "-fd", FD_SLOT.toString(),
-                    "-socks", "127.0.0.1:$socksPort",
+                    // xjasonlyu/tun2socks v2 takes a *device URI*, not a bare
+                    // descriptor: "-fd 3" and "-socks host:port" are not flags
+                    // it defines, so the flag parser killed the process with
+                    // exit code 2 before it ever touched the tunnel. The device
+                    // is "fd://<n>" (engine/parse.go -> fdbased driver) and the
+                    // upstream proxy is "-proxy [protocol://]host:port".
+                    "-device", "fd://$FD_SLOT",
+                    "-proxy", "socks5://127.0.0.1:$socksPort",
+                    "-mtu", BlackoutVpnService.VPN_MTU.toString(),
+                    "-loglevel", "info",
                 ),
                 tunFd,
                 engineLog.absolutePath,
@@ -242,6 +250,15 @@ object EngineRunner {
             val startupError = lifecycle.awaitStartup(children, startupWaitMs)
             if (startupError != null) {
                 lastError = startupError + engineLogTail(engineLog)
+                stop()
+                return false
+            }
+            // awaitStartup only watches Process children; tun2socks is a
+            // launcher-started pid, so re-check it here. Without this a dead
+            // tun2socks surfaced as a misleading SOCKS-handshake timeout.
+            if (anyChildDied()) {
+                lastError = "tun2socks exited during startup (code ${tun2socksExitCode()}). " +
+                    engineLogTail(engineLog)
                 stop()
                 return false
             }

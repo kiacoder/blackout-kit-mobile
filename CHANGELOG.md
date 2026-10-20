@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.38] - 2026-10-20
+
+### Fixed
+- **tun2socks was started with flags it does not have, so every sing-box-family
+  engine died instantly.** The bundled binary is xjasonlyu/tun2socks v2.7.0,
+  whose flags are `-device [driver://]name` and `-proxy [protocol://]host:port`.
+  The runner passed `-fd 3 -socks 127.0.0.1:10808`; Go's flag parser answers an
+  unknown flag with exit code 2, so tun2socks never touched the tunnel. It is
+  now started as `-device fd://3 -proxy socks5://127.0.0.1:<port> -mtu 1500`
+  (the `fd` driver is `core/device/fdbased`, which parses the number after
+  `fd://` as the descriptor).
+- **The engine and the VPN service shared one tun descriptor.**
+  `ParcelFileDescriptor.fromFd()` wraps the same descriptor without duplicating
+  it, so the engine's close and teardown's close hit one descriptor twice - the
+  second landing on whatever number the kernel had recycled. It now uses
+  `dup()`, which is what the surrounding comment always claimed.
+- **Each connect leaked a descriptor.** The engine's duplicate was never closed;
+  it is now tracked and released in teardown.
+- **A dead tun2socks was reported as a SOCKS-handshake timeout.** The startup
+  wait only watches `Process` children, and tun2socks is a launcher-started pid,
+  so its death is now checked again after the wait and reported with its exit
+  code (2 = bad flag, 126 = dup2 failed, 127 = exec failed).
+
 ## [1.0.0-beta.37] - 2026-10-20
 
 ### Fixed

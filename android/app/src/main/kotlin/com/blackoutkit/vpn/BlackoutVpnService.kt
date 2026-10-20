@@ -68,7 +68,7 @@ class BlackoutVpnService : VpnService() {
          */
         private const val VPN_ADDRESS_V4 = "10.111.222.1"
         private const val VPN_PREFIX_V4 = 30
-        private const val VPN_MTU = 1500
+        internal const val VPN_MTU = 1500
         private const val DEFAULT_DNS = "1.1.1.1"
 
         const val DEFAULT_SOCKS_PORT = 10808
@@ -125,6 +125,13 @@ class BlackoutVpnService : VpnService() {
     }
 
     private var tun: ParcelFileDescriptor? = null
+
+    /**
+     * The engine's own duplicate of the tun descriptor. Kept so teardown can
+     * close it: without this every connect leaked one descriptor in the app
+     * process, and after enough reconnects the process runs out of them.
+     */
+    private var engineTunFd: ParcelFileDescriptor? = null
     private var activeProtocol: String? = null
     private var activeName: String? = null
 
@@ -295,6 +302,12 @@ class BlackoutVpnService : VpnService() {
                 return false
             }
             tun = fd
+            // A previous attempt's engine copy must not survive this one.
+            try {
+                engineTunFd?.close()
+            } catch (_: Exception) {
+            }
+            engineTunFd = null
 
             // Arm the kill switch before the engine starts, so a crash during
             // startup is caught too.
@@ -307,7 +320,12 @@ class BlackoutVpnService : VpnService() {
             // means teardown()'s later close() targets a recycled descriptor.
             // The engine gets its own dup and closes only that.
             val engineFd = try {
-                ParcelFileDescriptor.fromFd(fd.fd)
+                // dup(), NOT fromFd(): fromFd wraps the SAME descriptor without
+                // duplicating it, so the engine's close() and teardown()'s
+                // close() would hit one descriptor twice - and the second close
+                // would land on whatever descriptor number the kernel had since
+                // recycled.
+                fd.dup()
             } catch (e: Exception) {
                 Log.e(TAG, "could not duplicate the tun fd: ${e.message}")
                 lastError = "Could not duplicate the tun fd: ${e.message}"
@@ -317,6 +335,7 @@ class BlackoutVpnService : VpnService() {
 
             // The engine must be up before we claim success, otherwise all
             // traffic would be black-holed by the default route just installed.
+            engineTunFd = engineFd
             val engineOk = startEngine(protocol, xrayConfig, singboxConfig, engineFd.fd, socksPort)
             if (!engineOk) {
                 // The engine sets its own lastError with the REAL reason
@@ -417,6 +436,12 @@ class BlackoutVpnService : VpnService() {
         holdTunnelOnFailure = false
         XrayEngine.stop()
         EngineRunner.stop()
+        try {
+            engineTunFd?.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "error closing the engine tun fd: ${e.message}")
+        }
+        engineTunFd = null
         try {
             tun?.close()
         } catch (e: Exception) {

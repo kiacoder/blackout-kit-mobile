@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.41] - 2026-10-20
+
+### Fixed
+- **The Library showed "✗ Failed" under a working tunnel.** The badge collapsed
+  five test states into two (`isWorking ? Working : Failed`), so a config that
+  had never been tested — or whose probe failed once before the engines
+  worked — was labelled a failure forever. The badge now reports the real
+  state: Working / Failed / Timeout / Testing / Not tested. A successful
+  connect also marks that config as working (keeping any measured latency and
+  speed), so the Library reflects the live tunnel instead of an old probe.
+- **The exit location stayed on "resolving…" for the sing-box engines.** The
+  lookup ran exactly once, immediately after connect — before hysteria2/TUIC
+  finished their QUIC handshake — and a single failure was permanent for the
+  session. It now retries up to six times with increasing delays and stops as
+  soon as an address resolves.
+- **The in-app updater reported "up to date" when it had actually failed.**
+  `checkForUpdate()` swallowed every error (offline, GitHub rate limit, missing
+  asset) and returned null, which the UI renders as "App is up to date" — the
+  same screen as a genuinely current install. Failures now surface their
+  reason ("Could not check for updates: …") with a Retry button, and only a
+  real up-to-date result says so.
+
 ## [1.0.0-beta.40] - 2026-10-20
 
 ### Fixed

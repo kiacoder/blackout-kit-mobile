@@ -308,6 +308,11 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             ? DateTime.fromMillisecondsSinceEpoch(startedAtMs)
             : DateTime.now();
         _startUptimeCounter();
+        if (config != null) {
+          try {
+            Get.find<ConfigController>().markConnected(config);
+          } catch (_) {}
+        }
         _fetchConnectedIP();
 
         _log.i('Adopted a running native tunnel'
@@ -627,6 +632,14 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         });
         _connectionStartTime = DateTime.now();
         _startUptimeCounter();
+        // The tunnel is live, so this config is working by definition. Without
+        // this the library badge kept whatever a failed probe had stored and
+        // read "Failed" under an active tunnel.
+        try {
+          Get.find<ConfigController>().markConnected(config);
+        } catch (_) {
+          // ConfigController not registered yet (early boot) - not fatal.
+        }
         _fetchConnectedIP();
 
         debugService.logInfo(
@@ -937,18 +950,37 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     connectionUptime.value = 0;
   }
 
+  /// Resolves the exit address through the tunnel, retrying briefly.
+  ///
+  /// A fresh tunnel is not instantly usable: hysteria2/TUIC still have to
+  /// finish their QUIC handshake, so the very first SOCKS dial can fail. One
+  /// shot at connect time left the location stuck on "resolving..." for the
+  /// whole session.
   Future<void> _fetchConnectedIP() async {
-    try {
-      final ip = await vpnService.getConnectedIP();
-      connectedIP.value = ip;
-    } catch (e) {
-      _log.e('Error fetching connected IP: $e');
-    }
-    // Where is the exit? Only a request that leaves THROUGH the tunnel can
-    // answer that; a direct one would describe the unprotected address.
     final service = ipInfoService;
-    if (service != null) {
-      exitIpInfo.value = await service.fetchExit();
+    const attempts = 6;
+    for (var attempt = 1; attempt <= attempts; attempt++) {
+      if (!isConnected) return; // torn down mid-flight
+      try {
+        final ip = await vpnService.getConnectedIP();
+        if (ip != null && ip.isNotEmpty) {
+          connectedIP.value = ip;
+          if (service != null) {
+            final info = await service.fetchExit();
+            if (!info.isEmpty) {
+              exitIpInfo.value = info;
+              return;
+            }
+          } else {
+            return;
+          }
+        }
+      } catch (e) {
+        _log.w('Exit lookup attempt $attempt/$attempts failed: $e');
+      }
+      // 1s, 2s, 3s, 4s, 5s - long enough for the upstream handshake.
+      await Future<void>.delayed(Duration(seconds: attempt));
     }
+    _log.w('Exit lookup gave up after $attempts attempts');
   }
 }

@@ -863,12 +863,22 @@ class _UpdateSectionState extends State<_UpdateSection> {
     } catch (_) {
       _currentVersion = '';
     }
-    final update = await _service.checkForUpdate();
-    if (!mounted) return;
-    setState(() {
-      _update = update;
-      _phase = update == null ? 'latest' : 'available';
-    });
+    try {
+      final update = await _service.checkForUpdate();
+      if (!mounted) return;
+      setState(() {
+        _update = update;
+        _phase = update == null ? 'latest' : 'available';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = 'error';
+        // "Could not check" is not the same as "up to date" - say which.
+        _error = 'Could not check for updates: '
+            '${e.toString().replaceFirst('Exception: ', '')}';
+      });
+    }
   }
 
   Future<void> _downloadAndInstall() async {

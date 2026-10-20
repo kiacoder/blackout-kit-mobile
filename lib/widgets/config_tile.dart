@@ -21,9 +21,32 @@ class ConfigTile extends StatelessWidget {
     this.onDelete,
   }) : super(key: key);
 
+  static String _badgeLabel(TestStatus status) => switch (status) {
+        TestStatus.success => '✓ Working',
+        TestStatus.failed => '✗ Failed',
+        TestStatus.timeout => '⏱ Timeout',
+        TestStatus.testing => 'Testing…',
+        TestStatus.notTested => 'Not tested',
+      };
+
+  static Color _badgeBackground(TestStatus status) => switch (status) {
+        TestStatus.success => Colors.green.shade100,
+        TestStatus.failed => Colors.red.shade100,
+        TestStatus.timeout => Colors.orange.shade100,
+        TestStatus.testing => Colors.blue.shade100,
+        TestStatus.notTested => Colors.grey.shade200,
+      };
+
+  static Color _badgeForeground(TestStatus status) => switch (status) {
+        TestStatus.success => Colors.green.shade700,
+        TestStatus.failed => Colors.red.shade700,
+        TestStatus.timeout => Colors.orange.shade800,
+        TestStatus.testing => Colors.blue.shade700,
+        TestStatus.notTested => Colors.grey.shade700,
+      };
+
   @override
   Widget build(BuildContext context) {
-    final isWorking = testResult?.isWorking ?? false;
     final hasResult = testResult != null;
 
     return Card(
@@ -74,25 +97,26 @@ class ConfigTile extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                             if (hasResult)
+                              // Five states, not two. A config that was never
+                              // tested (or is mid-test) used to render as
+                              // "Failed", which is how a perfectly working
+                              // tunnel ended up labelled a failure in the
+                              // library.
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: isWorking
-                                      ? Colors.green.shade100
-                                      : Colors.red.shade100,
+                                  color: _badgeBackground(testResult!.status),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  isWorking ? '✓ Working' : '✗ Failed',
+                                  _badgeLabel(testResult!.status),
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
-                                    color: isWorking
-                                        ? Colors.green.shade700
-                                        : Colors.red.shade700,
+                                    color: _badgeForeground(testResult!.status),
                                   ),
                                 ),
                               )

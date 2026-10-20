@@ -80,6 +80,30 @@ class ConfigController extends GetxController {
 
   void _invalidateFilterCache() => _filterEpoch++;
 
+  /// Marks [config] as working because the tunnel carrying it came up.
+  ///
+  /// The library badge is fed by [testResults], and nothing used to write a
+  /// result on connect - so a config whose probe had failed once kept showing
+  /// "✗ Failed" while it was actively carrying traffic. Existing latency and
+  /// speed measurements are preserved; only the status is upgraded.
+  void markConnected(Config config) {
+    final hash = config.getHash();
+    final existing = testResults[hash];
+    testResults[hash] = existing == null
+        ? TestResult.success(configHash: hash)
+        : TestResult(
+            configHash: hash,
+            status: TestStatus.success,
+            testedAt: DateTime.now(),
+            latencyMs: existing.latencyMs,
+            speedMbps: existing.speedMbps,
+            successCount: existing.successCount,
+            totalCount: existing.totalCount,
+          );
+    _invalidateFilterCache();
+    _log.i('Marked ${config.displayName} as working (connected)');
+  }
+
   /// Grows the visible window of the library list.
   void showMoreConfigs() => visibleConfigLimit.value += configPageSize;
 

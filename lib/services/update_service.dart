@@ -95,26 +95,37 @@ class UpdateService extends GetxService {
   }
 
   /// AppUpdate when the latest release build is newer than the installed one.
+  ///
+  /// Returns null ONLY when the app really is up to date. Everything else
+  /// throws with the reason: swallowing failures made every network error, rate
+  /// limit or missing asset look like "App is up to date", which is
+  /// indistinguishable from the updater being broken.
   Future<AppUpdate?> checkForUpdate() async {
-    try {
-      final abi = await deviceAbi();
-      final res = await Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 20),
-      )).get<Map<String, dynamic>>(
-        _apiLatest,
-        options: Options(headers: {'User-Agent': 'blackout-kit-mobile'}),
-      );
-      final update = AppUpdate.fromReleaseJson(
-        res.data ?? <String, dynamic>{},
-        abi: abi,
-      );
-      if (update == null) return null;
-      if (update.buildNumber <= await installedBuildNumber()) return null;
-      return update;
-    } catch (_) {
-      return null; // offline / API down — silently fine
+    final abi = await deviceAbi();
+    final res = await Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 25),
+    )).get<Map<String, dynamic>>(
+      _apiLatest,
+      options: Options(
+        headers: {'User-Agent': 'blackout-kit-mobile'},
+        // GitHub answers 403 (rate limit) or 404 with an error body; treat
+        // anything non-200 as a failure instead of parsing it as a release.
+        validateStatus: (code) => code == 200,
+      ),
+    );
+    final data = res.data;
+    if (data == null) {
+      throw Exception('GitHub returned an empty release document.');
     }
+    final update = AppUpdate.fromReleaseJson(data, abi: abi);
+    if (update == null) {
+      throw Exception(
+        'The latest release has no APK asset for this device ($abi).',
+      );
+    }
+    if (update.buildNumber <= await installedBuildNumber()) return null;
+    return update;
   }
 
   /// Downloads the APK into the FileProvider-mapped internal updates dir.

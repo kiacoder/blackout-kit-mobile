@@ -158,12 +158,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard"),
             "singboxAvailable" to singboxAvailable,
             "singboxProtocols" to
-                if (singboxAvailable) listOf("hysteria2", "tuic", "amneziawg", "warp")
+                if (singboxAvailable)
+                    listOf("hysteria2", "tuic", "anytls", "shadowtls", "amneziawg", "warp")
                 else emptyList<String>(),
             "unavailableProtocols" to
                 (listOf("openvpn", "psiphon") +
                     if (singboxAvailable) emptyList()
-                    else listOf("hysteria2", "tuic", "amneziawg", "warp"))
+                    else listOf("hysteria2", "tuic", "anytls", "shadowtls", "amneziawg", "warp"))
         )
     }
 

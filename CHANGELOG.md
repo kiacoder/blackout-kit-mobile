@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.33] - 2026-10-20
+
+### Added
+- **AnyTLS engine.** `anytls://password@host:port?sni=...&insecure=1` parses
+  into an AnyTLS config and dials through the bundled sing-box core. Deployed
+  on both Frankfurt nodes on `:39007/tcp` — password `BlackoutAnyTLS2026`,
+  SNI `www.microsoft.com`. Verified end to end from the CLI (exit IPs are
+  the two servers' own).
+- **ShadowTLS v3 engine.** `shadowtls://` parses into a v3 config; v3 only
+  (v1 removed, v2 deprecated). Client carries no `detour` — that field is
+  server-side and sing-box rejects it on the client.
+- Wired through every layer: `kSingboxProtocols`, `BlackoutEngine`,
+  `SingboxConfigBuilder` outbound cases, Kotlin `ENGINE_FOR_PROTOCOL`,
+  `singboxProtocols` availability, and the engine capability matrix. 3 new
+  parser tests.
+
 ## [1.0.0-beta.32] - 2026-10-19
 
 ### Fixed

@@ -4,6 +4,8 @@
 /// sing-box native core (libsingbox.so):
 /// - Hysteria 2 (hy2://, hysteria2://)
 /// - TUIC v5 (tuic://)
+/// - AnyTLS (anytls://)
+/// - ShadowTLS v3 (shadowtls://)
 /// - AmneziaWG (obfuscated WireGuard with junk packets)
 /// - Cloudflare WARP
 ///
@@ -17,6 +19,8 @@ import '../models/config.dart';
 const Set<String> kSingboxProtocols = {
   'hysteria2',
   'tuic',
+  'anytls',
+  'shadowtls',
   'amneziawg',
   'warp',
 };
@@ -175,6 +179,38 @@ class SingboxConfigBuilder {
             'alpn': c.alpn != null && c.alpn!.isNotEmpty
                 ? c.alpn!.split(',').map((e) => e.trim()).toList()
                 : ['h3'],
+          },
+        };
+
+      case AnyTlsConfig c:
+        return {
+          'type': 'anytls',
+          'tag': 'proxy',
+          'server': c.address,
+          'server_port': c.port,
+          'password': c.password,
+          'tls': {
+            'enabled': true,
+            if (c.sni != null && c.sni!.isNotEmpty) 'server_name': c.sni,
+            'insecure': c.insecure,
+          },
+        };
+
+      case ShadowTlsConfig c:
+        // v3 only: v2 is deprecated and v1 was removed. `detour` is a
+        // SERVER-side field (it routes the decrypted inner stream to the
+        // real proxy inbound) - a client-side detour is rejected by sing-box.
+        return {
+          'type': 'shadowtls',
+          'tag': 'proxy',
+          'server': c.address,
+          'server_port': c.port,
+          'password': c.password,
+          'version': c.version,
+          'tls': {
+            'enabled': true,
+            if (c.sni != null && c.sni!.isNotEmpty) 'server_name': c.sni,
+            'insecure': c.insecure,
           },
         };
 

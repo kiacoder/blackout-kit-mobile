@@ -146,6 +146,101 @@ class WireGuardPeer {
       );
 }
 
+/// AnyTLS config (anytls://password@host:port?sni=...&insecure=1).
+///
+/// Served by the bundled sing-box core (libsingbox.so).
+class AnyTlsConfig extends Config {
+  final String name;
+  final String rawUri;
+  final String password;
+  final String address;
+  final int port;
+  final String? sni;
+  final bool insecure;
+
+  AnyTlsConfig({
+    required this.name, required this.rawUri, required this.password,
+    required this.address, required this.port,
+    this.sni, this.insecure = false,
+  });
+
+  @override String get protocol => 'anytls';
+  @override String get displayName => name;
+  @override Future<bool> connect() async => true;
+  @override Future<void> disconnect() async {}
+  @override Future<bool> isRunning() async => false;
+  @override bool validate() => address.isNotEmpty && port > 0 && password.isNotEmpty;
+
+  static AnyTlsConfig? fromUri(String uri, {String? customName}) {
+    try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
+      if (!uri.startsWith('anytls://')) return null;
+      final u = ConfigParser.tryParseUri(uri);
+      if (u == null) return null;
+      String name = customName ?? 'AnyTLS (${u.host}:${u.port})';
+      if (customName == null && u.fragment.isNotEmpty) {
+        name = ConfigParser.safeFragment(uri, fallback: name);
+      }
+      return AnyTlsConfig(
+        name: name, rawUri: uri,
+        password: u.userInfo,
+        address: u.host, port: u.port,
+        sni: u.queryParameters['sni'],
+        insecure: ConfigParser._insecure(u.queryParameters),
+      );
+    } catch (_) { return null; }
+  }
+}
+
+/// ShadowTLS v3 config (shadowtls://password@host:port?sni=...).
+///
+/// v3 shadows a real TLS site: active probes see the genuine handshake of the
+/// shadowed domain, not a proxy.
+class ShadowTlsConfig extends Config {
+  final String name;
+  final String rawUri;
+  final String password;
+  final String address;
+  final int port;
+  final String? sni;
+  final bool insecure;
+  final int version;
+
+  ShadowTlsConfig({
+    required this.name, required this.rawUri, required this.password,
+    required this.address, required this.port,
+    this.sni, this.insecure = false, this.version = 3,
+  });
+
+  @override String get protocol => 'shadowtls';
+  @override String get displayName => name;
+  @override Future<bool> connect() async => true;
+  @override Future<void> disconnect() async {}
+  @override Future<bool> isRunning() async => false;
+  @override bool validate() => address.isNotEmpty && port > 0 && password.isNotEmpty;
+
+  static ShadowTlsConfig? fromUri(String uri, {String? customName}) {
+    try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
+      if (!uri.startsWith('shadowtls://')) return null;
+      final u = ConfigParser.tryParseUri(uri);
+      if (u == null) return null;
+      String name = customName ?? 'ShadowTLS (${u.host}:${u.port})';
+      if (customName == null && u.fragment.isNotEmpty) {
+        name = ConfigParser.safeFragment(uri, fallback: name);
+      }
+      return ShadowTlsConfig(
+        name: name, rawUri: uri,
+        password: u.userInfo,
+        address: u.host, port: u.port,
+        sni: u.queryParameters['sni'],
+        insecure: ConfigParser._insecure(u.queryParameters),
+        version: int.tryParse(u.queryParameters['version'] ?? '') ?? 3,
+      );
+    } catch (_) { return null; }
+  }
+}
+
 /// WireGuard config, parsed from a standard `.conf` / `wg-quick` profile.
 ///
 /// Carried on Android by the bundled Xray core's own `wireguard` outbound
@@ -988,6 +1083,8 @@ enum BlackoutEngine {
   trojan,      // xray
   hysteria2,   // singbox
   tuic,        // singbox
+  anytls,      // singbox
+  shadowtls,   // singbox
   amneziawg,   // amneziawg
   warp,        // warp
   psiphon,     // psiphon
@@ -1004,6 +1101,8 @@ extension BlackoutEngineInfo on BlackoutEngine {
       case BlackoutEngine.trojan:     return 'Trojan (XRay)';
       case BlackoutEngine.hysteria2:  return 'Hysteria2';
       case BlackoutEngine.tuic:       return 'TUIC v5';
+      case BlackoutEngine.anytls:     return 'AnyTLS';
+      case BlackoutEngine.shadowtls:  return 'ShadowTLS v3';
       case BlackoutEngine.amneziawg:  return 'AmneziaWG';
       case BlackoutEngine.warp:       return 'Cloudflare WARP';
       case BlackoutEngine.psiphon:    return 'Psiphon';
@@ -1020,6 +1119,8 @@ extension BlackoutEngineInfo on BlackoutEngine {
       case BlackoutEngine.trojan:     return 'XRay Trojan masquerades as HTTPS';
       case BlackoutEngine.hysteria2:  return 'Ultra-fast UDP-based censorship bypass';
       case BlackoutEngine.tuic:       return 'QUIC-based low-latency proxy (SingBox)';
+      case BlackoutEngine.anytls:     return 'Padding-aware TLS proxy against traffic classification';
+      case BlackoutEngine.shadowtls:  return 'Shadows a real TLS site - defeats active probing';
       case BlackoutEngine.amneziawg:  return 'WireGuard + junk packets, DPI-resistant';
       case BlackoutEngine.warp:       return 'Cloudflare WARP free VPN';
       case BlackoutEngine.psiphon:    return 'Multi-transport circumvention (auto)';
@@ -1036,6 +1137,8 @@ extension BlackoutEngineInfo on BlackoutEngine {
       case BlackoutEngine.trojan:      return 'TR';
       case BlackoutEngine.hysteria2:   return 'H2';
       case BlackoutEngine.tuic:        return 'TC';
+      case BlackoutEngine.anytls:      return 'AT';
+      case BlackoutEngine.shadowtls:   return 'ST';
       case BlackoutEngine.amneziawg:   return 'AW';
       case BlackoutEngine.warp:        return 'WP';
       case BlackoutEngine.psiphon:     return 'PS';
@@ -1052,6 +1155,8 @@ extension BlackoutEngineInfo on BlackoutEngine {
       case BlackoutEngine.trojan:      return 'trojan';
       case BlackoutEngine.hysteria2:   return 'hysteria2';
       case BlackoutEngine.tuic:        return 'tuic';
+      case BlackoutEngine.anytls:      return 'anytls';
+      case BlackoutEngine.shadowtls:   return 'shadowtls';
       case BlackoutEngine.amneziawg:   return 'amneziawg';
       case BlackoutEngine.warp:        return 'warp';
       case BlackoutEngine.psiphon:     return 'psiphon';
@@ -1184,6 +1289,8 @@ class ConfigParser {
       if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://') || trimmed.startsWith('hysteria://'))
                                                 return Hysteria2Config.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('tuic://'))        return TuicConfig.fromUri(trimmed, customName: customName);
+      if (trimmed.startsWith('anytls://'))      return AnyTlsConfig.fromUri(trimmed, customName: customName);
+      if (trimmed.startsWith('shadowtls://'))   return ShadowTlsConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('ss://'))          return ShadowsocksConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('awg://') || trimmed.startsWith('amneziawg://'))
                                                 return AmneziaWGConfig.fromUri(awgUriToConf(trimmed), customName: customName);
@@ -1317,7 +1424,7 @@ class ConfigParser {
       }
 
       // Extract embedded URIs from markdown tables, bullet points, or HTML
-      final uriRegex = RegExp(r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg)://[^\s<>"\]]+');
+      final uriRegex = RegExp(r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg|anytls|shadowtls)://[^\s<>"\]]+');
       final matches = uriRegex.allMatches(trimmed);
       if (matches.isNotEmpty) {
         for (final match in matches) {

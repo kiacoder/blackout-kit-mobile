@@ -47,6 +47,8 @@ object EngineRunner {
     private val ENGINE_FOR_PROTOCOL = mapOf(
         "hysteria2" to "libsingbox.so",
         "tuic" to "libsingbox.so",
+        "anytls" to "libsingbox.so",
+        "shadowtls" to "libsingbox.so",
         "amneziawg" to "libsingbox.so",
         "warp" to "libsingbox.so",
     )

@@ -808,4 +808,35 @@ AllowedIPs = 0.0.0.0/0
     });
   });
 
+
+  group('AnyTLS / ShadowTLS links', () {
+    test('anytls:// parses into an AnyTlsConfig', () {
+      final c = ConfigParser.parse(
+          'anytls://BlackoutAnyTLS2026@185.215.244.95:39007?sni=www.microsoft.com&insecure=1&sni2=x#SRV1-AnyTLS') as AnyTlsConfig;
+      expect(c.protocol, 'anytls');
+      expect(c.address, '185.215.244.95');
+      expect(c.port, 39007);
+      expect(c.password, 'BlackoutAnyTLS2026');
+      expect(c.insecure, isTrue);
+    });
+
+    test('shadowtls:// parses into a ShadowTlsConfig with version 3', () {
+      final c = ConfigParser.parse(
+          'shadowtls://BlackoutShadowTLS2026@185.208.172.212:39008?sni=www.microsoft.com') as ShadowTlsConfig;
+      expect(c.protocol, 'shadowtls');
+      expect(c.version, 3);
+      expect(c.insecure, isFalse);
+    });
+
+    test('both links survive inside a multi-config payload', () {
+      final blob = [
+        'anytls://pw1@a.com:39007?sni=x&insecure=1',
+        'vless://11111111-1111-1111-1111-111111111111@b.com:443#V',
+        'shadowtls://pw2@c.com:39008?sni=y',
+      ].join('\\n');
+      final configs = ConfigParser.parseMultiple(blob);
+      expect(configs.map((c) => c.protocol).toSet(), {'anytls', 'vless', 'shadowtls'});
+    });
+  });
+
 }

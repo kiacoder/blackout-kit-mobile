@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.36] - 2026-10-20
+
+### Fixed
+- **Sing-box could not start at all on Android: "initialize network manager:
+  create network monitor: netlink socket in Android is banned by Google".**
+  Google's SELinux policy bans netlink sockets for normal apps, and sing-box
+  needs one for its interface monitor. We run sing-box as a subprocess, so no
+  Android platform interface is supplied to serve that monitor instead — and
+  `route.auto_detect_interface: true` *enforced* the monitor, which is what
+  turned the ban into a fatal error (sing-box's own
+  `enforceInterfaceMonitor := options.AutoDetectInterface` gate). The field is
+  gone: sing-box tolerates a missing monitor and starts, and routing works
+  normally behind the VPN service. 2 new tests pin the field's absence — along
+  with `default_interface`/`bind_interface`, which would select an interface
+  the same way.
+
 ## [1.0.0-beta.35] - 2026-10-20
 
 ### Changed

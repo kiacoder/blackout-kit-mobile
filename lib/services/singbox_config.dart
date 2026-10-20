@@ -114,7 +114,17 @@ class SingboxConfigBuilder {
             'action': 'sniff',
           },
         ],
-        'auto_detect_interface': true,
+        // NO `auto_detect_interface` on Android. sing-box tries to open a
+        // netlink socket for the interface monitor, and Google's SELinux
+        // policy bans that for normal apps ("netlink socket in Android is
+        // banned by Google"). We run sing-box as a subprocess, so no Android
+        // platform interface is supplied either - and with the monitor
+        // *enforced* by auto_detect_interface, sing-box turns that failure
+        // into a FATAL instead of carrying on without a monitor
+        // (route/network.go: `enforceInterfaceMonitor :=
+        // options.AutoDetectInterface` gates the error). The field is also
+        // documented as Linux/Windows/macOS-only. Routing without it works
+        // fine behind a VPN service: the TUN carries the traffic.
         'final': 'proxy',
       },
     };

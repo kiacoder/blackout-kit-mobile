@@ -224,4 +224,33 @@ Endpoint = awg.server.com:51820
     });
   });
 
+
+  group('Android netlink restriction', () {
+    // Google's SELinux policy bans netlink sockets for normal apps, and we run
+    // sing-box as a subprocess (no Android platform interface), so any field
+    // that enforces the interface monitor turns the ban into a FATAL:
+    //   "initialize network manager: create network monitor: netlink socket
+    //    in Android is banned by Google"
+    // `auto_detect_interface` is exactly that field - and is documented as
+    // Linux/Windows/macOS-only, so it was never valid on Android.
+    test('route never carries auto_detect_interface', () {
+      const builder = SingboxConfigBuilder();
+      final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
+      final doc = builder.build(config);
+
+      final route = doc['route'] as Map;
+      expect(route.containsKey('auto_detect_interface'), isFalse);
+    });
+
+    test('no field anywhere selects an interface by name', () {
+      const builder = SingboxConfigBuilder(routeDnsThroughProxy: true);
+      final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
+      final json = builder.buildJson(config);
+
+      expect(json.contains('auto_detect_interface'), isFalse);
+      expect(json.contains('default_interface'), isFalse);
+      expect(json.contains('bind_interface'), isFalse);
+    });
+  });
+
 }

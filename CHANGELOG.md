@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.40] - 2026-10-20
+
+### Fixed
+- **tun2socks still would not start: single-dash long options.** The bundled
+  build parses its arguments with `go-flags`, not Go's stdlib `flag` package —
+  the help it prints lists `--tcp-sndbuf`, `--tun-post-up`, `-v, --version`,
+  and a bad option fails with `unknown shorthand flag: 'm' in -mtu`. In
+  go-flags a single dash starts a *shorthand cluster*, so `-mtu` was read as
+  `-m -t -u` (and `-device` as `-d evice`, silently eating the value). The
+  engine is now started with long options:
+  `--device fd://3 --proxy socks5://127.0.0.1:<port> --mtu 1500 --loglevel info`.
+  A comment records why the double dash is mandatory, so it cannot be
+  "tidied" back into a single dash.
+
+  For the record, the failure chain to this point was: config rejected
+  (legacy `sniff`) -> netlink monitor fatal -> descriptor never inherited ->
+  wrong flag names -> wrong flag syntax. Each one hid the next.
+
 ## [1.0.0-beta.39] - 2026-10-20
 
 ### Fixed

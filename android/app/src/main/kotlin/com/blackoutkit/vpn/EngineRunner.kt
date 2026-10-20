@@ -219,16 +219,18 @@ object EngineRunner {
                 tun2socksPath.absolutePath,
                 arrayOf(
                     tun2socksPath.absolutePath,
-                    // xjasonlyu/tun2socks v2 takes a *device URI*, not a bare
-                    // descriptor: "-fd 3" and "-socks host:port" are not flags
-                    // it defines, so the flag parser killed the process with
-                    // exit code 2 before it ever touched the tunnel. The device
-                    // is "fd://<n>" (engine/parse.go -> fdbased driver) and the
-                    // upstream proxy is "-proxy [protocol://]host:port".
-                    "-device", "fd://$FD_SLOT",
-                    "-proxy", "socks5://127.0.0.1:$socksPort",
-                    "-mtu", BlackoutVpnService.VPN_MTU.toString(),
-                    "-loglevel", "info",
+                    // DOUBLE dashes are mandatory here. This build parses its
+                    // options with go-flags, where a single dash means a
+                    // shorthand cluster: "-mtu" is read as "-m -t -u" and dies
+                    // with `unknown shorthand flag: 'm' in -mtu` (and "-device"
+                    // is read as "-d evice", silently swallowing the value).
+                    // The device is a URI, not a bare descriptor: "fd://<n>"
+                    // selects the fdbased driver, which opens that descriptor -
+                    // the launcher dup2()s the tun fd to exactly FD_SLOT.
+                    "--device", "fd://$FD_SLOT",
+                    "--proxy", "socks5://127.0.0.1:$socksPort",
+                    "--mtu", BlackoutVpnService.VPN_MTU.toString(),
+                    "--loglevel", "info",
                 ),
                 tunFd,
                 engineLog.absolutePath,
@@ -241,7 +243,7 @@ object EngineRunner {
             }
 
             if (anyChildDied()) {
-                lastError = "tun2socks exited during startup (code ${tun2socksExitCode()}). " +
+                lastError = "tun2socks exited during startup (code ${tun2socksExitCode()})." +
                     engineLogTail(engineLog)
                 stop()
                 return false

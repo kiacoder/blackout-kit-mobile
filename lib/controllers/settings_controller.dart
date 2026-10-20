@@ -132,7 +132,17 @@ class SettingsController extends GetxController {
 
   @visibleForTesting
   Future<void> initializeForTest() async {
-    _settingsBox = await Hive.openBox(_settingsBoxName);
+    // A corrupt box (interrupted write) used to leave the `late` field
+    // unopened: the open failure was swallowed, and the first settings write
+    // then crashed with a LateInitializationError. Quarantine-and-reopen
+    // keeps the controller usable at the cost of the stored settings.
+    try {
+      _settingsBox = await Hive.openBox(_settingsBoxName);
+    } catch (e) {
+      _log.e('Settings box unreadable ($e) - quarantining it');
+      await Hive.deleteBoxFromDisk(_settingsBoxName);
+      _settingsBox = await Hive.openBox(_settingsBoxName);
+    }
     _loadSettings();
   }
 
@@ -189,6 +199,8 @@ class SettingsController extends GetxController {
   /// Save all settings to Hive storage
   Future<void> saveSettings() async {
     try {
+      // If init failed entirely this raises LateInitializationError, which
+      // the catch below turns into a log line - settings simply do not save.
       await _settingsBox.put('autoConnect', autoConnect.value);
       await _settingsBox.put('killSwitchEnabled', killSwitchEnabled.value);
       await _settingsBox.put('blockNonVPNTraffic', blockNonVPNTraffic.value);

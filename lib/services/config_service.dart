@@ -24,16 +24,31 @@ class ConfigService {
 
   ConfigService({Logger? logger}) : _log = logger ?? Logger();
 
-  /// Initialize Hive boxes
+  /// Initialize Hive boxes.
+  ///
+  /// A corrupt box (power loss / OOM kill during a compaction or write) used
+  /// to rethrow out of `main()`, which is a white screen on EVERY subsequent
+  /// launch - the app became permanently unbootable with no user-visible
+  /// recovery. Now a failed open quarantines that box (deleted, fresh one
+  /// created) exactly once and continues: losing a stored copy of configs is
+  /// recoverable; an unbootable app is not.
   Future<void> initialize() async {
+    _configBox = await _openOrQuarantine<Map>(_configBoxName);
+    _sourceBox = await _openOrQuarantine<Map>(_sourceBoxName);
+    _resultBox = await _openOrQuarantine<Map>(_resultBoxName);
+    _log.i('ConfigService initialized');
+  }
+
+  /// Opens [name], or - if the file is corrupt - deletes it and reopens
+  /// fresh. One retry only; if that also fails the error propagates, since
+  /// silently running with no storage at all would mask real bugs.
+  Future<Box<T>> _openOrQuarantine<T>(String name) async {
     try {
-      _configBox = await Hive.openBox<Map>(_configBoxName);
-      _sourceBox = await Hive.openBox<Map>(_sourceBoxName);
-      _resultBox = await Hive.openBox<Map>(_resultBoxName);
-      _log.i('ConfigService initialized');
+      return await Hive.openBox<T>(name);
     } catch (e) {
-      _log.e('Error initializing ConfigService: $e');
-      rethrow;
+      _log.e('Box "$name" is unreadable ($e) - quarantining it');
+      await Hive.deleteBoxFromDisk(name);
+      return await Hive.openBox<T>(name);
     }
   }
 
@@ -364,16 +379,28 @@ class ConfigService {
     }
   }
 
-  /// Get all config sources
+  /// Get all config sources.
+  ///
+  /// Each record is decoded on its own: one corrupt or schema-drifted entry
+  /// used to throw inside the single try block and return an EMPTY list,
+  /// which made every stored source disappear from the app until the record
+  /// was removed. A skipped record is logged with its key; a list that loads
+  /// 9 of 10 sources is strictly better than one that loads none.
   List<ConfigSource> getAllSources() {
-    try {
-      return _sourceBox.values
-          .map((data) => ConfigSource.fromJson(Map<String, dynamic>.from(data)))
-          .toList();
-    } catch (e) {
-      _log.e('Error loading sources: $e');
-      return [];
+    final sources = <ConfigSource>[];
+    for (final key in _sourceBox.keys) {
+      if (key is! String) continue;
+      final data = _sourceBox.get(key);
+      if (data == null) continue;
+      try {
+        sources.add(
+          ConfigSource.fromJson(Map<String, dynamic>.from(data)),
+        );
+      } catch (e) {
+        _log.w('Skipping unreadable source $key: $e');
+      }
     }
+    return sources;
   }
 
   /// Get source by ID

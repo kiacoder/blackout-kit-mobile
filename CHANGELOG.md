@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [1.0.0-beta.43] - 2026-10-20
+
+### Fixed - storage robustness (the "leave it alone for months" pass)
+
+- **A corrupt config/source/result box made the app permanently unbootable.**
+  `ConfigService.initialize()` rethrew open failures out of `main()`, so after
+  a single interrupted write (power loss, OOM kill during compaction) every
+  subsequent launch died on a white screen with no user-visible recovery.
+  A failed open now quarantines that box - deletes it, reopens fresh - exactly
+  once, and continues. Losing a stored copy is recoverable; an unbootable app
+  is not.
+- **One bad stored source wiped the whole source list.** `getAllSources()`
+  decoded every record inside a single try block, so a corrupt or
+  schema-drifted entry made the method return an empty list - every source
+  vanished from the app until the record was manually removed. Each record is
+  now decoded independently and unreadable ones are skipped with a logged key.
+
+
 
 ## [1.0.0-beta.42] - 2026-10-20
 

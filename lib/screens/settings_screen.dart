@@ -962,20 +962,24 @@ class _UpdateSectionState extends State<_UpdateSection> {
                 : Icons.system_update,
             color: _phase == 'available' ? Colors.green : null,
           ),
-          // Wrapped in Obx: progress is an observable, and reading it inside a
-          // plain Text meant the percentage never repainted during a download.
-          title: Obx(() => Text(
-            switch (_phase) {
-              'checking' => 'Checking for updates...',
-              'latest' => 'App is up to date',
-              'available' => 'Update available: ${_update!.tagName}',
-              'downloading' =>
-                'Downloading ${(_service.progress.value * 100).toStringAsFixed(0)}%',
-              'ready' => 'Ready to install - tap to open the installer',
-              'error' => 'Update failed',
-              _ => 'App update',
-            },
-          )),
+          // Only the downloading label reads an observable, so only that
+          // branch is wrapped in Obx. Wrapping the whole switch meant every
+          // other phase built an Obx that observed nothing, which GetX
+          // rejects with "improper use of a GetX" - and that exception on
+          // every build left the whole Settings screen blank.
+          title: _phase == 'downloading'
+              ? Obx(() => Text(
+                    'Downloading '
+                    '${(_service.progress.value * 100).toStringAsFixed(0)}%',
+                  ))
+              : Text(switch (_phase) {
+                  'checking' => 'Checking for updates...',
+                  'latest' => 'App is up to date',
+                  'available' => 'Update available: ${_update!.tagName}',
+                  'ready' => 'Ready to install - tap to open the installer',
+                  'error' => 'Update failed',
+                  _ => 'App update',
+                }),
           // The failure reason (missing install permission, truncated
           // download, ...) is the whole point here, so it gets room to wrap
           // instead of being clipped to one line in the title.

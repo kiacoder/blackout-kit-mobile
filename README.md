@@ -2,12 +2,14 @@
 
 An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
 
-**Status**: v1.0.0-beta.26 — Android VPN service and in-process Xray core are implemented, and
-the Xray tunnel path is now **verified working on physical hardware** (2026-10-16): a real
+**Status**: v1.12.1 — Android VPN service and in-process Xray core are implemented, and
+the Xray tunnel path is **verified working on physical hardware** (2026-10-16): a real
 config on a real device carries live traffic end to end — a TikTok video loads in under a
-second. Sing-box/tun2socks binaries are packaged for supported ARM ABIs; process launch and
-local SOCKS readiness are checked, but end-to-end traffic through subprocess-backed tunnels
-remains unverified on hardware.
+second. Saved configs are encrypted at rest since v1.12.1 (see
+[SECURITY.md](SECURITY.md)); the key lives in the Android Keystore. Sing-box/tun2socks
+binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are
+checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on
+hardware. The iOS target contains a mock VPN and does not tunnel.
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process
@@ -32,10 +34,14 @@ remains unverified on hardware.
 
 ✅ **Config-based Architecture**
 - Fetch VPN configs from trusted GitHub repositories
-- Share-link parsing for 11 protocols (`vless://`, `vmess://`, `trojan://`,
-  `ss://`, `hy2://`, `tuic://`, WireGuard `.conf`, `.ovpn`, AmneziaWG)
+- Share-link parsing for 13 protocols (`vless://`, `vmess://`, `trojan://`,
+  `ss://`, `hy2://`, `hysteria2://`, `tuic://`, `anytls://`, `shadowtls://`,
+  `awg://`/`amneziawg://`, plus WireGuard `.conf` and `.ovpn` profiles)
 - Auto-deduplication by SHA256 hash
-- Local Hive persistence; config and settings data are currently not encrypted at rest
+- Local Hive persistence, **encrypted at rest** since v1.12.1: the config, source
+  and test-result boxes are AES-encrypted with a key held in the Android
+  Keystore, and an existing plaintext library is migrated in place on first
+  launch
 
 🟡 **Automatic Testing**
 - Real TCP reachability and latency measurement per config

@@ -19,25 +19,46 @@ class AppUpdate {
   AppUpdate({
     required this.tagName,
     required this.buildNumber,
+    required this.version,
     required this.notes,
     required this.apkUrl,
     required this.apkSize,
   });
 
-  final String tagName; // e.g. v1.0.0-beta.38
-  final int buildNumber; // 38
+  final String tagName; // e.g. v1.0.0-beta.38 or v1.12.1
+  final int buildNumber; // beta.N, or major*10000+minor*100+patch
+  final String version; // the semver part of the tag, e.g. 1.12.1
   final String notes;
   final String apkUrl;
   final int apkSize;
 
   /// Only beta-tagged builds carry a comparable build number; anything else
   /// (1.0.0 stable, typos) returns null instead of guessing.
+  /// Monotonic build number for a release tag.
+  ///
+  /// beta.N keeps N (the historical scheme); a v1.12.1 tag becomes
+  /// major*10000 + minor*100 + patch, which sorts correctly against the beta
+  /// numbers and against each other.
+  static int _buildNumberFromTag(String tag, Match m) {
+    if (tag.contains('beta.')) {
+      final beta = RegExp(r'beta\.(\d+)$').firstMatch(tag);
+      if (beta != null) return int.parse(beta.group(1)!);
+    }
+    final major = int.parse(m.group(1)!);
+    final minor = int.parse(m.group(2)!);
+    final patch = int.parse(m.group(3)!);
+    return major * 10000 + minor * 100 + patch;
+  }
+
   static AppUpdate? fromReleaseJson(
     Map<String, dynamic> json, {
     String abi = 'arm64-v8a',
   }) {
     final tag = (json['tag_name'] as String? ?? '').trim();
-    final m = RegExp(r'beta\.(\d+)$').firstMatch(tag);
+    // Accept both the old beta numbering and the v1.12.x scheme. Matching
+    // only `beta.(\d+)$` meant every release after the version scheme changed
+    // parsed as null, so the updater could never see an update at all.
+    final m = RegExp(r'v?(\d+)\.(\d+)\.(\d+)').firstMatch(tag);
     if (m == null) return null;
     final assets =
         (json['assets'] as List? ?? []).whereType<Map<String, dynamic>>().toList();
@@ -70,7 +91,8 @@ class AppUpdate {
     if (apk == null || apk.isEmpty) return null;
     return AppUpdate(
       tagName: tag,
-      buildNumber: int.parse(m.group(1)!),
+      buildNumber: _buildNumberFromTag(tag, m),
+      version: '${m.group(1)}.${m.group(2)}.${m.group(3)}',
       notes: (json['body'] as String? ?? ''),
       apkUrl: apk['browser_download_url'] as String,
       apkSize: (apk['size'] as num? ?? 0).toInt(),
@@ -100,6 +122,41 @@ class UpdateService extends GetxService {
   Future<int> installedBuildNumber() async {
     final info = await PackageInfo.fromPlatform();
     return int.tryParse(info.buildNumber) ?? 0;
+  }
+
+  /// True when [release] is a newer version than what is installed.
+  ///
+  /// Compares the semver strings rather than build numbers: the release tags
+  /// moved from `beta.N` to `v1.12.x`, and a build number means something
+  /// different on each side of that change - comparing them made the updater
+  /// offer the very version already installed, forever.
+  Future<bool> _isNewerThanInstalled(AppUpdate release) async {
+    final info = await PackageInfo.fromPlatform();
+    return _compareSemver(release.version, info.version) > 0;
+  }
+
+  /// Test seam for the semver ordering (the real comparison reads PackageInfo).
+  static int compareForTest(String a, String b) => _compareSemver(a, b);
+
+  /// Standard semver ordering: numeric fields first, then prerelease, where a
+  /// release outranks its own prerelease (1.12.1 > 1.12.1-beta.3).
+  static int _compareSemver(String a, String b) {
+    final coreA = a.split('-')[0].split('+')[0];
+    final coreB = b.split('-')[0].split('+')[0];
+    final preA = a.contains('-') ? a.split('-')[1] : '';
+    final preB = b.contains('-') ? b.split('-')[1] : '';
+
+    final partsA = coreA.split('.').map(int.tryParse).toList();
+    final partsB = coreB.split('.').map(int.tryParse).toList();
+    for (var i = 0; i < 3; i++) {
+      final na = i < partsA.length ? (partsA[i] ?? 0) : 0;
+      final nb = i < partsB.length ? (partsB[i] ?? 0) : 0;
+      if (na != nb) return na.compareTo(nb);
+    }
+    if (preA == preB) return 0;
+    if (preA.isEmpty) return 1; // release beats prerelease
+    if (preB.isEmpty) return -1;
+    return preA.compareTo(preB);
   }
 
   /// AppUpdate when the latest release build is newer than the installed one.
@@ -132,7 +189,7 @@ class UpdateService extends GetxService {
         'The latest release has no APK asset for this device ($abi).',
       );
     }
-    if (update.buildNumber <= await installedBuildNumber()) return null;
+    if (!await _isNewerThanInstalled(update)) return null;
     return update;
   }
 

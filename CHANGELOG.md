@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.12.1] - 2026-10-22
+
+### Fixed
+- **The Settings screen rendered as a blank gray box.** The update tile wrapped
+  its whole title in `Obx`, but only the downloading branch reads an observable -
+  every other phase built an Obx observing nothing, which GetX rejects with
+  "improper use of a GetX" on every build. Only the reactive branch is wrapped
+  now.
+- **The app reported version 1.0.0-beta.43.** The pubspec version was never
+  moved when the release scheme changed, so every build installed as a beta.
+- **The in-app updater could never see a release.** It parsed only `beta.N`
+  tags, so every `v1.12.x` release failed to parse. Tags are read as semver now
+  and compared against the installed version, instead of comparing build numbers
+  across two incompatible schemes.
+
+## [1.12.0] - 2026-10-22
+
+### Fixed
+- Security and integrity pass over the whole app (58-finding audit): the editor
+  deleting configs it failed to replace, "DNS leak protection" that still
+  resolved through the device resolver, a `reconnect()` crash on every
+  disconnect-then-reconnect, overlapping connect operations, subscription files
+  importing a single malformed config, stale probe failures blacklisting configs
+  permanently, parser defects (shadowsocks ports, IPv6 authorities, percent-
+  encoded Trojan passwords, OpenVPN detection, AmneziaWG endpoints), source
+  filters leaking tested configs, a no-op "Recently added" sort, and silent
+  exception handlers on the paths that can leave a machine unusable. Full detail
+  in the release notes.
 ## [1.0.0-beta.43] - 2026-10-20
 
 ### Fixed - storage robustness (the "leave it alone for months" pass)

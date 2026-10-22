@@ -743,6 +743,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showSourceDetails(BuildContext context, dynamic source) {
     final theme = Theme.of(context);
     final cardColor = theme.cardColor;
+    // One pass over the config box when the sheet opens, instead of the
+    // previous per-rebuild scan.
+    final sourceCounts =
+        _configController.configService.countConfigsBySource();
 
     Get.bottomSheet(
       Container(
@@ -780,8 +784,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               // Live count from the config box, not the source record's stored
               // snapshot: a freshly created source reads 0 from configCount
-              // even when its configs are already in the library.
-              'Configs: ${_configController.configService.countConfigsBySource()[source.id] ?? 0}',
+              // even when its configs are already in the library. Resolved
+              // once when the dialog opens rather than on every rebuild.
+              'Configs: ${sourceCounts[source.id] ?? 0}',
               style: TextStyle(fontSize: 12, color: theme.hintColor),
             ),
             if (source.lastFetched != null) ...[

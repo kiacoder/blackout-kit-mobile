@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-10-22
+
+### Fixed
+- Ships the three fixes from v1.12.1 as a proper release: the blank Settings
+  screen (an `Obx` with nothing to observe threw on every build), the version
+  that still read 1.0.0-beta.43, and an in-app updater that parsed only
+  `beta.N` tags and so could never see a `v1.12.x` release.
+- The updater now compares the release's semver against the installed version.
+  Build numbers are not comparable across the tag schemes - and the per-ABI
+  splits carry different versionCodes - so the old check would have offered
+  the version already installed.
+
+### Changed
+- Release artifacts are published per ABI: a universal APK plus arm64-v8a and
+  armeabi-v7a builds, which together cover every Android device. The x86_64
+  build is deliberately not published: `packagingOptions` strips x86/x86_64
+  native libraries, so that APK installs and crashes on launch.
+
 ## [1.12.1] - 2026-10-22
 
 ### Fixed

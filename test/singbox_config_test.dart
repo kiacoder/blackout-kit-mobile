@@ -23,7 +23,14 @@ Endpoint = example.com:51820
 
       expect(() => builder.build(hy2), returnsNormally);
       expect(() => builder.build(tuic), returnsNormally);
-      expect(() => builder.build(awg), returnsNormally);
+      // AmneziaWG is deliberately NOT advertised any more: the bundled core
+      // contains no AmneziaWG symbols, so the `amnezia` block is rejected as
+      // an unknown field and the tunnel can never come up. Refusing to build
+      // is honest; the old code built it and failed at connect.
+      expect(() => builder.build(awg), throwsArgumentError);
+      expect(kSingboxProtocols, isNot(contains('amneziawg')));
+      expect(kSingboxProtocols, isNot(contains('shadowtls')));
+      expect(kSingboxProtocols, isNot(contains('warp')));
     });
 
     test('rejects non-singbox protocols', () {
@@ -86,36 +93,53 @@ Endpoint = example.com:51820
     });
   });
 
-  group('amneziawg outbound', () {
-    test('builds valid wireguard config with junk packet parameters', () {
-      const builder = SingboxConfigBuilder();
+  group('amneziawg model', () {
+    test('parses the full interface, not just the junk parameters', () {
       final config = ConfigParser.parse('''
 [Interface]
 PrivateKey = MY_PRIVATE_KEY
+Address = 172.16.9.2/32, fd00::2/128
+MTU = 1300
 Jc = 4
 Jmin = 50
 Jmax = 90
+S1 = 12
+S2 = 34
+H1 = 1111
+H4 = 4444
 
 [Peer]
 PublicKey = MY_PEER_PUB_KEY
+PresharedKey = MY_PSK
 Endpoint = awg.server.com:51820
 ''')! as AmneziaWGConfig;
 
-      final doc = builder.build(config);
-      final outbounds = doc['outbounds'] as List;
-      final proxy = outbounds.firstWhere((o) => o['tag'] == 'proxy') as Map;
+      // The interface address used to be overwritten by the endpoint host and
+      // replaced with a hard-coded 10.0.0.2/32.
+      expect(config.address, 'awg.server.com');
+      expect(config.localAddresses, ['172.16.9.2/32', 'fd00::2/128']);
+      expect(config.mtu, 1300);
+      expect(config.presharedKey, 'MY_PSK');
+      // Obfuscation beyond Jc/Jmin/Jmax was dropped entirely.
+      expect(config.s1, 12);
+      expect(config.s2, 34);
+      expect(config.h1, 1111);
+      expect(config.h4, 4444);
+    });
 
-      expect(proxy['type'], 'wireguard');
-      expect(proxy['server'], 'awg.server.com');
-      expect(proxy['server_port'], 51820);
-      expect(proxy['private_key'], 'MY_PRIVATE_KEY');
-      expect(proxy['peer_public_key'], 'MY_PEER_PUB_KEY');
-      // Junk-packet params go in sing-box's `amnezia` block. They used to be
-      // stuffed into `reserved` — the 3-byte WireGuard header field, which is
-      // a WARP thing — so AWG servers were dialled as vanilla WireGuard and
-      // failed the handshake instantly.
-      expect(proxy['reserved'], isNull);
-      expect(proxy['amnezia'], {'jc': 4, 'jmin': 50, 'jmax': 90});
+    test('the builder refuses it rather than emitting a config that cannot run',
+        () {
+      final config = ConfigParser.parse('''
+[Interface]
+PrivateKey = K
+Jc = 4
+
+[Peer]
+PublicKey = P
+Endpoint = awg.server.com:51820
+''')!;
+      expect(() => const SingboxConfigBuilder().build(config),
+          throwsArgumentError);
     });
   });
 

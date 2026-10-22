@@ -183,7 +183,10 @@ class AnyTlsConfig extends Config {
       }
       return AnyTlsConfig(
         name: name, rawUri: uri,
-        password: u.userInfo,
+        // `userInfo` is still percent-encoded: a password written as
+        // p%40ss must reach the engine as p@ss, or authentication
+        // fails on every server whose password has a reserved char.
+        password: ConfigParser._decodeUserInfo(u.userInfo),
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
         insecure: ConfigParser._insecure(u.queryParameters),
@@ -231,7 +234,10 @@ class ShadowTlsConfig extends Config {
       }
       return ShadowTlsConfig(
         name: name, rawUri: uri,
-        password: u.userInfo,
+        // `userInfo` is still percent-encoded: a password written as
+        // p%40ss must reach the engine as p@ss, or authentication
+        // fails on every server whose password has a reserved char.
+        password: ConfigParser._decodeUserInfo(u.userInfo),
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
         insecure: ConfigParser._insecure(u.queryParameters),
@@ -722,7 +728,14 @@ class VlessConfig extends Config {
       var network = params['type'] ?? 'tcp';
       if (network == 'xhttp') network = 'splithttp';
 
-      final insecureRaw = (params['insecure'] ?? '').toLowerCase();
+      // Every spelling the shared helper understands: insecure, allow_insecure,
+      // allowInsecure. Reading only `insecure` kept certificate verification
+      // on for links that asked to skip it.
+      final insecureRaw = (params['insecure'] ??
+              params['allow_insecure'] ??
+              params['allowInsecure'] ??
+              '')
+          .toLowerCase();
 
       return VlessConfig(
         name: name, rawUri: uri, uuid: uuid, address: host, port: port,
@@ -769,12 +782,16 @@ class VmessConfig extends Config {
   final String? sni;
   final String? path;
   final String? host;
+  /// gRPC service name. The vmess share format carries it in `path`, so it
+  /// was being written to wsSettings and never reached grpcSettings - every
+  /// vmess-over-gRPC config dialled an empty service name.
+  final String? serviceName;
 
   VmessConfig({
     required this.name, required this.rawUri, required this.uuid,
     required this.address, required this.port,
     this.alterId = '0', this.cipher = 'auto', this.network = 'tcp',
-    this.tls, this.sni, this.path, this.host,
+    this.tls, this.sni, this.path, this.host, this.serviceName,
   });
 
   @override String get protocol => 'vmess';
@@ -808,6 +825,10 @@ class VmessConfig extends Config {
         sni: json['sni']?.toString(),
         path: json['path']?.toString(),
         host: json['host']?.toString(),
+        // For gRPC the share link puts the service name in `path`.
+        serviceName: (json['net']?.toString() == 'grpc')
+            ? json['path']?.toString()
+            : json['serviceName']?.toString(),
       );
     } catch (_) { return null; }
   }
@@ -867,19 +888,19 @@ class TrojanConfig extends Config {
       } catch (_) {
         decodedPassword = u.userInfo;
       }
-      final insecureFlag = (u.queryParameters['allowInsecure'] ??
-              u.queryParameters['insecure'] ??
-              '')
-          .toLowerCase();
+      // Same helper every other protocol uses; Trojan had its own third
+      // spelling of this check and missed `allow_insecure`.
+      final insecureFlag = ConfigParser._insecure(u.queryParameters);
 
       return TrojanConfig(
         name: name, rawUri: uri,
         password: decodedPassword,
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
-        allowInsecure: insecureFlag == '1' ||
-            insecureFlag == 'true' ||
-            insecureFlag == 'yes',
+        // The helper already returns a bool. Comparing it to the strings it
+        // replaced (`insecureFlag == '1'`) compiles - `==` takes any Object -
+        // but is always false, which would have quietly disabled the flag.
+        allowInsecure: insecureFlag,
         fingerprint: u.queryParameters['fp'],
         network: network,
         path: u.queryParameters['path'],
@@ -933,7 +954,10 @@ class Hysteria2Config extends Config {
       }
       return Hysteria2Config(
         name: name, rawUri: uri,
-        password: u.userInfo,
+        // `userInfo` is still percent-encoded: a password written as
+        // p%40ss must reach the engine as p@ss, or authentication
+        // fails on every server whose password has a reserved char.
+        password: ConfigParser._decodeUserInfo(u.userInfo),
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
         insecure: ConfigParser._insecure(u.queryParameters),
@@ -982,9 +1006,16 @@ class TuicConfig extends Config {
       if (!uri.startsWith('tuic://')) return null;
       final u = ConfigParser.tryParseUri(uri);
       if (u == null) return null;
+      // Split BEFORE decoding: a password may legitimately contain an encoded
+      // colon (%3A), which must not be treated as the uuid separator, and
+      // decoding first would turn it into a real colon.
       final userInfo = u.userInfo.split(':');
-      final uuid = userInfo.isNotEmpty ? userInfo[0] : '';
-      final pwd = userInfo.length > 1 ? userInfo.sublist(1).join(':') : '';
+      final uuid = userInfo.isNotEmpty
+          ? ConfigParser._decodeUserInfo(userInfo[0])
+          : '';
+      final pwd = userInfo.length > 1
+          ? ConfigParser._decodeUserInfo(userInfo.sublist(1).join(':'))
+          : '';
       String name = customName ?? 'TUIC (${u.host}:${u.port})';
       if (customName == null && u.fragment.isNotEmpty) {
         name = ConfigParser.safeFragment(uri, fallback: name);
@@ -1018,12 +1049,32 @@ class AmneziaWGConfig extends Config {
   final int junkMin;
   final int junkMax;
 
+  /// The tunnel's own address from [Interface] Address.
+  ///
+  /// Distinct from [address], which is the server host. These used to be the
+  /// same field: the endpoint host overwrote the interface address, and the
+  /// builder then hard-coded 10.0.0.2/32 - so any server whose inner subnet
+  /// was not 10.0.0.x dropped every packet.
+  final List<String> localAddresses;
+  final int? mtu;
+
+  /// AmneziaWG obfuscation parameters. Parsing only Jc/Jmin/Jmax meant a
+  /// server configured with magic headers or padding saw a vanilla handshake.
+  final int? s1;
+  final int? s2;
+  final int? h1;
+  final int? h2;
+  final int? h3;
+  final int? h4;
+
   AmneziaWGConfig({
     required this.name, required this.rawUri, required this.address,
     required this.port, required this.endpoint,
     required this.privateKey, required this.publicKey,
     this.presharedKey, this.dns,
     this.junkCount = 4, this.junkMin = 40, this.junkMax = 70,
+    this.localAddresses = const [], this.mtu,
+    this.s1, this.s2, this.h1, this.h2, this.h3, this.h4,
   });
 
   @override String get protocol => 'amneziawg';
@@ -1037,7 +1088,9 @@ class AmneziaWGConfig extends Config {
     try {
       if (!content.contains('[Interface]') && !content.contains('Jc =') && !content.contains('JC =')) return null;
       String privateKey = '', publicKey = '', endpoint = '', address = '', dns = '';
+      String psk = '';
       int port = 51820, jc = 4, jmin = 40, jmax = 70;
+      int? mtu, s1, s2, h1, h2, h3, h4;
       for (final line in content.split('\n')) {
         final t = line.trim();
         if (!t.contains('=')) continue;
@@ -1056,6 +1109,15 @@ class AmneziaWGConfig extends Config {
         if (k == 'jc') jc = int.tryParse(v) ?? 4;
         if (k == 'jmin') jmin = int.tryParse(v) ?? 40;
         if (k == 'jmax') jmax = int.tryParse(v) ?? 70;
+        if (k == 'presharedkey') psk = v;
+        if (k == 'mtu') mtu = int.tryParse(v);
+        // AmneziaWG obfuscation: the padding sizes and the magic headers.
+        if (k == 's1') s1 = int.tryParse(v);
+        if (k == 's2') s2 = int.tryParse(v);
+        if (k == 'h1') h1 = int.tryParse(v);
+        if (k == 'h2') h2 = int.tryParse(v);
+        if (k == 'h3') h3 = int.tryParse(v);
+        if (k == 'h4') h4 = int.tryParse(v);
       }
       final host = endpoint.isNotEmpty
           ? (_splitHostPort(endpoint)?.$1 ?? endpoint)
@@ -1064,7 +1126,15 @@ class AmneziaWGConfig extends Config {
         name: customName ?? 'AmneziaWG ($host:$port)',
         rawUri: content, address: host, port: port,
         endpoint: endpoint, privateKey: privateKey, publicKey: publicKey,
+        presharedKey: psk.isEmpty ? null : psk,
         dns: dns, junkCount: jc, junkMin: jmin, junkMax: jmax,
+        // Keep the interface address instead of discarding it.
+        localAddresses: address
+            .split(',')
+            .map((a) => a.trim())
+            .where((a) => a.isNotEmpty)
+            .toList(),
+        mtu: mtu, s1: s1, s2: s2, h1: h1, h2: h2, h3: h3, h4: h4,
       );
     } catch (_) { return null; }
   }
@@ -1135,7 +1205,21 @@ class PsiphonConfig extends Config {
   @override bool validate() => true; // Psiphon uses auto-discovery
 
   static PsiphonConfig? fromUri(String content, {String? customName}) {
-    if (!content.toLowerCase().contains('psiphon') && !content.startsWith('{')) return null;
+    // Must be an actual psiphon link or a psiphon JSON document. The old test
+    // was `contains('psiphon') || startsWith('{')`, so any scanned line that
+    // merely mentioned psiphon - "psiphon lists: vless://..." - was stored as
+    // a Psiphon config, and so was every bare JSON blob of any shape.
+    final trimmed = content.trim();
+    final lower = trimmed.toLowerCase();
+    if (!lower.startsWith('psiphon://') && !lower.startsWith('{')) return null;
+    if (lower.startsWith('{')) {
+      // A psiphon document carries a region or an embedded server entry.
+      if (!lower.contains('"region"') &&
+          !lower.contains('"proxiedsites"') &&
+          !lower.contains('"localproxyport"')) {
+        return null;
+      }
+    }
     return PsiphonConfig(
       name: customName ?? 'Psiphon',
       rawUri: content,
@@ -1342,6 +1426,20 @@ class ConfigParser {
   /// (v2rayNG JSON-style links). A link using a spelling this parser did not know
   /// silently connected with certificate validation ON, which fails against the
   /// self-signed certs most servers actually use.
+  /// Percent-decodes a URI user-info segment.
+  ///
+  /// Trojan decoded its password and every other protocol did not, so a
+  /// password containing @, :, %, + or / was sent literally and the server
+  /// rejected it. One helper, used by all of them.
+  static String _decodeUserInfo(String raw) {
+    try {
+      return Uri.decodeComponent(raw);
+    } catch (_) {
+      // A malformed escape is not worth losing the credential over.
+      return raw;
+    }
+  }
+
   static bool _insecure(Map<String, String> q) {
     final v = q['insecure'] ?? q['allow_insecure'] ?? q['allowInsecure'];
     if (v == null) return false;
@@ -1400,6 +1498,11 @@ class ConfigParser {
     final separator = uri.indexOf('://');
     if (separator <= 0) return uri;
     final scheme = uri.substring(0, separator);
+    // Only a real scheme may be lower-cased. A whole .conf file that happens
+    // to mention a URL has its separator far into the text, and the "scheme"
+    // is then every line before it - including `PrivateKey = AbC...`, whose
+    // case is significant. Lower-casing that corrupted the key.
+    if (!RegExp(r'^[A-Za-z][A-Za-z0-9+.\-]*$').hasMatch(scheme)) return uri;
     if (scheme == scheme.toLowerCase()) return uri;
     return scheme.toLowerCase() + uri.substring(separator);
   }

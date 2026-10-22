@@ -63,7 +63,16 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "::warning::ANDROID_KEYSTORE_* secrets are not set - falling back to the debug key. Every runner mints a new debug keystore, so these APKs can never update a previously installed build (INSTALL_FAILED_UPDATE_INCOMPATIBLE)."
+            # A tagged build becomes a published release. Signing it with the
+            # throwaway debug key would ship an APK that can never update an
+            # installed build (INSTALL_FAILED_UPDATE_INCOMPATIBLE), and the
+            # in-app updater relies on signature continuity - so fail instead
+            # of publishing something broken.
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::ANDROID_KEYSTORE_* secrets are not set. Refusing to publish a debug-signed release: it could never update an installed build. Configure the secrets, or build a non-tagged artifact for testing."
+              exit 1
+            fi
+            echo "::warning::ANDROID_KEYSTORE_* secrets are not set - this untagged build falls back to the debug key and must not be published as a release."
             exit 0
           fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release-keystore.jks"

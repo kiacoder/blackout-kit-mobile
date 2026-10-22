@@ -119,6 +119,22 @@ class TesterService {
       return TestResult.failed(configHash: hash, error: reason);
     }
 
+    // A TCP probe cannot say anything about a UDP-only protocol: hysteria2,
+    // TUIC and WireGuard never listen on TCP, so every one of them was marked
+    // failed by the scan and dropped before it could be tried. Report them as
+    // unverified instead - the connect attempt is the only real test.
+    if (_isUdpOnly(config.protocol)) {
+      _log.i('Skipping TCP probe for ${config.displayName} '
+          '(${config.protocol} is UDP-only)');
+      onProgress?.call(hash, TestStatus.notTested);
+      return TestResult(
+        configHash: hash,
+        status: TestStatus.notTested,
+        testedAt: DateTime.now(),
+        error: 'UDP-only protocol: verified on connect, not by a TCP probe',
+      );
+    }
+
     _log.i('Probing ${config.displayName} (${config.address}:${config.port})');
 
     var successes = 0;
@@ -265,6 +281,10 @@ class TesterService {
   }
 
   /// Working configs, fastest (lowest latency) first.
+  /// Protocols that speak UDP only, so a TCP reachability probe is meaningless.
+  static bool _isUdpOnly(String protocol) =>
+      protocol == 'hysteria2' || protocol == 'tuic' || protocol == 'wireguard';
+
   List<TestResult> getWorkingConfigs(List<TestResult> results) {
     final working = results.where((r) => r.isWorking).toList();
     working.sort((a, b) {

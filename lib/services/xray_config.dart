@@ -479,7 +479,8 @@ class XrayConfigBuilder {
           c.serviceName,
           c.xhttpMode,
         ),
-      VmessConfig c => (c.network, c.path, c.host ?? c.sni, null, null),
+      VmessConfig c =>
+        (c.network, c.path, c.host ?? c.sni, c.serviceName, null),
       TrojanConfig c => (c.network ?? 'tcp', c.path, c.host ?? c.sni, null, null),
       _ => ('tcp', null, null, null, null),
     };
@@ -548,9 +549,22 @@ class XrayConfigBuilder {
             'type': (config is VlessConfig ? config.headerType : null) ?? 'none',
           },
         };
+      case 'httpupgrade':
+        // Supported by the bundled core, and among the most common
+        // CDN-fronted transports. It needs the same path/host pair as ws;
+        // without a case here it used to fall through to raw TCP, so every
+        // httpupgrade config dialled plain TCP at a CDN and failed.
+        stream['httpupgradeSettings'] = {
+          'path': (path == null || path.isEmpty) ? '/' : path,
+          if (host != null && host.isNotEmpty) 'host': host,
+        };
       case 'tcp':
         // Raw TCP carries no settings of its own.
         break;
+      // 'http' (h2) and 'quic' are handled above: their settings blocks are
+      // still emitted, but the bundled core has no transport package for
+      // either, so engineRefusal() rejects those configs before connect
+      // rather than letting the core fail to start.
       default:
         // Unknown transport: fall back to tcp rather than emitting a key Xray
         // would reject at parse time.
@@ -573,11 +587,20 @@ class XrayConfigBuilder {
     }
 
     // TLS unless the config explicitly says otherwise.
+    //
+    // The default here used to be 'tls', which wrapped Shadowsocks in a TLS
+    // ClientHello it can never answer - so no ss:// config ever handshook.
+    // Shadowsocks has no TLS layer, and the same is true of anything that is
+    // not one of the TLS-bearing protocols below.
     final security = switch (config) {
       VlessConfig c => c.security.toLowerCase(),
-      VmessConfig c => (c.tls == null || c.tls!.isEmpty) ? 'none' : 'tls',
+      // `"tls":"none"` is a real value in vmess links and means what it says.
+      VmessConfig c =>
+        (c.tls == null || c.tls!.isEmpty || c.tls!.toLowerCase() == 'none')
+            ? 'none'
+            : 'tls',
       TrojanConfig _ => 'tls', // Trojan is TLS by definition.
-      _ => 'tls',
+      _ => 'none',
     };
 
     if (security == 'none' && config is! TrojanConfig) {
@@ -597,15 +620,20 @@ class XrayConfigBuilder {
       _ => null,
     };
     stream['security'] = 'tls';
-    // Xray 25.x REMOVED allowInsecure — its mere presence is a config error
-    // ("The feature allowInsecure has been removed"), which killed every
-    // security=tls tunnel on the bundled core. TLS now relies on valid
-    // certificates and a matching serverName. Self-signed endpoints need the
-    // migrated pinning fields (pinnedPeerCertSha256 / verifyPeerCertByName)
-    // once the app carries cert hashes.
+    // The bundled core (xray-core v1.260327.1) still carries the
+    // `allowInsecure` field, and a link that says insecure=1 is asking for a
+    // self-signed certificate to be accepted. Emitting it only when the link
+    // asks for it means every other config keeps full verification, and the
+    // ones that request it stop failing the handshake they opted out of.
+    final allowInsecure = switch (config) {
+      VlessConfig c => c.allowInsecure,
+      TrojanConfig c => c.allowInsecure,
+      _ => false,
+    };
     stream['tlsSettings'] = {
       if (sni != null && sni.isNotEmpty) 'serverName': sni,
       'fingerprint': _orDefault(fingerprint, 'chrome'),
+      if (allowInsecure) 'allowInsecure': true,
     };
     return stream;
   }

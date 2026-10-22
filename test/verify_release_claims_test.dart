@@ -64,15 +64,30 @@ void main() {
           'anytls://password@a.com:443?sni=a.com#node');
       final route = doc['route'] as Map;
       final resolver = route['default_domain_resolver'] as Map;
-      expect(resolver['server'], 'remote-dns');
+      expect(resolver['server'], 'remote-dns',
+          reason: 'user traffic must resolve through the tunnel');
 
       final dns = doc['dns'] as Map;
       final servers = (dns['servers'] as List).cast<Map>();
+
+      // No resolver may be a hostname: that would need resolving itself.
       for (final server in servers) {
-        expect(server['detour'], 'proxy',
-            reason: 'every resolver must be proxied in strict mode');
+        final address = server['server'] as String;
+        expect(RegExp(r'^[0-9.]+$').hasMatch(address) ||
+                address.contains(':'),
+            isTrue,
+            reason: '$address needs a resolver to reach the resolver');
       }
+
+      // Exactly one resolver is direct, and it exists only to resolve the
+      // proxy's own hostname - otherwise the tunnel can never come up.
+      final bootstrap =
+          servers.firstWhere((s) => s['tag'] == 'bootstrap-dns');
+      expect(bootstrap['detour'], 'direct');
       expect(servers.any((s) => s['tag'] == 'local-dns'), isFalse);
+
+      final proxy = ((doc['outbounds'] as List).first as Map);
+      expect((proxy['domain_resolver'] as Map)['server'], 'bootstrap-dns');
     });
   });
 

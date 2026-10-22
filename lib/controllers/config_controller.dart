@@ -168,6 +168,11 @@ class ConfigController extends GetxController {
     // without each of them having to remember to invalidate by hand.
     ever(allConfigs, (_) => _invalidateFilterCache());
     ever(testResults, (_) => _invalidateFilterCache());
+    // visibleConfigs also depends on which sources are enabled, and toggling a
+    // source replaces the list without touching allConfigs - so the cached
+    // filter result kept showing a disabled repository's configs until some
+    // unrelated change happened to invalidate it.
+    ever(sources, (_) => _invalidateFilterCache());
 
     // Persist measurements so a restart does not wipe the tester back to
     // "Untested" for thousands of servers (and connectFastest back to probing

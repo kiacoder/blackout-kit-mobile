@@ -387,10 +387,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       return false;
     }
     _operationInFlight = true;
+    _cancelRequested = false;
     try {
       return await _connectFastestImpl(availableConfigs, testResults: testResults);
     } finally {
       _operationInFlight = false;
+      _cancelRequested = false;
     }
   }
 
@@ -468,6 +470,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       });
 
       for (var batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        if (_cancelRequested) {
+          _log.i('Scan cancelled by the user after ${batchIndex} batch(es)');
+          statusMessage.value = 'Scan stopped';
+          state.value = ConnectionState.idle;
+          return false;
+        }
         final batch =
             toScan.skip(batchIndex * _probeBatchSize).take(_probeBatchSize).toList();
         final batchHashes = batch.map((c) => c.getHash()).toSet();
@@ -477,14 +485,14 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         state.value = ConnectionState.selecting;
         statusMessage.value = 'Pinging $batchLabel (${batch.length} servers)...';
         var probed = 0;
-        testerService.onProgress = (hash, status) {
+        final progressToken = testerService.beginProgressRun((hash, status) {
           // onProgress fires a 'testing' event at probe start AND a terminal
           // event at the end — counting both reported double progress.
           if (status == TestStatus.testing) return;
           probed++;
           statusMessage.value =
               'Pinging $batchLabel... $probed/${batch.length}';
-        };
+        });
         List<TestResult> probedResults;
         try {
           probedResults = await testerService.testConfigsConcurrently(
@@ -494,15 +502,21 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             timeout: _probeTimeout,
           );
         } finally {
-          testerService.onProgress = null;
+          testerService.endProgressRun(progressToken);
         }
 
-        final working = testerService
-            .getWorkingConfigs(probedResults)
-            .where((r) => batchHashes.contains(r.configHash))
-            .toList()
-          ..sort((a, b) => (a.latencyMs ?? 1 << 30)
-              .compareTo(b.latencyMs ?? 1 << 30));
+        // Verified-by-probe results first, then the ones the probe cannot
+        // judge (UDP-only protocols come back notTested). Leaving those out
+        // meant hysteria2/TUIC/WireGuard were never candidates at all.
+        final working = <TestResult>[
+          ...testerService
+              .getWorkingConfigs(probedResults)
+              .where((r) => batchHashes.contains(r.configHash)),
+          ...probedResults.where((r) =>
+              r.status == TestStatus.notTested &&
+              batchHashes.contains(r.configHash)),
+        ]..sort((a, b) =>
+            (a.latencyMs ?? 1 << 30).compareTo(b.latencyMs ?? 1 << 30));
 
         if (working.isEmpty) {
           _log.i('$batchLabel: no server answered');
@@ -532,13 +546,17 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           }
         }
 
-        // Rank the batch: verified-usable first (best tunnel latency), then
-        // everything else by TCP latency.
+        // Rank the batch: verified-usable first, then unknown, then the ones
+        // the site check proved unusable.
+        //
+        // The numbers were inverted (a FAILED check scored 0 and sorted first),
+        // so Fastest Connect spent its attempts on exactly the configs the
+        // expensive check had just ruled out.
         int rank(TestResult r) {
           final report = reports[r.configHash];
           if (report == null || !report.supported) return 1;
-          if (!report.isUsable) return 0;
-          return 2;
+          if (!report.isUsable) return 2;
+          return 0;
         }
 
         working.sort((a, b) {
@@ -565,6 +583,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             : _maxConnectAttemptsPerBatch;
 
         for (var attempt = 0; attempt < attemptLimit; attempt++) {
+          if (_cancelRequested) {
+            _log.i('Scan cancelled during $batchLabel');
+            statusMessage.value = 'Scan stopped';
+            state.value = ConnectionState.idle;
+            return false;
+          }
           final result = working[attempt];
           final config = batch.firstWhereOrNull(
             (c) => c.getHash() == result.configHash,
@@ -634,6 +658,21 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// while the first was still in flight. Every public entry point shares
   /// this guard; internal steps call the impl methods.
   bool _operationInFlight = false;
+
+  /// Set by [cancelScan] and checked between batches and between connect
+  /// attempts. A full scan can run for minutes over thousands of configs, and
+  /// there was no way to stop it: the big button was disabled in selecting/
+  /// testing and Disconnect was rejected by the single-flight guard, so the
+  /// only escape was killing the app.
+  bool _cancelRequested = false;
+
+  /// Stops a running scan. Returns true when there was one to stop.
+  bool cancelScan() {
+    if (!_operationInFlight) return false;
+    _cancelRequested = true;
+    statusMessage.value = 'Stopping...';
+    return true;
+  }
   bool get operationInFlight => _operationInFlight;
 
   /// Connect to specific config
@@ -794,6 +833,23 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     } catch (e) {
       _log.w('Engine capability probe failed, continuing: $e');
       return null;
+    }
+
+    // Transports the bundled Xray core has no package for. It resolves the
+    // transport by name at start-up, so a config carrying one of these fails
+    // with "Xray core rejected the configuration" - after the consent dialog
+    // and after a wasted probe. The core's transport/internet packages are
+    // grpc, httpupgrade, hysteria, kcp, reality, splithttp, tcp, tls, udp and
+    // websocket; there is no quic and no http (h2).
+    final network = switch (config) {
+      VlessConfig c => c.network,
+      VmessConfig c => c.network,
+      TrojanConfig c => c.network,
+      _ => null,
+    };
+    if (network == 'quic' || network == 'http' || network == 'h2') {
+      return "'$network' transport is not supported by the bundled core. "
+          'Use a ws, grpc, httpupgrade or xhttp link instead.';
     }
 
     final availability = _engineAvailability!;

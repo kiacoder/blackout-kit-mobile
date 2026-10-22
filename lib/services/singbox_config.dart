@@ -20,9 +20,18 @@ const Set<String> kSingboxProtocols = {
   'hysteria2',
   'tuic',
   'anytls',
-  'shadowtls',
-  'amneziawg',
-  'warp',
+  // 'shadowtls' is intentionally absent: a shadowtls outbound is only a TLS
+  // camouflage layer and must carry an inner proxy as its `detour`, which a
+  // shadowtls:// link does not contain. Emitting it as the final outbound
+  // produced a tunnel that reported "connected" and passed no traffic.
+  //
+  // 'amneziawg' is absent for the same kind of reason: the bundled core
+  // (libsingbox.so) contains no AmneziaWG symbols at all, so the `amnezia`
+  // block is rejected as an unknown field. Advertising it meant every awg://
+  // config was imported, ranked and offered, then refused at connect.
+  //
+  // 'warp' is absent because WarpConfig.fromUri() always returns null - there
+  // is no parser, so no warp config can ever exist.
 };
 
 /// True when [protocol] is served by the bundled sing-box core.
@@ -58,6 +67,10 @@ class SingboxConfigBuilder {
       const JsonEncoder.withIndent('  ').convert(build(config));
 
   /// The config as a nested map.
+  /// WireGuard (and its AmneziaWG/WARP variants) must be an `endpoint`.
+  static bool _isWireguardEndpoint(Config config) =>
+      config is AmneziaWGConfig || config is WarpConfig;
+
   Map<String, dynamic> build(Config config) {
     final protocol = config.protocol;
     if (!isSingboxProtocol(protocol)) {
@@ -85,8 +98,11 @@ class SingboxConfigBuilder {
           'listen_port': socksPort,
         },
       ],
+      // WireGuard lives in `endpoints` since sing-box 1.11; the outbound form
+      // was removed in 1.13 and the bundled core says so in as many words.
+      // Everything else stays an outbound.
       'outbounds': <Map<String, dynamic>>[
-        _buildOutbound(config),
+        if (!_isWireguardEndpoint(config)) _buildOutbound(config),
         {
           'type': 'direct',
           'tag': 'direct',
@@ -96,6 +112,8 @@ class SingboxConfigBuilder {
           'tag': 'block',
         },
       ],
+      if (_isWireguardEndpoint(config))
+        'endpoints': <Map<String, dynamic>>[_buildOutbound(config)],
       'route': {
         'rules': <Map<String, dynamic>>[
           if (bypassPrivateRanges)
@@ -142,12 +160,32 @@ class SingboxConfigBuilder {
       // a `local-dns` entry with `detour: direct` and made it the DEFAULT
       // domain resolver, so anything outside the proxy outbound was resolved
       // by the carrier - the opposite of what the toggle promises.
+      // A resolver used THROUGH the proxy cannot also be the one that resolves
+      // the proxy's own hostname: that is a cycle (resolve the server address
+      // -> needs the proxy -> needs the server address). Worse, the DoH
+      // endpoint was a hostname (`cloudflare-dns.com`) with no bootstrap, so
+      // even the resolver's own address needed resolving.
+      //
+      // Two resolvers instead:
+      //   bootstrap-dns - IP literal, direct. Only ever resolves the proxy's
+      //                   server hostname. Unavoidably outside the tunnel:
+      //                   you cannot resolve the tunnel's own endpoint through
+      //                   the tunnel. It never sees the user's browsing.
+      //   remote-dns    - IP literal, through the proxy. Resolves everything
+      //                   the user actually visits.
       document['dns'] = {
         'servers': [
           {
             'type': 'https',
+            'tag': 'bootstrap-dns',
+            // IP literal: no name resolution needed to reach it.
+            'server': '1.1.1.1',
+            'detour': 'direct',
+          },
+          {
+            'type': 'https',
             'tag': 'remote-dns',
-            'server': 'cloudflare-dns.com',
+            'server': '1.1.1.1',
             'detour': 'proxy',
           },
           if (dnsServers.isNotEmpty)
@@ -165,10 +203,15 @@ class SingboxConfigBuilder {
         'server': 'remote-dns',
         'strategy': 'prefer_ipv4',
       };
-      for (final outbound in document['outbounds']!) {
-        if (outbound['tag'] == 'proxy') {
+      // The proxy's own hostname is the one thing that must resolve outside
+      // the tunnel, or the tunnel can never come up.
+      for (final outbound in [
+        ...(document['outbounds'] as List? ?? const []),
+        ...(document['endpoints'] as List? ?? const []),
+      ]) {
+        if (outbound is Map && outbound['tag'] == 'proxy') {
           outbound['domain_resolver'] = {
-            'server': 'remote-dns',
+            'server': 'bootstrap-dns',
             'strategy': 'prefer_ipv4',
           };
         }
@@ -255,17 +298,26 @@ class SingboxConfigBuilder {
         };
 
       case AmneziaWGConfig c:
+        // WireGuard moved from outbounds to `endpoints` in sing-box 1.11 and
+        // the outbound form was REMOVED in 1.13 - the bundled core carries the
+        // literal "use WireGuard endpoint instead". The caller emits this into
+        // `endpoints`, not `outbounds`.
         return {
           'type': 'wireguard',
           'tag': 'proxy',
-          'server': c.address,
-          'server_port': c.port,
+          'address': c.address,
+          'port': c.port,
           'private_key': c.privateKey,
           'peer_public_key': c.publicKey,
           if (c.presharedKey != null && c.presharedKey!.isNotEmpty)
             'pre_shared_key': c.presharedKey,
-          'local_address': ['10.0.0.2/32'],
-          'mtu': 1420,
+          // The tunnel address is the config's own, not a hard-coded
+          // 10.0.0.2/32 - that guessed address dropped every packet on any
+          // server whose inner subnet differs.
+          'local_address': c.localAddresses.isEmpty
+              ? ['10.0.0.2/32']
+              : c.localAddresses,
+          'mtu': c.mtu ?? 1420,
           // `reserved` is the 3-byte WireGuard header field (a WARP thing),
           // NOT AmneziaWG obfuscation — stuffing the junk-packet numbers in
           // there dialed AWG servers as vanilla WireGuard and the handshake
@@ -283,8 +335,8 @@ class SingboxConfigBuilder {
         return {
           'type': 'wireguard',
           'tag': 'proxy',
-          'server': c.address,
-          'server_port': c.port,
+          'address': c.address,
+          'port': c.port,
           'private_key': c.privateKey,
           'peer_public_key': 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=',
           'local_address': ['172.16.0.2/32', '2606:4700:110:8f9f:6f5:7c45:9d36:31e9/128'],

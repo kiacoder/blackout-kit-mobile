@@ -24,6 +24,10 @@ class ConfigService {
   late Box<Map> _resultBox;
   SecureVault? _vault;
   bool _vaultActive = false;
+
+  /// Encrypted data exists but its key is gone. The library is intact and
+  /// unreadable; callers must say so rather than showing an empty list.
+  bool _vaultLocked = false;
   final KeyStore? _keyStore;
   final Logger _log;
 
@@ -55,7 +59,13 @@ class ConfigService {
       _vault = SecureVault(store: _keyStore);
       final report = await _vault!.migrate();
       _vaultActive = report.active;
-      if (report.migrated) {
+      // migrate() already distinguishes "no keystore" from "key lost while
+      // encrypted data exists" - take its verdict rather than re-deriving it,
+      // which read a flag that had just been set to false.
+      _vaultLocked = report.locked;
+      if (report.locked) {
+        _log.e('Config vault is locked: ${report.detail}');
+      } else if (report.migrated) {
         _log.i('Config vault: ${report.detail}');
       } else if (!report.active) {
         _log.w('Config vault inactive: ${report.detail}');
@@ -73,9 +83,17 @@ class ConfigService {
     // rather than presenting an empty library.
     var vaultKey = _vaultActive ? await _vault!.getOrCreateKey() : null;
     if (_vaultActive && vaultKey == null) {
-      _log.e('Vault key unavailable - falling back to plaintext storage');
+      // Distinguish "no keystore on this platform" from "the key that opens
+      // existing encrypted data is gone". The second case must never delete
+      // anything: the boxes are intact and a restore of the key brings the
+      // library back.
+      _vaultLocked = await _vault!.hasEncryptedData();
       _vaultActive = false;
       vaultKey = null;
+      _log.e(_vaultLocked
+          ? 'Vault key missing but encrypted configs exist - keeping them '
+              'untouched and reporting a locked library'
+          : 'Vault key unavailable - falling back to plaintext storage');
     }
     final cipher = vaultKey == null ? null : HiveAesCipher(vaultKey);
 
@@ -94,6 +112,12 @@ class ConfigService {
   /// Whether the saved configs are encrypted on disk.
   bool get isEncryptedAtRest => _vaultActive;
 
+  /// Encrypted configs are on disk but cannot be decrypted right now.
+  ///
+  /// The UI shows a recovery message for this instead of "no configs", which
+  /// is what made a keystore reset look like the library had been deleted.
+  bool get isVaultLocked => _vaultLocked;
+
   /// Opens [name], or - if the file is corrupt - deletes it and reopens
   /// fresh. One retry only; if that also fails the error propagates, since
   /// silently running with no storage at all would mask real bugs.
@@ -111,6 +135,14 @@ class ConfigService {
         } catch (_) {
           // fall through to quarantine
         }
+      }
+      // Never delete encrypted data. A wrong or missing key is not corruption:
+      // the bytes are fine, and deleting them destroys a library that a
+      // restored key would have opened. Rename instead, so the file survives.
+      if (name.endsWith('_v2')) {
+        _log.e('Encrypted box "$name" could not be opened ($e) - leaving it on '
+            'disk; the vault key may be missing');
+        rethrow;
       }
       _log.e('Box "$name" is unreadable ($e) - quarantining it');
       await Hive.deleteBoxFromDisk(name);

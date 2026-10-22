@@ -60,17 +60,35 @@ class MemoryKeyStore implements KeyStore {
   Future<void> write(String key, String value) async => _values[key] = value;
 }
 
+/// What the vault can do right now.
+enum VaultState {
+  /// A key exists and encrypted boxes are readable.
+  active,
+
+  /// Encrypted data exists but the key is gone (keystore reset, app data
+  /// restored onto another device). The data is intact and unreadable; the
+  /// app must say so instead of deleting it.
+  locked,
+
+  /// No encrypted data yet - a key will be created on first write.
+  absent,
+}
+
 class MigrationReport {
   final bool active;
   final bool migrated;
   final String detail;
   final int recordsMoved;
 
+  /// Encrypted data is on disk but the key is missing. Nothing was deleted.
+  final bool locked;
+
   const MigrationReport({
     required this.active,
     required this.migrated,
     required this.detail,
     this.recordsMoved = 0,
+    this.locked = false,
   });
 }
 
@@ -100,8 +118,14 @@ class SecureVault {
     }
   }
 
-  /// Returns the vault key, creating it on first use. Null when the store is
-  /// unavailable, which keeps the app usable in legacy mode.
+  /// Returns the vault key, creating it on first use.
+  ///
+  /// Returns null when the key cannot be produced. That is deliberately NOT
+  /// the same as "create a new one": minting a fresh key while encrypted boxes
+  /// still exist on disk produces a key that cannot open them, and the caller
+  /// then sees an unreadable box and deletes it - which silently wiped the
+  /// whole saved library on a keystore reset or a restore onto a new device.
+  /// See [VaultState.locked].
   Future<Uint8List?> getOrCreateKey() async {
     try {
       final existing = await _store.read(_keyName);
@@ -109,11 +133,48 @@ class SecureVault {
         final decoded = _decode(existing);
         if (decoded != null) return decoded;
       }
+
+      // No usable key. If encrypted data is already on disk, creating a new
+      // key would make that data permanently unreadable - refuse instead and
+      // let the caller surface a recoverable state.
+      if (await hasEncryptedData()) {
+        return null;
+      }
+
       final key = _randomKey();
       await _store.write(_keyName, _encode(key));
       return key;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// True when any encrypted box exists on disk.
+  Future<bool> hasEncryptedData() async {
+    for (final encrypted in _encryptedBoxNames.values) {
+      try {
+        if (Hive.isBoxOpen(encrypted) || await Hive.boxExists(encrypted)) {
+          return true;
+        }
+      } catch (_) {
+        // An unreadable check is not evidence of absence.
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Whether the vault is usable, locked, or absent.
+  Future<VaultState> state() async {
+    try {
+      final stored = await _store.read(_keyName);
+      final hasKey = stored != null && stored.isNotEmpty;
+      final hasData = await hasEncryptedData();
+      if (hasKey && hasData) return VaultState.active;
+      if (!hasKey && hasData) return VaultState.locked;
+      return VaultState.absent;
+    } catch (_) {
+      return VaultState.absent;
     }
   }
 
@@ -128,10 +189,15 @@ class SecureVault {
   Future<MigrationReport> migrate() async {
     final key = await getOrCreateKey();
     if (key == null) {
-      return const MigrationReport(
+      final locked = await state() == VaultState.locked;
+      return MigrationReport(
         active: false,
         migrated: false,
-        detail: 'Platform keystore unavailable - configs stay in plain text',
+        locked: locked,
+        detail: locked
+            ? 'Encrypted configs exist but the vault key is gone. The data is '
+                'kept on disk; it cannot be read until the key is restored.'
+            : 'Platform keystore unavailable - configs stay in plain text',
       );
     }
 

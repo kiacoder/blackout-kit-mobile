@@ -47,6 +47,14 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    // A scan in progress: this tap means "stop", not "start another one".
+    // The button used to be disabled only while connecting, so during a
+    // minutes-long scan a tap did nothing at all.
+    if (_connectionController.operationInFlight) {
+      _connectionController.cancelScan();
+      return;
+    }
+
     // Get available configs (only from enabled sources)
     final configs = _configController.visibleConfigs;
     if (configs.isEmpty) {
@@ -256,6 +264,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final isConnected = _connectionController.isConnected;
       final isConnecting = _connectionController.state.value ==
           ConnectionState.connecting;
+      // During a scan the button is live again, as a Cancel action.
+      final isScanning = _connectionController.state.value ==
+              ConnectionState.selecting ||
+          _connectionController.state.value == ConnectionState.testing;
 
       return Center(
         child: GestureDetector(
@@ -307,7 +319,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       const SizedBox(height: 8),
                       Text(
-                        (isConnected ? 'connected' : 'connect').tr.toUpperCase(),
+                        // During a scan the same button stops it, so say so.
+                        (isScanning
+                                ? 'cancel'
+                                : (isConnected ? 'connected' : 'connect'))
+                            .tr
+                            .toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,

@@ -579,8 +579,22 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onChanged: (text) {
-              final parsed = ConfigParser.parse(text);
-              setState(() => _parsedConfig = parsed);
+              // parseMultiple, not parse: pasting a list of links used to
+              // produce ONE config whose raw URI was the whole blob, so every
+              // link after the first was silently dropped.
+              final configs = _parsePayload(text);
+              if (configs.length > 1) {
+                setState(() => _parsedConfig = configs.first);
+                if (!_dialogOpen && !_saving) {
+                  _dialogOpen = true;
+                  _showMultipleParsedDialog(configs).whenComplete(() {
+                    if (mounted) _dialogOpen = false;
+                  });
+                }
+              } else {
+                setState(() =>
+                    _parsedConfig = configs.isEmpty ? null : configs.first);
+              }
             },
           ),
           const SizedBox(height: 16),

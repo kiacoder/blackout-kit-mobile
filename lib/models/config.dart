@@ -1471,11 +1471,16 @@ class ConfigParser {
       // was classified as OpenVPN. Require a real directive at line start.
       if (_hasOpenVpnDirective(trimmed) || trimmed.contains('BEGIN CERTIFICATE'))
                                                 return OpenVpnConfig.fromUri(trimmed, customName: customName);
-      if (trimmed.contains('Jc =') || trimmed.contains('JC =') || trimmed.contains('junk_count'))
+      // Case-insensitive: `jc = 5` is as valid as `Jc = 5`, and the old
+      // case-sensitive test sent every lowercase conf to plain WireGuard,
+      // where the obfuscation parameters were dropped.
+      if (_looksLikeAmnezia(trimmed))
                                                 return AmneziaWGConfig.fromUri(trimmed, customName: customName);
       if (trimmed.contains('[Interface]') || trimmed.contains('PrivateKey'))
                                                 return WireGuardConfig.fromUri(trimmed, customName: customName);
-      if (trimmed.toLowerCase().contains('psiphon'))
+      // A psiphon document is JSON and does not have to contain the word
+      // "psiphon"; a link does. Both are handled by the parser's own checks.
+      if (trimmed.toLowerCase().contains('psiphon') || trimmed.startsWith('{'))
                                                 return PsiphonConfig.fromUri(trimmed, customName: customName);
       if (trimmed.toLowerCase().contains('warp'))
                                                 return WarpConfig.fromUri(trimmed, customName: customName);
@@ -1509,6 +1514,23 @@ class ConfigParser {
 
   /// True when a block contains an OpenVPN directive at line start (not in a
   /// comment). Used to classify pasted .ovpn content without matching prose.
+  /// True when a block carries AmneziaWG's obfuscation parameters.
+  ///
+  /// Case-insensitive, and keyed on the parameters that only AWG has - Jc
+  /// alone is enough, since vanilla WireGuard defines no such key.
+  static bool _looksLikeAmnezia(String content) {
+    final lower = content.toLowerCase();
+    if (lower.contains('junk_count')) return true;
+    for (final key in const ['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4']) {
+      // Match `key = value` at the start of a line, ignoring leading spaces.
+      if (RegExp('^\\s*${key}\\s*=', multiLine: true, caseSensitive: false)
+          .hasMatch(content)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   static bool _hasOpenVpnDirective(String content) {
     for (final rawLine in content.split('\n')) {
       final line = rawLine.trim();
@@ -1643,9 +1665,15 @@ class ConfigParser {
     if (blockText.contains('[Interface]')) {
       final blocks = blockText.split(RegExp(r'(?=\[Interface\])', caseSensitive: false));
       for (final block in blocks) {
-        if (block.trim().contains('[Interface]')) {
-          final wg = WireGuardConfig.fromUri(block.trim());
-          addIfValid(wg);
+        final text = block.trim();
+        if (!text.contains('[Interface]')) continue;
+        // Classify the block instead of assuming WireGuard: this hard-coded
+        // WireGuardConfig.fromUri, so an AmneziaWG conf imported as part of a
+        // bundle silently lost Jc/Jmin/Jmax and became a vanilla tunnel.
+        if (_looksLikeAmnezia(text)) {
+          addIfValid(AmneziaWGConfig.fromUri(text));
+        } else {
+          addIfValid(WireGuardConfig.fromUri(text));
         }
       }
     } else if (blockText.contains('remote ') || blockText.contains('BEGIN CERTIFICATE')) {

@@ -1,1 +1,0 @@
-C:\Users\kiacoder\blackout-kit-mobile\android\app\src\main\cpp\CMakeLists.txt

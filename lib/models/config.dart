@@ -658,6 +658,15 @@ class VlessConfig extends Config {
   final String? xhttpMode;  // splithttp mode: auto / packet-up / stream-up
   final String? alpn;       // TLS ALPN list
   final bool allowInsecure;
+  // Transport detail for http / kcp / quic. These parameters are present in
+  // every share link that uses those transports, and they used to be parsed
+  // away: the outbound was built with the right host and port but no
+  // transport settings at all, so an mKCP server rejected the connection and
+  // an http/2 or QUIC server never saw the request it expected.
+  final String? headerType;   // kcp / quic / httpheader disguise
+  final String? kcpSeed;      // mKCP obfuscation seed
+  final String? quicSecurity; // quic: none / aes-128-gcm / chacha20-poly1305
+  final String? quicKey;      // quic encryption key
 
   VlessConfig({
     required this.name, required this.rawUri, required this.uuid,
@@ -666,6 +675,7 @@ class VlessConfig extends Config {
     this.publicKey, this.shortId, this.pbk, this.network,
     this.path, this.host, this.serviceName, this.spiderX, this.xhttpMode,
     this.alpn, this.allowInsecure = false,
+    this.headerType, this.kcpSeed, this.quicSecurity, this.quicKey,
   });
 
   @override String get protocol => 'vless';
@@ -731,6 +741,13 @@ class VlessConfig extends Config {
         xhttpMode: params['mode'],
         alpn: params['alpn'],
         allowInsecure: insecureRaw == '1' || insecureRaw == 'true' || insecureRaw == 'yes',
+        // mKCP/QUIC disguise and encryption, plus the http header type. Read
+        // under both the `headerType` and `header` spellings, which is what
+        // different client generators emit.
+        headerType: params['headerType'] ?? params['header'],
+        kcpSeed: params['seed'],
+        quicSecurity: params['quicSecurity'] ?? params['security'],
+        quicKey: params['key'],
       );
     } catch (_) { return null; }
   }

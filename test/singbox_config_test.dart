@@ -184,7 +184,7 @@ Endpoint = awg.server.com:51820
       final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
       final rules = (builder.build(config)['route'] as Map)['rules'] as List;
 
-      final actions = rules.map((r) => (r as Map)['outbound'] ?? (r as Map)['action']).toList();
+      final actions = rules.map((r) => (r as Map)['outbound'] ?? r['action']).toList();
       final sniffIndex = rules.indexWhere((r) => (r as Map)['action'] == 'sniff');
       final bypassIndex = rules.indexWhere((r) => (r as Map)['outbound'] == 'direct');
       expect(sniffIndex, greaterThan(bypassIndex));

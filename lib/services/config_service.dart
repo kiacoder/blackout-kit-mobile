@@ -6,10 +6,12 @@
 /// - Config validation before storage
 
 import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logger/logger.dart';
 import '../models/config.dart';
 import '../models/config_source.dart';
 import '../models/test_result.dart';
+import 'secure_vault.dart';
 
 class ConfigService {
   static const String _configBoxName = 'configs';
@@ -20,9 +22,14 @@ class ConfigService {
   late Box<Map> _configBox;
   late Box<Map> _sourceBox;
   late Box<Map> _resultBox;
+  SecureVault? _vault;
+  bool _vaultActive = false;
+  final KeyStore? _keyStore;
   final Logger _log;
 
-  ConfigService({Logger? logger}) : _log = logger ?? Logger();
+  ConfigService({Logger? logger, KeyStore? keyStore})
+      : _log = logger ?? Logger(),
+        _keyStore = keyStore;
 
   /// Initialize Hive boxes.
   ///
@@ -33,22 +40,81 @@ class ConfigService {
   /// created) exactly once and continues: losing a stored copy of configs is
   /// recoverable; an unbootable app is not.
   Future<void> initialize() async {
-    _configBox = await _openOrQuarantine<Map>(_configBoxName);
-    _sourceBox = await _openOrQuarantine<Map>(_sourceBoxName);
-    _resultBox = await _openOrQuarantine<Map>(_resultBoxName);
-    _log.i('ConfigService initialized');
+    // Encrypted-at-rest storage (BK-053). Every saved config embeds a live
+    // credential - UUID, password or private key - and used to sit in a plain
+    // Hive box readable by anything with storage access. The vault moves them
+    // into AES-encrypted boxes whose key lives in the platform keystore.
+    //
+    // Migration is additive and idempotent: plaintext records are copied into
+    // the encrypted boxes and the originals are deleted only afterwards. Any
+    // failure leaves the plaintext boxes untouched and the app runs in legacy
+    // mode rather than losing the library.
+    try {
+      // The key store is injectable so tests (and platforms with no keystore)
+      // can supply their own; production gets the platform keystore.
+      _vault = SecureVault(store: _keyStore);
+      final report = await _vault!.migrate();
+      _vaultActive = report.active;
+      if (report.migrated) {
+        _log.i('Config vault: ${report.detail}');
+      } else if (!report.active) {
+        _log.w('Config vault inactive: ${report.detail}');
+      }
+    } catch (e) {
+      // Never let the vault block startup: legacy plaintext still works.
+      _log.e('Config vault setup failed, continuing unencrypted: $e');
+      _vaultActive = false;
+    }
+
+    // The cipher is mandatory for the encrypted boxes: opening one without it
+    // silently yields zero records, which looks exactly like an empty library.
+    // If the key cannot be read back (keystore wiped, app data restored onto a
+    // new device) the vault is unusable, so fall back to the plaintext boxes
+    // rather than presenting an empty library.
+    var vaultKey = _vaultActive ? await _vault!.getOrCreateKey() : null;
+    if (_vaultActive && vaultKey == null) {
+      _log.e('Vault key unavailable - falling back to plaintext storage');
+      _vaultActive = false;
+      vaultKey = null;
+    }
+    final cipher = vaultKey == null ? null : HiveAesCipher(vaultKey);
+
+    _configBox = await _openOrQuarantine<Map>(
+        _vaultActive ? SecureVault.encryptedNameFor(_configBoxName) : _configBoxName,
+        cipher);
+    _sourceBox = await _openOrQuarantine<Map>(
+        _vaultActive ? SecureVault.encryptedNameFor(_sourceBoxName) : _sourceBoxName,
+        cipher);
+    _resultBox = await _openOrQuarantine<Map>(
+        _vaultActive ? SecureVault.encryptedNameFor(_resultBoxName) : _resultBoxName,
+        cipher);
+    _log.i('ConfigService initialized (encrypted at rest: $_vaultActive)');
   }
+
+  /// Whether the saved configs are encrypted on disk.
+  bool get isEncryptedAtRest => _vaultActive;
 
   /// Opens [name], or - if the file is corrupt - deletes it and reopens
   /// fresh. One retry only; if that also fails the error propagates, since
   /// silently running with no storage at all would mask real bugs.
-  Future<Box<T>> _openOrQuarantine<T>(String name) async {
+  Future<Box<T>> _openOrQuarantine<T>(String name, [HiveCipher? cipher]) async {
     try {
-      return await Hive.openBox<T>(name);
-    } catch (e) {
+      return await Hive.openBox<T>(name, encryptionCipher: cipher);
+    } on HiveError catch (e) {
+      // "already open and of type ...": another ConfigService (or a previous
+      // instance in the same process) holds the box. Reuse it rather than
+      // failing - the data is fine, only the second open is refused.
+      final message = e.toString();
+      if (message.contains('already open')) {
+        try {
+          return Hive.box(name) as Box<T>;
+        } catch (_) {
+          // fall through to quarantine
+        }
+      }
       _log.e('Box "$name" is unreadable ($e) - quarantining it');
       await Hive.deleteBoxFromDisk(name);
-      return await Hive.openBox<T>(name);
+      return await Hive.openBox<T>(name, encryptionCipher: cipher);
     }
   }
 

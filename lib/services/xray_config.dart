@@ -509,11 +509,47 @@ class XrayConfigBuilder {
           if (host != null && host.isNotEmpty) 'host': host,
           if (xhttpMode != null && xhttpMode.isNotEmpty) 'mode': xhttpMode,
         };
-      case 'tcp':
       case 'http':
+        // Xray's "http" transport is HTTP/2 over the proxy connection; it
+        // needs the same host/path pair WebSocket does. Dropping it meant the
+        // server never received the request the client thought it sent.
+        stream['httpSettings'] = {
+          'path': (path == null || path.isEmpty) ? '/' : path,
+          if (host != null && host.isNotEmpty) 'host': <String>[host],
+        };
       case 'kcp':
+        // mKCP: the header type is the disguise, and the seed is what both
+        // ends must agree on. Without these the handshake is not mKCP at all.
+        stream['kcpSettings'] = {
+          'mtu': 1350,
+          'tti': 50,
+          'uplinkCapacity': 12,
+          'downlinkCapacity': 100,
+          'congestion': false,
+          'readBufferSize': 2,
+          'writeBufferSize': 2,
+          'header': {
+            'type': (config is VlessConfig ? config.headerType : null) ?? 'none',
+          },
+          if (config is VlessConfig &&
+              (config.kcpSeed ?? '').isNotEmpty)
+            'seed': config.kcpSeed,
+        };
       case 'quic':
-        // No extra settings required for these transports.
+        // QUIC: the security algorithm and key are mandatory, and the header
+        // type selects the disguise. An empty key makes the core refuse the
+        // config outright.
+        stream['quicSettings'] = {
+          'security': (config is VlessConfig
+                  ? (config.quicSecurity ?? 'none')
+                  : 'none'),
+          'key': (config is VlessConfig ? (config.quicKey ?? '') : ''),
+          'header': {
+            'type': (config is VlessConfig ? config.headerType : null) ?? 'none',
+          },
+        };
+      case 'tcp':
+        // Raw TCP carries no settings of its own.
         break;
       default:
         // Unknown transport: fall back to tcp rather than emitting a key Xray

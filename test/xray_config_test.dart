@@ -569,4 +569,57 @@ Endpoint = vpn.example.com:51820
       expect((tun['settings'] as Map)['mtu'], 1400);
     });
   });
+
+  group('BK-021 transports that used to be dropped', () {
+    test('http transport carries host and path', () {
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443'
+        '?type=http&path=%2Fh2&host=cdn.example.com#h2',
+      )!;
+      final doc = const XrayConfigBuilder().build(config);
+      final stream = doc['outbounds'].first['streamSettings'] as Map;
+
+      expect(stream['network'], 'http');
+      expect((stream['httpSettings'] as Map)['path'], '/h2');
+      expect((stream['httpSettings'] as Map)['host'], ['cdn.example.com']);
+    });
+
+    test('kcp transport carries the header type and seed', () {
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443'
+        '?type=kcp&headerType=srtp&seed=myseed#mkcp',
+      )!;
+      final doc = const XrayConfigBuilder().build(config);
+      final stream = doc['outbounds'].first['streamSettings'] as Map;
+      final kcp = stream['kcpSettings'] as Map;
+
+      expect(stream['network'], 'kcp');
+      expect((kcp['header'] as Map)['type'], 'srtp');
+      expect(kcp['seed'], 'myseed');
+    });
+
+    test('quic transport carries security, key and header', () {
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443'
+        '?type=quic&quicSecurity=aes-128-gcm&key=secretkey&headerType=dtls#quic',
+      )!;
+      final doc = const XrayConfigBuilder().build(config);
+      final stream = doc['outbounds'].first['streamSettings'] as Map;
+      final quic = stream['quicSettings'] as Map;
+
+      expect(stream['network'], 'quic');
+      expect(quic['security'], 'aes-128-gcm');
+      expect(quic['key'], 'secretkey');
+      expect((quic['header'] as Map)['type'], 'dtls');
+    });
+
+    test('an unknown transport still falls back to tcp', () {
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443?type=mystery#x',
+      )!;
+      final doc = const XrayConfigBuilder().build(config);
+      final stream = doc['outbounds'].first['streamSettings'] as Map;
+      expect(stream['network'], 'tcp');
+    });
+  });
 }

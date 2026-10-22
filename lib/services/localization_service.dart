@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 /// Translation catalogue for the app.
@@ -23,6 +24,18 @@ import 'package:get/get.dart';
 class LocalizationService extends GetxService implements Translations {
   /// Language code used when a lookup misses, and when no preference is stored.
   static const String fallbackLanguageCode = 'en';
+
+  /// Locales the app can render, in the same order as [supportedLanguages].
+  static List<Locale> get supportedLocales =>
+      supportedLanguages.keys.map((code) => Locale(code)).toList();
+
+  /// Languages written right-to-left. Selecting one of these must flip the
+  /// whole widget tree, not just the strings: without a Directionality the
+  /// Material widgets stayed LTR while the text ran the other way.
+  static const Set<String> rtlLanguages = {'ar', 'fa', 'he', 'ur', 'ps', 'sd', 'ug', 'yi'};
+
+  static bool isRtl(String languageCode) =>
+      rtlLanguages.contains(languageCode.toLowerCase());
 
   /// Supported languages: language code -> display name, in menu order.
   static const Map<String, String> supportedLanguages = {

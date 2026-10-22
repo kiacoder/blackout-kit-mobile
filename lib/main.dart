@@ -3,6 +3,7 @@
 /// GetX for state management, Hive for local persistence
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logger/logger.dart';
@@ -138,12 +139,36 @@ class BlackoutKitApp extends StatelessWidget {
       // language — two sources of truth is how this used to silently not work.
       final languageCode = settingsController.selectedLanguage.value;
 
-      return GetMaterialApp(
-        title: LocalizationService.translate('app_title', language: languageCode),
-        debugShowCheckedModeBanner: false,
-        translations: Get.find<LocalizationService>(),
-        locale: Locale(languageCode),
-        fallbackLocale: const Locale(LocalizationService.fallbackLanguageCode),
+      // Arabic used to produce LTR widgets with Arabic strings: GetX's
+      // `translations` only maps keys, so nothing ever flipped the layout and
+      // none of the Material widgets (dialogs, pickers, text fields) were
+      // localized at all. The delegates below give real localization, and the
+      // Directionality wrapper flips the tree for right-to-left languages.
+      final rtl = LocalizationService.isRtl(languageCode);
+
+      return Directionality(
+        textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
+        child: GetMaterialApp(
+          title: LocalizationService.translate('app_title', language: languageCode),
+          debugShowCheckedModeBanner: false,
+          translations: Get.find<LocalizationService>(),
+          locale: Locale(languageCode),
+          fallbackLocale: const Locale(LocalizationService.fallbackLanguageCode),
+          supportedLocales: LocalizationService.supportedLocales,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          localeResolutionCallback: (deviceLocale, supportedLocales) {
+            if (deviceLocale == null) return const Locale('en');
+            for (final supported in supportedLocales) {
+              if (supported.languageCode == deviceLocale.languageCode) {
+                return supported;
+              }
+            }
+            return const Locale('en');
+          },
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
@@ -158,8 +183,9 @@ class BlackoutKitApp extends StatelessWidget {
             brightness: Brightness.dark,
           ),
         ),
-        themeMode: mode,
-        home: const RootScreen(),
+          themeMode: mode,
+          home: const RootScreen(),
+        ),
       );
     });
   }

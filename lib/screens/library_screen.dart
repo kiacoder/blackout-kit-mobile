@@ -446,13 +446,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
         final result = _configController.testResults[config.getHash()];
         final isTesting =
             _configController.testingHashes.contains(config.getHash());
+        // A bottom sheet is only as tall as its content, so a long name plus
+        // a large accessibility text scale pushed the action buttons off the
+        // bottom of the screen with no way to reach them. The sheet is now
+        // bounded by the viewport, scrollable, and its text scale is clamped
+        // so a 200% system setting cannot eject the buttons.
+        final sheetHeight = MediaQuery.of(context).size.height * 0.85;
+        final textScale =
+            MediaQuery.of(context).textScaler.scale(14).clamp(1.0, 1.3);
+
         return Container(
         padding: const EdgeInsets.all(24),
+        constraints: BoxConstraints(maxHeight: sheetHeight),
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
-        child: Column(
+        child: MediaQuery(
+          // Clamp only inside this sheet; the rest of the app keeps honouring
+          // the user's accessibility preference.
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(textScale)),
+          child: SingleChildScrollView(
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -464,6 +480,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     children: [
                       Text(
                         config.displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -477,7 +495,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ],
                   ),
                 ),
-                Container(
+                Flexible(
+                  child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isTesting
@@ -509,20 +528,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                   : Colors.grey,
                     ),
                   ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
             Text(
               '${config.address}:${config.port}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
             ),
             if (result != null) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Wrap, not a space-between Row: three fixed columns overflow a
+              // 320 dp screen (and any screen with enlarged text) with the
+              // classic black-and-yellow overflow stripes.
+              Wrap(
+                spacing: 24,
+                runSpacing: 12,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -654,6 +680,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ],
             ),
           ],
+            ),
+          ),
         ),
       );
       }),

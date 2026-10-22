@@ -75,7 +75,12 @@ class ConfigTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        Row(
+                        // Wrap, not Row: the protocol chip plus the status chip
+                        // are fixed width, and on a 320 dp screen (or with the
+                        // system text scaled up) a Row overflows the tile.
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(

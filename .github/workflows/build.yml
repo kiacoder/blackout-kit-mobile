@@ -78,9 +78,17 @@ jobs:
         # APK is 115.7 MB while each split lands near 64 MB / 58 MB.
         # --target-platform is required because android/app/build.gradle no
         # longer sets ndk.abiFilters (that blocks --split-per-abi entirely).
+        #
+        # CI is the ONLY place release APKs are produced: it holds the
+        # ANDROID_KEYSTORE_* secrets. A locally built APK falls back to the
+        # debug keystore, and a debug-signed build can never update a
+        # release-signed one (INSTALL_FAILED_UPDATE_INCOMPATIBLE) - which is
+        # how v1.12.x ended up shipping both on the same release.
         run: |
+          set -e
           flutter build apk --release --split-per-abi \
             --target-platform android-arm,android-arm64
+          flutter build apk --release
 
       - name: Upload APK artifacts
         # Always, so workflow_dispatch runs still yield something downloadable.
@@ -125,9 +133,13 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ steps.relmeta.outputs.title }}
           body_path: release_notes.md
+          # All three artifacts, under names that say which device they are for.
+          # A single owner: nothing else may attach APKs to a release, or the
+          # same version ships twice under different signing keys.
           files: |
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-release.apk#blackout-kit-${{ github.ref_name }}-universal.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk#blackout-kit-${{ github.ref_name }}-arm64-v8a.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk#blackout-kit-${{ github.ref_name }}-armeabi-v7a.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

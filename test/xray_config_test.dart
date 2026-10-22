@@ -486,10 +486,24 @@ Endpoint = vpn.example.com:51820
 
       expect(doc.containsKey('dns'), isTrue);
       final servers = ((doc['dns'] as Map)['servers'] as List).cast<String>();
-      expect(servers.any((s) => s.startsWith('https+local://')), isTrue);
+      expect(servers.any((s) => s.startsWith('https://')), isTrue);
 
       final dnsRule = routingRules(doc).firstWhere((r) => r['port'] == 53);
       expect(dnsRule['outboundTag'], 'proxy');
+    });
+
+    test('strict DNS mode keeps no local resolver (BK-002)', () {
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@a.com:443',
+      )!;
+      final doc = const XrayConfigBuilder(routeDnsThroughProxy: true).build(config);
+      final servers = ((doc['dns'] as Map)['servers'] as List).cast<String>();
+
+      // `https+local://` bootstraps through the device resolver and `localhost`
+      // resolves against it directly - both leak queries outside the tunnel,
+      // which is exactly what this setting claims to prevent.
+      expect(servers.any((s) => s.contains('+local')), isFalse);
+      expect(servers.contains('localhost'), isFalse);
     });
 
     test('DNS-through-proxy is off by default', () {

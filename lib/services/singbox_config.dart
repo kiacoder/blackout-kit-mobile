@@ -138,6 +138,10 @@ class SingboxConfigBuilder {
       // in the dial fields: `route.default_domain_resolver` for everything
       // else, and `domain_resolver` on the proxy outbound so domains dialed
       // through the tunnel are resolved inside it.
+      // Strict mode: one resolver, and it is proxied. The previous config kept
+      // a `local-dns` entry with `detour: direct` and made it the DEFAULT
+      // domain resolver, so anything outside the proxy outbound was resolved
+      // by the carrier - the opposite of what the toggle promises.
       document['dns'] = {
         'servers': [
           {
@@ -146,17 +150,19 @@ class SingboxConfigBuilder {
             'server': 'cloudflare-dns.com',
             'detour': 'proxy',
           },
-          {
-            'type': 'udp',
-            'tag': 'local-dns',
-            'server': dnsServers.isNotEmpty ? dnsServers.first : '1.1.1.1',
-            'detour': 'direct',
-          },
+          if (dnsServers.isNotEmpty)
+            {
+              'type': 'udp',
+              'tag': 'remote-dns-ip',
+              'server': dnsServers.first,
+              'detour': 'proxy',
+            },
         ],
         'strategy': 'prefer_ipv4',
+        'final': 'remote-dns',
       };
       document['route']!['default_domain_resolver'] = {
-        'server': 'local-dns',
+        'server': 'remote-dns',
         'strategy': 'prefer_ipv4',
       };
       for (final outbound in document['outbounds']!) {

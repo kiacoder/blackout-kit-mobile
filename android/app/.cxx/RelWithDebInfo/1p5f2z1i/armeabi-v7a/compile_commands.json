@@ -1,0 +1,7 @@
+[
+{
+  "directory": "C:/Users/kiacoder/blackout-kit-mobile/android/app/.cxx/RelWithDebInfo/1p5f2z1i/armeabi-v7a",
+  "command": "C:\\Users\\kiacoder\\AppData\\Local\\Android\\Sdk\\ndk\\23.1.7779620\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe --target=armv7-none-linux-androideabi24 --sysroot=C:/Users/kiacoder/AppData/Local/Android/Sdk/ndk/23.1.7779620/toolchains/llvm/prebuilt/windows-x86_64/sysroot -Dfdlauncher_EXPORTS -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -march=armv7-a -mthumb -Wformat -Werror=format-security -fno-exceptions -O2 -g -DNDEBUG -fPIC -o CMakeFiles\\fdlauncher.dir\\fdlauncher.c.o -c C:\\Users\\kiacoder\\blackout-kit-mobile\\android\\app\\src\\main\\cpp\\fdlauncher.c",
+  "file": "C:\\Users\\kiacoder\\blackout-kit-mobile\\android\\app\\src\\main\\cpp\\fdlauncher.c"
+}
+]

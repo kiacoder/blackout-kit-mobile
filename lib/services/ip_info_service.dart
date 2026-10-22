@@ -134,8 +134,32 @@ class IpInfoService {
     return IpInfo.fromCached(data);
   }
 
+  /// Whether lookups are allowed to leave the device at all.
+  ///
+  /// The privacy copy says the app does not phone home, and then it silently
+  /// queried a third-party IP service on connect. Off by default; the user
+  /// opts in with the "Show my location" switch in Settings.
+  bool _lookupsEnabled = false;
+
+  /// Test/diagnostic hook: true when a lookup was actually attempted (i.e. the
+  /// opt-in switch is on). Never true while lookups are disabled.
+  bool get lastLookupAttempted => _lookupsEnabled && _lookupAttempted;
+  bool _lookupAttempted = false;
+
+  void setLookupsEnabled(bool enabled) {
+    _lookupsEnabled = enabled;
+    if (!enabled) {
+      // Drop anything already resolved so turning the switch off really means
+      // "no third-party data on this device".
+      _box?.delete(_homeKey);
+      _box?.delete(_exitKey);
+    }
+  }
+
   /// Resolves the user's direct (pre-tunnel) address and location.
   Future<IpInfo> fetchHome() async {
+    if (!_lookupsEnabled) return IpInfo.unresolved();
+    _lookupAttempted = true;
     final info = await _directLookup();
     if (!info.isEmpty) _cache(_homeKey, info);
     return info;
@@ -145,6 +169,7 @@ class IpInfoService {
   /// Returns [IpInfo.unresolved] when the tunnel cannot carry the lookup —
   /// callers hide the row rather than show a wrong place.
   Future<IpInfo> fetchExit() async {
+    if (!_lookupsEnabled) return IpInfo.unresolved();
     try {
       final body = await _vpnService.tunnelFetch(
         _lookupUrl,

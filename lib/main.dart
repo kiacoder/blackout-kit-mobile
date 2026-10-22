@@ -72,6 +72,18 @@ void main() async {
   // and the connection controller consumes the service.
   final settingsController = SettingsController(logger: logger);
   Get.put<SettingsController>(settingsController);
+  // Load persisted settings before anything reads them: the site-check service
+  // takes the toggle and host list, and the connection controller's
+  // auto-connect/watchdog setup runs in onInit. Without this await they saw
+  // defaults for a frame and could act on them (auto-connecting to a config,
+  // scheduling a scan) before the real values arrived.
+  await settingsController.initialize();
+
+  // Android 13+ needs a runtime grant before the VPN status notification can
+  // be shown; without this prompt the tunnel notification is silently dropped.
+  try {
+    await vpnService.requestNotificationPermission();
+  } catch (_) {}
 
   Get.put<SiteCheckService>(
     SiteCheckService(
@@ -84,6 +96,11 @@ void main() async {
   final ipInfoService = IpInfoService(vpnService: vpnService, logger: logger);
   await ipInfoService.initialize();
   Get.put<IpInfoService>(ipInfoService);
+  // Apply the stored privacy preference: with it off, no third-party IP
+  // lookup ever leaves the device.
+  try {
+    ipInfoService.setLookupsEnabled(settingsController.showMyLocation.value);
+  } catch (_) {}
 
   Get.put<ConnectionController>(
     ConnectionController(

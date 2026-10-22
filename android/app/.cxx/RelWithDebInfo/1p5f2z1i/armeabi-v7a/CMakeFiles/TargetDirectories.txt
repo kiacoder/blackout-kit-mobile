@@ -1,0 +1,3 @@
+C:/Users/kiacoder/blackout-kit-mobile/android/app/.cxx/RelWithDebInfo/1p5f2z1i/armeabi-v7a/CMakeFiles/fdlauncher.dir
+C:/Users/kiacoder/blackout-kit-mobile/android/app/.cxx/RelWithDebInfo/1p5f2z1i/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/kiacoder/blackout-kit-mobile/android/app/.cxx/RelWithDebInfo/1p5f2z1i/armeabi-v7a/CMakeFiles/rebuild_cache.dir

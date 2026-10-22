@@ -39,7 +39,10 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   static const int _benchmarkConcurrency = 16;
 
   Future<void> _runFullBenchmark() async {
-    final configs = _configController.allConfigs;
+    // `visibleConfigs` honours disabled repositories; `allConfigs` does not, so
+    // the benchmark used to probe (and report on) servers the user had turned
+    // off in Settings.
+    final configs = _configController.visibleConfigs;
     if (configs.isEmpty) {
       Get.snackbar(
         'No Configs',
@@ -58,13 +61,14 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       _currentTestingConfig = sample.first;
     });
 
-    _configController.testerService.onProgress = (hash, status) {
+    final progressToken =
+        _configController.testerService.beginProgressRun((hash, status) {
       // Only terminal events count — a 'testing' event fires at probe start
       // and would double the progress bar.
       if (status == TestStatus.testing) return;
       if (!mounted) return;
       setState(() => _testedCount++);
-    };
+    });
 
     try {
       final results =
@@ -75,8 +79,25 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       for (final result in results) {
         _configController.testResults[result.configHash] = result;
       }
+    } catch (e) {
+      if (mounted) {
+        Get.snackbar(
+          'Benchmark Failed',
+          'The speed test could not finish: $e',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
     } finally {
-      _configController.testerService.onProgress = null;
+      // Always drop the callback AND clear the testing state: an exception
+      // escaping the try above used to leave the screen spinning forever.
+      _configController.testerService.endProgressRun(progressToken);
+      if (mounted) {
+        setState(() {
+          _isTesting = false;
+          _currentTestingConfig = null;
+        });
+      }
     }
 
     if (mounted) {
@@ -84,10 +105,6 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
           .where((r) => sample.any((c) => c.getHash() == r.configHash))
           .where((r) => r.isWorking)
           .length;
-      setState(() {
-        _isTesting = false;
-        _currentTestingConfig = null;
-      });
       Get.snackbar(
         'Benchmark Complete',
         '$working of ${sample.length} servers responded '

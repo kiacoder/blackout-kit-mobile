@@ -108,6 +108,11 @@ class ConfigService {
     'port': config.port,
     'rawUri': config.rawUri,
     'sourceId': sourceId,
+    // Every source that ever supplied this config. Disabling one repository
+    // used to hide the config for everyone, because a duplicate record could
+    // only remember a single owner - so re-adding the same server from a
+    // second source silently stole it from the first.
+    if (sourceId != null) 'sourceIds': <String>[sourceId],
     'savedAt': DateTime.now().toIso8601String(),
     // Protocol-specific fields
     if (config is WireGuardConfig) ...{
@@ -136,6 +141,24 @@ class ConfigService {
       // Check for duplicate
       final dedup = _configBox.get(_dedupKey) ?? {};
       if (dedup.containsKey(hash)) {
+        // Same rule as the batch path: a duplicate arriving from a new source
+        // is still an attribution, so the config stays visible when either
+        // repository is enabled.
+        if (sourceId != null) {
+          final key = 'config_$hash';
+          final existing = _configBox.get(key);
+          if (existing is Map) {
+            final ids = <String>{
+              if (existing['sourceId'] is String) existing['sourceId'] as String,
+              ...((existing['sourceIds'] as List?)?.cast<String>() ?? const []),
+            };
+            if (ids.add(sourceId)) {
+              await _configBox.put(key, Map<String, dynamic>.from(existing)
+                ..['sourceIds'] = ids.toList()
+                ..['sourceId'] = sourceId);
+            }
+          }
+        }
         _log.w('Duplicate config detected: $hash (source: $sourceId)');
         return false;
       }
@@ -187,9 +210,20 @@ class ConfigService {
         if (sourceId != null) {
           final key = 'config_$hash';
           final existing = _configBox.get(key);
-          if (existing is Map && existing['sourceId'] != sourceId) {
-            batch[key] = Map<String, dynamic>.from(existing)
-              ..['sourceId'] = sourceId;
+          if (existing is Map) {
+            final next = Map<String, dynamic>.from(existing);
+            final ids = <String>{
+              if (existing['sourceId'] is String) existing['sourceId'] as String,
+              ...((existing['sourceIds'] as List?)?.cast<String>() ?? const []),
+            };
+            if (ids.add(sourceId)) {
+              // Keep sourceId as the newest owner for display purposes, and
+              // record the full set so disabling one repository no longer
+              // hides a config another repository also provides.
+              next['sourceIds'] = ids.toList();
+              next['sourceId'] = sourceId;
+              batch[key] = next;
+            }
           }
         }
         continue;
@@ -234,6 +268,30 @@ class ConfigService {
   /// Lets the controller hide configs that belong to a disabled source
   /// without touching the stored records — disabling a source must hide its
   /// configs from the library, testing and the scanner, never delete them.
+  /// hash → every source id that supplied it (legacy single-id records are
+  /// upgraded to a one-element set).
+  Map<String, Set<String>> loadHashToSourceIds() {
+    final map = <String, Set<String>>{};
+    try {
+      for (final key in _configBox.keys) {
+        if (key is! String || !key.startsWith('config_')) continue;
+        final data = _configBox.get(key);
+        if (data is! Map) continue;
+        final ids = <String>{
+          if (data['sourceId'] is String) data['sourceId'] as String,
+          ...((data['sourceIds'] as List?)?.cast<String>() ?? const []),
+        };
+        ids.removeWhere((id) => id.isEmpty);
+        if (ids.isNotEmpty) {
+          map[key.substring('config_'.length)] = ids;
+        }
+      }
+    } catch (e) {
+      _log.e('Error building hash→sourceIds map: $e');
+    }
+    return map;
+  }
+
   Map<String, String> loadHashToSource() {
     final map = <String, String>{};
     try {
@@ -248,6 +306,30 @@ class ConfigService {
       }
     } catch (e) {
       _log.e('Error building hash→source map: $e');
+    }
+    return map;
+  }
+
+  /// hash → savedAt, for the library's "recently added" ordering.
+  ///
+  /// Records written before `savedAt` existed are simply absent; the caller
+  /// sorts them last rather than inventing a timestamp.
+  Map<String, DateTime> loadHashToSavedAt() {
+    final map = <String, DateTime>{};
+    try {
+      for (final key in _configBox.keys) {
+        if (key is! String || !key.startsWith('config_')) continue;
+        final data = _configBox.get(key);
+        if (data is! Map) continue;
+        final raw = data['savedAt'];
+        if (raw is! String) continue;
+        final parsed = DateTime.tryParse(raw);
+        if (parsed != null) {
+          map[key.substring('config_'.length)] = parsed;
+        }
+      }
+    } catch (e) {
+      _log.e('Error building hash→savedAt map: $e');
     }
     return map;
   }

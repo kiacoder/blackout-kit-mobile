@@ -12,6 +12,16 @@ import '../models/config.dart';
 
 typedef ConfigParserFn = Config? Function(String uri);
 
+/// Raised when a source could not be reached at all (network error, or no
+/// candidate file answered). The caller records this on the source so the
+/// Library can say "this source failed" instead of "up to date".
+class SourceUnavailableException implements Exception {
+  final String reason;
+  const SourceUnavailableException(this.reason);
+  @override
+  String toString() => 'SourceUnavailableException: $reason';
+}
+
 class GitHubService {
   final Dio _client;
   final Logger _log;
@@ -202,6 +212,9 @@ class GitHubService {
           _log.i('Parsed ${configs.length} configs from direct URL ${source.owner}');
           return configs;
         }
+        throw const SourceUnavailableException(
+          'Direct URL returned no content',
+        );
       }
 
       // An explicit filePath (set on the built-in sources) points straight at
@@ -249,10 +262,17 @@ class GitHubService {
         }
       }
 
-      return [];
+      // Every candidate and both branches came back empty: the source is
+      // reachable but has no config file. That is a real outcome (say so),
+      // not the same as "up to date with nothing new".
+      throw const SourceUnavailableException(
+        'No config file found in this repository',
+      );
+    } on SourceUnavailableException {
+      rethrow;
     } catch (e) {
       _log.e('Error fetching configs: $e');
-      return [];
+      throw SourceUnavailableException(e.toString());
     }
   }
 

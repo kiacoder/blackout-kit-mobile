@@ -184,8 +184,19 @@ object EngineRunner {
             val check = ProcessBuilder(
                 listOf(enginePath.absolutePath, "check", "-c", configFile.absolutePath)
             ).redirectErrorStream(true).start()
-            val checkOutput = check.inputStream.bufferedReader().readText()
-            if (check.waitFor() != 0) {
+            // readText() blocks until the stream closes, so the checker gets a
+            // hard timeout as well: a wedged `sing-box check` used to hang the
+            // connect path indefinitely, past the Dart-side timeout, with the
+            // thread stuck and no way to recover but killing the app.
+            val checkOutput = check.inputStream.bufferedReader().use { it.readText() }
+            val checkDone = check.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)
+            if (!checkDone) {
+                check.destroyForcibly()
+                lastError = "sing-box check timed out after 20s - the engine may be damaged"
+                Log.e(TAG, lastError!!)
+                return false
+            }
+            if (check.exitValue() != 0) {
                 lastError = "sing-box rejected the configuration: " + checkOutput.takeLast(500) +
                     (if (checkOutput.contains("amnezia", ignoreCase = true))
                         " [this build does not support the AmneziaWG junk-packet block]"

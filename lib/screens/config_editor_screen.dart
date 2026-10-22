@@ -42,7 +42,9 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
   void _validateContent(String text) {
     final parsed = ConfigParser.parse(text);
     setState(() {
-      _isValid = parsed != null || text.trim().isNotEmpty;
+      // "non-empty" is not "valid": the old expression ORed the two, so any
+      // garbage typed into the box still showed a green "Syntax Valid" tick.
+      _isValid = parsed != null;
     });
   }
 
@@ -69,9 +71,30 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
       return;
     }
 
-    // Delete old config hash and save new one
+    // Nothing actually changed (whitespace-only edit): closing is the honest
+    // outcome. Rewriting would churn savedAt and the "recently added" order.
+    if (parsed.getHash() == widget.config.getHash()) {
+      Get.back();
+      return;
+    }
+
+    // Order matters. The old code deleted first and saved second: when the
+    // save failed (the edited config matched another one already in the
+    // library, or the Hive write errored) the original was already gone and
+    // the snackbar still claimed success. Store the replacement first, then
+    // remove the old record - a failed delete leaves a duplicate, not a loss.
+    final stored = await _configController.configService.saveConfig(parsed);
+    if (!stored) {
+      Get.snackbar(
+        'Duplicate Config',
+        'Another config in your library is identical - the original was left untouched',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
     await _configController.deleteConfig(widget.config);
-    await _configController.configService.saveConfig(parsed);
     await _configController.loadConfigs();
 
     Get.back();
@@ -103,6 +126,40 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
                 data: content,
                 version: QrVersions.auto,
                 size: 220.0,
+                // Content too long for one symbol caught nothing before: the
+                // widget rendered a blank white square with no explanation, so
+                // sharing a long config just produced a useless picture.
+                errorStateBuilder: (context, error) {
+                  return SizedBox(
+                    width: 220,
+                    height: 220,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.qr_code_2,
+                                size: 40, color: Colors.orange),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Too long for a QR code',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: Colors.orange),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Copy the text and share it instead',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 12),

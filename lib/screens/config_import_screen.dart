@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -111,7 +112,15 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             _textController.text = text;
             _parsedConfig = configs.first;
           });
-          _showMultipleParsedDialog(configs);
+          // Same single-flight rule the scanner uses: the clipboard is polled
+          // on tab changes and resume, so an open dialog plus one more tick
+          // stacked a second copy of the same list.
+          if (!_dialogOpen && !_saving) {
+            _dialogOpen = true;
+            _showMultipleParsedDialog(configs).whenComplete(() {
+              if (mounted) _dialogOpen = false;
+            });
+          }
         }
       }
     } catch (_) {}
@@ -177,9 +186,26 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         String content = '';
 
         if (file.bytes != null) {
-          content = String.fromCharCodes(file.bytes!);
+          // String.fromCharCodes maps every byte to a code point, which mangles
+          // any UTF-8 config (a Persian or Chinese node name became mojibake
+          // before it was ever parsed).
+          content = utf8.decode(file.bytes!, allowMalformed: true);
         } else if (file.path != null) {
           content = await File(file.path!).readAsString();
+        }
+
+        // Parsing is synchronous and runs on the UI isolate: a huge file would
+        // freeze the app. 5 MB is far beyond any real subscription.
+        const maxImportBytes = 5 * 1024 * 1024;
+        if (content.length > maxImportBytes) {
+          if (!mounted) return;
+          Get.snackbar(
+            'File Too Large',
+            'This file is larger than 5 MB - paste the configs instead',
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+          );
+          return;
         }
 
         if (content.isNotEmpty) {
@@ -189,17 +215,25 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           if (!mounted) return;
           final filename = file.name;
           final multiple = ConfigParser.parseMultiple(content);
-          final single = ConfigParser.parse(content, customName: filename);
+          // A subscription file starts with a URI; parse() then happily treats
+          // the ENTIRE multiline payload as one URI, so the first server was
+          // offered with the rest of the file swallowed into its raw URI and
+          // every other server silently dropped. Multi wins when it finds more.
+          final single = multiple.length > 1
+              ? null
+              : ConfigParser.parse(content, customName: filename);
 
           setState(() {
             _textController.text = content;
-            _parsedConfig = single;
+            _parsedConfig = single ?? (multiple.isNotEmpty ? multiple.first : null);
           });
 
-          if (single != null) {
+          if (multiple.length > 1) {
+            _showMultipleParsedDialog(multiple);
+          } else if (single != null) {
             _showParsedDialog(single);
           } else if (multiple.isNotEmpty) {
-            _showMultipleParsedDialog(multiple);
+            _showParsedDialog(multiple.first);
           } else {
             Get.snackbar(
               'Import Failed',
@@ -235,9 +269,15 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         colorText: Colors.white,
       );
     } else {
+      // saveConfig() returns false for a duplicate AND for a failed write.
+      // Look at what is actually stored before blaming the user for a dupe.
+      final alreadyStored = _configController.allConfigs
+          .any((c) => c.getHash() == config.getHash());
       Get.snackbar(
-        'Duplicate Config',
-        'This configuration already exists in your library',
+        alreadyStored ? 'Duplicate Config' : 'Save Failed',
+        alreadyStored
+            ? 'This configuration already exists in your library'
+            : 'The config could not be written to storage - try again',
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -254,9 +294,23 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       final savedCount = await _configController.configService.saveConfigs(configs);
       await _configController.loadConfigs();
       Get.back();
+      if (savedCount == 0) {
+        // Every entry already existed. The old message still said
+        // "Successfully added 0 configs", which reads like a success.
+        Get.snackbar(
+          'Already in Library',
+          'All ${configs.length} configs were duplicates - nothing was added',
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+        );
+        return;
+      }
       Get.snackbar(
         'Imported',
-        'Successfully added $savedCount configs to Library',
+        savedCount == configs.length
+            ? 'Added $savedCount configs to Library'
+            : 'Added $savedCount of ${configs.length} configs '
+                '(${configs.length - savedCount} were already in your library)',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -427,16 +481,46 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                   ),
                   // Toggling the torch on a stopped controller throws.
                   onPressed: (_isScanning && !_dialogOpen)
-                      ? () {
-                          _scannerController.toggleTorch();
-                          setState(() => _torchEnabled = !_torchEnabled);
+                      ? () async {
+                          // toggleTorch throws on a stopped controller or a
+                          // device without a flash unit; the old code flipped
+                          // the icon anyway, so the UI claimed a torch that was
+                          // never on.
+                          try {
+                            await _scannerController.toggleTorch();
+                            if (!mounted) return;
+                            setState(() => _torchEnabled = !_torchEnabled);
+                          } catch (_) {
+                            if (!mounted) return;
+                            setState(() => _torchEnabled = false);
+                            Get.snackbar(
+                              'Torch Unavailable',
+                              'This camera does not expose a torch',
+                              backgroundColor: Colors.orange,
+                              colorText: Colors.white,
+                              duration: const Duration(seconds: 2),
+                            );
+                          }
                         }
                       : null,
                 ),
                 IconButton(
                   icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
                   onPressed: (_isScanning && !_dialogOpen)
-                      ? () => _scannerController.switchCamera()
+                      ? () async {
+                          try {
+                            await _scannerController.switchCamera();
+                          } catch (_) {
+                            if (!mounted) return;
+                            Get.snackbar(
+                              'Camera Unavailable',
+                              'Could not switch camera',
+                              backgroundColor: Colors.orange,
+                              colorText: Colors.white,
+                              duration: const Duration(seconds: 2),
+                            );
+                          }
+                        }
                       : null,
                 ),
                 ElevatedButton.icon(

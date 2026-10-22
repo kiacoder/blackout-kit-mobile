@@ -26,6 +26,13 @@ class ConfigController extends GetxController {
   /// configs whose source is disabled without touching stored records.
   final RxMap<String, String> sourceIdByHash = RxMap<String, String>();
 
+  /// hash -> every source that supplied it. A config stays visible while ANY
+  /// of its sources is enabled; the single-id map remains for display.
+  final RxMap<String, Set<String>> sourceIdsByHash = <String, Set<String>>{}.obs;
+
+  /// hash → savedAt, for the "recently added" ordering.
+  final RxMap<String, DateTime> savedAtByHash = <String, DateTime>{}.obs;
+
   /// Configs currently being single-tested (hashes), for progress states.
   final RxSet<String> testingHashes = RxSet<String>();
   final RxList<ConfigSource> sources = RxList<ConfigSource>();
@@ -210,6 +217,8 @@ class ConfigController extends GetxController {
       final configs = configService.getAllConfigs();
       allConfigs.value = configs;
       sourceIdByHash.value = configService.loadHashToSource();
+      sourceIdsByHash.value = configService.loadHashToSourceIds();
+      savedAtByHash.value = configService.loadHashToSavedAt();
       _log.i('Loaded ${configs.length} configs');
     } catch (e) {
       _log.e('Error loading configs: $e');
@@ -227,8 +236,10 @@ class ConfigController extends GetxController {
   List<Config> get visibleConfigs {
     final enabled = sources.where((s) => s.isEnabled).map((s) => s.id).toSet();
     return allConfigs.where((c) {
-      final sid = sourceIdByHash[c.getHash()];
-      return sid == null || enabled.contains(sid);
+      final hash = c.getHash();
+      final ids = sourceIdsByHash[hash];
+      if (ids == null || ids.isEmpty) return true;
+      return ids.any(enabled.contains);
     }).toList();
   }
 
@@ -494,10 +505,11 @@ class ConfigController extends GetxController {
           .getConfigsBySource(filterSource.value)
           .map((c) => c.getHash())
           .toSet();
+      // Only configs that actually belong to the chosen source. The previous
+      // predicate also kept every config with a stored test result, so picking
+      // one repository still listed configs from every other source.
       filtered = filtered
-          .where((c) =>
-            testResults.containsKey(c.getHash()) ||
-            sourceHashes.contains(c.getHash()))
+          .where((c) => sourceHashes.contains(c.getHash()))
           .toList();
     }
 
@@ -517,8 +529,14 @@ class ConfigController extends GetxController {
         case 'name':
           return a.displayName.compareTo(b.displayName);
         case 'recently_added':
-          // Would need timestamp tracking
-          return 0;
+          // Newest first. savedAt is written with every stored record; configs
+          // from before that field existed sort last instead of jittering.
+          final aAt = savedAtByHash[a.getHash()];
+          final bAt = savedAtByHash[b.getHash()];
+          if (aAt == null && bAt == null) return 0;
+          if (aAt == null) return 1;
+          if (bAt == null) return -1;
+          return bAt.compareTo(aAt);
         default:
           return 0;
       }
@@ -542,7 +560,13 @@ class ConfigController extends GetxController {
   }
 
   /// Add custom source
-  Future<bool> addCustomSource({
+  /// Returns the created source, or null when the add failed.
+  ///
+  /// Returning a bool pushed the "which source was just added?" question onto
+  /// the caller, which guessed `sources.last` — a list that is neither sorted
+  /// nor guaranteed to end with the new entry, so adding a repository could
+  /// fetch (and attribute configs to) a completely different source.
+  Future<ConfigSource?> addCustomSource({
     required String name,
     required String owner,
     required String repo,
@@ -563,10 +587,10 @@ class ConfigController extends GetxController {
       await loadSources();
 
       _log.i('Added custom source: $name');
-      return true;
+      return source;
     } catch (e) {
       _log.e('Error adding source: $e');
-      return false;
+      return null;
     }
   }
 

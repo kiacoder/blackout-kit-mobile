@@ -33,6 +33,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private var activity: Activity? = null
 
     private var pendingPrepare: MethodChannel.Result? = null
+    private var pendingNotificationPermission: MethodChannel.Result? = null
     private var pendingConnect: MethodChannel.Result? = null
 
     /// Loopback SOCKS port of the most recent connect, used to dial the core
@@ -45,6 +46,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         private const val TAG = "VpnPlugin"
         private const val CHANNEL = "com.blackoutkit.vpn/service"
         private const val PREPARE_REQUEST = 0xB10C
+        private const val NOTIFICATION_PERMISSION_REQUEST = 9101
         // A cold start on a slow device has to fit: sing-box `check`,
         // the 3s engine startup window, the 2s SOCKS readiness probe and
         // the tun2socks launch. 20s left no headroom and reported a
@@ -92,6 +94,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "prepare" -> handlePrepare(result)
+            // Android 13+ silently drops the VPN status notification without a
+            // runtime grant; the permission was declared but never asked for.
+            "requestNotificationPermission" -> handleNotificationPermission(result)
             "connect" -> handleConnect(call, result)
             "disconnect" -> handleDisconnect(result)
             "isRunning" -> result.success(BlackoutVpnService.isRunning)
@@ -190,6 +195,32 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         "socksPort" to lastSocksPort
     )
 
+    private fun handleNotificationPermission(result: MethodChannel.Result) {
+        val act = activity
+        if (act == null) {
+            // No foreground activity to prompt with: report the failure rather
+            // than claiming a grant the user never gave.
+            result.success(false)
+            return
+        }
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+            result.success(true) // install-time permission before 13
+            return
+        }
+        val granted = act.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            result.success(true)
+            return
+        }
+        pendingNotificationPermission?.success(false)
+        pendingNotificationPermission = result
+        act.requestPermissions(
+            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+            NOTIFICATION_PERMISSION_REQUEST,
+        )
+    }
+
     private fun handlePrepare(result: MethodChannel.Result) {
         val ctx = appContext
         if (ctx == null) {
@@ -210,6 +241,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             return
         }
 
+        // A second consent request must not orphan the first: complete the
+        // previous one with an error so its Dart Future settles instead of
+        // hanging forever (the caller's await never returned).
+        pendingPrepare?.error(
+            "CONSENT_SUPERSEDED",
+            "A newer VPN consent request replaced this one",
+            null,
+        )
         pendingPrepare = result
         act.startActivityForResult(consent, PREPARE_REQUEST)
     }
@@ -322,12 +361,29 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             return
         }
         try {
+            // Acknowledge only after teardown. Returning true immediately told
+            // Dart the tunnel was gone while the interface was still up, so the
+            // UI showed "disconnected" while traffic was still routed.
+            var settled = false
+            BlackoutVpnService.onTeardownComplete = {
+                if (!settled) {
+                    settled = true
+                    result.success(true)
+                }
+            }
             ctx.startService(
                 Intent(ctx, BlackoutVpnService::class.java).apply {
                     action = BlackoutVpnService.ACTION_DISCONNECT
                 }
             )
-            result.success(true)
+            // Fail loudly rather than leaving the Dart Future hanging forever
+            // if the service never reports back.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (!settled) {
+                    settled = true
+                    result.error("DISCONNECT_TIMEOUT", "The tunnel did not close in time", null)
+                }
+            }, 8000)
         } catch (e: Exception) {
             result.error("DISCONNECT_FAILED", e.message, null)
         }
@@ -631,12 +687,29 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 false
             }
         }
+        // Runtime permission results arrive here, not through
+        // onActivityResult - ActivityAware has no such override.
+        binding.addRequestPermissionsResultListener { requestCode, _, grantResults ->
+            if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
+                val granted = grantResults.isNotEmpty() &&
+                    grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+                pendingNotificationPermission?.success(granted)
+                pendingNotificationPermission = null
+                true
+            } else {
+                false
+            }
+        }
     }
 
     override fun onDetachedFromActivity() {
         activity = null
         pendingPrepare?.success(false)
         pendingPrepare = null
+        // Never leave a permission request hanging: the caller cannot prompt
+        // again without an activity, so report the failure.
+        pendingNotificationPermission?.success(false)
+        pendingNotificationPermission = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {

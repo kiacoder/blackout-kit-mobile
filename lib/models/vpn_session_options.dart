@@ -92,17 +92,49 @@ class VpnSessionOptions {
     return null;
   }
 
+  /// Test hook for the DNS-address validator.
+  static bool looksLikeIpForTest(String value) => _looksLikeIp(value);
+
   static bool _looksLikeIp(String value) {
     if (value.isEmpty) return false;
-    // IPv4 dotted quad or anything containing a colon (IPv6).
-    if (value.contains(':')) return true;
+    if (value.contains(':')) return _isIpv6Literal(value);
     final parts = value.split('.');
     if (parts.length != 4) return false;
     for (final part in parts) {
+      if (part.isEmpty || part.length > 3) return false;
+      if (!RegExp(r'^[0-9]+$').hasMatch(part)) return false;
       final n = int.tryParse(part);
       if (n == null || n < 0 || n > 255) return false;
     }
     return true;
+  }
+
+  /// A real IPv6 literal: 2-8 groups of 1-4 hex digits, `::` compression
+  /// allowed once, optional zone id. Previously ANY string containing a colon
+  /// ("http://x", "a:b", "1:2:3") passed validation and was handed to the
+  /// engine as a nameserver.
+  static bool _isIpv6Literal(String value) {
+    var text = value;
+    final zone = text.indexOf('%');
+    if (zone != -1) text = text.substring(0, zone);
+    if (text.isEmpty) return false;
+    if (!RegExp(r'^[0-9a-fA-F:.]+$').hasMatch(text)) return false;
+    if ('::'.allMatches(text).length > 1) return false;
+
+    final compressed = text.contains('::');
+    final halves = compressed ? text.split('::') : [text];
+    var groups = 0;
+    for (final half in halves) {
+      if (half.isEmpty) continue;
+      final parts = half.split(':');
+      for (final part in parts) {
+        if (part.isEmpty || part.length > 4) return false;
+        if (!RegExp(r'^[0-9a-fA-F]+$').hasMatch(part)) return false;
+        groups++;
+      }
+    }
+    if (compressed) return groups <= 7;
+    return groups == 8;
   }
 
   /// Payload for the `connect` platform call.

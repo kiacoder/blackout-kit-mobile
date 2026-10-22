@@ -775,7 +775,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final success = await _configController.addCustomSource(
+              final addedSource = await _configController.addCustomSource(
                 name: nameController.text,
                 owner: ownerController.text,
                 repo: repoController.text,
@@ -784,19 +784,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
               Get.back();
 
-              if (success) {
+              if (addedSource != null) {
                 Get.snackbar(
                   'Source Added',
                   'Fetching configs...',
                   backgroundColor: Colors.green,
                   colorText: Colors.white,
                 );
-                // Fetch from new source
-                final sources = _configController.sources;
-                if (sources.isNotEmpty) {
-                  await _configController
-                      .fetchFromSource(sources.last);
-                }
+                // Fetch exactly the source that was just created.
+                await _configController.fetchFromSource(addedSource);
+              } else {
+                Get.snackbar(
+                  'Could Not Add Source',
+                  'The repository could not be saved - check the name and try again',
+                  backgroundColor: Colors.orange,
+                  colorText: Colors.white,
+                );
               }
             },
             child: const Text('Add'),

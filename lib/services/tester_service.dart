@@ -59,7 +59,32 @@ class _Probe {
 
 class TesterService {
   final Logger _log;
+
+  /// Progress callback for ONE active run.
+  ///
+  /// It used to be a single shared field: a library scan and the benchmark
+  /// screen both assigned to it, so whichever started last stole the other's
+  /// events and progress bars jumped to arbitrary values. Callers now
+  /// register a run token, and only the holder of that token receives events.
   OnTestProgress? onProgress;
+  Object? _progressOwner;
+  int _runCounter = 0;
+
+  /// Register for progress events and get a token identifying this run.
+  Object beginProgressRun(OnTestProgress? callback) {
+    _runCounter += 1;
+    _progressOwner = callback == null ? null : _runCounter;
+    onProgress = callback;
+    return _progressOwner ?? _runCounter;
+  }
+
+  /// Release a progress run (no-op if the token does not own the callback).
+  void endProgressRun(Object token) {
+    if (identical(_progressOwner, token)) {
+      onProgress = null;
+      _progressOwner = null;
+    }
+  }
 
   /// Per-attempt timeout. Deliberately short: a config that takes longer than
   /// this to answer is not one the user wants to connect to anyway.

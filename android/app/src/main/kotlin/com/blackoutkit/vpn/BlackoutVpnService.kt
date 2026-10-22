@@ -37,6 +37,14 @@ class BlackoutVpnService : VpnService() {
     companion object {
         private const val TAG = "BlackoutVpnService"
 
+        private const val PREFS = "blackout_vpn_state"
+        private const val KEY_HELD_BLOCKING = "held_blocking"
+
+        /// Invoked once the tunnel has actually been torn down. Used by the
+        /// plugin to acknowledge a disconnect only after the interface is gone.
+        @Volatile
+        var onTeardownComplete: (() -> Unit)? = null
+
         const val ACTION_CONNECT = "com.blackoutkit.vpn.CONNECT"
         const val ACTION_DISCONNECT = "com.blackoutkit.vpn.DISCONNECT"
 
@@ -158,6 +166,13 @@ class BlackoutVpnService : VpnService() {
             lastError = reason
             if (holdTunnelOnFailure && tun != null) {
                 isRunning = false
+                // Remember that traffic is being deliberately blocked. Without
+                // the persisted flag, a restart came back with isRunning=false
+                // and no trace of the held tunnel - indistinguishable from
+                // "stopped", so the user could believe traffic was flowing
+                // normally while it was black-holed.
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putBoolean(KEY_HELD_BLOCKING, true).apply()
                 Log.w(TAG, "engine died - holding the tunnel open to block traffic: $reason")
                 notifyStatus("blocked")
                 return@post
@@ -172,6 +187,14 @@ class BlackoutVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        // A tunnel held for traffic blocking survives the process: restore the
+        // flag so the app reports "blocked" instead of "stopped".
+        val held = getSharedPreferences(PREFS, MODE_PRIVATE)
+            .getBoolean(KEY_HELD_BLOCKING, false)
+        if (held) {
+            isRunning = true
+            notifyStatus("blocked")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -449,6 +472,10 @@ class BlackoutVpnService : VpnService() {
         }
         tun = null
         isRunning = false
+        // The held-blocking marker describes a live tunnel; once the interface
+        // is gone the state is "stopped" again, not "blocked".
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+            .putBoolean(KEY_HELD_BLOCKING, false).apply()
         activeProtocol = null
         activeName = null
         activeProtocolId = null
@@ -460,6 +487,10 @@ class BlackoutVpnService : VpnService() {
             @Suppress("DEPRECATION")
             stopForeground(true)
         }
+        // Let the plugin settle the disconnect Future now that the interface is
+        // really gone. Main thread: teardown() runs on it from every caller
+        // except onEngineDied's post, which is also main.
+        mainHandler.post { onTeardownComplete?.invoke() }
     }
 
     private fun notifyStatus(status: String) {

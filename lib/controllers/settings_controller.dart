@@ -32,6 +32,11 @@ class SettingsController extends GetxController {
   /// fall back to the carrier resolver.
   final RxBool dnsLeakPreventionEnabled = RxBool(false);
 
+  /// Opt-in for the IP/geolocation lookups. The app queried a third-party
+  /// service on every connect while its privacy copy said it never phones home;
+  /// now nothing leaves the device unless this is on.
+  final RxBool showMyLocation = RxBool(false);
+
   /// Resolver used when [dnsLeakPreventionEnabled] is on.
   final RxString customDnsServer = RxString('1.1.1.1');
 
@@ -117,8 +122,16 @@ class SettingsController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Fire-and-forget is fine for the UI, but main() awaits initialize()
+    // explicitly before building the services that read these values.
     _initSettings();
   }
+
+  /// Load persisted settings. Callers that immediately construct something
+  /// reading settings (the site-check service, the connection controller's
+  /// auto-connect and watchdog setup) must await this first: onInit() starts
+  /// the load but does not wait for it.
+  Future<void> initialize() => _initSettings();
 
   /// Initialize Hive box and load settings
   Future<void> _initSettings() async {
@@ -196,35 +209,43 @@ class SettingsController extends GetxController {
     }
   }
 
-  /// Save all settings to Hive storage
+  /// Save all settings to Hive storage.
+  ///
+  /// Values are captured into a snapshot BEFORE the first await. Writing each
+  /// Rx as it is read let a toggle landing mid-save publish an older value
+  /// over a newer one, so the stored settings quietly disagreed with the UI.
   Future<void> saveSettings() async {
+    final snapshot = {
+      'autoConnect': autoConnect.value,
+      'killSwitchEnabled': killSwitchEnabled.value,
+      'blockNonVPNTraffic': blockNonVPNTraffic.value,
+      'splitTunnelingEnabled': splitTunnelingEnabled.value,
+      'splitTunnelingApps': splitTunnelingApps.toList(),
+      'splitTunnelingMode': splitTunnelingMode.value,
+      'dnsLeakPreventionEnabled': dnsLeakPreventionEnabled.value,
+      'customDnsServer': customDnsServer.value,
+      'showMyLocation': showMyLocation.value,
+      'theme': theme.value,
+      'showSpeedInTray': showSpeedInTray.value,
+      'showNotifications': showNotifications.value,
+      'keepScreenAwake': keepScreenAwake.value,
+      'selectedLanguage': selectedLanguage.value,
+      'analyticsEnabled': analyticsEnabled.value,
+      'preferredProtocol': preferredProtocol.value,
+      'autoSelectFastest': autoSelectFastest.value,
+      'autoTestIntervalMinutes': autoTestIntervalMinutes.value,
+      'logLocalConnection': logLocalConnection.value,
+      'siteCheckEnabled': siteCheckEnabled.value,
+      'siteCheckUrls': siteCheckUrls.toList(),
+      'coreDebugLogs': coreDebugLogs.value,
+    };
     try {
       // If init failed entirely this raises LateInitializationError, which
       // the catch below turns into a log line - settings simply do not save.
-      await _settingsBox.put('autoConnect', autoConnect.value);
-      await _settingsBox.put('killSwitchEnabled', killSwitchEnabled.value);
-      await _settingsBox.put('blockNonVPNTraffic', blockNonVPNTraffic.value);
-      await _settingsBox.put('splitTunnelingEnabled', splitTunnelingEnabled.value);
-      await _settingsBox.put('splitTunnelingApps', splitTunnelingApps.toList());
-      await _settingsBox.put('splitTunnelingMode', splitTunnelingMode.value);
-      await _settingsBox.put('dnsLeakPreventionEnabled', dnsLeakPreventionEnabled.value);
-      await _settingsBox.put('customDnsServer', customDnsServer.value);
-
-      await _settingsBox.put('theme', theme.value);
-      await _settingsBox.put('showSpeedInTray', showSpeedInTray.value);
-      await _settingsBox.put('showNotifications', showNotifications.value);
-      await _settingsBox.put('keepScreenAwake', keepScreenAwake.value);
-      await _settingsBox.put('selectedLanguage', selectedLanguage.value);
-      await _settingsBox.put('analyticsEnabled', analyticsEnabled.value);
-
-      await _settingsBox.put('preferredProtocol', preferredProtocol.value);
-      await _settingsBox.put('autoSelectFastest', autoSelectFastest.value);
-      await _settingsBox.put('autoTestIntervalMinutes', autoTestIntervalMinutes.value);
-      await _settingsBox.put('logLocalConnection', logLocalConnection.value);
-
-      await _settingsBox.put('siteCheckEnabled', siteCheckEnabled.value);
-      await _settingsBox.put('siteCheckUrls', siteCheckUrls.toList());
-      await _settingsBox.put('coreDebugLogs', coreDebugLogs.value);
+      // Every value comes from the snapshot taken above.
+      for (final entry in snapshot.entries) {
+        await _settingsBox.put(entry.key, entry.value);
+      }
 
       _log.i('Settings saved to storage');
     } catch (e) {
@@ -268,6 +289,7 @@ class SettingsController extends GetxController {
   /// Toggle DNS leak prevention
   void toggleDnsLeakPrevention(bool value) {
     dnsLeakPreventionEnabled.value = value;
+    showMyLocation.value = _settingsBox.get('showMyLocation') ?? false;
     saveSettings();
     _log.i('DNS leak prevention: $value');
   }
@@ -440,6 +462,15 @@ class SettingsController extends GetxController {
     autoSelectFastest.value = true;
     autoTestIntervalMinutes.value = 60;
     logLocalConnection.value = false;
+    // The old reset stopped here, so DNS leak prevention, the custom resolver,
+    // site checking and core debug logs survived a "Reset to Defaults" and the
+    // user was left wondering which of their settings were actually reset.
+    dnsLeakPreventionEnabled.value = false;
+    customDnsServer.value = '';
+    showMyLocation.value = false;
+    siteCheckEnabled.value = true;
+    siteCheckUrls.value = List<String>.from(defaultSiteCheckUrls);
+    coreDebugLogs.value = false;
 
     _applyTheme('system');
     _applyKeepScreenAwake(false);

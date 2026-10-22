@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../controllers/config_controller.dart';
 import '../controllers/settings_controller.dart';
+import '../services/ip_info_service.dart';
 import '../services/kill_switch_service.dart';
 import '../services/update_service.dart';
 import '../services/vpn_service.dart';
@@ -137,10 +138,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 )),
                 Obx(() => SwitchListTile(
                   title: const Text('Show Speed in Status Bar'),
-                  subtitle: const Text('Display current speed when connected'),
+                  // Honest subtitle: the tester measures latency, not throughput.
+                  // The old copy promised a live speed the app never produced.
+                  subtitle: const Text(
+                    'Shows the latency of the selected config in the notification',
+                  ),
                   value: _settingsController.showSpeedInTray.value,
                   onChanged: (value) {
                     _settingsController.showSpeedInTray.value = value;
+                    _settingsController.saveSettings();
                   },
                 )),
               ],
@@ -158,9 +164,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.language),
                   onTap: _showLanguageDialog,
                 )),
+                // "Analytics" claimed to send anonymous usage data while nothing
+                // was ever transmitted anywhere. The toggle is kept as a stored
+                // preference, but its description now says exactly that.
+                Obx(() => SwitchListTile(
+                  title: const Text('Show my location'),
+                  subtitle: const Text(
+                    'Asks a third-party service for your IP and country. Off by '
+                    'default - nothing leaves your device while it is off.',
+                  ),
+                  value: _settingsController.showMyLocation.value,
+                  onChanged: (value) {
+                    _settingsController.showMyLocation.value = value;
+                    _settingsController.saveSettings();
+                    // Apply immediately: the connection controller reads the
+                    // service on connect.
+                    try {
+                      Get.find<IpInfoService>()
+                          .setLookupsEnabled(value);
+                    } catch (_) {}
+                  },
+                )),
                 Obx(() => SwitchListTile(
                   title: const Text('Analytics'),
-                  subtitle: const Text('Help improve the app (anonymous)'),
+                  subtitle: const Text(
+                    'No data leaves your device - this only stores your preference',
+                  ),
                   value: _settingsController.analyticsEnabled.value,
                   onChanged: _settingsController.toggleAnalytics,
                 )),
@@ -248,6 +277,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: Text('No repositories loaded'),
                     );
                   }
+                  // Count for every source in ONE pass. Calling this inside the
+                  // per-source loop below re-scanned the whole Hive box once per
+                  // repository on every rebuild.
+                  final sourceCounts =
+                      _configController.configService.countConfigsBySource();
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -288,7 +322,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               padding: const EdgeInsets.only(top: 2),
                               child: Text(
                                 '${source.owner}/${source.repo} (${source.branch ?? "main"})'
-                                ' — ${_configController.configService.countConfigsBySource()[source.id] ?? 0} configs',
+                                ' — ${sourceCounts[source.id] ?? 0} configs',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -889,7 +923,16 @@ class _UpdateSectionState extends State<_UpdateSection> {
       _apkPath = await _service.downloadApk(update);
       if (!mounted) return;
       setState(() => _phase = 'ready');
-      await _service.installApk(_apkPath!);
+      // A refused install permission (or a missing installer) used to throw
+      // out of this method with no UI update at all - the tile just sat on
+      // "downloading" forever.
+      await _service.installApk(_apkPath!).catchError((Object e) {
+        if (!mounted) return;
+        setState(() {
+          _phase = 'error';
+          _error = 'Could not start the installer: $e';
+        });
+      });
       // The OS installer takes over from here; the app may be replaced.
     } catch (e) {
       if (!mounted) return;
@@ -914,18 +957,20 @@ class _UpdateSectionState extends State<_UpdateSection> {
                 : Icons.system_update,
             color: _phase == 'available' ? Colors.green : null,
           ),
-          title: Text(
+          // Wrapped in Obx: progress is an observable, and reading it inside a
+          // plain Text meant the percentage never repainted during a download.
+          title: Obx(() => Text(
             switch (_phase) {
               'checking' => 'Checking for updates...',
               'latest' => 'App is up to date',
               'available' => 'Update available: ${_update!.tagName}',
               'downloading' =>
-                'Downloading ${((_service.progress.value) * 100).toStringAsFixed(0)}%',
+                'Downloading ${(_service.progress.value * 100).toStringAsFixed(0)}%',
               'ready' => 'Ready to install - tap to open the installer',
               'error' => 'Update failed',
               _ => 'App update',
             },
-          ),
+          )),
           // The failure reason (missing install permission, truncated
           // download, ...) is the whole point here, so it gets room to wrap
           // instead of being clipped to one line in the title.

@@ -7,7 +7,6 @@
 /// Internal storage is deliberate: FileProvider maps `filesDir/updates/`
 /// through `res/xml/file_paths.xml`, whereas the external app dir is not
 /// always the volume that gets mapped ("Failed to find configured root").
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -54,8 +53,17 @@ class AppUpdate {
       orElse: () => <String, dynamic>{},
     );
     if (apk.isEmpty) {
+      // Fall back ONLY to an APK this device can actually install. The old
+      // fallback took any .apk, so a 32-bit phone could be offered the arm64
+      // build and fail with INSTALL_FAILED_NO_MATCHING_ABIS after downloading.
       apk = assets.cast<Map<String, dynamic>?>().firstWhere(
-            (a) => nameOf(a!).endsWith('.apk'),
+            (a) {
+              final name = nameOf(a!).toLowerCase();
+              if (!name.endsWith('.apk')) return false;
+              // universal / fat APKs carry no ABI token and install anywhere.
+              if (name.contains('universal') || name.contains('fat')) return true;
+              return name.contains(abi);
+            },
             orElse: () => null,
           );
     }

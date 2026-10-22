@@ -150,12 +150,19 @@ class XrayConfigBuilder {
 
     // ── DNS leak protection ────────────────────────────────────────────────
     if (routeDnsThroughProxy) {
+      // Strict mode: every resolver must be reachable only through the proxy.
+      //
+      // The old list mixed in `https+local://` (bootstrap via the phone's own
+      // resolver) and a bare `localhost` entry, which resolves against the
+      // device stack - so "DNS leak protection" still emitted queries outside
+      // the tunnel, exactly what the setting claims to prevent. The DoH
+      // endpoints are dialled by the core and matched by the port-53 rule
+      // below; no local fallback is kept.
       document['dns'] = {
         'servers': [
-          'https+local://cloudflare-dns.com/dns-query',
-          'https+local://dns.google/dns-query',
+          'https://cloudflare-dns.com/dns-query',
+          'https://dns.google/dns-query',
           ...dnsServers,
-          'localhost',
         ],
         'queryStrategy': 'UseIP',
       };

@@ -452,15 +452,22 @@ class OpenVpnConfig extends Config {
       int remotePort = 1194;
 
       final lines = content.split('\n');
+      var foundRemote = false;
       for (final line in lines) {
         final trimmed = line.trim();
         if (trimmed.startsWith('remote ')) {
           final parts = trimmed.split(RegExp(r'\s+'));
-          if (parts.length >= 2) remoteHost = parts[1];
+          if (parts.length >= 2) {
+            remoteHost = parts[1];
+            foundRemote = true;
+          }
           if (parts.length >= 3) remotePort = int.tryParse(parts[2]) ?? 1194;
           break;
         }
       }
+      // A profile without a remote cannot connect to anything. Defaulting to
+      // 127.0.0.1 produced a "valid" config that silently dialled the phone.
+      if (!foundRemote) return null;
 
       return OpenVpnConfig(
         name: customName ?? 'OpenVPN ($remoteHost:$remotePort)',
@@ -561,7 +568,14 @@ class ShadowsocksConfig extends Config {
       // of the server address. Leaving it in made `int.tryParse` on the port
       // fail and the config fall back to port 8388 — a silent wrong-port bug on
       // every ss link that carries transport metadata.
-      final serverPart = cleanUri.substring(atIndex + 1).split('?')[0];
+      // Strip the query AND the path: `ss://m:p@host:1234/` used to leave the
+      // slash attached to the port, `int.tryParse` failed, and the config
+      // silently fell back to 8388 - connecting to the wrong port.
+      final serverPart = cleanUri
+          .substring(atIndex + 1)
+          .split('?')[0]
+          .split('/')[0]
+          .trim();
 
       final credParts = creds.split(':');
       if (credParts.length < 2) return null;
@@ -572,9 +586,35 @@ class ShadowsocksConfig extends Config {
       final colonIndex = serverPart.lastIndexOf(':');
       if (colonIndex == -1) return null;
 
-      final address = serverPart.substring(0, colonIndex);
+      var address = serverPart.substring(0, colonIndex);
       final portStr = serverPart.substring(colonIndex + 1);
-      final port = int.tryParse(portStr) ?? 8388;
+      final parsedPort = int.tryParse(portStr);
+      // No port in the link: 8388 is shadowsocks' conventional default, which
+      // is what the old code did on every parse failure too. Only fall back
+      // when the port is genuinely absent or unparseable, never to paper over
+      // a malformed address.
+      final port = parsedPort ?? 8388;
+      if (address.startsWith('[') && address.endsWith(']')) {
+        address = address.substring(1, address.length - 1);
+      }
+      if (address.isEmpty) return null;
+
+      // `plugin=` (obfs-local / v2ray-plugin) was silently dropped even though
+      // the model carries the field, so a plugin-protected server was dialled
+      // as plain shadowsocks and could never handshake.
+      String? plugin;
+      final queryIndex = cleanUri.indexOf('?');
+      if (queryIndex != -1) {
+        final query = cleanUri.substring(queryIndex + 1);
+        for (final pair in query.split('&')) {
+          final eq = pair.indexOf('=');
+          if (eq <= 0) continue;
+          if (pair.substring(0, eq) == 'plugin') {
+            plugin = Uri.decodeComponent(pair.substring(eq + 1));
+            break;
+          }
+        }
+      }
 
       return ShadowsocksConfig(
         name: nameFromHash.isNotEmpty ? nameFromHash : 'Shadowsocks ($address:$port)',
@@ -583,6 +623,7 @@ class ShadowsocksConfig extends Config {
         port: port,
         method: method,
         password: password,
+        plugin: plugin,
       );
     } catch (e) {
       return null;
@@ -801,13 +842,27 @@ class TrojanConfig extends Config {
       // See the note in [VlessConfig.fromUri]: the bundled core knows this
       // transport as `splithttp`, not `xhttp`.
       if (network == 'xhttp') network = 'splithttp';
+      // `Uri.userInfo` is still percent-encoded; a password containing `@` or
+      // `:` only matched the server after decoding.
+      String decodedPassword;
+      try {
+        decodedPassword = Uri.decodeComponent(u.userInfo);
+      } catch (_) {
+        decodedPassword = u.userInfo;
+      }
+      final insecureFlag = (u.queryParameters['allowInsecure'] ??
+              u.queryParameters['insecure'] ??
+              '')
+          .toLowerCase();
+
       return TrojanConfig(
         name: name, rawUri: uri,
-        password: u.userInfo,
+        password: decodedPassword,
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
-        allowInsecure: u.queryParameters['allowInsecure'] == '1' ||
-            u.queryParameters['insecure'] == '1',
+        allowInsecure: insecureFlag == '1' ||
+            insecureFlag == 'true' ||
+            insecureFlag == 'yes',
         fingerprint: u.queryParameters['fp'],
         network: network,
         path: u.queryParameters['path'],
@@ -978,14 +1033,16 @@ class AmneziaWGConfig extends Config {
         if (k == 'dns') dns = v;
         if (k == 'endpoint') {
           endpoint = v;
-          final parts = v.split(':');
-          port = int.tryParse(parts.last) ?? 51820;
+          final parsedEndpoint = _splitHostPort(v);
+          port = parsedEndpoint?.$2 ?? 51820;
         }
         if (k == 'jc') jc = int.tryParse(v) ?? 4;
         if (k == 'jmin') jmin = int.tryParse(v) ?? 40;
         if (k == 'jmax') jmax = int.tryParse(v) ?? 70;
       }
-      final host = endpoint.isNotEmpty ? endpoint.split(':')[0] : address.split('/')[0];
+      final host = endpoint.isNotEmpty
+          ? (_splitHostPort(endpoint)?.$1 ?? endpoint)
+          : address.split('/')[0].split(',')[0];
       return AmneziaWGConfig(
         name: customName ?? 'AmneziaWG ($host:$port)',
         rawUri: content, address: host, port: port,
@@ -1294,8 +1351,10 @@ class ConfigParser {
       if (trimmed.startsWith('ss://'))          return ShadowsocksConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('awg://') || trimmed.startsWith('amneziawg://'))
                                                 return AmneziaWGConfig.fromUri(awgUriToConf(trimmed), customName: customName);
-      // File/block content protocols
-      if (trimmed.contains('remote ') || trimmed.contains('BEGIN CERTIFICATE') || trimmed.contains('client\n'))
+      // File/block content protocols. A bare substring match meant any text
+      // whose comment mentioned "remote " (e.g. "# remote server is in DE")
+      // was classified as OpenVPN. Require a real directive at line start.
+      if (_hasOpenVpnDirective(trimmed) || trimmed.contains('BEGIN CERTIFICATE'))
                                                 return OpenVpnConfig.fromUri(trimmed, customName: customName);
       if (trimmed.contains('Jc =') || trimmed.contains('JC =') || trimmed.contains('junk_count'))
                                                 return AmneziaWGConfig.fromUri(trimmed, customName: customName);
@@ -1326,6 +1385,19 @@ class ConfigParser {
     final scheme = uri.substring(0, separator);
     if (scheme == scheme.toLowerCase()) return uri;
     return scheme.toLowerCase() + uri.substring(separator);
+  }
+
+  /// True when a block contains an OpenVPN directive at line start (not in a
+  /// comment). Used to classify pasted .ovpn content without matching prose.
+  static bool _hasOpenVpnDirective(String content) {
+    for (final rawLine in content.split('\n')) {
+      final line = rawLine.trim();
+      if (line.isEmpty || line.startsWith('#') || line.startsWith(';')) continue;
+      for (final directive in const ['remote ', 'client', 'dev tun', 'proto ']) {
+        if (line == directive.trim() || line.startsWith(directive)) return true;
+      }
+    }
+    return false;
   }
 
   static List<Config> parseMultiple(String text) {
@@ -1424,7 +1496,13 @@ class ConfigParser {
       }
 
       // Extract embedded URIs from markdown tables, bullet points, or HTML
-      final uriRegex = RegExp(r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg|anytls|shadowtls)://[^\s<>"\]]+');
+      // caseSensitive: false so `VLESS://` in a markdown table is found, and the
+      // character class keeps `]` so a bracketed IPv6 authority
+      // (`vless://id@[2001:db8::1]:443`) is not truncated at the bracket.
+      final uriRegex = RegExp(
+        r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg|anytls|shadowtls)://[^\s<>"|]+',
+        caseSensitive: false,
+      );
       final matches = uriRegex.allMatches(trimmed);
       if (matches.isNotEmpty) {
         for (final match in matches) {

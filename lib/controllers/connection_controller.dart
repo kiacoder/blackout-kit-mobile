@@ -65,6 +65,10 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// in rank order, and only a fully exhausted batch advances to the next one.
   static const int _probeBatchSize = 50;
 
+  /// Incremented on every connect/disconnect so in-flight lookups can tell
+  /// they belong to a session that no longer exists.
+  int _sessionEpoch = 0;
+
   /// How many of a batch's TCP-passing candidates get the (expensive)
   /// headless site check. The rest keep their TCP rank.
   static const int _siteCheckShortlistSize = 3;
@@ -378,9 +382,44 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     List<Config> availableConfigs, {
     List<TestResult>? testResults,
   }) async {
+    if (_operationInFlight) {
+      _log.w('Fast connect ignored: another operation is already running');
+      return false;
+    }
+    _operationInFlight = true;
+    try {
+      return await _connectFastestImpl(availableConfigs, testResults: testResults);
+    } finally {
+      _operationInFlight = false;
+    }
+  }
+
+  Future<bool> _connectFastestImpl(
+    List<Config> availableConfigs, {
+    List<TestResult>? testResults,
+  }) async {
     try {
       state.value = ConnectionState.selecting;
       statusMessage.value = 'Finding fastest config...';
+
+      // Honour the protocol preference instead of ignoring it: configs using
+      // the preferred protocol are tried first, everything else keeps its
+      // order behind them. With autoSelectFastest off the preference becomes
+      // the primary order rather than latency, so "connect my vless first"
+      // means something.
+      final preferredProtocol = Get.find<SettingsController>()
+          .preferredProtocol
+          .value
+          .toLowerCase();
+      if (preferredProtocol.isNotEmpty && preferredProtocol != 'auto') {
+        availableConfigs = List<Config>.of(availableConfigs)
+          ..sort((a, b) {
+            final aPreferred = a.protocol.toLowerCase() == preferredProtocol;
+            final bPreferred = b.protocol.toLowerCase() == preferredProtocol;
+            if (aPreferred == bPreferred) return 0;
+            return aPreferred ? -1 : 1;
+          });
+      }
 
       // Drop anything no bundled engine can serve, otherwise "fastest" can
       // select a config that connect() is then obliged to refuse.
@@ -397,9 +436,17 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
       // Results handed in by the library let us skip servers that already
       // failed — re-probing thousands of them was dead air behind censorship.
+      // Only recent failures count. A probe that failed once - on a flaky
+      // network, before the tunnel warmed up, or an hour ago - used to exclude
+      // the config from auto-connect forever, so a library could end up with
+      // nothing left to try. Failures older than the window are re-probed.
+      final failureCutoff =
+          DateTime.now().subtract(const Duration(hours: 6));
       final knownFailed = <String>{};
       for (final r in testResults ?? const <TestResult>[]) {
-        if (!r.isWorking && candidateHashes.contains(r.configHash)) {
+        if (r.isWorking || !candidateHashes.contains(r.configHash)) continue;
+        final testedAt = r.testedAt;
+        if (testedAt == null || testedAt.isAfter(failureCutoff)) {
           knownFailed.add(r.configHash);
         }
       }
@@ -509,11 +556,13 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         final verify = siteCheckService;
         final liveVerifyEnabled =
             verify != null && verify.enabled && verify.liveCheckHosts.isNotEmpty;
-        final attemptLimit = liveVerifyEnabled
-            ? (working.length < _maxConnectAttemptsPerBatch
-                ? working.length
-                : _maxConnectAttemptsPerBatch)
-            : 1;
+        // Always try several candidates per batch. The old code allowed a
+        // single attempt when site checking was off, so one config that
+        // accepted the probe but failed to connect threw away the whole
+        // 50-config batch and the scan crawled forward one batch at a time.
+        final attemptLimit = working.length < _maxConnectAttemptsPerBatch
+            ? working.length
+            : _maxConnectAttemptsPerBatch;
 
         for (var attempt = 0; attempt < attemptLimit; attempt++) {
           final result = working[attempt];
@@ -525,7 +574,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           statusMessage.value =
               'Connecting ($batchLabel, config ${attempt + 1})...';
 
-          final connected = await connect(config, testResult: result);
+          final connected = await _connectImpl(config, testResult: result);
           if (!connected) continue;
           if (!liveVerifyEnabled) return true;
 
@@ -551,7 +600,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           _log.w('Tunnel came up but could not reach any check host '
               '(${config.displayName}, $batchLabel) — trying the next '
               'candidate');
-          await disconnect();
+          await _disconnectImpl();
         }
         // Whole batch exhausted — the outer loop advances to the next 50.
         _log.i('$batchLabel exhausted: $attemptLimit connect attempt(s) '
@@ -578,8 +627,33 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// True while a connect/disconnect/scan is running.
+  ///
+  /// The UI only disabled the "connecting" state, so a second tap started a
+  /// parallel scan, a second consent request and a second native connect
+  /// while the first was still in flight. Every public entry point shares
+  /// this guard; internal steps call the impl methods.
+  bool _operationInFlight = false;
+  bool get operationInFlight => _operationInFlight;
+
   /// Connect to specific config
   Future<bool> connect(
+    Config config, {
+    TestResult? testResult,
+  }) async {
+    if (_operationInFlight) {
+      _log.w('Connect ignored: another operation is already running');
+      return false;
+    }
+    _operationInFlight = true;
+    try {
+      return await _connectImpl(config, testResult: testResult);
+    } finally {
+      _operationInFlight = false;
+    }
+  }
+
+  Future<bool> _connectImpl(
     Config config, {
     TestResult? testResult,
   }) async {
@@ -735,6 +809,19 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   /// Disconnect from VPN
   Future<bool> disconnect() async {
+    if (_operationInFlight) {
+      _log.w('Disconnect ignored: another operation is already running');
+      return false;
+    }
+    _operationInFlight = true;
+    try {
+      return await _disconnectImpl();
+    } finally {
+      _operationInFlight = false;
+    }
+  }
+
+  Future<bool> _disconnectImpl() async {
     try {
       state.value = ConnectionState.disconnecting;
       statusMessage.value = 'Disconnecting...';
@@ -777,17 +864,20 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   /// Reconnect to current config
   Future<bool> reconnect() async {
-    if (selectedConfig.value == null) {
+    // Capture the selection BEFORE disconnecting: disconnect() clears
+    // selectedConfig, so reading it afterwards dereferenced null and every
+    // successful disconnect-then-reconnect threw instead of reconnecting.
+    final target = selectedConfig.value;
+    if (target == null) {
       _log.w('No config to reconnect to');
       return false;
     }
 
-    final success = await disconnect();
-    if (success) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      return await connect(selectedConfig.value!);
-    }
-    return false;
+    final success = await _disconnectImpl();
+    if (!success) return false;
+
+    await Future.delayed(const Duration(milliseconds: 500));
+    return await _connectImpl(target);
   }
 
   /// Test current connection
@@ -965,15 +1055,24 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// whole session.
   Future<void> _fetchConnectedIP() async {
     final service = ipInfoService;
+    // A lookup can take seconds (QUIC handshake + HTTPS round trip). If the
+    // user reconnects or disconnects meanwhile, this coroutine must not write
+    // its result over the newer session's state - so every write is gated on
+    // the session token captured when the lookup started.
+    final epoch = _sessionEpoch;
+    bool stale() => epoch != _sessionEpoch || !isConnected;
+
     const attempts = 6;
     for (var attempt = 1; attempt <= attempts; attempt++) {
-      if (!isConnected) return; // torn down mid-flight
+      if (stale()) return; // torn down or superseded mid-flight
       try {
         final ip = await vpnService.getConnectedIP();
+        if (stale()) return;
         if (ip != null && ip.isNotEmpty) {
           connectedIP.value = ip;
           if (service != null) {
             final info = await service.fetchExit();
+            if (stale()) return;
             if (!info.isEmpty) {
               exitIpInfo.value = info;
               return;
@@ -988,6 +1087,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       // 1s, 2s, 3s, 4s, 5s - long enough for the upstream handshake.
       await Future<void>.delayed(Duration(seconds: attempt));
     }
+    if (stale()) return;
     _log.w('Exit lookup gave up after $attempts attempts');
   }
 }

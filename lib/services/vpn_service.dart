@@ -60,6 +60,19 @@ class VPNService {
 
   /// Android requires explicit user consent before the first tunnel.
   /// Returns true when consent is already granted or the user just granted it.
+  /// Ask for the Android 13+ notification permission so the VPN status
+  /// notification is actually shown. Returns false when the grant was refused
+  /// or no activity is available to prompt with.
+  Future<bool> requestNotificationPermission() async {
+    try {
+      final result =
+          await platform.invokeMethod<bool>('requestNotificationPermission');
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<bool> prepare() async {
     try {
       final result = await platform.invokeMethod<bool>('prepare');

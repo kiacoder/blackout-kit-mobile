@@ -199,8 +199,22 @@ class SplitTunnelingService extends GetxService {
   }
 
   void _markStale() {
-    // Only meaningful while a tunnel is live.
+    // Only meaningful while a tunnel is live: editing the app list while
+    // disconnected used to raise "reconnect required" and ask the user to
+    // reconnect a tunnel that was never running.
+    if (!_isConnected) return;
     requiresReconnect.value = true;
+  }
+
+  /// Whether a tunnel is currently up. Injected by the connection controller so
+  /// the stale flag is only raised when it would mean something.
+  bool Function()? _connectionStateProbe;
+
+  bool get _isConnected => _connectionStateProbe?.call() ?? true;
+
+  /// Attach the tunnel-state probe (called once during app wiring).
+  void bindConnectionState(bool Function() isConnected) {
+    _connectionStateProbe = isConnected;
   }
 
   /// Called by the connection controller once a fresh tunnel is up.

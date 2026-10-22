@@ -10,10 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.12.2] - 2026-10-22
 
 ### Fixed
-- Ships the three fixes from v1.12.1 as a proper release: the blank Settings
-  screen (an `Obx` with nothing to observe threw on every build), the version
-  that still read 1.0.0-beta.43, and an in-app updater that parsed only
-  `beta.N` tags and so could never see a `v1.12.x` release.
+- **The Settings screen was blank, the version read 1.0.0-beta.43, and the
+  updater could never see a release.** Three bugs reported from an install of
+  v1.12.0: an `Obx` with nothing to observe threw on every build, the pubspec
+  version was never moved off the beta scheme, and the updater parsed only
+  `beta.N` tags so every `v1.12.x` release failed to parse.
 - The updater now compares the release's semver against the installed version.
   Build numbers are not comparable across the tag schemes - and the per-ABI
   splits carry different versionCodes - so the old check would have offered

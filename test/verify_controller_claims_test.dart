@@ -14,7 +14,6 @@ import 'package:blackout_kit_mobile/controllers/config_controller.dart';
 import 'package:blackout_kit_mobile/controllers/connection_controller.dart';
 import 'package:blackout_kit_mobile/controllers/settings_controller.dart';
 import 'package:blackout_kit_mobile/models/config.dart';
-import 'package:blackout_kit_mobile/models/config_source.dart';
 import 'package:blackout_kit_mobile/models/test_result.dart';
 import 'package:blackout_kit_mobile/services/config_service.dart';
 import 'package:blackout_kit_mobile/services/debug_service.dart';

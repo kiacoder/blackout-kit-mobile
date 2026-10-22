@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.3] - 2026-10-22
+
+### Fixed
+- **Shadowsocks was wrapped in TLS, so no ss:// config ever connected.** The
+  stream builder's security switch ended in `_ => 'tls'`, so every
+  Shadowsocks outbound opened a TLS ClientHello at a raw Shadowsocks port.
+- **AmneziaWG and WARP emitted a WireGuard outbound**, which sing-box 1.11
+  deprecated and 1.13 removed - the bundled core carries that message
+  verbatim. They are endpoints now, and AmneziaWG/ShadowTLS/WARP are no
+  longer advertised as connectable: the core has no AmneziaWG symbols, and a
+  shadowtls link carries no inner proxy, so both could only ever report a
+  dead "connected".
+- **The DNS privacy toggle broke connectivity.** The resolver was used
+  through the proxy and to resolve the proxy's own hostname - a cycle. A
+  direct IP-literal bootstrap resolver now handles only that one name.
+- **Losing the vault key deleted the whole encrypted library.** The vault no
+  longer mints a new key while encrypted data exists, encrypted boxes are
+  never deleted, and a locked library is reported as locked.
+- **vmess "tls":"none" was treated as TLS**, vmess-over-gRPC lost its service
+  name, and httpupgrade fell through to raw TCP.
+- **quic and http(h2) configs** are refused with a reason instead of failing
+  at core start - the bundled core has no transport package for either.
+- **allowInsecure is honoured** when a link asks for it, under every spelling
+  (insecure, allow_insecure, allowInsecure).
+- **hysteria2/TUIC/AnyTLS/ShadowTLS passwords were never percent-decoded.**
+- **A .conf that merely mentioned a URL had its private key lower-cased.**
+- **AmneziaWG imported as part of a bundle became plain WireGuard**, and
+  `jc =` in lowercase was not recognised at all.
+- **Pasting several links produced one config** with the whole blob as its
+  raw URI; every link after the first was dropped.
+- **A scanned line containing "psiphon" became a Psiphon config.**
+- **Disabling a repository left its configs in the Library** until an
+  unrelated change invalidated the filter cache.
+- **Fastest Connect tried the configs the site check had just failed first**
+  (the rank was inverted), and UDP-only protocols could never be candidates
+  because a TCP probe always failed them.
+- **A running scan can be cancelled**: the connect button becomes Cancel.
+- **Every launch fetched and probed the whole library.** It now fetches only
+  when the library is empty; scanning is something you ask for.
+- **The updater verifies the package name and signing certificate** before
+  handing an APK to the installer, and a tagged CI build without signing
+  secrets now fails instead of publishing a debug-signed APK.
+
+### Known limitations
+- The UI is still largely hard-coded English and there is no Persian
+  translation. Adding languages is a content project, not a code fix.
+- AmneziaWG, ShadowTLS and WARP parse and display but cannot connect: the
+  bundled sing-box core has no engine for them. They are no longer offered as
+  connectable, so they fail honestly at the point of selection.
+
 ## [1.12.2] - 2026-10-22
 
 ### Fixed

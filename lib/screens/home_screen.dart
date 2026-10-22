@@ -29,16 +29,22 @@ class _HomeScreenState extends State<HomeScreen> {
     _configController = Get.find<ConfigController>();
     _connectionController = Get.find<ConnectionController>();
 
-    // Fetch configs on first load
+    // Do NOT fetch and probe the whole library on every launch.
     _initializeApp();
   }
 
+  /// First-run setup only.
+  ///
+  /// This used to run `fetchFromAllSources()` followed by `testAllConfigs()`
+  /// on EVERY cold start and every return to this tab: with a few thousand
+  /// configs that is a full refresh plus a 150-server probe before the user
+  /// has touched anything - data, battery, and a slow first frame. The
+  /// library is already persisted, so there is nothing to fetch unless it is
+  /// empty; probing is something the user asks for (Scan) or that happens
+  /// when they connect.
   Future<void> _initializeApp() async {
-    // Fetch from all enabled sources
+    if (_configController.allConfigs.isNotEmpty) return;
     await _configController.fetchFromAllSources();
-
-    // Test all configs
-    await _configController.testAllConfigs();
   }
 
   Future<void> _handleConnectDisconnect() async {

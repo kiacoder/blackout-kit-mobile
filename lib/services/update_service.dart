@@ -1,6 +1,6 @@
 /// Blackout Kit Mobile - in-app self-updater.
 ///
-/// Checks GitHub Releases for a newer beta build, downloads the APK that
+/// Checks GitHub Releases for a newer release, downloads the APK that
 /// matches this device's ABI into the app's internal files dir, and hands it
 /// to Android's package installer through the UpdatePlugin platform channel.
 ///
@@ -25,24 +25,22 @@ class AppUpdate {
     required this.apkSize,
   });
 
-  final String tagName; // e.g. v1.0.0-beta.38 or v1.12.1
-  final int buildNumber; // beta.N, or major*10000+minor*100+patch
+  final String tagName; // e.g. v1.12.3
+  final int buildNumber; // major*10000 + minor*100 + patch
   final String version; // the semver part of the tag, e.g. 1.12.1
   final String notes;
   final String apkUrl;
   final int apkSize;
 
-  /// Only beta-tagged builds carry a comparable build number; anything else
-  /// (1.0.0 stable, typos) returns null instead of guessing.
   /// Monotonic build number for a release tag.
   ///
-  /// beta.N keeps N (the historical scheme); a v1.12.1 tag becomes
-  /// major*10000 + minor*100 + patch, which sorts correctly against the beta
-  /// numbers and against each other.
+  /// A v1.12.1 tag becomes major*10000 + minor*100 + patch. The pre-1.12
+  /// `beta.N` scheme is still understood, only so that a device already
+  /// running an old beta compares correctly once; no such tag exists any more.
   static int _buildNumberFromTag(String tag, Match m) {
     if (tag.contains('beta.')) {
-      final beta = RegExp(r'beta\.(\d+)$').firstMatch(tag);
-      if (beta != null) return int.parse(beta.group(1)!);
+      final legacy = RegExp(r'beta\.(\d+)$').firstMatch(tag);
+      if (legacy != null) return int.parse(legacy.group(1)!);
     }
     final major = int.parse(m.group(1)!);
     final minor = int.parse(m.group(2)!);
@@ -55,7 +53,7 @@ class AppUpdate {
     String abi = 'arm64-v8a',
   }) {
     final tag = (json['tag_name'] as String? ?? '').trim();
-    // Accept both the old beta numbering and the v1.12.x scheme. Matching
+    // Accept both the v1.12.x scheme and the old beta numbering. Matching
     // only `beta.(\d+)$` meant every release after the version scheme changed
     // parsed as null, so the updater could never see an update at all.
     final m = RegExp(r'v?(\d+)\.(\d+)\.(\d+)').firstMatch(tag);

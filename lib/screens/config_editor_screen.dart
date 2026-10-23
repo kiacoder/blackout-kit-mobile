@@ -23,6 +23,10 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
   late final TextEditingController _textController;
 
   bool _isValid = true;
+  // Parsing and validating are different questions. `_isValid` used to mean
+  // "the text parses", so a config missing its password still showed a green
+  // "Syntax Valid" tick and was only rejected later, with the wrong reason.
+  bool _parses = true;
 
   @override
   void initState() {
@@ -44,7 +48,8 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     setState(() {
       // "non-empty" is not "valid": the old expression ORed the two, so any
       // garbage typed into the box still showed a green "Syntax Valid" tick.
-      _isValid = parsed != null;
+      _parses = parsed != null;
+      _isValid = parsed != null && parsed.validate();
     });
   }
 
@@ -71,6 +76,21 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
       return;
     }
 
+    // saveConfig() returns false for "duplicate", "invalid" and "storage
+    // error" alike, and the caller reported every one of them as "Duplicate
+    // Config". Catch the invalid case here, where the reason is known.
+    if (!parsed.validate()) {
+      Get.snackbar(
+        'Incomplete Config',
+        'This config parses but is missing required fields - check the '
+        'address, the port, and the credentials for this protocol. '
+        'Nothing was saved.',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
     // Nothing actually changed (whitespace-only edit): closing is the honest
     // outcome. Rewriting would churn savedAt and the "recently added" order.
     if (parsed.getHash() == widget.config.getHash()) {
@@ -83,11 +103,23 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     // library, or the Hive write errored) the original was already gone and
     // the snackbar still claimed success. Store the replacement first, then
     // remove the old record - a failed delete leaves a duplicate, not a loss.
-    final stored = await _configController.configService.saveConfig(parsed);
+    // Carry the original's attribution over. Saving without it turned an
+    // imported config into a "manual" one the moment it was edited.
+    final originalSource = _configController.configService.sourceIdFor(widget.config);
+    final isDuplicate = _configController.allConfigs
+        .any((c) => c.getHash() == parsed.getHash());
+
+    final stored = await _configController.configService
+        .saveConfig(parsed, sourceId: originalSource);
     if (!stored) {
+      // The two remaining causes are distinguishable now that validation ran
+      // above: either the library already holds this exact config, or the
+      // write itself failed.
       Get.snackbar(
-        'Duplicate Config',
-        'Another config in your library is identical - the original was left untouched',
+        isDuplicate ? 'Duplicate Config' : 'Could Not Save',
+        isDuplicate
+            ? 'Another config in your library is identical - the original was left untouched'
+            : 'The config could not be written to storage. The original was left untouched.',
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -239,16 +271,26 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
             child: Row(
               children: [
                 Icon(
-                  _isValid ? Icons.check_circle : Icons.warning_amber_rounded,
-                  color: _isValid ? Colors.green : Colors.red,
+                  _isValid
+                      ? Icons.check_circle
+                      : (_parses
+                          ? Icons.info_outline
+                          : Icons.warning_amber_rounded),
+                  color: _isValid
+                      ? Colors.green
+                      : (_parses ? Colors.orange : Colors.red),
                   size: 18,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  _isValid ? 'Syntax Valid' : 'Syntax Warning',
+                  _isValid
+                      ? 'Valid Config'
+                      : (_parses ? 'Parses, but incomplete' : 'Syntax Error'),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: _isValid ? Colors.green : Colors.red,
+                    color: _isValid
+                        ? Colors.green
+                        : (_parses ? Colors.orange : Colors.red),
                   ),
                 ),
                 const Spacer(),

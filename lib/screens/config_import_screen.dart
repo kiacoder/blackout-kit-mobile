@@ -558,10 +558,24 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
               ElevatedButton.icon(
                 onPressed: () async {
                   final data = await Clipboard.getData(Clipboard.kTextPlain);
-                  if (data != null && data.text != null) {
-                    _textController.text = data.text!;
-                    final parsed = ConfigParser.parse(data.text!);
-                    setState(() => _parsedConfig = parsed);
+                  final text = data?.text?.trim() ?? '';
+                  if (text.isEmpty) return;
+                  // This button parsed with ConfigParser.parse(), so a
+                  // clipboard holding several links collapsed to the first one
+                  // (or to nothing). The text field and the auto-detect path
+                  // already use _parsePayload; paste must too.
+                  final configs = _parsePayload(text);
+                  _textController.text = text;
+                  if (configs.isEmpty) {
+                    setState(() => _parsedConfig = null);
+                    return;
+                  }
+                  setState(() => _parsedConfig = configs.first);
+                  if (configs.length > 1 && !_dialogOpen && !_saving) {
+                    _dialogOpen = true;
+                    _showMultipleParsedDialog(configs).whenComplete(() {
+                      if (mounted) _dialogOpen = false;
+                    });
                   }
                 },
                 icon: const Icon(Icons.content_paste, size: 18),

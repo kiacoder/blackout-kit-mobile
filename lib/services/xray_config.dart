@@ -610,7 +610,12 @@ class XrayConfigBuilder {
 
     final sni = switch (config) {
       VlessConfig c => c.sni,
-      VmessConfig c => c.sni,
+      // VMess links usually put the CDN domain in `host` and leave `sni`
+      // empty. The transport below already falls back to `host`; this block
+      // did not, so no serverName was emitted and the handshake presented the
+      // bare IP - which the CDN rejects.
+      VmessConfig c =>
+        (c.sni != null && c.sni!.isNotEmpty) ? c.sni : c.host,
       TrojanConfig c => c.sni,
       _ => null,
     };

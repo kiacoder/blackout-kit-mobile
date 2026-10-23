@@ -232,6 +232,24 @@ class ConfigService {
 
   /// Save config with deduplication
   /// Returns true if saved, false if duplicate
+  /// The source a config was imported from, or null for a manual one.
+  ///
+  /// Attribution lives in the stored record, not on the [Config] object, so a
+  /// caller that rewrites a config (the editor) had no way to carry it over -
+  /// and the record silently became "manual".
+  String? sourceIdFor(Config config) {
+    try {
+      final record = _configBox.get('config_${config.getHash()}');
+      if (record is Map) {
+        final id = record['sourceId'];
+        if (id is String && id.isNotEmpty) return id;
+      }
+    } catch (_) {
+      // A missing box is not an error here: the caller treats null as manual.
+    }
+    return null;
+  }
+
   Future<bool> saveConfig(Config config, {String? sourceId}) async {
     try {
       final hash = config.getHash();

@@ -227,15 +227,13 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final alive = await verify.verifyLiveConnection();
       if (alive || !isConnected) return;
       _log.w('Liveness check failed on a connected tunnel');
-      state.value = ConnectionState.error;
-      statusMessage.value =
-          'The tunnel is up but nothing loads — reconnect to pick another '
-          'server';
       debugService.logAction('liveness_failed');
       // Paint the error AND close the interface. Leaving it up left the app
       // claiming failure while the system VPN stayed established, so traffic
       // kept being routed into a tunnel that carries nothing.
-      await vpnService.disconnect();
+      await _failTunnel(
+        'The tunnel is up but nothing loads — reconnect to pick another server',
+      );
     });
   }
 
@@ -269,13 +267,27 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     if (verify == null || !verify.enabled) return;
     final alive = await verify.verifyLiveConnection();
     if (alive || !isConnected) return;
-    state.value = ConnectionState.error;
-    statusMessage.value =
-        'The tunnel is up but nothing loads — reconnect to pick another server';
     debugService.logAction('liveness_failed', {'trigger': 'resume'});
     // Same reason as the watchdog: an error state with a live interface is a
-    // lie the user pays for in dropped traffic.
-    await vpnService.disconnect();
+    // lie the user pays for in dropped traffic - and a tunnel torn down
+    // without unwinding the session is the same lie in the other direction.
+    await _failTunnel(
+      'The tunnel is up but nothing loads — reconnect to pick another server',
+    );
+  }
+
+  /// Closes a tunnel that failed its liveness check and unwinds the session.
+  ///
+  /// The two callers used to invoke `vpnService.disconnect()` directly, which
+  /// closed the interface but left the controller half-alive: selection,
+  /// uptime, exit identity, the connected IP and the timers all survived, so
+  /// the next connect reused stale state and the UI described a session that
+  /// was not running. This runs the same teardown as a user disconnect, then
+  /// keeps the failure message instead of replacing it with "Disconnected".
+  Future<void> _failTunnel(String message) async {
+    await _disconnectImpl();
+    state.value = ConnectionState.error;
+    if (message.isNotEmpty) statusMessage.value = message;
   }
 
   /// Brings the Dart state in line with what the native service is actually
@@ -363,7 +375,21 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     homeIpInfo.value = service.cachedHome();
     final fresh = await service.fetchHome();
     if (!fresh.isEmpty && isConnected) return;
+    // A failed refresh returns an empty IpInfo. Assigning it unconditionally
+    // replaced a perfectly good cached identity with blanks, so one network
+    // hiccup erased the "before" row until the next successful fetch.
+    if (fresh.isEmpty && !(homeIpInfo.value?.isEmpty ?? true)) return;
     homeIpInfo.value = fresh;
+  }
+
+  /// Drops the identities currently on screen.
+  ///
+  /// Called when the user turns "Show my location" off: the service deletes
+  /// its cache, but these are in-memory values that the home screen keeps
+  /// rendering, so the last resolved IPs stayed visible after opting out.
+  void clearIpInfo() {
+    homeIpInfo.value = null;
+    exitIpInfo.value = null;
   }
 
   /// Refreshes the home identity when the tunnel is down, so the "before"
@@ -434,6 +460,16 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         return false;
       }
 
+      // "Auto-select fastest" off means: do not probe the whole library, just
+      // take the first usable config in preference order. The switch was
+      // stored, loaded, rendered and reset, but nothing ever read it - every
+      // tap ran the full scan regardless of what the user chose.
+      if (!Get.find<SettingsController>().autoSelectFastest.value) {
+        final chosen = candidates.first;
+        statusMessage.value = 'Connecting to ${chosen.displayName}...';
+        return _connectImpl(chosen);
+      }
+
       final candidateHashes = candidates.map((c) => c.getHash()).toSet();
 
       // Results handed in by the library let us skip servers that already
@@ -446,7 +482,15 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           DateTime.now().subtract(const Duration(hours: 6));
       final knownFailed = <String>{};
       for (final r in testResults ?? const <TestResult>[]) {
-        if (r.isWorking || !candidateHashes.contains(r.configHash)) continue;
+        // notTested is "the probe cannot judge this", not "it failed": the
+        // tester returns it for UDP-only protocols (WireGuard, Hysteria2,
+        // TUIC) it has no way to reach. Counting those as failures kept them
+        // out of auto-connect for six hours even though nothing was wrong.
+        if (r.isWorking ||
+            r.status == TestStatus.notTested ||
+            !candidateHashes.contains(r.configHash)) {
+          continue;
+        }
         final testedAt = r.testedAt;
         if (testedAt == null || testedAt.isAfter(failureCutoff)) {
           knownFailed.add(r.configHash);
@@ -714,6 +758,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
 
       state.value = ConnectionState.connecting;
+      // A new session starts here: anything still in flight belongs to the
+      // previous one and must not write over this one's state.
+      _sessionEpoch++;
       statusMessage.value = 'Connecting to ${config.displayName}...';
       selectedConfig.value = config;
       selectedConfigResult.value = testResult;
@@ -881,6 +928,11 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     try {
       state.value = ConnectionState.disconnecting;
       statusMessage.value = 'Disconnecting...';
+      // Invalidate in-flight exit-IP lookups. _fetchConnectedIP captures this
+      // token and refuses to write its result if it changed - but nothing ever
+      // changed it, so the only guard left was `!isConnected`, which a quick
+      // reconnect defeats: the old lookup could land on the new session.
+      _sessionEpoch++;
 
       _stopUptimeCounter();
 

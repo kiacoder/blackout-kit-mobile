@@ -189,6 +189,10 @@ class SettingsController extends GetxController {
       autoSelectFastest.value = _settingsBox.get('autoSelectFastest', defaultValue: true);
       autoTestIntervalMinutes.value = _settingsBox.get('autoTestIntervalMinutes', defaultValue: 60);
       logLocalConnection.value = _settingsBox.get('logLocalConnection', defaultValue: false);
+      // This key was written on every save and never read back, so every cold
+      // start silently returned the user to "off" and disabled all IP lookups
+      // even though they had opted in.
+      showMyLocation.value = _settingsBox.get('showMyLocation', defaultValue: false);
 
       siteCheckEnabled.value = _settingsBox.get('siteCheckEnabled', defaultValue: true);
       final savedUrls = _settingsBox.get('siteCheckUrls');
@@ -289,7 +293,9 @@ class SettingsController extends GetxController {
   /// Toggle DNS leak prevention
   void toggleDnsLeakPrevention(bool value) {
     dnsLeakPreventionEnabled.value = value;
-    showMyLocation.value = _settingsBox.get('showMyLocation') ?? false;
+    // This line did not belong here: toggling DNS leak prevention re-read
+    // showMyLocation from storage and overwrote the live value with whatever
+    // happened to be persisted, silently flipping an unrelated switch.
     saveSettings();
     _log.i('DNS leak prevention: $value');
   }

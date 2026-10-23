@@ -426,7 +426,22 @@ class BlackoutVpnService : VpnService() {
         if (!xrayConfig.isNullOrBlank()) {
             Log.w(TAG, "ignoring an Xray config supplied for non-Xray '$protocol'")
         }
-        if (!singboxConfig.isNullOrBlank() && !EngineRunner.writeConfig(this, singboxConfig)) {
+
+        // A non-Xray protocol MUST arrive with its config document.
+        //
+        // This used to be `if (!singboxConfig.isNullOrBlank() && !writeConfig(...))`,
+        // so a null config skipped the write entirely and EngineRunner.start()
+        // loaded whatever singbox.json was already on disk - the previous
+        // session's server, under the new protocol's name. The tunnel came up
+        // and reported "connected" while running the wrong proxy.
+        if (singboxConfig.isNullOrBlank()) {
+            lastError =
+                "No sing-box config was supplied for protocol '$protocol'; " +
+                    "refusing to start an engine on a stale config file."
+            Log.e(TAG, lastError!!)
+            return false
+        }
+        if (!EngineRunner.writeConfig(this, singboxConfig)) {
             lastError = EngineRunner.lastError ?: "Could not write the sing-box config."
             Log.e(TAG, lastError!!)
             return false

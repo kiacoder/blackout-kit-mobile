@@ -586,8 +586,13 @@ class ShadowsocksConfig extends Config {
       final credParts = creds.split(':');
       if (credParts.length < 2) return null;
 
-      final method = credParts[0];
-      final password = credParts.sublist(1).join(':');
+      // SIP002 allows a NON-base64 `method:password` userinfo. This branch is
+      // the plain one, and it was the only credential path in the file that
+      // skipped the shared decoder - so a password containing %40 or %3A was
+      // sent literally and the server rejected it.
+      final method = ConfigParser._decodeUserInfo(credParts[0]);
+      final password =
+          ConfigParser._decodeUserInfo(credParts.sublist(1).join(':'));
 
       final colonIndex = serverPart.lastIndexOf(':');
       if (colonIndex == -1) return null;

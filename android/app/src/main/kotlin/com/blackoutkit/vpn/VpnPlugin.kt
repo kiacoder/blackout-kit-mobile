@@ -172,14 +172,25 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             // it produced a cryptic "unknown field amnezia" from sing-box
             // instead of an honest "this build cannot dial it". The desktop CLI
             // serves AWG through its own native core; mobile does not.
+            // Only the protocols the DART side can actually describe.
+            //
+            // shadowtls and warp used to be listed here because libsingbox.so
+            // contains the outbound types, but Dart cannot build a config for
+            // either: a shadowtls outbound is only a TLS camouflage layer and
+            // needs an inner proxy as its `detour`, which a shadowtls:// link
+            // does not carry, and there is no warp:// parser at all. Listing
+            // them made a shadowtls config parse, validate, show as available
+            // and "connect" - while startEngine received no config document
+            // and simply ran whatever singbox.json was left over from the
+            // previous session. That is a false tunnel state, not a failure.
             "singboxProtocols" to
                 if (singboxAvailable)
-                    listOf("hysteria2", "tuic", "anytls", "shadowtls", "warp")
+                    listOf("hysteria2", "tuic", "anytls")
                 else emptyList<String>(),
             "unavailableProtocols" to
-                (listOf("openvpn", "psiphon", "amneziawg") +
+                (listOf("openvpn", "psiphon", "amneziawg", "shadowtls", "warp") +
                     if (singboxAvailable) emptyList()
-                    else listOf("hysteria2", "tuic", "anytls", "shadowtls", "warp"))
+                    else listOf("hysteria2", "tuic", "anytls"))
         )
     }
 

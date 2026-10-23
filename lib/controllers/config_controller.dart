@@ -647,7 +647,14 @@ class ConfigController extends GetxController {
   Future<bool> deleteConfig(Config config) async {
     _action('config_deleted', {'config': config.displayName});
     try {
-      await configService.deleteConfig(config.getHash());
+      // The service reports whether the record was actually removed; this
+      // method used to discard that and return true regardless, so the
+      // Library said "removed" even when the delete had failed.
+      final removed = await configService.deleteConfig(config.getHash());
+      if (!removed) {
+        _log.w('Storage did not delete config: ${config.displayName}');
+        return false;
+      }
       allConfigs.remove(config);
       testResults.remove(config.getHash());
       _log.i('Deleted config: ${config.displayName}');

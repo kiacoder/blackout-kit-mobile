@@ -117,6 +117,20 @@ void main() async {
     ),
   );
 
+  // Split tunneling raises "reconnect for this selection to take effect" only
+  // when a tunnel is actually up. The probe was defined and documented as
+  // "called once during app wiring" but nothing ever called it, so
+  // _isConnected fell back to true and every edit warned about a reconnect
+  // that had nothing to reconnect.
+  try {
+    splitTunnelingService.bindConnectionState(
+      () => Get.find<ConnectionController>().isConnected,
+    );
+  } catch (_) {
+    // A missing controller at this point is not worth failing startup over;
+    // the probe's default (assume connected) is the safe direction.
+  }
+
   runApp(const BlackoutKitApp());
 }
 

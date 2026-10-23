@@ -160,6 +160,20 @@ class VPNService {
         }
       }
 
+      // Every tunnel is carried by one of the two cores, and each needs a
+      // config document built here. A protocol that produces neither is one
+      // this build cannot dial - say so instead of handing the native layer a
+      // connect request it will serve from a stale config file.
+      if (xrayJson == null && singboxJson == null) {
+        _status = VPNStatus.error;
+        _lastError =
+            'This build cannot dial "${config.protocol}" configs. '
+            'Use a VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC or AnyTLS '
+            'config, or update the app.';
+        _log.e('Refusing to connect: $_lastError');
+        return false;
+      }
+
       final result = await platform.invokeMethod('connect', {
         'protocol': config.protocol,
         'displayName': config.displayName,

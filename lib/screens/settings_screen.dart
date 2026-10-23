@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../controllers/config_controller.dart';
+import '../controllers/connection_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../services/ip_info_service.dart';
 import '../services/kill_switch_service.dart';
@@ -180,8 +181,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // Apply immediately: the connection controller reads the
                     // service on connect.
                     try {
-                      Get.find<IpInfoService>()
-                          .setLookupsEnabled(value);
+                      Get.find<IpInfoService>().setLookupsEnabled(value);
+                    } catch (_) {}
+                    // Turning it off has to take the resolved IPs off the
+                    // screen too - the service clears its cache, but the home
+                    // screen renders in-memory values that survived. Turning
+                    // it back on refreshes them, since nothing else will.
+                    try {
+                      final connection = Get.find<ConnectionController>();
+                      if (value) {
+                        connection.refreshHomeIpInfo();
+                      } else {
+                        connection.clearIpInfo();
+                      }
                     } catch (_) {}
                   },
                 )),

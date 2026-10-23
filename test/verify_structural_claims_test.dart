@@ -20,7 +20,9 @@ void main() {
   group('BK-001 editor save order', () {
     test('the replacement is stored before the old record is deleted', () {
       final src = source('lib/screens/config_editor_screen.dart');
-      final saveAt = src.indexOf('saveConfig(parsed)');
+      // Prefix match, not the exact call: the editor now passes the original
+      // source id through so an edited config keeps its attribution.
+      final saveAt = src.indexOf('saveConfig(parsed');
       final deleteAt = src.indexOf('deleteConfig(widget.config)');
       expect(saveAt, greaterThan(-1));
       expect(deleteAt, greaterThan(-1));

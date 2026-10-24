@@ -472,7 +472,11 @@ class SettingsController extends GetxController {
     // site checking and core debug logs survived a "Reset to Defaults" and the
     // user was left wondering which of their settings were actually reset.
     dnsLeakPreventionEnabled.value = false;
-    customDnsServer.value = '';
+    // This was set to '', while _loadSettings() defaults the same key to
+    // 1.1.1.1. DnsLeakPreventionService treats an empty resolver as invalid,
+    // so after a reset the feature could never be turned back on until the
+    // user typed an address by hand.
+    customDnsServer.value = '1.1.1.1';
     showMyLocation.value = false;
     siteCheckEnabled.value = true;
     siteCheckUrls.value = List<String>.from(defaultSiteCheckUrls);

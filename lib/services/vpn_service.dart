@@ -312,10 +312,22 @@ class VPNService {
   /// Starts the headless probe core with [xrayConfig] (must be a SOCKS-only
   /// config — `XrayConfigBuilder(tunEnabled: false)`). Returns false with a
   /// reason in [lastError] when the core refuses the config.
-  Future<bool> probeStart(String xrayConfig) async {
+  /// Starts the headless probe core.
+  ///
+  /// Exactly one document is expected: an Xray config for the Xray-family
+  /// protocols, a sing-box config for hysteria2/tuic/anytls. The probe used to
+  /// take only the Xray document, so the site check had nothing to send for
+  /// the sing-box protocols and reported them unsupported.
+  Future<bool> probeStart({
+    String? xrayConfig,
+    String? singboxConfig,
+    int socksPort = 10809,
+  }) async {
     try {
       final result = await platform.invokeMethod<bool>('probeStart', {
-        'xrayConfig': xrayConfig,
+        if (xrayConfig != null) 'xrayConfig': xrayConfig,
+        if (singboxConfig != null) 'singboxConfig': singboxConfig,
+        'socksPort': socksPort,
       });
       return result ?? false;
     } on PlatformException catch (e) {

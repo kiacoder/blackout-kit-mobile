@@ -372,6 +372,9 @@ object EngineRunner {
         }
     }
 
+    /** Directory the engine reads its config from; the probe writes here too. */
+    internal fun configDirectory(context: Context): File = configDir(context)
+
     private fun configDir(context: Context): File =
         File(context.filesDir, "engine").apply { mkdirs() }
 }

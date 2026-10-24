@@ -67,11 +67,25 @@ class AppUpdate {
     // Prefer the asset for this device's ABI. A 32-bit phone cannot install the
     // arm64 APK (INSTALL_FAILED_NO_MATCHING_ABIS), and picking by name alone
     // would hand it exactly that file.
-    Map<String, dynamic>? apk = assets.firstWhere(
-      (a) => nameOf(a) == 'app-$abi-release.apk',
-      orElse: () => <String, dynamic>{},
-    );
-    if (apk.isEmpty) {
+    // The release workflow names assets `blackout-kit-<tag>-<abi>.apk` plus a
+    // `-universal.apk`. This used to look for `app-<abi>-release.apk`, which
+    // never matches, and then fell back to the first .apk that was universal
+    // OR matched the ABI - so a phone downloaded the 115 MB universal build
+    // instead of its own 60 MB split.
+    Map<String, dynamic>? apk;
+    final wanted = abi.toLowerCase();
+    for (final a in assets) {
+      final name = nameOf(a).toLowerCase();
+      if (!name.endsWith('.apk')) continue;
+      // Exact ABI match first, in any of the names this project has used.
+      if (name.contains(wanted) ||
+          name == 'app-$wanted-release.apk' ||
+          name.contains('-$wanted')) {
+        apk = a;
+        break;
+      }
+    }
+    if (apk == null) {
       // Fall back ONLY to an APK this device can actually install. The old
       // fallback took any .apk, so a 32-bit phone could be offered the arm64
       // build and fail with INSTALL_FAILED_NO_MATCHING_ABIS after downloading.
@@ -80,13 +94,12 @@ class AppUpdate {
               final name = nameOf(a!).toLowerCase();
               if (!name.endsWith('.apk')) return false;
               // universal / fat APKs carry no ABI token and install anywhere.
-              if (name.contains('universal') || name.contains('fat')) return true;
-              return name.contains(abi);
+              return name.contains('universal') || name.contains('fat');
             },
             orElse: () => null,
           );
     }
-    if (apk == null || apk.isEmpty) return null;
+    if (apk == null) return null;
     return AppUpdate(
       tagName: tag,
       buildNumber: _buildNumberFromTag(tag, m),

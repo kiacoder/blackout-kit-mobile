@@ -311,10 +311,19 @@ class BlackoutVpnService : VpnService() {
                 }
             }
 
-            try {
-                builder.addDisallowedApplication(packageName)
-            } catch (e: Exception) {
-                Log.w(TAG, "could not exclude self: ${e.message}")
+            // In allowed-list mode this call is illegal: Android documents
+            // addAllowedApplication and addDisallowedApplication as mutually
+            // exclusive and throws on the second one. It was wrapped in a
+            // catch, so it only logged - but the exception is thrown on the
+            // main thread inside establish(), and on stricter builds it
+            // aborts the whole tunnel. The app is already outside the allowed
+            // list, so there is nothing to exclude.
+            if (!useAllowedList) {
+                try {
+                    builder.addDisallowedApplication(packageName)
+                } catch (e: Exception) {
+                    Log.w(TAG, "could not exclude self: ${e.message}")
+                }
             }
 
             val fd = builder.establish()

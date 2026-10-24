@@ -318,6 +318,10 @@ class WireGuardConfig extends Config {
   bool validate() {
     if (privateKey.isEmpty) return false;
     if (peers.isEmpty) return false;
+    // Xray's wireguard outbound needs `address`; without a local address the
+    // builder omits it and the core refuses the whole config at load time.
+    // Validating only the keys let an unbuildable profile pass as ready.
+    if (localAddresses.isEmpty) return false;
     return peers.every(
       (p) => p.publicKey.isNotEmpty && (p.endpoint ?? '').isNotEmpty,
     );

@@ -10,6 +10,7 @@ import '../models/config_source.dart';
 import '../models/test_result.dart';
 import '../services/config_service.dart';
 import '../services/github_service.dart';
+import 'connection_controller.dart';
 import '../services/tester_service.dart';
 import '../services/debug_service.dart';
 
@@ -552,7 +553,11 @@ class ConfigController extends GetxController {
 
   /// Get top N working configs, lowest latency first
   List<Config> getTopConfigs({int limit = 5}) {
-    final working = allConfigs
+    // visibleConfigs, not allConfigs: this feeds the "Fastest Configuration"
+    // banner and the speed test, so reading the raw list surfaced configs from
+    // disabled or untrusted repositories - the exact isolation the source
+    // toggles are supposed to provide.
+    final working = visibleConfigs
         .where((c) => testResults[c.getHash()]?.isWorking ?? false)
         .toList()
       ..sort((a, b) {
@@ -657,6 +662,22 @@ class ConfigController extends GetxController {
       }
       allConfigs.remove(config);
       testResults.remove(config.getHash());
+
+      // A deleted config must not stay "connected". The tunnel kept running
+      // with no library record behind it, so the UI showed a live session for
+      // a config the user had just removed - and reconnecting was impossible
+      // because the selection pointed at something that no longer existed.
+      try {
+        final connection = Get.find<ConnectionController>();
+        if (connection.isConnected &&
+            connection.selectedConfig.value?.getHash() == config.getHash()) {
+          _log.i('Deleting the active config - disconnecting first');
+          await connection.disconnect();
+        }
+      } catch (_) {
+        // No connection controller (tests, or startup ordering): nothing to do.
+      }
+
       _log.i('Deleted config: ${config.displayName}');
       return true;
     } catch (e) {

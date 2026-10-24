@@ -43,6 +43,7 @@ import 'package:logger/logger.dart';
 import '../controllers/settings_controller.dart';
 import '../models/config.dart';
 import '../models/test_result.dart';
+import 'singbox_config.dart';
 import 'vpn_service.dart';
 import 'xray_config.dart';
 
@@ -215,12 +216,35 @@ class SiteCheckService {
     // degrades to unsupported rather than blocking the flow.
     const probePort = 10809;
 
-    final probeConfig = XrayConfigBuilder(
-      socksPort: probePort,
-      tunEnabled: false,
-    ).buildJson(config);
+    // Each protocol is carried by a different core, and only that core can
+    // run it. This used to build an Xray document unconditionally, so every
+    // hysteria2/tuic/anytls config threw here and was reported "unsupported":
+    // the check silently did nothing for exactly the UDP protocols whose
+    // handshakes most need verifying.
+    String? xrayJson;
+    String? singboxJson;
+    if (isXrayProtocol(config.protocol)) {
+      xrayJson = XrayConfigBuilder(
+        socksPort: probePort,
+        tunEnabled: false,
+      ).buildJson(config);
+    } else if (isSingboxProtocol(config.protocol)) {
+      singboxJson = const SingboxConfigBuilder(socksPort: probePort).buildJson(config);
+    } else {
+      _log.i('Site check: ${config.protocol} has no probe engine, skipping');
+      return SiteCheckReport(
+        configHash: hash,
+        reachable: 0,
+        total: hosts.length,
+        supported: false,
+      );
+    }
 
-    final started = await _vpnService.probeStart(probeConfig);
+    final started = await _vpnService.probeStart(
+      xrayConfig: xrayJson,
+      singboxConfig: singboxJson,
+      socksPort: probePort,
+    );
     if (!started) {
       _log.w('Site check: probe core refused config ${config.displayName}: '
           '${_vpnService.lastError}');

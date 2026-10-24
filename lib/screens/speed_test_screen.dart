@@ -266,14 +266,29 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
           // Results List
           Expanded(
             child: Obx(() {
-              final configs = _configController.allConfigs;
+              // visibleConfigs, so configs from disabled or untrusted
+              // repositories do not appear in a benchmark.
+              final configs = _configController.visibleConfigs;
               if (configs.isEmpty) {
                 return Center(
                   child: Text('No configs to benchmark', style: TextStyle(color: theme.hintColor)),
                 );
               }
 
-              final sorted = _configController.getFilteredConfigs();
+              // Rank by measured latency here instead of reusing
+              // getFilteredConfigs(): that applies the Library screen's filter
+              // and sort (so "Alphabetical" crowned the first name "#1
+              // fastest") and resets the Library's pagination as a side effect.
+              final sorted = List<Config>.of(configs)
+                ..sort((a, b) {
+                  final aMs = _configController.testResults[a.getHash()]
+                          ?.latencyMs ??
+                      1 << 30;
+                  final bMs = _configController.testResults[b.getHash()]
+                          ?.latencyMs ??
+                      1 << 30;
+                  return aMs.compareTo(bMs);
+                });
 
               return ListView.separated(
                 padding: const EdgeInsets.all(12),

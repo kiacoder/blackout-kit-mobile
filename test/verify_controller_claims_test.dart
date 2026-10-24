@@ -249,7 +249,10 @@ void main() {
       await settings.resetToDefaults();
 
       expect(settings.dnsLeakPreventionEnabled.value, isFalse);
-      expect(settings.customDnsServer.value, '');
+      // The documented default, matching what _loadSettings() uses. Resetting
+      // to '' left DnsLeakPreventionService with an invalid resolver, so the
+      // feature could not be re-enabled without typing an address by hand.
+      expect(settings.customDnsServer.value, '1.1.1.1');
       expect(settings.siteCheckEnabled.value, isTrue);
       expect(settings.coreDebugLogs.value, isFalse);
       expect(settings.showMyLocation.value, isFalse);

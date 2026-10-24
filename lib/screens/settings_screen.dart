@@ -1,6 +1,8 @@
 /// Settings screen - Manage preferences and VPN sources
 /// Includes auto-connect, kill switch, theme, language, and more
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -149,6 +151,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _settingsController.showSpeedInTray.value = value;
                     _settingsController.saveSettings();
                   },
+                )),
+              ],
+            ),
+            // DNS section.
+            //
+            // The DNS leak prevention service, its settings key, the tunnel
+            // plumbing and the README all existed - but no widget ever
+            // rendered a control for it, so the feature could not be turned on
+            // from the app at all.
+            _buildSection(
+              context: context,
+              title: 'DNS',
+              children: [
+                Obx(() => SwitchListTile(
+                  title: const Text('DNS leak prevention'),
+                  subtitle: Text(
+                    _settingsController.dnsLeakPreventionEnabled.value
+                        ? 'DNS queries are resolved inside the tunnel through '
+                            '${_settingsController.customDnsServer.value}.'
+                        : 'Off - your provider can see which domains you resolve.',
+                  ),
+                  value: _settingsController.dnsLeakPreventionEnabled.value,
+                  onChanged: (value) {
+                    _settingsController.toggleDnsLeakPrevention(value);
+                  },
+                )),
+                Obx(() => ListTile(
+                  title: const Text('DNS resolver'),
+                  subtitle: Text(
+                    _settingsController.customDnsServer.value.isEmpty
+                        ? 'Not set - pick one to enable leak prevention'
+                        : _settingsController.customDnsServer.value,
+                  ),
+                  leading: const Icon(Icons.dns_outlined),
+                  enabled: _settingsController.dnsLeakPreventionEnabled.value,
+                  onTap: _settingsController.dnsLeakPreventionEnabled.value
+                      ? _showDnsResolverDialog
+                      : null,
                 )),
               ],
             ),
@@ -543,6 +583,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Picks the resolver used while DNS leak prevention is on.
+  void _showDnsResolverDialog() {
+    const presets = <String, String>{
+      '1.1.1.1': 'Cloudflare',
+      '9.9.9.9': 'Quad9',
+      '8.8.8.8': 'Google',
+      '94.140.14.14': 'AdGuard',
+    };
+    final controller =
+        TextEditingController(text: _settingsController.customDnsServer.value);
+    Get.dialog(
+      AlertDialog(
+        title: const Text('DNS resolver'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final entry in presets.entries)
+              RadioListTile<String>(
+                dense: true,
+                title: Text(entry.value),
+                subtitle: Text(entry.key),
+                value: entry.key,
+                // ignore: deprecated_member_use
+                groupValue: _settingsController.customDnsServer.value,
+                // ignore: deprecated_member_use
+                onChanged: (value) {
+                  if (value == null) return;
+                  _settingsController.setCustomDnsServer(value);
+                  Get.back();
+                },
+              ),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: 'Custom (IP address)',
+                hintText: '1.1.1.1',
+              ),
+              onSubmitted: (value) {
+                final trimmed = value.trim();
+                if (trimmed.isEmpty) return;
+                _settingsController.setCustomDnsServer(trimmed);
+                Get.back();
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: Get.back, child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final trimmed = controller.text.trim();
+              if (trimmed.isEmpty) return;
+              _settingsController.setCustomDnsServer(trimmed);
+              Get.back();
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showLanguageDialog() {
     Get.dialog(
       AlertDialog(
@@ -739,9 +842,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              final minutes = int.tryParse(controller.text) ?? 60;
-              if (minutes > 0) {
-                _settingsController.setAutoTestInterval(minutes);
+              // The subtitle tells the user "0 disables", and the scheduler
+              // already treats <= 0 as "no timer" - but this guard rejected 0,
+              // so the advertised way to turn the feature off did nothing.
+              final parsed = int.tryParse(controller.text.trim());
+              if (parsed != null) {
+                _settingsController.setAutoTestInterval(parsed < 0 ? 0 : parsed);
               }
               Get.back();
             },
@@ -932,9 +1038,34 @@ class _UpdateSectionState extends State<_UpdateSection> {
     }
   }
 
+  /// Hands the downloaded APK to Android's installer.
+  Future<void> _startInstaller() async {
+    final path = _apkPath;
+    if (path == null) return;
+    await _service.installApk(path).catchError((Object e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = 'error';
+        _error = 'Could not start the installer: $e';
+      });
+    });
+  }
+
   Future<void> _downloadAndInstall() async {
     final update = _update;
     if (update == null) return;
+
+    // Reuse a finished download. Tapping Retry after Android asked for the
+    // "install unknown apps" permission used to call downloadApk() again,
+    // which deletes the file it just fetched and pulls the whole APK a second
+    // time - 100+ MB for a permission toggle.
+    final existing = _apkPath;
+    if (existing != null && File(existing).existsSync()) {
+      setState(() => _phase = 'ready');
+      await _startInstaller();
+      return;
+    }
+
     setState(() => _phase = 'downloading');
     try {
       _apkPath = await _service.downloadApk(update);
@@ -943,13 +1074,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
       // A refused install permission (or a missing installer) used to throw
       // out of this method with no UI update at all - the tile just sat on
       // "downloading" forever.
-      await _service.installApk(_apkPath!).catchError((Object e) {
-        if (!mounted) return;
-        setState(() {
-          _phase = 'error';
-          _error = 'Could not start the installer: $e';
-        });
-      });
+      await _startInstaller();
       // The OS installer takes over from here; the app may be replaced.
     } catch (e) {
       if (!mounted) return;

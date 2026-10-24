@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to Blackout Kit Mobile will be documented in this file.
 
@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.12.4] - 2026-10-24
+
+### Fixed
+- **Scanning and pinging now work for every protocol, not just VLESS/VMess.**
+  The headless probe was Xray-only, so the site check built an Xray document
+  for every config; hysteria2, TUIC and AnyTLS threw there and were reported
+  "unsupported". The probe now runs the sing-box core for those protocols.
+- **Engines no longer fail on a cold start.** The SOCKS readiness check made a
+  single connection attempt with the full timeout, so an engine that had not
+  yet bound its port - every cold start on a slower device - was reported as
+  failed to start in microseconds. It polls until the deadline now.
+- **WireGuard profiles without an `Address` are rejected up front** instead of
+  failing inside the core, where Xray omits the field and refuses the config.
+- **Two probes can no longer collide on port 10809**, which could fail one
+  check or tear down the other one's core.
+- **Whitelist split tunneling no longer mixes the allowed and disallowed app
+  lists**, which Android rejects outright.
+- **A timed-out disconnect no longer throws on the next teardown.**
+- **Updates download your device's 60 MB split APK, not the 115 MB universal
+  one.** The asset match looked for a filename the release workflow does not
+  produce, so it always fell back to universal.
+- **Retrying an install no longer re-downloads the whole APK** after Android
+  asks for the install permission.
+- **"0 disables" now actually disables auto-testing.**
+- **DNS leak prevention is reachable.** The service, the setting and the tunnel
+  plumbing all existed, but no control was ever rendered, so the feature could
+  not be switched on from the app. There is now a DNS section with a toggle and
+  a resolver picker, and "Reset to Defaults" restores 1.1.1.1 instead of
+  leaving an unusable blank.
+- **The speed test ranks by measured latency**, and no longer shows configs
+  from disabled sources or inherits the Library's alphabetical sort.
+- **Deleting the config you are connected through disconnects first**, instead
+  of leaving a tunnel running with no config behind it.
+
 
 ## [1.12.3] - 2026-10-22
 

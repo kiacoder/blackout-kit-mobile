@@ -25,7 +25,7 @@ const uuid = '11111111-1111-1111-1111-111111111111';
 final candidates = <String, String>{
   'vless/tcp/plain': 'vless://$uuid@a.com:443?type=tcp#v1',
   'vless/tcp/tls': 'vless://$uuid@a.com:443?security=tls&sni=a.com&fp=chrome&type=tcp#v2',
-  'vless/reality': 'vless://$uuid@a.com:443?security=reality&pbk=AbCdEf_GHIJ1234567890abcdefghij1234567890KLm&sid=123456&fp=chrome&sni=www.microsoft.com&flow=xtls-rprx-vision&type=tcp#v3',
+  'vless/reality': 'vless://$uuid@a.com:443?security=reality&pbk=9PHDW9gtXmmSBw2yx0dhd_2QQA7OpCKywpfYWpCpPk4&sid=123456&fp=chrome&sni=www.microsoft.com&flow=xtls-rprx-vision&type=tcp#v3',
   'vless/ws/tls': 'vless://$uuid@a.com:443?security=tls&sni=a.com&type=ws&path=%2Fws&host=cdn.example.com#v4',
   'vless/grpc/tls': 'vless://$uuid@a.com:443?security=tls&type=grpc&serviceName=grpcsvc&mode=gun#v5',
   'vless/httpupgrade': 'vless://$uuid@a.com:443?security=tls&type=httpupgrade&path=%2Fup&host=cdn.example.com#v6',

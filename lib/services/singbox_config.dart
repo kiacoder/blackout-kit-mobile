@@ -180,7 +180,13 @@ class SingboxConfigBuilder {
             'tag': 'bootstrap-dns',
             // IP literal: no name resolution needed to reach it.
             'server': '1.1.1.1',
-            'detour': 'direct',
+            // NO `detour: "direct"` here. The default dialer already dials
+            // direct, and the bundled core REFUSES the explicit form with
+            // `start dns/https[bootstrap-dns]: detour to an empty direct
+            // outbound makes no sense` — a FATAL that killed every sing-box
+            // protocol (hysteria2/tuic/anytls) at startup whenever DNS leak
+            // prevention was on. The proxy resolver below keeps its detour:
+            // that one points at a real outbound.
           },
           {
             'type': 'https',

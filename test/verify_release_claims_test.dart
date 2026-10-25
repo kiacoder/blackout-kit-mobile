@@ -81,9 +81,15 @@ void main() {
 
       // Exactly one resolver is direct, and it exists only to resolve the
       // proxy's own hostname - otherwise the tunnel can never come up.
+      // "Direct" here means NO detour key: the default dialer already dials
+      // direct, and the bundled core FATALs on an explicit detour to the
+      // bare direct outbound ("detour to an empty direct outbound makes no
+      // sense") - which killed every sing-box protocol when leak prevention
+      // was on.
       final bootstrap =
           servers.firstWhere((s) => s['tag'] == 'bootstrap-dns');
-      expect(bootstrap['detour'], 'direct');
+      expect(bootstrap.containsKey('detour'), isFalse,
+          reason: 'an explicit detour: direct FATALs the bundled core');
       expect(servers.any((s) => s['tag'] == 'local-dns'), isFalse);
 
       final proxy = ((doc['outbounds'] as List).first as Map);

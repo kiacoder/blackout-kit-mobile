@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Samsung: every sing-box protocol (hysteria2 / TUIC / AnyTLS) FATALed at
+  startup when DNS leak prevention was on** —
+  `start dns/https[bootstrap-dns]: detour to an empty direct outbound makes
+  no sense`. The generated DNS section gave the bootstrap resolver an
+  explicit `detour: "direct"`, which the bundled sing-box core refuses (the
+  default dialer already dials direct, so the key is pointless). The key is
+  no longer emitted; the section is otherwise unchanged. Reported from a
+  real Samsung device; the Redmi ran with leak prevention off, which is why
+  only one device showed it. Claim test updated to the corrected contract;
+  3 new regression tests in `test/audit_round8_test.dart`;
+  `tool/repro_dns_fatal.dart` documents the reproduction.
+
 ## [1.12.5] - 2026-10-25
 
 ### Fixed

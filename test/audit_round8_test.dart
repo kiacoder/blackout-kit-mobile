@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:blackout_kit_mobile/models/config.dart';
 import 'package:blackout_kit_mobile/models/vpn_session_options.dart';
 import 'package:blackout_kit_mobile/services/dns_leak_prevention_service.dart';
+import 'package:blackout_kit_mobile/services/singbox_config.dart';
 import 'package:blackout_kit_mobile/services/vpn_service.dart';
 import 'package:blackout_kit_mobile/services/xray_config.dart';
 
@@ -196,6 +197,59 @@ void main() {
       expect(VpnSessionOptions.isIpLiteral('2606:4700::1'), isTrue);
       expect(VpnSessionOptions.isIpLiteral('dns.example.com'), isFalse);
       expect(VpnSessionOptions.isIpLiteral(''), isFalse);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Samsung FATAL regression (2026-10-25): `start dns/https[bootstrap-dns]:
+  // detour to an empty direct outbound makes no sense` — the bundled sing-box
+  // core refuses a DNS server detoured to the bare `direct` outbound, which
+  // killed every sing-box protocol (hy2/tuic/anytls) whenever DNS leak
+  // prevention was on. The default dialer already dials direct, so the detour
+  // key must simply not be emitted.
+  // ───────────────────────────────────────────────────────────────────────────
+  group('sing-box DNS section never detours to the bare direct outbound', () {
+    Map<String, dynamic> buildWithLeakPrevention() {
+      const uri =
+          'anytls://secretpass@185.208.172.212:39007?sni=a.com&insecure=0#x';
+      final config = ConfigParser.parse(uri)!;
+      return const SingboxConfigBuilder(routeDnsThroughProxy: true)
+          .build(config);
+    }
+
+    test('no dns server carries detour: direct', () {
+      final doc = buildWithLeakPrevention();
+      final servers = ((doc['dns'] as Map)['servers'] as List).cast<Map>();
+      for (final server in servers) {
+        expect(
+          server['detour'] == 'direct',
+          isFalse,
+          reason: 'dns server "${server['tag']}" must not detour to the bare '
+              'direct outbound — the bundled core FATALs on it',
+        );
+      }
+    });
+
+    test('the DNS section stays complete (bootstrap + remote + final)', () {
+      final doc = buildWithLeakPrevention();
+      final servers = ((doc['dns'] as Map)['servers'] as List)
+          .cast<Map>()
+          .map((s) => s['tag'])
+          .toSet();
+      expect(servers, containsAll(['bootstrap-dns', 'remote-dns']));
+      expect((doc['dns'] as Map)['final'], 'remote-dns');
+      // The proxy outbound still resolves through the bootstrap resolver.
+      final proxy = (doc['outbounds'] as List).first as Map;
+      expect((proxy['domain_resolver'] as Map)['server'], 'bootstrap-dns');
+    });
+
+    test('leak prevention off emits no dns section at all', () {
+      const uri =
+          'anytls://secretpass@185.208.172.212:39007?sni=a.com&insecure=0#x';
+      final config = ConfigParser.parse(uri)!;
+      final doc =
+          const SingboxConfigBuilder(routeDnsThroughProxy: false).build(config);
+      expect(doc.containsKey('dns'), isFalse);
     });
   });
 }

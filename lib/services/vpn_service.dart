@@ -215,6 +215,10 @@ class VPNService {
   }
 
   /// DNS servers to hand the core, taken from the config where it specifies any.
+  ///
+  /// Non-literal entries (a profile may carry a hostname resolver) are
+  /// dropped: `VpnSessionOptions.validationError` refuses anything that is not
+  /// an IP literal, and letting one through would block the whole connect.
   static List<String> dnsServersForConfig(Config config) {
     final dns = switch (config) {
       WireGuardConfig c when c.dns.isNotEmpty => c.dns,
@@ -225,7 +229,7 @@ class VPNService {
     final parsed = dns
         .split(',')
         .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
+        .where((e) => e.isNotEmpty && VpnSessionOptions.isIpLiteral(e))
         .toList();
     return parsed.isEmpty ? const ['1.1.1.1', '8.8.8.8'] : parsed;
   }

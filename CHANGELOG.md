@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.5] - 2026-10-25
+
+### Fixed
+- **The config's own DNS resolvers reach the tunnel again.** The session
+  options were built without the config, and the DNS-leak-prevention service
+  overwrote the resolver list with `1.1.1.1` even while disabled — so a
+  WireGuard profile's `[Interface] DNS` was silently discarded on every
+  connect. Hostname resolvers in a profile are now dropped (Android only
+  accepts IP literals) instead of blocking the connect.
+- **VLESS/VMess/Trojan TLS material is no longer dropped.** `alpn` was parsed
+  into the model and never emitted (servers that require ALPN could never
+  handshake); vmess links carrying `allowInsecure`/`fp`/`alpn` connected with
+  certificate verification ON; trojan-over-gRPC dialled an empty service name
+  (the share format carries it in `path`).
+- **A reconnect within 35s of a previous connect is no longer killed by the
+  old attempt's timeout watchdog**, and the watchdog no longer crashes the
+  app with an unguarded `startService` when the app is in the background.
+- **A process death no longer resurrects a phantom "blocked" tunnel** — the
+  held-blocking marker survives, the tunnel does not; the stale marker is
+  cleared instead of adopting a session that carries nothing.
+- **A wedged `sing-box check` can no longer hang the connect path forever.**
+  The output read ran before the 20s deadline, so the deadline was
+  unreachable; output is drained on a side thread now.
+- **`XrayEngine.start` stops a half-started core** when `startLoop` throws
+  instead of leaving it running with no owner.
+- **Activity/permission listeners no longer stack on every activity
+  re-attach** in the VPN plugin.
+- **`reconnect()` shares the single-flight guard** — a double tap no longer
+  starts two parallel disconnect+connect sequences.
+- **A bare-IPv6 endpoint is no longer mis-split** (`2606:4700::1` parsed as
+  host `2606:4700::` port 1 before).
+- **The speed-benchmark "Testing:" label follows the probe** instead of
+  showing the first sample for the whole run; the update tile's Install
+  button reuses the error-handled installer path; the debug dump reports the
+  real app version.
+- **The logo is no longer cropped.** The in-app icon and all five launcher
+  mipmaps were a bad zoom-crop with the wordmark chopped; all are regenerated
+  from the full `assets/images/logo.png`.
+
+### Added
+- `tool/validate_engines.dart` — parses representative links of every
+  protocol with the app's own parser and grammar-tests the generated JSON
+  against real `xray run -test` / `sing-box check` binaries.
+- `tool/audit_real_subscription.dart` — runs a real subscription payload
+  through the parser and reports parse/validate results per protocol.
+- 16 regression tests (`test/audit_round8_test.dart`) covering the DNS
+  selection chain, the dropped TLS material, and the IPv6 endpoint split.
+
 ## [1.12.4] - 2026-10-24
 
 ### Fixed

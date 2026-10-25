@@ -184,17 +184,31 @@ object EngineRunner {
             val check = ProcessBuilder(
                 listOf(enginePath.absolutePath, "check", "-c", configFile.absolutePath)
             ).redirectErrorStream(true).start()
-            // readText() blocks until the stream closes, so the checker gets a
-            // hard timeout as well: a wedged `sing-box check` used to hang the
-            // connect path indefinitely, past the Dart-side timeout, with the
-            // thread stuck and no way to recover but killing the app.
-            val checkOutput = check.inputStream.bufferedReader().use { it.readText() }
+            // Drain the checker's output on a side thread. Reading it inline
+            // (readText before waitFor) hung the connect path FOREVER when a
+            // wedged `sing-box check` produced no output and never exited:
+            // the 20s deadline below was unreachable because the read never
+            // returned. The deadline is now measured on the process, and the
+            // drained output is collected with a short grace afterwards (the
+            // stream closes once the process is gone).
+            val outputFuture = java.util.concurrent.CompletableFuture.supplyAsync {
+                try {
+                    check.inputStream.bufferedReader().use { it.readText() }
+                } catch (_: Exception) {
+                    ""
+                }
+            }
             val checkDone = check.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)
             if (!checkDone) {
                 check.destroyForcibly()
                 lastError = "sing-box check timed out after 20s - the engine may be damaged"
                 Log.e(TAG, lastError!!)
                 return false
+            }
+            val checkOutput = try {
+                outputFuture.get(2, java.util.concurrent.TimeUnit.SECONDS)
+            } catch (_: Exception) {
+                ""
             }
             if (check.exitValue() != 0) {
                 lastError = "sing-box rejected the configuration: " + checkOutput.takeLast(500) +

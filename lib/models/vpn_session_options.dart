@@ -93,7 +93,11 @@ class VpnSessionOptions {
   }
 
   /// Test hook for the DNS-address validator.
-  static bool looksLikeIpForTest(String value) => _looksLikeIp(value);
+  static bool looksLikeIpForTest(String value) => isIpLiteral(value);
+
+  /// True for a literal IPv4 or IPv6 address — the only form Android's
+  /// `addDnsServer()` accepts.
+  static bool isIpLiteral(String value) => _looksLikeIp(value);
 
   static bool _looksLikeIp(String value) {
     if (value.isEmpty) return false;

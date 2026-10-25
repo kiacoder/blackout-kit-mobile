@@ -36,6 +36,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private var pendingNotificationPermission: MethodChannel.Result? = null
     private var pendingConnect: MethodChannel.Result? = null
 
+    /**
+     * The timeout watchdog of the connect currently in flight. Kept so
+     * [resolveConnect] can cancel it: the runnable checks `pendingConnect`,
+     * and a later connect that starts within CONNECT_TIMEOUT_MS of an earlier
+     * one would otherwise be judged — and killed — by the earlier attempt's
+     * leftover timer.
+     */
+    private var connectTimeoutRunnable: Runnable? = null
+
     /// Loopback SOCKS port of the most recent connect, used to dial the core
     /// for the exit-IP fetch. Matches VpnService.defaultSocksPort.
     private var lastSocksPort: Int = BlackoutVpnService.DEFAULT_SOCKS_PORT
@@ -334,22 +343,38 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             return
         }
 
-        main.postDelayed({
+        val timeout = Runnable {
             if (pendingConnect != null) {
                 // Stop the service too: establish() may still complete after
                 // this and would otherwise leave a live tunnel whose Dart
                 // state already reported failure — UI and reality diverged.
-                ctx.startService(
-                    Intent(ctx, BlackoutVpnService::class.java).apply {
-                        action = BlackoutVpnService.ACTION_DISCONNECT
-                    }
-                )
+                // The app can be in the BACKGROUND by now (the user gave up
+                // waiting), where a plain startService throws
+                // IllegalStateException — and this runnable runs on the main
+                // thread, so the throw would take the app down.
+                try {
+                    ctx.startService(
+                        Intent(ctx, BlackoutVpnService::class.java).apply {
+                            action = BlackoutVpnService.ACTION_DISCONNECT
+                        }
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "could not stop the service after the connect timeout: ${e.message}")
+                }
                 resolveConnect(false, "Timed out waiting for the tunnel to come up")
             }
-        }, CONNECT_TIMEOUT_MS)
+        }
+        connectTimeoutRunnable = timeout
+        main.postDelayed(timeout, CONNECT_TIMEOUT_MS)
     }
 
     private fun resolveConnect(ok: Boolean, message: String? = null) {
+        // Cancel this attempt's watchdog FIRST: once pendingConnect is cleared
+        // a later connect could already be in flight, and firing the stale
+        // timer after that would tear down the new attempt.
+        connectTimeoutRunnable?.let { main.removeCallbacks(it) }
+        connectTimeoutRunnable = null
+
         val result = pendingConnect ?: return
         pendingConnect = null
         BlackoutVpnService.connectResultCallback = null
@@ -561,10 +586,24 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             val check = ProcessBuilder(
                 listOf(enginePath.absolutePath, "check", "-c", configFile.absolutePath)
             ).redirectErrorStream(true).start()
-            val output = check.inputStream.bufferedReader().use { it.readText() }
+            // Same shape as EngineRunner.start: the output is drained on a
+            // side thread so a wedged checker cannot hang this read past the
+            // process deadline below.
+            val outputFuture = java.util.concurrent.CompletableFuture.supplyAsync {
+                try {
+                    check.inputStream.bufferedReader().use { it.readText() }
+                } catch (_: Exception) {
+                    ""
+                }
+            }
             if (!check.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)) {
                 check.destroyForcibly()
                 return "sing-box check timed out after 20s"
+            }
+            val output = try {
+                outputFuture.get(2, java.util.concurrent.TimeUnit.SECONDS)
+            } catch (_: Exception) {
+                ""
             }
             if (check.exitValue() != 0) {
                 return "sing-box rejected the probe config: " + output.takeLast(300)
@@ -825,9 +864,28 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         }
     }
 
+    /**
+     * The listeners registered on the current activity binding. Every re-attach
+     * (including the config-change re-attach, which goes through
+     * [onReattachedToActivityForConfigChanges]) used to add a NEW anonymous
+     * listener without ever removing the previous one, so they stacked for the
+     * lifetime of the process.
+     */
+    private var activityBinding: ActivityPluginBinding? = null
+    private var prepareResultListener: io.flutter.plugin.common.PluginRegistry.ActivityResultListener? = null
+    private var permissionResultListener: io.flutter.plugin.common.PluginRegistry.RequestPermissionsResultListener? = null
+
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
-        binding.addActivityResultListener { requestCode, resultCode, _ ->
+        // Idempotent re-attach: drop the previous registration before adding a
+        // fresh one, so a binding that is handed to us twice never ends up with
+        // two copies of the same listener.
+        activityBinding?.let { previous ->
+            prepareResultListener?.let { previous.removeActivityResultListener(it) }
+            permissionResultListener?.let { previous.removeRequestPermissionsResultListener(it) }
+        }
+
+        val resultListener = io.flutter.plugin.common.PluginRegistry.ActivityResultListener { requestCode, resultCode, _ ->
             if (requestCode == PREPARE_REQUEST) {
                 pendingPrepare?.success(resultCode == Activity.RESULT_OK)
                 pendingPrepare = null
@@ -836,9 +894,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 false
             }
         }
+        prepareResultListener = resultListener
+        binding.addActivityResultListener(resultListener)
+
         // Runtime permission results arrive here, not through
         // onActivityResult - ActivityAware has no such override.
-        binding.addRequestPermissionsResultListener { requestCode, _, grantResults ->
+        val permListener = io.flutter.plugin.common.PluginRegistry.RequestPermissionsResultListener { requestCode, _, grantResults ->
             if (requestCode == NOTIFICATION_PERMISSION_REQUEST) {
                 val granted = grantResults.isNotEmpty() &&
                     grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -849,9 +910,22 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 false
             }
         }
+        permissionResultListener = permListener
+        binding.addRequestPermissionsResultListener(permListener)
+
+        activityBinding = binding
     }
 
     override fun onDetachedFromActivity() {
+        // Remove what we added; leaving them attached made the listener set
+        // grow by one on every activity re-creation (rotation, theme change).
+        activityBinding?.let { binding ->
+            prepareResultListener?.let { binding.removeActivityResultListener(it) }
+            permissionResultListener?.let { binding.removeRequestPermissionsResultListener(it) }
+        }
+        activityBinding = null
+        prepareResultListener = null
+        permissionResultListener = null
         activity = null
         pendingPrepare?.success(false)
         pendingPrepare = null

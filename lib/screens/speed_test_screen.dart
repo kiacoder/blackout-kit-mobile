@@ -63,10 +63,18 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
 
     final progressToken =
         _configController.testerService.beginProgressRun((hash, status) {
-      // Only terminal events count — a 'testing' event fires at probe start
-      // and would double the progress bar.
-      if (status == TestStatus.testing) return;
       if (!mounted) return;
+      if (status == TestStatus.testing) {
+        // A probe just started on this config: label it. The old code kept
+        // showing sample.first for the whole run because only the progress
+        // count was ever updated.
+        final started = sample
+            .firstWhereOrNull((c) => c.getHash() == hash);
+        if (started != null) {
+          setState(() => _currentTestingConfig = started);
+        }
+        return;
+      }
       setState(() => _testedCount++);
     });
 

@@ -189,11 +189,23 @@ class BlackoutVpnService : VpnService() {
         createNotificationChannel()
         // A tunnel held for traffic blocking survives the process: restore the
         // flag so the app reports "blocked" instead of "stopped".
+        //
+        // ...it does NOT, actually: the flag survives, the TUNNEL does not.
+        // If this onCreate runs with the marker set, the previous process died
+        // while holding the interface - and the interface, its file descriptor
+        // and the black-holing died with it (the service is START_NOT_STICKY,
+        // so nothing restarted). Resurrecting isRunning=true here made the app
+        // adopt a phantom "blocked" tunnel: the UI showed a live session and
+        // reconcile() reported a connection that carried nothing. Clear the
+        // stale marker; a genuine hold is always within the lifetime of the
+        // instance that set it, where `tun` already tracks the truth.
         val held = getSharedPreferences(PREFS, MODE_PRIVATE)
             .getBoolean(KEY_HELD_BLOCKING, false)
         if (held) {
-            isRunning = true
-            notifyStatus("blocked")
+            Log.w(TAG, "stale held-blocking marker from a previous process - " +
+                "the tunnel died with it, clearing instead of reporting 'blocked'")
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putBoolean(KEY_HELD_BLOCKING, false).apply()
         }
     }
 

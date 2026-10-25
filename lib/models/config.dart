@@ -71,12 +71,15 @@ abstract class Config {
   }
 
   final parts = value.split(':');
-  if (parts.length >= 2) {
+  // Only `host:port` — exactly two parts — may be split. A bare IPv6 literal
+  // splits into several groups, and the last group of e.g. `2606:4700::1` is
+  // numeric (`1`), which the old >= 2 check read as a port: the host became
+  // `2606:4700::` and the port became 1. IPv6 + port always arrives bracketed
+  // (handled above), so any multi-colon input is an unbracketed v6 literal.
+  if (parts.length == 2) {
     final port = int.tryParse(parts.last);
-    // A bare IPv6 literal splits into many non-numeric parts; only treat the
-    // tail as a port when it actually parses as one.
     if (port != null) {
-      return (parts.sublist(0, parts.length - 1).join(':'), port);
+      return (parts[0], port);
     }
   }
   return (value, fallbackPort);
@@ -796,11 +799,19 @@ class VmessConfig extends Config {
   /// vmess-over-gRPC config dialled an empty service name.
   final String? serviceName;
 
+  /// TLS material carried by the share JSON: many vmess servers use
+  /// self-signed certificates, and links asking to skip verification used to
+  /// connect with certificate validation ON and fail the handshake.
+  final bool allowInsecure;
+  final String? fingerprint;
+  final String? alpn;
+
   VmessConfig({
     required this.name, required this.rawUri, required this.uuid,
     required this.address, required this.port,
     this.alterId = '0', this.cipher = 'auto', this.network = 'tcp',
     this.tls, this.sni, this.path, this.host, this.serviceName,
+    this.allowInsecure = false, this.fingerprint, this.alpn,
   });
 
   @override String get protocol => 'vmess';
@@ -823,6 +834,20 @@ class VmessConfig extends Config {
       final host = json['add']?.toString() ?? '';
       final port = int.tryParse(json['port']?.toString() ?? '443') ?? 443;
       final name = customName ?? json['ps']?.toString() ?? 'VMess ($host:$port)';
+      // `allowInsecure` arrives as a bool, a number or a string depending on
+      // the generating client; accept all three.
+      final insecureRaw = json['allowInsecure'] ?? json['insecure'];
+      final insecure = insecureRaw == true ||
+          insecureRaw == 1 ||
+          insecureRaw.toString().toLowerCase() == 'true' ||
+          insecureRaw.toString() == '1';
+      // `alpn` may be a comma-separated string or an array.
+      final alpnRaw = json['alpn'];
+      final alpn = switch (alpnRaw) {
+        final List list => list.map((e) => e.toString()).join(','),
+        final String s => s,
+        _ => null,
+      };
       return VmessConfig(
         name: name, rawUri: uri,
         uuid: json['id']?.toString() ?? '',
@@ -838,6 +863,9 @@ class VmessConfig extends Config {
         serviceName: (json['net']?.toString() == 'grpc')
             ? json['path']?.toString()
             : json['serviceName']?.toString(),
+        allowInsecure: insecure,
+        fingerprint: json['fp']?.toString(),
+        alpn: (alpn == null || alpn.isEmpty) ? null : alpn,
       );
     } catch (_) { return null; }
   }
@@ -860,11 +888,16 @@ class TrojanConfig extends Config {
   final String? host;   // Trojan over WebSocket Host header
   final String? alpn;
 
+  /// gRPC service name. Trojan share links put it in `path` (the same
+  /// convention the vmess JSON uses), so without this field every
+  /// trojan-over-gRPC config dialled an empty service name.
+  final String? serviceName;
+
   TrojanConfig({
     required this.name, required this.rawUri, required this.password,
     required this.address, required this.port,
     this.sni, this.allowInsecure = false, this.fingerprint, this.network,
-    this.path, this.host, this.alpn,
+    this.path, this.host, this.alpn, this.serviceName,
   });
 
   @override String get protocol => 'trojan';
@@ -915,6 +948,11 @@ class TrojanConfig extends Config {
         path: u.queryParameters['path'],
         host: u.queryParameters['host'],
         alpn: u.queryParameters['alpn'],
+        // Over gRPC the service name rides in `path` (v2rayN convention);
+        // an explicit `serviceName` parameter wins when a generator emits one.
+        serviceName: network == 'grpc'
+            ? (u.queryParameters['serviceName'] ?? u.queryParameters['path'])
+            : u.queryParameters['serviceName'],
       );
     } catch (_) { return null; }
   }

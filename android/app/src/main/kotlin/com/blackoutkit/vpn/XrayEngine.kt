@@ -210,8 +210,18 @@ object XrayEngine {
 
         stop()
 
+        // The controller handle must outlive the try below: the catch needs it
+        // to stop a core that threw half-way through startLoop. Declaring it
+        // inside the try would make it invisible to the catch.
+        val created = try {
+            Libv2ray.newCoreController(CoreCallback)
+        } catch (t: Throwable) {
+            lastError = "Could not create the Xray core controller: ${t.message}"
+            Log.e(TAG, lastError, t)
+            return false
+        }
+
         return try {
-            val created = Libv2ray.newCoreController(CoreCallback)
             lastConfigJson = configJson
             created.startLoop(configJson, tunFd)
 
@@ -238,6 +248,16 @@ object XrayEngine {
             // startLoop; the message is the most useful thing we can show.
             lastError = "Xray core rejected the configuration: ${t.message}"
             Log.e(TAG, lastError, t)
+            // startLoop can throw AFTER the core has partially started. The
+            // non-throwing failure path above stops the half-started
+            // controller explicitly; this path used to return without doing
+            // so, leaving a running core with no owner — nothing would ever
+            // call stopLoop on it, and the next connect started a second one.
+            try {
+                created.stopLoop()
+            } catch (stopError: Throwable) {
+                Log.w(TAG, "stopLoop after failed start: ${stopError.message}")
+            }
             false
         }
     }

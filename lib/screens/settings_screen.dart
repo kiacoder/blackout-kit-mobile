@@ -1140,7 +1140,10 @@ class _UpdateSectionState extends State<_UpdateSection> {
                 child: const Text('Update'),
               ),
             'ready' => ElevatedButton(
-                onPressed: () => _service.installApk(_apkPath!),
+                // _startInstaller, not a bare installApk: the raw call throws
+                // on a refused install permission and the tile then sat on
+                // "ready" forever with no explanation.
+                onPressed: _startInstaller,
                 child: const Text('Install'),
               ),
             'error' => TextButton(onPressed: _check, child: const Text('Retry')),

@@ -70,11 +70,18 @@ class DNSLeakPreventionService extends GetxService {
   }
 
   /// Feeds the DNS decision into the builder-time options.
-  VpnSessionOptions applyTo(VpnSessionOptions options) => options.copyWith(
-        dnsServers: resolvers,
-        // Resolving inside the core is what hides queries from the network.
-        routeDnsThroughProxy: isEnabled,
-      );
+  ///
+  /// Only an ENABLED leak-prevention choice replaces the resolver list: the
+  /// options the caller built already carry the config's own DNS (a WireGuard
+  /// profile's [Interface] DNS), and overwriting it with `1.1.1.1` while the
+  /// feature is off silently discarded that resolver on every connect.
+  VpnSessionOptions applyTo(VpnSessionOptions options) => isEnabled
+      ? options.copyWith(
+          dnsServers: [customDnsServer],
+          // Resolving inside the core is what hides queries from the network.
+          routeDnsThroughProxy: true,
+        )
+      : options.copyWith(routeDnsThroughProxy: false);
 
   /// Opens a TCP connection to port 53 on each resolver and reports which ones
   /// answered.

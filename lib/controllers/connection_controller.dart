@@ -779,7 +779,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       // Builder.establish(), so they have to be assembled *before* connecting.
       // The old code activated them afterwards through channels that had no
       // native handler, so none of them ever took effect.
-      final options = buildSessionOptions();
+      //
+      // The config is passed so its own DNS (a WireGuard profile's
+      // [Interface] DNS, for one) seeds the resolver list; without it the
+      // options were built with a hardcoded 1.1.1.1 and the profile's
+      // resolver never reached the tunnel.
+      final options = buildSessionOptions(config);
       final optionProblem = options.validationError;
       if (optionProblem != null) {
         state.value = ConnectionState.error;
@@ -972,20 +977,32 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   /// Reconnect to current config
   Future<bool> reconnect() async {
-    // Capture the selection BEFORE disconnecting: disconnect() clears
-    // selectedConfig, so reading it afterwards dereferenced null and every
-    // successful disconnect-then-reconnect threw instead of reconnecting.
-    final target = selectedConfig.value;
-    if (target == null) {
-      _log.w('No config to reconnect to');
+    // Shares the single-flight guard with connect/disconnect: a second tap
+    // used to start a parallel disconnect+connect pair, and two sequences
+    // fought over the tunnel and the UI state.
+    if (_operationInFlight) {
+      _log.w('Reconnect ignored: another operation is already running');
       return false;
     }
+    _operationInFlight = true;
+    try {
+      // Capture the selection BEFORE disconnecting: disconnect() clears
+      // selectedConfig, so reading it afterwards dereferenced null and every
+      // successful disconnect-then-reconnect threw instead of reconnecting.
+      final target = selectedConfig.value;
+      if (target == null) {
+        _log.w('No config to reconnect to');
+        return false;
+      }
 
-    final success = await _disconnectImpl();
-    if (!success) return false;
+      final success = await _disconnectImpl();
+      if (!success) return false;
 
-    await Future.delayed(const Duration(milliseconds: 500));
-    return await _connectImpl(target);
+      await Future.delayed(const Duration(milliseconds: 500));
+      return await _connectImpl(target);
+    } finally {
+      _operationInFlight = false;
+    }
   }
 
   /// Test current connection

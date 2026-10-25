@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 import 'dart:developer' as developer;
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// Circular log buffer entry
 class LogEntry {
@@ -48,7 +49,20 @@ class DebugService extends GetxService {
   @override
   void onInit() {
     super.onInit();
+    _loadAppVersion();
     _logger.i('Debug service initialized');
+  }
+
+  /// Resolved once at startup so the debug dump reports the real version
+  /// instead of a hardcoded "1.0.0" that stopped being true many releases ago.
+  String _appVersion = '';
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _appVersion = info.version;
+    } catch (_) {
+      // Leave it empty; the dump omits the field rather than lying.
+    }
   }
 
   /// Records a discrete user or system action in the log buffer.
@@ -132,7 +146,9 @@ class DebugService extends GetxService {
   Map<String, dynamic> getDebugInfo() {
     return {
       'app_name': 'Blackout Kit',
-      'version': '1.0.0', // TODO: Get from pubspec
+      // Real version from the platform (loaded at startup); omitted rather
+      // than fabricated when the lookup failed.
+      if (_appVersion.isNotEmpty) 'version': _appVersion,
       'timestamp': DateTime.now().toIso8601String(),
       'log_count': _logBuffer.length,
       'debug_mode': isDebugMode.value,

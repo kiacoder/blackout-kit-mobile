@@ -481,7 +481,16 @@ class XrayConfigBuilder {
         ),
       VmessConfig c =>
         (c.network, c.path, c.host ?? c.sni, c.serviceName, null),
-      TrojanConfig c => (c.network ?? 'tcp', c.path, c.host ?? c.sni, null, null),
+      TrojanConfig c => (
+          c.network ?? 'tcp',
+          c.path,
+          c.host ?? c.sni,
+          // Over gRPC the service name arrives in `path`; parsing has already
+          // normalised that into serviceName when the link uses the v2rayN
+          // convention, and an empty name makes the server refuse the stream.
+          c.serviceName,
+          null,
+        ),
       _ => ('tcp', null, null, null, null),
     };
 
@@ -582,6 +591,7 @@ class XrayConfigBuilder {
         'shortId': config.shortId ?? '',
         if (config.spiderX != null && config.spiderX!.isNotEmpty)
           'spiderX': config.spiderX,
+        if (_alpnOf(config) != null) 'alpn': _alpnOf(config),
       };
       return stream;
     }
@@ -621,6 +631,7 @@ class XrayConfigBuilder {
     };
     final fingerprint = switch (config) {
       VlessConfig c => c.fingerprint,
+      VmessConfig c => c.fingerprint,
       TrojanConfig c => c.fingerprint,
       _ => null,
     };
@@ -632,6 +643,7 @@ class XrayConfigBuilder {
     // ones that request it stop failing the handshake they opted out of.
     final allowInsecure = switch (config) {
       VlessConfig c => c.allowInsecure,
+      VmessConfig c => c.allowInsecure,
       TrojanConfig c => c.allowInsecure,
       _ => false,
     };
@@ -639,10 +651,33 @@ class XrayConfigBuilder {
       if (sni != null && sni.isNotEmpty) 'serverName': sni,
       'fingerprint': _orDefault(fingerprint, 'chrome'),
       if (allowInsecure) 'allowInsecure': true,
+      // A server that requires `h2,http/1.1` cannot complete a handshake that
+      // offers no ALPN, so a link that carries one must reach the core.
+      if (_alpnOf(config) != null) 'alpn': _alpnOf(config),
     };
     return stream;
   }
 
   static String _orDefault(String? value, String fallback) =>
       (value == null || value.isEmpty) ? fallback : value;
+
+  /// The config's ALPN list, or null when it carries none.
+  ///
+  /// Xray wants ALPN as a list of names; share links carry it
+  /// comma-separated (`alpn=h2,http/1.1`).
+  static List<String>? _alpnOf(Config config) {
+    final raw = switch (config) {
+      VlessConfig c => c.alpn,
+      VmessConfig c => c.alpn,
+      TrojanConfig c => c.alpn,
+      _ => null,
+    };
+    if (raw == null) return null;
+    final entries = raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    return entries.isEmpty ? null : entries;
+  }
 }

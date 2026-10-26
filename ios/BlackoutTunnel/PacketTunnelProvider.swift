@@ -61,12 +61,18 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         try fileManager.createDirectory(at: workingDir, withIntermediateDirectories: true)
         let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
 
-        // BOOL LibboxSetup(LibboxSetupOptions* options, NSError** error)
+        // BOOL LibboxSetup(LibboxSetupOptions* options, NSError** error) —
+        // gomobile FUNCTION bindings keep the NSErrorPointer style (unlike
+        // class methods, which import as throws).
         let setupOptions = LibboxSetupOptions()
         setupOptions.basePath = workingDir.path
         setupOptions.workingPath = workingDir.path
         setupOptions.tempPath = cacheDir.path
-        try LibboxSetup(setupOptions)
+        var setupError: NSError?
+        LibboxSetup(setupOptions, &setupError)
+        if let setupError = setupError {
+            throw setupError
+        }
 
         // LibboxBoxService* LibboxNewService(NSString* configContent,
         //     id<LibboxPlatformInterface> platformInterface, NSError** error)
@@ -138,7 +144,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
     /// Builds the system tunnel settings from the core's tun options and
     /// hands the flow's file descriptor back to Go.
     func openTun(
-        _ options: LibboxTunOptions?,
+        _ options: (any LibboxTunOptionsProtocol)?,
         ret0_: UnsafeMutablePointer<Int32>?
     ) throws {
         guard let options = options else {
@@ -248,7 +254,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         throw PacketTunnelProvider.error("not implemented")
     }
 
-    func getInterfaces() throws -> any LibboxNetworkInterfaceIteratorProtocol {
+    func getInterfaces() throws -> (any LibboxNetworkInterfaceIteratorProtocol)? {
         throw PacketTunnelProvider.error("not implemented")
     }
 

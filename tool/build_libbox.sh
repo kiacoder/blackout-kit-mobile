@@ -36,7 +36,10 @@ make lib_install
 echo "==> Building Apple framework (device + simulator)"
 # build_libbox -target apple produces Libbox.xcframework for ios/arm64 +
 # iossimulator/arm64 and writes it into the sing-box working tree.
-go run ./cmd/internal/build_libbox -target apple
+# -platform maps straight to gomobile's -target. The default (empty)
+# builds ios,tvos,macos - we only ship iOS, and the Flutter simulator
+# build needs the iossimulator slice present.
+go run ./cmd/internal/build_libbox -target apple -platform "ios,iossimulator"
 # debug=true would disable optimizations; release build by default.
 
 BUILT="$WORK/sing-box/Libbox.xcframework"

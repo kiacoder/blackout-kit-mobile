@@ -51,8 +51,8 @@ jobs:
 
       - name: Install gomobile
         run: |
-          go install gomobile.tools/gomobile@latest
-          go install gomobile.tools/bind@latest
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
           gomobile init
 
       - name: Build Libbox.xcframework

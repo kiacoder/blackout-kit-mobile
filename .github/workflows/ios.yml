@@ -64,8 +64,8 @@ jobs:
           FW=$(find ios/Frameworks/Libbox.xcframework -name 'Libbox.framework' | head -1)
           echo "framework: $FW"
           find "$FW" -maxdepth 3 | sort | head -40 || true
-          find ios/Frameworks/Libbox.xcframework -name '*.swiftinterface' -exec cp {} /tmp/libbox-iface/ \; || true
-          find "$FW/Headers" -name '*.h' -exec cp {} /tmp/libbox-iface/ \; || true
+          find -L ios/Frameworks/Libbox.xcframework -name '*.swiftinterface' -exec cp {} /tmp/libbox-iface/ \; || true
+          find -L ios/Frameworks/Libbox.xcframework -path '*Headers/*.h' -exec cp {} /tmp/libbox-iface/ \; || true
           ls -la /tmp/libbox-iface || true
         continue-on-error: true
 

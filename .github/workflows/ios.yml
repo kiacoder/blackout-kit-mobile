@@ -40,7 +40,9 @@ jobs:
       - name: Dart analyze + tests
         run: |
           flutter pub get
-          flutter analyze
+          # Errors only — infos and warnings are not fatal (same policy as
+          # the Tests workflow).
+          flutter analyze --no-fatal-infos --no-fatal-warnings
           flutter test
 
       - uses: actions/setup-go@v5

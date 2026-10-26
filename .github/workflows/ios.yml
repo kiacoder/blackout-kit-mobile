@@ -57,6 +57,21 @@ jobs:
           chmod +x tool/build_libbox.sh
           ./tool/build_libbox.sh
 
+      - name: Dump libbox Swift interface (binding reference)
+        if: always()
+        run: |
+          mkdir -p /tmp/libbox-iface
+          find ios/Frameworks/Libbox.xcframework -name '*.swiftinterface' -exec cp {} /tmp/libbox-iface/ \; || true
+        continue-on-error: true
+
+      - name: Upload libbox interface dump
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libbox-swiftinterface
+          path: /tmp/libbox-iface
+          if-no-files-found: ignore
+
       - name: Generate Flutter iOS artifacts
         run: flutter build ios --simulator --no-codesign
 

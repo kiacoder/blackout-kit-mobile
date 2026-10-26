@@ -57,11 +57,16 @@ jobs:
           chmod +x tool/build_libbox.sh
           ./tool/build_libbox.sh
 
-      - name: Dump libbox Swift interface (binding reference)
+      - name: Dump libbox bindings (swiftinterface + ObjC headers)
         if: always()
         run: |
           mkdir -p /tmp/libbox-iface
+          FW=$(find ios/Frameworks/Libbox.xcframework -name 'Libbox.framework' | head -1)
+          echo "framework: $FW"
+          find "$FW" -maxdepth 3 | sort | head -40 || true
           find ios/Frameworks/Libbox.xcframework -name '*.swiftinterface' -exec cp {} /tmp/libbox-iface/ \; || true
+          find "$FW/Headers" -name '*.h' -exec cp {} /tmp/libbox-iface/ \; || true
+          ls -la /tmp/libbox-iface || true
         continue-on-error: true
 
       - name: Upload libbox interface dump

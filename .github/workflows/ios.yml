@@ -78,7 +78,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Generate Flutter iOS artifacts
-        run: flutter build ios --simulator --no-codesign
+        run: flutter build ios --simulator --no-codesign --verbose
 
       - name: Build BlackoutTunnel + Runner (simulator SDK, no codesign)
         run: |

@@ -31,6 +31,10 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          # Pin to the version the repo is developed against (pubspec.lock
+          # resolved against 3.24.0); latest stable can break version
+          # solving for pinned SDK deps like flutter_localizations.
+          flutter-version: 3.24.0
           channel: stable
 
       - name: Dart analyze + tests

@@ -164,7 +164,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
             var ipv4Address: [String] = []
             var ipv4Mask: [String] = []
-            let ipv4Iterator = options.getInet4Address()
+            guard let ipv4Iterator = options.getInet4Address() else { throw PacketTunnelProvider.error("openTun: nil getInet4Address") }
             while ipv4Iterator.hasNext() {
                 let prefix = ipv4Iterator.next()!
                 ipv4Address.append(prefix.address())
@@ -172,7 +172,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
             }
             let ipv4Settings = NEIPv4Settings(addresses: ipv4Address, subnetMasks: ipv4Mask)
             var ipv4Routes: [NEIPv4Route] = []
-            let ipv4RouteIterator = options.getInet4RouteAddress()
+            guard let ipv4RouteIterator = options.getInet4RouteAddress() else { throw PacketTunnelProvider.error("openTun: nil getInet4RouteAddress") }
             if ipv4RouteIterator.hasNext() {
                 while ipv4RouteIterator.hasNext() {
                     let prefix = ipv4RouteIterator.next()!
@@ -191,7 +191,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
             var ipv6Address: [String] = []
             var ipv6Prefixes: [NSNumber] = []
-            let ipv6Iterator = options.getInet6Address()
+            guard let ipv6Iterator = options.getInet6Address() else { throw PacketTunnelProvider.error("openTun: nil getInet6Address") }
             while ipv6Iterator.hasNext() {
                 let prefix = ipv6Iterator.next()!
                 ipv6Address.append(prefix.address())
@@ -199,7 +199,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
             }
             let ipv6Settings = NEIPv6Settings(addresses: ipv6Address, networkPrefixLengths: ipv6Prefixes)
             var ipv6Routes: [NEIPv6Route] = []
-            let ipv6RouteIterator = options.getInet6RouteAddress()
+            guard let ipv6RouteIterator = options.getInet6RouteAddress() else { throw PacketTunnelProvider.error("openTun: nil getInet6RouteAddress") }
             if ipv6RouteIterator.hasNext() {
                 while ipv6RouteIterator.hasNext() {
                     let prefix = ipv6RouteIterator.next()!

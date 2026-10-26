@@ -138,7 +138,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
     /// Builds the system tunnel settings from the core's tun options and
     /// hands the flow's file descriptor back to Go.
     func openTun(
-        options: (any LibboxTunOptionsProtocol)?,
+        _ options: LibboxTunOptions?,
         ret0_: UnsafeMutablePointer<Int32>?
     ) throws {
         guard let options = options else {
@@ -235,10 +235,10 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     func clearDNSCache() {}
 
-    func closeDefaultInterfaceMonitor(listener _: (any LibboxInterfaceUpdateListener)?) throws {}
+    func closeDefaultInterfaceMonitor(listener _: LibboxInterfaceUpdateListener?) throws {}
 
     func findConnectionOwner(
-        ipProtocol _: Int32,
+        _ ipProtocol: Int32,
         sourceAddress _: String?,
         sourcePort _: Int32,
         destinationAddress _: String?,
@@ -260,7 +260,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     func sendNotification(notification _: LibboxNotification?) throws {}
 
-    func startDefaultInterfaceMonitor(listener _: (any LibboxInterfaceUpdateListener)?) throws {}
+    func startDefaultInterfaceMonitor(listener _: LibboxInterfaceUpdateListener?) throws {}
 
     func uidByPackageName(packageName _: String?, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
         throw PacketTunnelProvider.error("not implemented")
@@ -268,11 +268,11 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     func underNetworkExtension() -> Bool { true }
 
-    func usePlatformAutoDetectInterfaceControl() -> Bool { true }
+    func usePlatformAutoDetectControl() -> Bool { true }
 
     func useProcFS() -> Bool { false }
 
-    func writeLog(message: String?) {
+    func writeLog(_ message: String?) {
         guard let message = message else { return }
         NSLog("(blackout-tunnel) \(message)")
     }

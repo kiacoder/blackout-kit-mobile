@@ -2,6 +2,8 @@
 /// Bridges to native Android VPN service and iOS NEVPNManager.
 /// Handles connect, disconnect, and status checks.
 
+import 'dart:io' show Platform;
+
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import '../models/config.dart';
@@ -144,13 +146,20 @@ class VPNService {
       }
 
       // sing-box-family protocols are carried by the bundled sing-box binary.
+      //
+      // On iOS the ONLY core is libbox inside the tunnel extension, and it
+      // serves the whole kLibboxProtocols set — including the Xray-family
+      // protocols. So on that platform every config goes out as a sing-box
+      // document built in libbox mode; on Android nothing changes.
       String? singboxJson;
-      if (isSingboxProtocol(config.protocol)) {
+      final wantLibbox = Platform.isIOS;
+      if (wantLibbox || isSingboxProtocol(config.protocol)) {
         try {
           singboxJson = SingboxConfigBuilder(
             socksPort: defaultSocksPort,
             dnsServers: session.dnsServers,
             routeDnsThroughProxy: session.routeDnsThroughProxy,
+            libboxMode: wantLibbox,
           ).buildJson(config);
         } on ArgumentError catch (e) {
           _status = VPNStatus.error;

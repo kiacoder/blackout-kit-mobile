@@ -272,7 +272,7 @@ flutter test test/services/
 
 ### Integration Tests
 - Full flow: fetch → test → connect
-- Platform channel calls (mock native)
+- Platform channel calls (iOS: real NEVPNManager bridge + libbox tunnel extension since 1.13; Android: VpnPlugin + Xray/sing-box cores)
 - UI navigation between screens
 
 ```bash

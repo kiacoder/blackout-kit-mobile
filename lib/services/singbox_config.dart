@@ -15,7 +15,8 @@
 import 'dart:convert';
 import '../models/config.dart';
 
-/// Protocols served by the bundled sing-box core.
+/// Protocols served by the bundled sing-box core on ANDROID, where the
+/// Xray-family protocols are carried by the in-process Xray core instead.
 const Set<String> kSingboxProtocols = {
   'hysteria2',
   'tuic',
@@ -32,6 +33,24 @@ const Set<String> kSingboxProtocols = {
   //
   // 'warp' is absent because WarpConfig.fromUri() always returns null - there
   // is no parser, so no warp config can ever exist.
+};
+
+/// Protocols the iOS core (libbox) can carry.
+///
+/// On iOS there is no in-process Xray core: the tunnel runs inside a Network
+/// Extension around libbox, which speaks the same outbound types the Android
+/// sing-box does - including vless/vmess/trojan/shadowsocks/wireguard. So the
+/// whole servable set is wider there, EXCEPT the transports libbox has no
+/// dialer for (mKCP and the QUIC transport of vless links).
+const Set<String> kLibboxProtocols = {
+  'vless',
+  'vmess',
+  'trojan',
+  'shadowsocks',
+  'wireguard',
+  'hysteria2',
+  'tuic',
+  'anytls',
 };
 
 /// True when [protocol] is served by the bundled sing-box core.
@@ -60,7 +79,14 @@ class SingboxConfigBuilder {
     this.routeDnsThroughProxy = false,
     this.bypassPrivateRanges = true,
     this.bypassDomains = const [],
+    this.libboxMode = false,
   });
+
+  /// When true the protocol gate accepts the wider [kLibboxProtocols] set —
+  /// the iOS engine (libbox) carries the Xray-family protocols too, because
+  /// there is no separate Xray core on that platform. Android keeps the
+  /// narrower gate so nothing about its engine selection changes.
+  final bool libboxMode;
 
   /// Serialised JSON, ready to hand to `libsingbox.so run -c <file>`.
   String buildJson(Config config) =>
@@ -69,16 +95,23 @@ class SingboxConfigBuilder {
   /// The config as a nested map.
   /// WireGuard (and its AmneziaWG/WARP variants) must be an `endpoint`.
   static bool _isWireguardEndpoint(Config config) =>
-      config is AmneziaWGConfig || config is WarpConfig;
+      config is AmneziaWGConfig ||
+      config is WarpConfig ||
+      config is WireGuardConfig;
 
   Map<String, dynamic> build(Config config) {
     final protocol = config.protocol;
-    if (!isSingboxProtocol(protocol)) {
+    final supported = libboxMode ? kLibboxProtocols : kSingboxProtocols;
+    if (!supported.contains(protocol)) {
       throw ArgumentError.value(
         protocol,
         'config.protocol',
-        'Not a sing-box protocol. Supported: ${kSingboxProtocols.join(", ")}',
+        'Not a sing-box protocol. Supported: ${supported.join(", ")}',
       );
+    }
+    if (libboxMode) {
+      final refusal = libboxTransportRefusal(config);
+      if (refusal != null) throw ArgumentError(refusal);
     }
 
     final document = <String, dynamic>{
@@ -229,6 +262,28 @@ class SingboxConfigBuilder {
 
   Map<String, dynamic> _buildOutbound(Config config) {
     switch (config) {
+      case VlessConfig c:
+        return _buildVlessOutbound(c);
+
+      case VmessConfig c:
+        return _buildVmessOutbound(c);
+
+      case TrojanConfig c:
+        return _buildTrojanOutbound(c);
+
+      case ShadowsocksConfig c:
+        return {
+          'type': 'shadowsocks',
+          'tag': 'proxy',
+          'server': c.address,
+          'server_port': c.port,
+          'method': c.method,
+          'password': c.password,
+        };
+
+      case WireGuardConfig c:
+        return _buildWireguardEndpoint(c);
+
       case Hysteria2Config c:
         return {
           'type': 'hysteria2',
@@ -355,4 +410,223 @@ class SingboxConfigBuilder {
         );
     }
   }
+
+  // ───────────────────── libbox (iOS) outbounds ────────────────────────────
+
+  /// Human-readable refusal for a config libbox cannot serve, or null.
+  ///
+  /// sing-box has no mKCP dialer, no QUIC *transport* dialer for vless links,
+  /// and no xhttp/splithttp transport — those configs stay Xray-only and are
+  /// honestly refused on iOS instead of failing deep inside the extension.
+  static String? libboxTransportRefusal(Config config) {
+    final network = switch (config) {
+      VlessConfig c => c.network,
+      VmessConfig c => c.network,
+      TrojanConfig c => c.network,
+      _ => null,
+    };
+    const unsupported = {'kcp', 'quic', 'xhttp', 'splithttp', 'httpupgrade'};
+    if (network != null && unsupported.contains(network.toLowerCase())) {
+      return "The '$network' transport is not supported by the iOS core. "
+          'Use a ws, grpc or tcp link instead.';
+    }
+    return null;
+  }
+
+  /// sing-box's `transport` block for the share-link `type`, or null for raw
+  /// TCP. Field names are sing-box's, not Xray's.
+  static Map<String, dynamic>? _transportSettings(
+    String? network,
+    String? path,
+    String? host,
+    String? serviceName,
+  ) {
+    switch (network) {
+      case 'ws':
+      case 'websocket':
+        return {
+          'type': 'ws',
+          'path': (path == null || path.isEmpty) ? '/' : path,
+          if (host != null && host.isNotEmpty)
+            'headers': {'Host': host},
+        };
+      case 'grpc':
+        return {
+          'type': 'grpc',
+          'service_name': serviceName ?? path ?? '',
+        };
+      case 'http':
+        // Xray's "http" transport is HTTP/2; sing-box names it `http` too.
+        return {
+          'type': 'http',
+          'path': (path == null || path.isEmpty) ? '/' : path,
+          if (host != null && host.isNotEmpty) 'host': [host],
+        };
+      case 'httpupgrade':
+        return {
+          'type': 'httpupgrade',
+          'path': (path == null || path.isEmpty) ? '/' : path,
+          if (host != null && host.isNotEmpty) 'host': host,
+        };
+      default:
+        return null;
+    }
+  }
+
+  /// sing-box's `tls` block from the share-link TLS material.
+  ///
+  /// REALITY additionally REQUIRES uTLS in sing-box (a plain Go TLS stack
+  /// cannot produce the uTLS handshake REALITY's server-side probe logic
+  /// expects), so a reality block without a fingerprint is fatal — the same
+  /// default (`chrome`) the Xray builder applies.
+  static Map<String, dynamic>? _tlsSettings({
+    required bool enabled,
+    required String? sni,
+    required bool insecure,
+    required String? fingerprint,
+    required String? alpn,
+    required String? publicKey,
+    required String? shortId,
+  }) {
+    if (!enabled) return null;
+    final isReality = publicKey != null && publicKey.isNotEmpty;
+    return {
+      'enabled': true,
+      if (sni != null && sni.isNotEmpty) 'server_name': sni,
+      'insecure': insecure,
+      if (fingerprint != null && fingerprint.isNotEmpty || isReality)
+        'utls': {
+          'enabled': true,
+          'fingerprint':
+              (fingerprint != null && fingerprint.isNotEmpty)
+                  ? fingerprint
+                  : 'chrome',
+        },
+      if (alpn != null && alpn.isNotEmpty)
+        'alpn': alpn
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(),
+      if (isReality)
+        'reality': {
+          'enabled': true,
+          'public_key': publicKey,
+          if (shortId != null) 'short_id': shortId,
+        },
+    };
+  }
+
+  Map<String, dynamic> _buildVlessOutbound(VlessConfig c) {
+    final isReality = c.security.toLowerCase() == 'reality';
+    final isTls = c.security.toLowerCase() == 'tls' || isReality;
+    final sni = _orDefault(c.sni, _orDefault(c.host, c.address));
+    return {
+      'type': 'vless',
+      'tag': 'proxy',
+      'server': c.address,
+      'server_port': c.port,
+      'uuid': c.uuid,
+      if (c.flow != null && c.flow!.isNotEmpty) 'flow': c.flow,
+      if (_transportSettings(c.network, c.path, c.host ?? c.sni, c.serviceName)
+          case final transport?)
+        'transport': transport,
+      if (_tlsSettings(
+            enabled: isTls,
+            sni: sni,
+            insecure: c.allowInsecure,
+            fingerprint: c.fingerprint,
+            alpn: c.alpn,
+            publicKey: isReality ? (c.publicKey ?? c.pbk) : null,
+            shortId: c.shortId,
+          )
+          case final tls?)
+        'tls': tls,
+    };
+  }
+
+  Map<String, dynamic> _buildVmessOutbound(VmessConfig c) {
+    final isTls = c.tls != null &&
+        c.tls!.isNotEmpty &&
+        c.tls!.toLowerCase() != 'none';
+    return {
+      'type': 'vmess',
+      'tag': 'proxy',
+      'server': c.address,
+      'server_port': c.port,
+      'uuid': c.uuid,
+      'security': c.cipher.isEmpty ? 'auto' : c.cipher,
+      'alter_id': int.tryParse(c.alterId) ?? 0,
+      if (_transportSettings(c.network, c.path, c.host ?? c.sni, c.serviceName)
+          case final transport?)
+        'transport': transport,
+      if (_tlsSettings(
+            enabled: isTls,
+            sni: _orDefault(c.sni, c.host),
+            insecure: c.allowInsecure,
+            fingerprint: c.fingerprint,
+            alpn: c.alpn,
+            publicKey: null,
+            shortId: null,
+          )
+          case final tls?)
+        'tls': tls,
+    };
+  }
+
+  Map<String, dynamic> _buildTrojanOutbound(TrojanConfig c) {
+    return {
+      'type': 'trojan',
+      'tag': 'proxy',
+      'server': c.address,
+      'server_port': c.port,
+      'password': c.password,
+      if (_transportSettings(c.network, c.path, c.host ?? c.sni, c.serviceName)
+          case final transport?)
+        'transport': transport,
+      if (_tlsSettings(
+            enabled: true, // Trojan is TLS by definition.
+            sni: _orDefault(c.sni, c.host),
+            insecure: c.allowInsecure,
+            fingerprint: c.fingerprint,
+            alpn: c.alpn,
+            publicKey: null,
+            shortId: null,
+          )
+          case final tls?)
+        'tls': tls,
+    };
+  }
+
+  /// Vanilla WireGuard as a sing-box `endpoint` (1.11+ form — the outbound
+  /// form was removed in 1.13). Same shape the AmneziaWG builder emits, minus
+  /// the junk-packet block.
+  Map<String, dynamic> _buildWireguardEndpoint(WireGuardConfig c) {
+    final peer = c.peers.isEmpty ? null : c.peers.first;
+    return {
+      'type': 'wireguard',
+      'tag': 'proxy',
+      'address': c.localAddresses.isEmpty
+          ? ['172.16.0.2/32']
+          : c.localAddresses,
+      'private_key': c.privateKey,
+      'mtu': c.mtu ?? 1420,
+      'peers': [
+        {
+          'address': peer?.host ?? c.address,
+          'port': peer?.port ?? c.port,
+          'public_key': peer?.publicKey ?? '',
+          if (peer?.presharedKey != null &&
+              peer!.presharedKey!.isNotEmpty)
+            'pre_shared_key': peer.presharedKey,
+          'allowed_ips': (peer?.allowedIPs.isNotEmpty ?? false)
+              ? peer!.allowedIPs
+              : const ['0.0.0.0/0', '::/0'],
+        },
+      ],
+    };
+  }
+
+  static String _orDefault(String? value, String? fallback) =>
+      (value == null || value.isEmpty) ? (fallback ?? '') : value;
 }

@@ -1,0 +1,77 @@
+name: Build iOS (no codesign)
+
+# iOS is not yet a shippable platform (VPN entitlements need a paid Apple
+# Developer account, which we do not have). This workflow is the compile
+# gate: it proves the Runner app + BlackoutTunnel extension + libbox
+# framework link cleanly on a real Xcode toolchain, headless, on every
+# push that touches ios/ or the engine code — so the platform never rots
+# while it waits for signing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'lib/**'
+      - '.github/workflows/ios.yml'
+      - 'tool/build_libbox.sh'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'lib/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Dart analyze + tests
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install gomobile
+        run: |
+          go install gomobile.tools/gomobile@latest
+          go install gomobile.tools/bind@latest
+          gomobile init
+
+      - name: Build Libbox.xcframework
+        run: |
+          chmod +x tool/build_libbox.sh
+          ./tool/build_libbox.sh
+
+      - name: Generate Flutter iOS artifacts
+        run: flutter build ios --simulator --no-codesign
+
+      - name: Build BlackoutTunnel + Runner (simulator SDK, no codesign)
+        run: |
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ~/Library/Developer/Xcode/DerivedData/Logs/Build/*.xcactivitylog
+          if-no-files-found: ignore

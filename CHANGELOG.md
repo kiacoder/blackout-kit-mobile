@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **iOS target is real.** The `ios/` directory now holds a complete Flutter
+  iOS project with a `BlackoutTunnel` Network Extension (libbox core) and a
+  `VpnPlatformPlugin` NEVPNManager bridge; the Dart layer builds libbox-mode
+  sing-box documents for every protocol the extension can carry (vless /
+  vmess / trojan / shadowsocks / wireguard / hysteria2 / tuic / anytls —
+  grammar-verified against the real sing-box binary). A macOS CI workflow
+  compiles app + extension + libbox headlessly. Device installs stay blocked
+  on a paid Apple Developer account (Network Extension entitlement), which
+  the README now documents honestly; the old mock Swift files are deleted.
+
 ### Fixed
 - **Samsung: every sing-box protocol (hysteria2 / TUIC / AnyTLS) FATALed at
   startup when DNS leak prevention was on** —

@@ -1,6 +1,6 @@
 # Blackout Kit Mobile - Open-Source VPN App
 
-An open-source VPN client for Android, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection. The iOS VPN layer is not implemented.
+An open-source VPN client for Android and iOS, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection.
 
 **Status**: v1.12.1 — Android VPN service and in-process Xray core are implemented, and
 the Xray tunnel path is **verified working on physical hardware** (2026-10-16): a real
@@ -9,7 +9,7 @@ second. Saved configs are encrypted at rest since v1.12.1 (see
 [SECURITY.md](SECURITY.md)); the key lives in the Android Keystore. Sing-box/tun2socks
 binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are
 checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on
-hardware. The iOS target contains a mock VPN and does not tunnel.
+hardware. The iOS target runs the same tunnel design (libbox inside a Network Extension), gated on a paid Apple Developer account for the VPN entitlements — see [iOS status](#ios-status).
 
 > ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
 > `VpnService` owns the TUN interface and the bundled Xray core runs in-process
@@ -313,7 +313,7 @@ On a physical device (**nothing below has ever been run**):
       service reports connected; **this still does not verify end-to-end
       traffic** — that requires the on-device test below. Note sing-box is
       GPL-3.0 while this project is MIT; it ships as a separate native library.
-- [ ] iOS native layer (`NEVPNManager`) — currently unregistered mocks
+- [ ] iOS device installs — code complete (libbox tunnel extension + NEVPNManager bridge + compile CI); blocked on a paid Apple Developer account for the Network Extension entitlements, not on code
 - [ ] **On-device verification of the tunnel** — `integration_test/native_tunnel_test.dart`
       is written and waiting; device-level runs captured during beta.11–beta.14
       debugging drove real fixes (error propagation, XUDP base key), but a full
@@ -366,6 +366,32 @@ EngineRegistry.register('trojan', TrojanConfig);
 - No closed-source binaries
 - Community code review
 - Reproducible builds planned
+
+## iOS Status
+
+The iOS target is real since 1.13: the tunnel is a `PacketTunnelProvider`
+app extension (`ios/BlackoutTunnel`) running sing-box's **libbox** core,
+armed by the app over `NEVPNManager` (`ios/Runner/VpnPlatformPlugin.swift`).
+Every protocol document the app builds is generated in libbox mode and was
+grammar-verified against the real sing-box binary.
+
+What works today:
+- Full Dart app (library, tester, site check, import/QR, settings)
+- Compile CI on GitHub's macOS runners: app + extension + libbox link
+  cleanly (`Build iOS (no codesign)` workflow)
+- vless/vmess/trojan/shadowsocks/wireguard/hysteria2/tuic/anytls outbounds
+
+What is blocked, and on what:
+- **Device installs** need the `com.apple.developer.networking.networkextension`
+  entitlement, which Apple only grants to a **paid** Apple Developer Program
+  account ($99/yr). Free-account profiles cannot run a VPN tunnel — this is
+  an Apple policy, not a code gap. Enroll, open `ios/Runner.xcworkspace`,
+  set your team on both targets, and the project is ready.
+
+iOS Simulator cannot exercise the tunnel either (no Network Extension
+support in the simulator), so on-device testing requires the enrollment.
+
+---
 
 ## Contributing
 

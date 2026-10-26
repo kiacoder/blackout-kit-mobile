@@ -123,13 +123,30 @@ class SingboxConfigBuilder {
       // REMOVED it - the whole document fails to decode ("legacy inbound
       // fields ... inbounds[0]"), which is exactly what the bundled
       // libsingbox.so did on the phone. Sniffing is a route rule action now.
+      //
+      // libboxMode (iOS): the tunnel extension hands libbox a real TUN file
+      // descriptor, so the document must carry a tun inbound with
+      // auto_route — the core derives the interface settings from it and
+      // calls the platform's openTun. A mixed loopback inbound would start
+      // the core with no interface at all.
       'inbounds': [
-        {
-          'type': 'mixed',
-          'tag': 'mixed-in',
-          'listen': '127.0.0.1',
-          'listen_port': socksPort,
-        },
+        if (libboxMode)
+          {
+            'type': 'tun',
+            'tag': 'tun-in',
+            'address': ['172.19.0.1/30'],
+            'mtu': 9000,
+            'auto_route': true,
+            'strict_route': true,
+            'stack': 'mixed',
+          }
+        else
+          {
+            'type': 'mixed',
+            'tag': 'mixed-in',
+            'listen': '127.0.0.1',
+            'listen_port': socksPort,
+          },
       ],
       // WireGuard lives in `endpoints` since sing-box 1.11; the outbound form
       // was removed in 1.13 and the bundled core says so in as many words.

@@ -72,6 +72,27 @@ void main() {
       expect(o['password'], 'pass');
     });
 
+    test('libbox docs carry a tun inbound with auto_route', () {
+      // The extension's openTun receives the tun inbound's options — without
+      // this inbound the core starts with no interface at all.
+      final doc = const SingboxConfigBuilder(libboxMode: true).build(
+        ConfigParser.parse('anytls://pw@a.com:443?sni=a.com#y')!,
+      );
+      final inbound = (doc['inbounds'] as List).first as Map;
+      expect(inbound['type'], 'tun');
+      expect(inbound['auto_route'], isTrue);
+      expect(inbound['address'], contains('172.19.0.1/30'));
+    });
+
+    test('android docs still carry the mixed loopback inbound', () {
+      final doc = const SingboxConfigBuilder().build(
+        ConfigParser.parse('hysteria2://pw@a.com:443?sni=a.com#y')!,
+      );
+      final inbound = (doc['inbounds'] as List).first as Map;
+      expect(inbound['type'], 'mixed');
+      expect(inbound['listen_port'], 10808);
+    });
+
     test('wireguard becomes an endpoint with a peer', () {
       final doc = const SingboxConfigBuilder(libboxMode: true).build(
         WireGuardConfig(

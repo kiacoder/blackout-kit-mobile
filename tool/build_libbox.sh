@@ -14,7 +14,7 @@
 # (android/app/src/main/jniLibs/libsingbox.so) so both platforms speak the
 # same config grammar. Update BOTH together.
 SINGBOX_REF="${SINGBOX_REF:-v1.11.4}"
-OUT="$(pwd)/ios/Frameworks/Libbox.xcframework"
+OUT="$(cd "$(dirname "$0")/.." && pwd)/ios/Frameworks/Libbox.xcframework"
 
 set -euo pipefail
 cd "$(dirname "$0")/.."

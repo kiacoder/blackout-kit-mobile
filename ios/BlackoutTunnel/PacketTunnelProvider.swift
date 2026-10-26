@@ -254,7 +254,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         throw PacketTunnelProvider.error("not implemented")
     }
 
-    func getInterfaces() throws -> (any LibboxNetworkInterfaceIteratorProtocol)? {
+    func getInterfaces() throws -> any LibboxNetworkInterfaceIteratorProtocol {
         throw PacketTunnelProvider.error("not implemented")
     }
 

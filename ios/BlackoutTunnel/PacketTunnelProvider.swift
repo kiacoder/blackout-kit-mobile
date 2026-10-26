@@ -6,15 +6,13 @@ import NetworkExtension
 /// extension with the engine JSON through `providerConfiguration` and the
 /// system launches us.
 ///
-/// Structure mirrors the reference sing-box-for-ios client (GPL-3.0):
-///   startTunnel  -> LibboxSetup + LibboxNewService(engineJson, platform) + start
-///   (the core then calls TunnelPlatformInterface.openTun with the tun
-///    inbound's options; Swift builds NEPacketTunnelNetworkSettings there
-///    and hands the flow's file descriptor back to Go)
-///   stopTunnel   -> service.close()
+/// Every signature below was written against the ACTUAL generated ObjC
+/// header of the Libbox.xcframework we ship (v1.11.4 gomobile bindings:
+/// method-style accessors, `LibboxSetupOptions`, boxed DNS string) — not
+/// against any client source.
 ///
 /// The engine JSON MUST carry a tun inbound with auto_route — the Dart
-/// builder emits one in libboxMode.
+/// builder emits one in libboxMode, and the core calls openTun from it.
 final class PacketTunnelProvider: NEPacketTunnelProvider {
 
     private var boxService: LibboxBoxService?
@@ -52,8 +50,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 completionHandler(nil)
             } catch {
                 self.boxService = nil
-                // The reason (config decode, bind failure, fd refusal)
-                // surfaces in the system VPN UI and via the Dart status.
                 completionHandler(error)
             }
         }
@@ -65,18 +61,25 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         try fileManager.createDirectory(at: workingDir, withIntermediateDirectories: true)
         let cacheDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
 
-        // Module-level Go setup: asset/workspace paths + stdio fds.
-        LibboxSetup(workingDir.path, cacheDir.path, -1, -1)
+        // BOOL LibboxSetup(LibboxSetupOptions* options, NSError** error)
+        let setupOptions = LibboxSetupOptions()
+        setupOptions.basePath = workingDir.path
+        setupOptions.workingPath = workingDir.path
+        setupOptions.tempPath = cacheDir.path
+        try LibboxSetup(setupOptions)
 
-        var setupError: NSError?
-        let service = LibboxNewService(engineJson, TunnelPlatformInterface(self), &setupError)
-        if let setupError {
-            throw setupError
+        // LibboxBoxService* LibboxNewService(NSString* configContent,
+        //     id<LibboxPlatformInterface> platformInterface, NSError** error)
+        var serviceError: NSError?
+        let service = LibboxNewService(engineJson, TunnelPlatformInterface(self), &serviceError)
+        if let serviceError = serviceError {
+            throw serviceError
         }
         guard let service = service else {
             throw Self.error("The engine returned no service instance.")
         }
 
+        // - (BOOL)start:(NSError**)error
         try service.start()
         boxService = service
     }
@@ -120,9 +123,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 }
 
-/// The Go->Swift platform bridge. The core calls openTun during start with
-/// the tun inbound's options; everything else is the minimal honest
-/// implementation (same stubs the reference client ships).
+/// The Go->Swift platform bridge, conforming to the generated
+/// LibboxPlatformInterfaceProtocol exactly. The core calls openTun during
+/// start with the tun inbound's options; everything else is the minimal
+/// honest implementation.
 final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     private unowned let tunnel: PacketTunnelProvider
@@ -132,9 +136,11 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
     }
 
     /// Builds the system tunnel settings from the core's tun options and
-    /// hands the flow's file descriptor back to Go. This is where the TUN
-    /// actually comes into existence.
-    func openTun(_ options: LibboxTunOptionsProtocol?, ret0_: UnsafeMutablePointer<Int32>?) throws {
+    /// hands the flow's file descriptor back to Go.
+    func openTun(
+        options: (any LibboxTunOptionsProtocol)?,
+        ret0_: UnsafeMutablePointer<Int32>?
+    ) throws {
         guard let options = options else {
             throw PacketTunnelProvider.error("openTun: nil options")
         }
@@ -146,29 +152,26 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         if options.getAutoRoute() {
             settings.mtu = NSNumber(value: options.getMTU())
 
-            var dnsError: NSError?
-            let dnsServer = options.getDNSServerAddress(&dnsError)
-            if let dnsError {
-                throw dnsError
-            }
-            settings.dnsSettings = NEDNSSettings(servers: [dnsServer])
+            // getDNSServerAddress returns a boxed string in these bindings.
+            let dnsBox = try options.getDNSServerAddress()
+            settings.dnsSettings = NEDNSSettings(servers: [dnsBox.value])
 
             var ipv4Address: [String] = []
             var ipv4Mask: [String] = []
-            let ipv4Iterator = options.getInet4Address()!
+            let ipv4Iterator = options.getInet4Address()
             while ipv4Iterator.hasNext() {
                 let prefix = ipv4Iterator.next()!
-                ipv4Address.append(prefix.address)
+                ipv4Address.append(prefix.address())
                 ipv4Mask.append(prefix.mask())
             }
             let ipv4Settings = NEIPv4Settings(addresses: ipv4Address, subnetMasks: ipv4Mask)
             var ipv4Routes: [NEIPv4Route] = []
-            let ipv4RouteIterator = options.getInet4RouteAddress()!
+            let ipv4RouteIterator = options.getInet4RouteAddress()
             if ipv4RouteIterator.hasNext() {
                 while ipv4RouteIterator.hasNext() {
                     let prefix = ipv4RouteIterator.next()!
                     ipv4Routes.append(
-                        NEIPv4Route(destinationAddress: prefix.address, subnetMask: prefix.mask())
+                        NEIPv4Route(destinationAddress: prefix.address(), subnetMask: prefix.mask())
                     )
                 }
             } else {
@@ -182,22 +185,22 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
             var ipv6Address: [String] = []
             var ipv6Prefixes: [NSNumber] = []
-            let ipv6Iterator = options.getInet6Address()!
+            let ipv6Iterator = options.getInet6Address()
             while ipv6Iterator.hasNext() {
                 let prefix = ipv6Iterator.next()!
-                ipv6Address.append(prefix.address)
-                ipv6Prefixes.append(NSNumber(value: prefix.prefix))
+                ipv6Address.append(prefix.address())
+                ipv6Prefixes.append(NSNumber(value: prefix.prefix()))
             }
             let ipv6Settings = NEIPv6Settings(addresses: ipv6Address, networkPrefixLengths: ipv6Prefixes)
             var ipv6Routes: [NEIPv6Route] = []
-            let ipv6RouteIterator = options.getInet6RouteAddress()!
+            let ipv6RouteIterator = options.getInet6RouteAddress()
             if ipv6RouteIterator.hasNext() {
                 while ipv6RouteIterator.hasNext() {
                     let prefix = ipv6RouteIterator.next()!
                     ipv6Routes.append(
                         NEIPv6Route(
-                            destinationAddress: prefix.address,
-                            networkPrefixLength: NSNumber(value: prefix.prefix)
+                            destinationAddress: prefix.address(),
+                            networkPrefixLength: NSNumber(value: prefix.prefix())
                         )
                     )
                 }
@@ -226,14 +229,16 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         throw PacketTunnelProvider.error("openTun: could not obtain the tunnel file descriptor")
     }
 
-    // MARK: - Protocol stubs (same shape the reference client ships)
+    // MARK: - Protocol stubs (minimal honest implementations)
 
-    func usePlatformAutoDetectControl() -> Bool { true }
+    func autoDetectInterfaceControl(fd _: Int32) throws {}
 
-    func autoDetectControl(_: Int32) throws {}
+    func clearDNSCache() {}
+
+    func closeDefaultInterfaceMonitor(listener _: (any LibboxInterfaceUpdateListener)?) throws {}
 
     func findConnectionOwner(
-        _: Int32,
+        ipProtocol _: Int32,
         sourceAddress _: String?,
         sourcePort _: Int32,
         destinationAddress _: String?,
@@ -243,32 +248,34 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
         throw PacketTunnelProvider.error("not implemented")
     }
 
-    func packageName(byUid _: Int32, error _: NSErrorPointer) -> String { "" }
-
-    func uid(byPackageName _: String?, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
+    func getInterfaces() throws -> any LibboxNetworkInterfaceIteratorProtocol {
         throw PacketTunnelProvider.error("not implemented")
     }
 
-    func useProcFS() -> Bool { false }
+    func includeAllNetworks() -> Bool { false }
 
-    func writeLog(_ message: String?) {
-        guard let message = message else { return }
-        NSLog("(blackout-tunnel) \(message)")
-    }
+    func packageNameByUid(uid _: Int32) throws -> String { "" }
 
-    func usePlatformDefaultInterfaceMonitor() -> Bool { false }
+    func readWIFIState() -> LibboxWIFIState? { nil }
 
-    func startDefaultInterfaceMonitor(_: LibboxInterfaceUpdateListenerProtocol?) throws {}
+    func sendNotification(notification _: LibboxNotification?) throws {}
 
-    func closeDefaultInterfaceMonitor(_: LibboxInterfaceUpdateListenerProtocol?) throws {}
+    func startDefaultInterfaceMonitor(listener _: (any LibboxInterfaceUpdateListener)?) throws {}
 
-    func useGetter() -> Bool { false }
-
-    func getInterfaces() throws -> LibboxNetworkInterfaceIteratorProtocol {
+    func uidByPackageName(packageName _: String?, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
         throw PacketTunnelProvider.error("not implemented")
     }
 
     func underNetworkExtension() -> Bool { true }
+
+    func usePlatformAutoDetectInterfaceControl() -> Bool { true }
+
+    func useProcFS() -> Bool { false }
+
+    func writeLog(message: String?) {
+        guard let message = message else { return }
+        NSLog("(blackout-tunnel) \(message)")
+    }
 }
 
 /// Runs an async body to completion on a side task; libbox's callbacks are

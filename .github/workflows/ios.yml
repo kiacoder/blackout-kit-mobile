@@ -77,6 +77,13 @@ jobs:
           path: /tmp/libbox-iface
           if-no-files-found: ignore
 
+      - name: Typecheck extension Swift (full diagnostics)
+        if: always()
+        continue-on-error: true
+        run: |
+          FW=$(find ios/Frameworks/Libbox.xcframework -name 'Libbox.framework' | head -1)
+          xcrun swiftc -typecheck             -sdk $(xcrun --sdk iphonesimulator --show-sdk-path)             -target arm64-apple-ios13.0-simulator             -F "$(dirname "$FW")"             ios/BlackoutTunnel/PacketTunnelProvider.swift 2>&1 | head -80 || true
+
       - name: Generate Flutter iOS artifacts
         run: flutter build ios --simulator --no-codesign --verbose
 

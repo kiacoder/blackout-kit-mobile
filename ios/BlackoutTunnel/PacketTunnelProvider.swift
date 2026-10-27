@@ -268,7 +268,7 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     func startDefaultInterfaceMonitor(_ listener: (any LibboxInterfaceUpdateListenerProtocol)?) throws {}
 
-    func uid(byPackageName packageName _: String?, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
+    func uid(byPackageName packageName: String?, ret0_: UnsafeMutablePointer<Int32>?) throws {
         throw PacketTunnelProvider.error("not implemented")
     }
 

@@ -1,0 +1,5 @@
+// The tunnel extension deliberately does NOT include the Pods xcconfig:
+// Flutter's Debug.xcconfig pulls in Pods-Runner link flags (MLKit & co),
+// which are app-target frameworks and broke the extension's simulator link.
+// The extension needs only libbox + NetworkExtension. Version variables are
+// hardcoded in its Info.plist, so Generated.xcconfig is not required either.

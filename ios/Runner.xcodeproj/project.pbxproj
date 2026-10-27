@@ -70,7 +70,9 @@
 		};
 /* End PBXCopyFilesBuildPhase section */
 
-/* Begin PBXFileReference section */
+/* Begin PBXFileReference section */		X1A0C0FFEE000000000000000000030 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = BlackoutTunnel/Debug.xcconfig; sourceTree = "<group>"; };
+		X1A0C0FFEE000000000000000000031 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = BlackoutTunnel/Release.xcconfig; sourceTree = "<group>"; };
+
 		X1A0C0FFEE000000000000000000001 /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PacketTunnelProvider.swift; sourceTree = "<group>"; };
 		X1A0C0FFEE000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		X1A0C0FFEE000000000000000000003 /* BlackoutTunnel.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BlackoutTunnel.entitlements; sourceTree = "<group>"; };
@@ -406,7 +408,7 @@
 /* Begin XCBuildConfiguration section */
 		X1A0C0FFEE00000000000000000000C /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			baseConfigurationReference = X1A0C0FFEE000000000000000000030 /* Debug.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				BUNDLE_LOADER = ""; 
@@ -438,7 +440,7 @@
 		};
 		X1A0C0FFEE00000000000000000000D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			baseConfigurationReference = X1A0C0FFEE000000000000000000031 /* Release.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = BlackoutTunnel/BlackoutTunnel.entitlements;

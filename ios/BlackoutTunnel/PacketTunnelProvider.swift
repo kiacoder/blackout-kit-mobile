@@ -237,11 +237,11 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     // MARK: - Protocol stubs (minimal honest implementations)
 
-    func autoDetectInterfaceControl(fd _: Int32) throws {}
+    func autoDetectControl(_ fd: Int32) throws {}
 
     func clearDNSCache() {}
 
-    func closeDefaultInterfaceMonitor(listener _: LibboxInterfaceUpdateListener?) throws {}
+    func closeDefaultInterfaceMonitor(_ listener: (any LibboxInterfaceUpdateListenerProtocol)?) throws {}
 
     func findConnectionOwner(
         _ ipProtocol: Int32,
@@ -260,15 +260,15 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
     func includeAllNetworks() -> Bool { false }
 
-    func packageNameByUid(uid _: Int32) throws -> String { "" }
+    func packageName(byUid _: Int32, error: NSErrorPointer) -> String { "" }
 
     func readWIFIState() -> LibboxWIFIState? { nil }
 
-    func sendNotification(notification _: LibboxNotification?) throws {}
+    func send(_ notification: LibboxNotification?) throws {}
 
-    func startDefaultInterfaceMonitor(listener _: LibboxInterfaceUpdateListener?) throws {}
+    func startDefaultInterfaceMonitor(_ listener: (any LibboxInterfaceUpdateListenerProtocol)?) throws {}
 
-    func uidByPackageName(packageName _: String?, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
+    func uid(byPackageName packageName _: String?, ret0_ _: UnsafeMutablePointer<Int32>?) throws {
         throw PacketTunnelProvider.error("not implemented")
     }
 
@@ -286,19 +286,23 @@ final class TunnelPlatformInterface: NSObject, LibboxPlatformInterfaceProtocol {
 
 /// Runs an async body to completion on a side task; libbox's callbacks are
 /// synchronous, and setTunnelNetworkSettings is async-only.
+private final class ThrownError: @unchecked Sendable {
+    var error: Error?
+}
+
 private func runBlocking(_ body: @escaping () async throws -> Void) throws {
-    var thrown: Error?
+    let box = ThrownError()
     let semaphore = DispatchSemaphore(value: 0)
     Task {
         do {
             try await body()
         } catch {
-            thrown = error
+            box.error = error
         }
         semaphore.signal()
     }
     semaphore.wait()
-    if let thrown = thrown {
-        throw thrown
+    if let error = box.error {
+        throw error
     }
 }

@@ -10,9 +10,9 @@ import UIKit
     GeneratedPluginRegistrant.register(with: self)
     // The native tunnel bridge is not a pub package, so it registers here —
     // the same pattern MainActivity uses on Android.
-    VpnPlatformPlugin.register(
-      with: registrar(forPlugin: "VpnPlatformPlugin")
-    )
+    if let registrar = registrar(forPlugin: "VpnPlatformPlugin") {
+      VpnPlatformPlugin.register(with: registrar)
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }

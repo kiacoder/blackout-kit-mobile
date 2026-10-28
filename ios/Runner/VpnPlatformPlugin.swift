@@ -32,7 +32,7 @@ import UIKit
 ///   requestNotificationPermission -> bool (iOS VPNs show no custom
 ///                                  notification; true is the honest no-op)
 @objc public class VpnPlatformPlugin: NSObject, FlutterPlugin {
-    private let vpnManager = NETunnelProviderManager()
+    let vpnManager = NETunnelProviderManager()
     private var statusObserver: NSKeyValueObservation?
 
     private static let tunnelBundleId = "com.blackoutkit.vpn.tunnel"

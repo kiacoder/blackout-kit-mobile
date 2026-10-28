@@ -93,13 +93,23 @@ jobs:
 
       - name: Verify tunnel extension product
         run: |
-          APP=$(find build/ios -name "Runner.app" -path "*iphoneos*" | head -1)
-          echo "app: $APP"
-          ls -la "$APP/PlugIns" 2>/dev/null || true
-          test -d "$APP/PlugIns/BlackoutTunnel.appex" || \
-            test -d "$APP/Frameworks/BlackoutTunnel.appex" || \
-            { echo "ERROR: BlackoutTunnel.appex not embedded in Runner.app"; exit 1; }
-          echo "BlackoutTunnel.appex embedded OK"
+          echo "=== all Runner.app copies ==="
+          find build/ios -name "Runner.app" -maxdepth 4
+          echo "=== contents of each ==="
+          for APP in $(find build/ios -name "Runner.app" -maxdepth 4); do
+            echo "--- $APP ---"
+            ls "$APP" || true
+            find "$APP" -name "*.appex" || true
+          done
+          # The appex must exist as a built product AND be embedded in at
+          # least one Runner.app copy (flutter copies the xcodebuild product
+          # to build/ios/iphoneos).
+          APPEX=$(find build/ios -name "BlackoutTunnel.appex" | head -1)
+          test -n "$APPEX" || { echo "ERROR: BlackoutTunnel.appex was never built"; exit 1; }
+          echo "appex built: $APPEX"
+          EMBEDDED=$(find build/ios -path "*Runner.app*BlackoutTunnel.appex*" | head -1)
+          test -n "$EMBEDDED" || { echo "ERROR: appex exists but is not embedded in any Runner.app"; exit 1; }
+          echo "BlackoutTunnel.appex embedded OK: $EMBEDDED"
 
       - name: Upload build log on failure
         if: failure()

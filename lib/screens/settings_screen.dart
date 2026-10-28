@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../controllers/config_controller.dart';
 import '../controllers/connection_controller.dart';
 import '../controllers/settings_controller.dart';
+import '../models/dns_provider.dart';
 import '../services/ip_info_service.dart';
 import '../services/kill_switch_service.dart';
 import '../services/update_service.dart';
@@ -169,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(
                     _settingsController.dnsLeakPreventionEnabled.value
                         ? 'DNS queries are resolved inside the tunnel through '
-                            '${_settingsController.customDnsServer.value}.'
+                            '${_dnsSelectionSummary()}.'
                         : 'Off - your provider can see which domains you resolve.',
                   ),
                   value: _settingsController.dnsLeakPreventionEnabled.value,
@@ -179,11 +180,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 )),
                 Obx(() => ListTile(
                   title: const Text('DNS resolver'),
-                  subtitle: Text(
-                    _settingsController.customDnsServer.value.isEmpty
-                        ? 'Not set - pick one to enable leak prevention'
-                        : _settingsController.customDnsServer.value,
-                  ),
+                  // Shows the whole pair, not just the primary: the tunnel
+                  // advertises both addresses, and hiding the secondary made
+                  // the "why is it using 185.51.200.2" question unanswerable.
+                  subtitle: Text(_dnsSelectionSummary()),
                   leading: const Icon(Icons.dns_outlined),
                   enabled: _settingsController.dnsLeakPreventionEnabled.value,
                   onTap: _settingsController.dnsLeakPreventionEnabled.value
@@ -583,63 +583,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// Picks the resolver used while DNS leak prevention is on.
+  /// One-line description of the resolver pair currently selected.
+  String _dnsSelectionSummary() {
+    final primary = _settingsController.customDnsServer.value;
+    final secondary = _settingsController.dnsSecondaryServer.value;
+    final provider = DnsCatalog.byKey(_settingsController.dnsProviderKey.value);
+    if (primary.isEmpty) return 'Not set - pick one to enable leak prevention';
+    if (provider == null) {
+      return secondary.isEmpty ? '$primary (custom)' : '$primary, $secondary (custom)';
+    }
+    return '${provider.name} — ${provider.servers.join(", ")}';
+  }
+
+  /// Picks the resolver pair used while DNS leak prevention is on.
+  ///
+  /// The list is the shared [DnsCatalog], grouped by category, so the mobile
+  /// app and the desktop CLI offer the same addresses. Each row shows both
+  /// addresses because both are handed to `VpnService.Builder.addDnsServer`.
   void _showDnsResolverDialog() {
-    const presets = <String, String>{
-      '1.1.1.1': 'Cloudflare',
-      '9.9.9.9': 'Quad9',
-      '8.8.8.8': 'Google',
-      '94.140.14.14': 'AdGuard',
-    };
     final controller =
         TextEditingController(text: _settingsController.customDnsServer.value);
     Get.dialog(
       AlertDialog(
         title: const Text('DNS resolver'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final entry in presets.entries)
-              RadioListTile<String>(
-                dense: true,
-                title: Text(entry.value),
-                subtitle: Text(entry.key),
-                value: entry.key,
-                // ignore: deprecated_member_use
-                groupValue: _settingsController.customDnsServer.value,
-                // ignore: deprecated_member_use
-                onChanged: (value) {
-                  if (value == null) return;
-                  _settingsController.setCustomDnsServer(value);
-                  Get.back();
-                },
-              ),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Custom (IP address)',
-                hintText: '1.1.1.1',
-              ),
-              onSubmitted: (value) {
-                final trimmed = value.trim();
-                if (trimmed.isEmpty) return;
-                _settingsController.setCustomDnsServer(trimmed);
-                Get.back();
-              },
-            ),
-          ],
+        contentPadding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+        content: SizedBox(
+          width: 360,
+          height: 420,
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: EdgeInsets.zero,
+                      children: [
+                        for (final category in DnsCategory.values) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                            child: Text(
+                              DnsCatalog.categoryLabels[category]!,
+                              style: Theme.of(context).textTheme.labelMedium,
+                            ),
+                          ),
+                          for (final provider
+                              in DnsCatalog.inCategory(category))
+                            RadioListTile<String>(
+                              dense: true,
+                              value: provider.key,
+                              // ignore: deprecated_member_use
+                              groupValue:
+                                  _settingsController.dnsProviderKey.value,
+                              title: Text(provider.name),
+                              subtitle: Text(provider.servers.join('  ·  ')),
+                              // ignore: deprecated_member_use
+                              onChanged: (value) {
+                                if (value == null) return;
+                                _settingsController.setDnsProvider(value);
+                                setDialogState(() {});
+                              },
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: TextField(
+                      controller: controller,
+                      keyboardType: TextInputType.url,
+                      decoration: const InputDecoration(
+                        labelText: 'Custom (IP address)',
+                        hintText: '1.1.1.1',
+                        isDense: true,
+                      ),
+                      onSubmitted: (value) {
+                        final trimmed = value.trim();
+                        if (trimmed.isEmpty) return;
+                        _settingsController.setCustomDnsServer(trimmed);
+                        setDialogState(() {});
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
         actions: [
           TextButton(onPressed: Get.back, child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               final trimmed = controller.text.trim();
-              if (trimmed.isEmpty) return;
-              _settingsController.setCustomDnsServer(trimmed);
+              if (trimmed.isNotEmpty &&
+                  trimmed != _settingsController.customDnsServer.value) {
+                _settingsController.setCustomDnsServer(trimmed);
+              }
               Get.back();
             },
-            child: const Text('Save'),
+            child: const Text('Done'),
           ),
         ],
       ),

@@ -74,7 +74,7 @@ hardware. The iOS target runs the same tunnel design (libbox inside a Network Ex
 - Theme selection (light/dark/system)
 - Language preferences
 - Split tunneling (per-app, real `PackageManager` list)
-- DNS leak prevention
+- DNS leak prevention, with a 35-provider resolver catalogue (see below)
 - Protocol preference
 - Auto-test intervals
 
@@ -258,10 +258,36 @@ On a physical device (**nothing below has ever been run**):
 - **Xray-core protocols:** VLESS, VMess, Trojan, Shadowsocks, WireGuard
 - Sing-box-backed protocols require packaged runtime capability and a local SOCKS5 readiness handshake; this does not verify end-to-end tunnel traffic.
 
+### DNS resolver catalogue
+
+A tunnel can be healthy and still leak every domain to the carrier's resolver,
+so the resolver is chosen explicitly rather than inherited. Each entry in
+`lib/models/dns_provider.dart` is a **pair**, and both addresses go to
+`VpnService.Builder.addDnsServer` — a dead primary falls through to the
+secondary instead of to the carrier.
+
+The `sanctions` and `speed` groups start with XDNS's own lists (the exact
+primary/secondary pairs that single-file Windows client switches between) and
+continue with well-known resolvers. The same catalogue is shipped by the
+desktop CLI (`blackoutkit/dns_engine.py`, `blackout dns list`), so both clients
+offer the same addresses.
+
+| Group | Providers |
+|---|---|
+| `sanctions` | Shecan, Electro, Begzar, Radar, 403.online, OpenDNS |
+| `speed` | Yandex, Cloudflare (+Security, +Family), Google, DNS.SB, Control D, Level3, Vercara, Comodo, Gcore, Oracle Dyn, Wikimedia, DNS4EU |
+| `extra` | Quad9 (+Unfiltered), AdGuard (+Family, +Unfiltered), CleanBrowsing (+Family), NextDNS, Mullvad, OpenDNS FamilyShield, Yandex Safe/Family, Alibaba, Tencent, 114DNS |
+
+Settings → DNS → *DNS resolver* lists them grouped by category, with both
+addresses on each row; a typed custom address clears the pair. The selection is
+stored as `dnsProviderKey` / `customDnsServer` / `dnsSecondaryServer` and is
+reset with the rest of the settings.
+
 ### Phase 3 — Security features ✅ Complete (corrected design)
 - **Split tunneling** — `addAllowedApplication` / `addDisallowedApplication`,
   fed from a real `PackageManager` app list
-- **DNS leak prevention** — `addDnsServer` plus in-core resolution
+- **DNS leak prevention** — `addDnsServer` plus in-core resolution, driven by
+  a 35-provider resolver catalogue (next section)
 - **Kill switch** — holds the TUN open when the engine dies; reports Android's
   always-on VPN state and deep-links to the setting
 - These are `VpnService.Builder` inputs, so they are applied at connect time.

@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-28
+
 ### Added
+- **DNS resolver catalogue** (`lib/models/dns_provider.dart`). The picker used
+  to offer four single addresses; it now offers **35 providers** grouped into
+  `sanctions`, `speed` and `extra`, and each entry is a **pair**. The
+  `sanctions` and `speed` groups start with XDNS's own lists — Shecan
+  (`178.22.122.100` / `185.51.200.2`), Electro, Begzar, Radar, 403.online,
+  OpenDNS, and Yandex, Cloudflare, Google — and continue with DNS.SB, Control D,
+  Level3, Vercara, Comodo, Gcore, Oracle Dyn, Wikimedia, DNS4EU and the
+  Cloudflare Security/Family variants. `extra` carries the filtering profiles
+  (Quad9, AdGuard, CleanBrowsing, NextDNS, Mullvad, OpenDNS FamilyShield,
+  Yandex Safe/Family) and the domestic resolvers (Alibaba, Tencent, 114DNS).
+  Mirrored from the desktop CLI's `blackoutkit/dns_engine.py` so both clients
+  offer the same addresses.
+- Selecting a provider now writes **both** addresses and the tunnel advertises
+  both (`addDnsServer` for each), so a dead primary falls through to the
+  secondary instead of to the carrier resolver. The settings row shows the pair
+  rather than only the primary. `dnsProviderKey` / `dnsSecondaryServer` are
+  persisted, reset with the rest of the settings, and a typed custom address
+  clears the pair as before.
 - **iOS target is real.** The `ios/` directory now holds a complete Flutter
   iOS project with a `BlackoutTunnel` Network Extension (libbox core) and a
   `VpnPlatformPlugin` NEVPNManager bridge; the Dart layer builds libbox-mode

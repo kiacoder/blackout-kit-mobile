@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 import 'package:logger/logger.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import '../models/dns_provider.dart';
 import '../services/localization_service.dart';
 import '../services/debug_service.dart';
 import '../services/xray_config.dart';
@@ -38,7 +39,19 @@ class SettingsController extends GetxController {
   final RxBool showMyLocation = RxBool(false);
 
   /// Resolver used when [dnsLeakPreventionEnabled] is on.
+  ///
+  /// This is the *primary* address. It stays the single source of truth for
+  /// the address itself so older saved settings keep loading; [dnsProviderKey]
+  /// records which catalogue pair it came from, and [dnsSecondaryServer]
+  /// carries the second address of that pair.
   final RxString customDnsServer = RxString('1.1.1.1');
+
+  /// Catalogue key of the selected resolver pair ('cloudflare', 'shecan', …).
+  /// The value `'custom'` means "use the typed address only".
+  final RxString dnsProviderKey = RxString('cloudflare');
+
+  /// Second address of the selected pair. Empty for a single-address choice.
+  final RxString dnsSecondaryServer = RxString('1.0.0.1');
 
   /// Verbose core logs: the generated Xray config logs at 'debug' so the
   /// TUN data path (packet dispositions, routing, DNS) is visible in logcat
@@ -177,6 +190,10 @@ class SettingsController extends GetxController {
           _settingsBox.get('dnsLeakPreventionEnabled', defaultValue: false);
       customDnsServer.value =
           _settingsBox.get('customDnsServer', defaultValue: '1.1.1.1');
+      dnsProviderKey.value =
+          _settingsBox.get('dnsProviderKey', defaultValue: 'cloudflare');
+      dnsSecondaryServer.value =
+          _settingsBox.get('dnsSecondaryServer', defaultValue: '1.0.0.1');
 
       theme.value = _settingsBox.get('theme', defaultValue: 'system');
       showSpeedInTray.value = _settingsBox.get('showSpeedInTray', defaultValue: true);
@@ -228,6 +245,8 @@ class SettingsController extends GetxController {
       'splitTunnelingMode': splitTunnelingMode.value,
       'dnsLeakPreventionEnabled': dnsLeakPreventionEnabled.value,
       'customDnsServer': customDnsServer.value,
+      'dnsProviderKey': dnsProviderKey.value,
+      'dnsSecondaryServer': dnsSecondaryServer.value,
       'showMyLocation': showMyLocation.value,
       'theme': theme.value,
       'showSpeedInTray': showSpeedInTray.value,
@@ -300,11 +319,34 @@ class SettingsController extends GetxController {
     _log.i('DNS leak prevention: $value');
   }
 
-  /// Set the DNS resolver used while leak prevention is on
+  /// Set the DNS resolver used while leak prevention is on.
+  ///
+  /// Kept for the custom-address path: typing an address means "this one, not
+  /// a catalogue pair", so the provider key moves to 'custom' and the
+  /// secondary address is cleared.
   void setCustomDnsServer(String server) {
     customDnsServer.value = server;
+    dnsProviderKey.value = 'custom';
+    dnsSecondaryServer.value = '';
     saveSettings();
     _log.i('Custom DNS server: $server');
+  }
+
+  /// Select a resolver pair from [DnsCatalog].
+  ///
+  /// Writes both addresses: the tunnel advertises the pair, so a dead primary
+  /// falls through to the secondary instead of to the carrier resolver.
+  void setDnsProvider(String key) {
+    final provider = DnsCatalog.byKey(key);
+    if (provider == null) {
+      _log.w('Ignoring unknown DNS provider: $key');
+      return;
+    }
+    dnsProviderKey.value = provider.key;
+    customDnsServer.value = provider.primary;
+    dnsSecondaryServer.value = provider.secondary ?? '';
+    saveSettings();
+    _log.i('DNS provider: ${provider.key} -> ${provider.servers.join(", ")}');
   }
 
   /// Add app to split tunneling list
@@ -477,6 +519,10 @@ class SettingsController extends GetxController {
     // so after a reset the feature could never be turned back on until the
     // user typed an address by hand.
     customDnsServer.value = '1.1.1.1';
+    // Reset the pair as well: leaving a stale provider key behind would make
+    // the service advertise the old provider's addresses over the reset ones.
+    dnsProviderKey.value = 'cloudflare';
+    dnsSecondaryServer.value = '1.0.0.1';
     showMyLocation.value = false;
     siteCheckEnabled.value = true;
     siteCheckUrls.value = List<String>.from(defaultSiteCheckUrls);

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:logger/logger.dart';
 
 import '../controllers/settings_controller.dart';
+import '../models/dns_provider.dart';
 import '../models/vpn_session_options.dart';
 
 /// DNS leak prevention: make sure queries cannot escape to the carrier.
@@ -33,14 +34,12 @@ class DNSLeakPreventionService extends GetxService {
   final lastError = Rxn<String>();
   final isProbing = RxBool(false);
 
-  /// Public resolvers offered in the UI.
-  static const secureDNSServers = {
-    'cloudflare': '1.1.1.1',
-    'quad9': '9.9.9.9',
-    'adguard': '94.140.14.14',
-    'nextdns': '45.90.28.0',
-    'opendns': '208.67.222.222',
-  };
+  /// The selectable resolver catalogue (sanctions / speed / extra).
+  ///
+  /// Each entry is a *pair*: primary and secondary. The tunnel advertises both,
+  /// so a dead primary falls through to the secondary instead of to the
+  /// carrier's resolver.
+  List<DnsProvider> get providers => DnsCatalog.all;
 
   SettingsController? get _settings =>
       Get.isRegistered<SettingsController>() ? Get.find<SettingsController>() : null;
@@ -49,14 +48,37 @@ class DNSLeakPreventionService extends GetxService {
 
   String get customDnsServer => _settings?.customDnsServer.value ?? '1.1.1.1';
 
+  /// Catalogue key of the active pair, or `'custom'` when the user typed an
+  /// address by hand.
+  String get providerKey => _settings?.dnsProviderKey.value ?? 'cloudflare';
+
+  /// The selected pair, or null when the choice is a custom address.
+  DnsProvider? get selectedProvider => DnsCatalog.byKey(providerKey);
+
   /// Resolvers the tunnel will advertise and the core will use.
+  ///
+  /// Primary first, secondary second — that ordering is the whole point of a
+  /// pair. A single custom address yields a one-element list.
   List<String> get resolvers {
     if (!isEnabled) return const ['1.1.1.1'];
-    return [customDnsServer];
+    final provider = selectedProvider;
+    if (provider != null) return provider.servers;
+    final secondary = _settings?.dnsSecondaryServer.value ?? '';
+    return [customDnsServer, if (secondary.isNotEmpty) secondary];
   }
 
   Future<void> setEnabled(bool enabled) async {
     _settings?.toggleDnsLeakPrevention(enabled);
+  }
+
+  /// Select a catalogue pair by key.
+  Future<void> selectProvider(String key) async {
+    if (DnsCatalog.byKey(key) == null) {
+      lastError.value = 'Unknown DNS provider "$key".';
+      return;
+    }
+    _settings?.setDnsProvider(key);
+    lastError.value = null;
   }
 
   Future<void> setCustomDnsServer(String server) async {
@@ -77,7 +99,7 @@ class DNSLeakPreventionService extends GetxService {
   /// feature is off silently discarded that resolver on every connect.
   VpnSessionOptions applyTo(VpnSessionOptions options) => isEnabled
       ? options.copyWith(
-          dnsServers: [customDnsServer],
+          dnsServers: resolvers,
           // Resolving inside the core is what hides queries from the network.
           routeDnsThroughProxy: true,
         )
@@ -134,6 +156,9 @@ class DNSLeakPreventionService extends GetxService {
   /// Human-readable summary for settings screens.
   String describe() {
     if (!isEnabled) return 'Off - the system resolver is used';
-    return 'On - queries resolved inside the tunnel via $customDnsServer';
+    final provider = selectedProvider;
+    final label = provider?.name ?? 'Custom';
+    return 'On - queries resolved inside the tunnel via $label '
+        '(${resolvers.join(", ")})';
   }
 }

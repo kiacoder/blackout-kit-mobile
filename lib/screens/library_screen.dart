@@ -36,7 +36,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Config Library'),
+        title: Text('config_library'.tr),
         elevation: 0,
         actions: [
           IconButton(
@@ -119,13 +119,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
               // Library mid-startup hid thousands of stored configs behind a
               // spinner for minutes. Refresh progress is now a banner instead.
               if (_configController.isLoading.value) {
-                return const Center(
+                return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Loading repositories & configs...'),
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text('loading_repos'.tr),
                     ],
                   ),
                 );
@@ -193,7 +193,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                                 );
                               },
                               icon: const Icon(Icons.refresh),
-                              label: const Text('Fetch Configs'),
+                              label: Text('fetch_configs'.tr),
                             ),
                           ],
                         ),
@@ -330,7 +330,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     await _configController.fetchFromAllSources(force: true);
                   },
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
+                  label: Text('retry'.tr),
                 ),
               ],
             ),
@@ -633,7 +633,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       _handleConnect(config);
                     },
                     icon: const Icon(Icons.vpn_lock),
-                    label: const Text('Connect'),
+                    label: Text('connect'.tr),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
@@ -670,7 +670,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       _handleDelete(config);
                     },
                     icon: const Icon(Icons.delete),
-                    label: const Text('Delete'),
+                    label: Text('delete'.tr),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
@@ -723,17 +723,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Future<void> _handleDelete(Config config) async {
     final confirm = await Get.dialog<bool>(
           AlertDialog(
-            title: const Text('Delete Config?'),
+            title: Text('delete_config_confirm'.tr),
             content: Text('Remove ${config.displayName}?'),
             actions: [
               TextButton(
                 onPressed: () => Get.back(result: false),
-                child: const Text('Cancel'),
+                child: Text('cancel'.tr),
               ),
               TextButton(
                 onPressed: () => Get.back(result: true),
-                child: const Text('Delete',
-                    style: TextStyle(color: Colors.red)),
+                child: Text('delete'.tr,
+                    style: const TextStyle(color: Colors.red)),
               ),
             ],
           ),
@@ -759,7 +759,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     Get.dialog(
       AlertDialog(
-        title: const Text('Add Custom Source'),
+        title: Text('add_custom_source'.tr),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -799,7 +799,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         actions: [
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -830,7 +830,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 );
               }
             },
-            child: const Text('Add'),
+            child: Text('add'.tr),
           ),
         ],
       ),

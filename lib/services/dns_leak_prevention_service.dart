@@ -55,17 +55,30 @@ class DNSLeakPreventionService extends GetxService {
   /// The selected pair, or null when the choice is a custom address.
   DnsProvider? get selectedProvider => DnsCatalog.byKey(providerKey);
 
-  /// Resolvers the tunnel will advertise and the core will use.
+  /// The resolver pair the user selected, whatever the leak-prevention
+  /// toggle says.
   ///
   /// Primary first, secondary second — that ordering is the whole point of a
   /// pair. A single custom address yields a one-element list.
-  List<String> get resolvers {
-    if (!isEnabled) return const ['1.1.1.1'];
+  ///
+  /// This is deliberately independent of [isEnabled]: DNS-only mode changes
+  /// the resolver without running a tunnel, and it used to read [resolvers],
+  /// which returns 1.1.1.1 while the toggle is off — so "change DNS only"
+  /// silently ignored the resolver the user had picked.
+  List<String> get selectedResolvers {
     final provider = selectedProvider;
     if (provider != null) return provider.servers;
     final secondary = _settings?.dnsSecondaryServer.value ?? '';
     return [customDnsServer, if (secondary.isNotEmpty) secondary];
   }
+
+  /// Resolvers the tunnel will advertise and the core will use.
+  ///
+  /// Unlike [selectedResolvers] this is the *tunnel* answer: with leak
+  /// prevention off the tunnel keeps whatever the config carried, so the
+  /// fallback here is only used for display and probing.
+  List<String> get resolvers =>
+      isEnabled ? selectedResolvers : const ['1.1.1.1'];
 
   Future<void> setEnabled(bool enabled) async {
     _settings?.toggleDnsLeakPrevention(enabled);

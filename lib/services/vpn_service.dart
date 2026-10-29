@@ -110,6 +110,63 @@ class VPNService {
     }
   }
 
+  /// Start a DNS-only session: change the resolver, route nothing.
+  ///
+  /// No config is needed and no core is started — the native side creates a
+  /// `VpnService` interface with the resolvers attached and **no routes**, so
+  /// ordinary traffic keeps using the physical network while every app's name
+  /// lookups move to [servers]. This is the "I only want a different DNS" case
+  /// that used to require a full tunnel.
+  ///
+  /// [servers] must be IPv4 literals; `VpnSessionOptions.validationError`
+  /// enforces the same rule for the tunnel path.
+  Future<bool> connectDnsOnly(List<String> servers) async {
+    final usable = servers.where(VpnSessionOptions.isTunnelDns).toList();
+    if (usable.isEmpty) {
+      _status = VPNStatus.error;
+      _lastError = 'Pick a resolver first (Settings, DNS).';
+      _log.e('Refusing DNS-only connect: no usable resolver in $servers');
+      return false;
+    }
+
+    try {
+      _status = VPNStatus.connecting;
+      _log.i('Starting DNS-only session with $usable');
+
+      final result = await platform.invokeMethod('connectDnsOnly', {
+        'protocol': 'dns',
+        'displayName': 'Blackout DNS',
+        'socksPort': defaultSocksPort,
+        'dns': usable.first,
+        'dnsServers': usable,
+        'routeDnsThroughProxy': false,
+        'holdTunnelOnEngineFailure': false,
+        'allowedApps': const <String>[],
+        'disallowedApps': const <String>[],
+      });
+
+      if (result == true) {
+        _status = VPNStatus.connected;
+        _lastError = null;
+        _log.i('DNS-only session up');
+        return true;
+      }
+      _status = VPNStatus.error;
+      _lastError = 'The DNS-only session failed to start';
+      return false;
+    } on PlatformException catch (e) {
+      _status = VPNStatus.error;
+      _lastError = e.message ?? e.code;
+      _log.e('Platform error starting DNS-only: ${e.message}');
+      return false;
+    } catch (e) {
+      _status = VPNStatus.error;
+      _lastError = e.toString();
+      _log.e('Error starting DNS-only: $e');
+      return false;
+    }
+  }
+
   /// Connect to VPN using config
   ///
   /// [options] carries the split tunneling, DNS and kill switch decisions. They

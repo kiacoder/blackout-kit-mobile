@@ -78,6 +78,26 @@ hardware. The iOS target runs the same tunnel design (libbox inside a Network Ex
 - Protocol preference
 - Auto-test intervals
 
+## Languages
+
+Three, by product decision: **English**, **Persian (فارسی)** and **Simplified
+Chinese (简体中文)**. The picker is generated from
+`LocalizationService.supportedLanguages`, so adding a language means adding a
+complete table — a partial one is what the previous nine-language list was, and
+it made the app look broken when someone picked Spanish and the body text
+stayed English.
+
+Persian flips the whole tree to RTL. Every visible string goes through the
+catalogue; `test/localization_coverage_test.dart` fails the build if a
+hardcoded English string appears in a screen or widget.
+
+## The guide
+
+`lib/screens/guide_screen.dart` is reachable from the help icon on the home
+screen and from Settings. Six steps, plain language, no jargon — written for
+someone who has never used a VPN and does not know what a "config" is. It is
+translated into all three languages like everything else.
+
 ## Architecture
 
 ### Tech Stack
@@ -282,6 +302,11 @@ Settings → DNS → *DNS resolver* lists them grouped by category, with both
 addresses on each row; a typed custom address clears the pair. The selection is
 stored as `dnsProviderKey` / `customDnsServer` / `dnsSecondaryServer` and is
 reset with the rest of the settings.
+
+**You do not need a VPN to change your DNS.** *Settings → DNS → Change DNS
+only* establishes an interface with the resolver attached and **no routes**, so
+ordinary traffic keeps going out directly and only name lookups move. No config,
+no server, no core. This is the answer to "I just want a different resolver".
 
 **National resolvers are for direct use, not for tunnelling abroad.** A
 resolver tied to one country answers with that country's frontends, so using

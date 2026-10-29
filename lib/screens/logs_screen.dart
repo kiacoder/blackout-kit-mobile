@@ -90,7 +90,7 @@ class _LogsScreenState extends State<LogsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('System Logs'),
+        title: Text('system_logs'.tr),
         elevation: 0,
         actions: [
           IconButton(
@@ -114,12 +114,12 @@ class _LogsScreenState extends State<LogsScreen> {
             onPressed: () async {
               final confirm = await Get.dialog<bool>(
                 AlertDialog(
-                  title: const Text('Clear Logs?'),
-                  content: const Text('Are you sure you want to clear the in-memory log buffer?'),
+                  title: Text('clear_logs'.tr),
+                  content: Text('clear_logs_confirm'.tr),
                   actions: [
                     TextButton(
                       onPressed: () => Get.back(result: false),
-                      child: const Text('Cancel'),
+                      child: Text('cancel'.tr),
                     ),
                     ElevatedButton(
                       onPressed: () => Get.back(result: true),
@@ -127,7 +127,7 @@ class _LogsScreenState extends State<LogsScreen> {
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('Clear'),
+                      child: Text('clear'.tr),
                     ),
                   ],
                 ),

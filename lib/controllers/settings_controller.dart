@@ -53,6 +53,11 @@ class SettingsController extends GetxController {
   /// Second address of the selected pair. Empty for a single-address choice.
   final RxString dnsSecondaryServer = RxString('1.0.0.1');
 
+  /// "Change DNS only": establish an interface with the resolver attached and
+  /// no routes, so traffic stays direct. Someone who only wants a different
+  /// resolver should not have to run a tunnel to get one.
+  final RxBool dnsOnlyMode = RxBool(false);
+
   /// Verbose core logs: the generated Xray config logs at 'debug' so the
   /// TUN data path (packet dispositions, routing, DNS) is visible in logcat
   /// through the core's status callback. Diagnosis tool — noisy otherwise.
@@ -206,6 +211,7 @@ class SettingsController extends GetxController {
           _settingsBox.get('dnsProviderKey', defaultValue: 'cloudflare');
       dnsSecondaryServer.value =
           _settingsBox.get('dnsSecondaryServer', defaultValue: '1.0.0.1');
+      dnsOnlyMode.value = _settingsBox.get('dnsOnlyMode', defaultValue: false);
 
       theme.value = _settingsBox.get('theme', defaultValue: 'system');
       showSpeedInTray.value = _settingsBox.get('showSpeedInTray', defaultValue: true);
@@ -259,6 +265,7 @@ class SettingsController extends GetxController {
       'customDnsServer': customDnsServer.value,
       'dnsProviderKey': dnsProviderKey.value,
       'dnsSecondaryServer': dnsSecondaryServer.value,
+      'dnsOnlyMode': dnsOnlyMode.value,
       'showMyLocation': showMyLocation.value,
       'theme': theme.value,
       'showSpeedInTray': showSpeedInTray.value,
@@ -342,6 +349,16 @@ class SettingsController extends GetxController {
     dnsSecondaryServer.value = '';
     saveSettings();
     _log.i('Custom DNS server: $server');
+  }
+
+  /// Turn the DNS-only mode on or off.
+  ///
+  /// Takes effect on the next connect: the interface's DNS is fixed at
+  /// establish() time, and this switches *which* interface gets built.
+  void setDnsOnlyMode(bool value) {
+    dnsOnlyMode.value = value;
+    saveSettings();
+    _log.i('DNS-only mode: $value');
   }
 
   /// Select a resolver pair from [DnsCatalog].
@@ -535,6 +552,7 @@ class SettingsController extends GetxController {
     // the service advertise the old provider's addresses over the reset ones.
     dnsProviderKey.value = 'cloudflare';
     dnsSecondaryServer.value = '1.0.0.1';
+    dnsOnlyMode.value = false;
     showMyLocation.value = false;
     siteCheckEnabled.value = true;
     siteCheckUrls.value = List<String>.from(defaultSiteCheckUrls);

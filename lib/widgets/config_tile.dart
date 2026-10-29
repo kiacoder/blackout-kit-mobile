@@ -2,6 +2,7 @@
 /// Shows protocol, address, speed, reliability, and actions
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../models/config.dart';
 import '../models/test_result.dart';
 
@@ -246,7 +247,7 @@ class ConfigTile extends StatelessWidget {
                       child: ElevatedButton.icon(
                         onPressed: onConnect,
                         icon: const Icon(Icons.vpn_lock, size: 14),
-                        label: const Text('Connect'),
+                        label: Text('connect'.tr),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           backgroundColor: Colors.green,
@@ -261,7 +262,7 @@ class ConfigTile extends StatelessWidget {
                       child: ElevatedButton.icon(
                         onPressed: onDelete,
                         icon: const Icon(Icons.delete, size: 14),
-                        label: const Text('Delete'),
+                        label: Text('delete'.tr),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           backgroundColor: Colors.red.shade600,

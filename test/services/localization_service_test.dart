@@ -69,18 +69,29 @@ void main() {
       }
     });
 
-    test('supportedLanguages is a non-trivial catalogue', () {
-      expect(LocalizationService.supportedLanguages.length, greaterThanOrEqualTo(9));
+    test('exactly three languages ship: English, Persian, Chinese', () {
+      // A product decision, not an accident: the catalogue used to list nine
+      // languages with English body text, so picking one changed almost
+      // nothing. Anything added here must come with a complete table.
+      expect(LocalizationService.supportedLanguages.keys.toList(),
+          ['en', 'fa', 'zh']);
       expect(LocalizationService.supportedLanguages['en'], 'English');
+      expect(LocalizationService.supportedLanguages['fa'], 'فارسی');
+      expect(LocalizationService.supportedLanguages['zh'], '简体中文');
+    });
+
+    test('a dropped language is no longer selectable', () {
+      for (final code in ['es', 'fr', 'de', 'ja', 'ru', 'ar', 'pt']) {
+        expect(LocalizationService.isSupported(code), isFalse, reason: code);
+      }
     });
   });
 
   group('translate', () {
     test('resolves a key in the requested language', () {
       expect(LocalizationService.translate('connect', language: 'en'), 'Connect');
-      expect(LocalizationService.translate('connect', language: 'de'), 'Verbinden');
+      expect(LocalizationService.translate('connect', language: 'fa'), 'اتصال');
       expect(LocalizationService.translate('connect', language: 'zh'), '连接');
-      expect(LocalizationService.translate('connect', language: 'ar'), 'اتصال');
     });
 
     test('defaults to the fallback language', () {
@@ -130,13 +141,15 @@ void main() {
   group('helpers', () {
     test('isSupported', () {
       expect(LocalizationService.isSupported('en'), isTrue);
-      expect(LocalizationService.isSupported('ja'), isTrue);
+      expect(LocalizationService.isSupported('fa'), isTrue);
+      expect(LocalizationService.isSupported('zh'), isTrue);
       expect(LocalizationService.isSupported('xx'), isFalse);
       expect(LocalizationService.isSupported(''), isFalse);
     });
 
     test('displayName falls back to the code', () {
-      expect(LocalizationService.displayName('de'), 'Deutsch');
+      expect(LocalizationService.displayName('fa'), 'فارسی');
+      expect(LocalizationService.displayName('de'), 'de');
       expect(LocalizationService.displayName('xx'), 'xx');
     });
   });

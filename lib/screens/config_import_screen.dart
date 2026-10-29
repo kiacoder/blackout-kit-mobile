@@ -326,7 +326,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           children: [
             const Icon(Icons.verified, color: Colors.green),
             const SizedBox(width: 8),
-            const Text('Valid Config Detected'),
+            Text('valid_config_detected'.tr),
           ],
         ),
         content: Column(
@@ -354,12 +354,12 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             // Scanning stays off after Cancel: the camera is paused and the
             // QR is probably still in view - Rescan resumes deliberately.
             onPressed: () => Get.back(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr),
           ),
           ElevatedButton.icon(
             onPressed: _saving ? null : () => _saveConfig(config),
             icon: const Icon(Icons.add),
-            label: const Text('Add to Library'),
+            label: Text('add_to_library'.tr),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
@@ -376,7 +376,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   Future<void> _showMultipleParsedDialog(List<Config> configs) async {
     await Get.dialog(
       AlertDialog(
-        title: Text('${configs.length} Configs Found'),
+        title: Text('${configs.length} ${'configs'.tr}'),
         content: SizedBox(
           width: double.maxFinite,
           height: 250,
@@ -395,7 +395,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         actions: [
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr),
           ),
           ElevatedButton(
             onPressed: _saving ? null : () => _saveMultipleConfigs(configs),
@@ -403,7 +403,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
             ),
-            child: Text('Import All (${configs.length})'),
+            child: Text('${'import_all'.tr} (${configs.length})'),
           ),
         ],
       ),
@@ -418,7 +418,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Import VPN Config'),
+        title: Text('import_vpn_config'.tr),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -532,7 +532,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                     _resumeCamera();
                   },
                   icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('Rescan'),
+                  label: Text('rescan'.tr),
                 ),
               ],
             ),
@@ -579,7 +579,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                   }
                 },
                 icon: const Icon(Icons.content_paste, size: 18),
-                label: const Text('Paste'),
+                label: Text('paste'.tr),
               ),
             ],
           ),
@@ -646,7 +646,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('Import'),
+                      child: Text('import'.tr),
                     ),
                   ],
                 ),
@@ -681,7 +681,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             ElevatedButton.icon(
               onPressed: _pickFile,
               icon: const Icon(Icons.folder_open),
-              label: const Text('Browse Files'),
+              label: Text('browse_files'.tr),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               ),

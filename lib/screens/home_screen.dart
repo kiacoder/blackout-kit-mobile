@@ -9,6 +9,8 @@ import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:get/get.dart';
 
 import '../controllers/config_controller.dart';
+import 'guide_screen.dart';
+import '../controllers/settings_controller.dart';
 import '../controllers/connection_controller.dart';
 import '../widgets/app_logo.dart';
 
@@ -22,12 +24,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final ConfigController _configController;
   late final ConnectionController _connectionController;
+  late final SettingsController _settingsController;
 
   @override
   void initState() {
     super.initState();
     _configController = Get.find<ConfigController>();
     _connectionController = Get.find<ConnectionController>();
+    _settingsController = Get.find<SettingsController>();
 
     // Do NOT fetch and probe the whole library on every launch.
     _initializeApp();
@@ -58,6 +62,17 @@ class _HomeScreenState extends State<HomeScreen> {
     // minutes-long scan a tap did nothing at all.
     if (_connectionController.operationInFlight) {
       _connectionController.cancelScan();
+      return;
+    }
+
+    // "Change DNS only": no config, no server, no routes. This is the whole
+    // point of the mode - someone who only wants a different resolver must not
+    // be told to go find a config first.
+    if (_settingsController.dnsOnlyMode.value) {
+      final ok = await _connectionController.connectDnsOnly();
+      if (!ok) {
+        _showSnackbar(_connectionController.statusMessage.value, Colors.red);
+      }
       return;
     }
 
@@ -104,6 +119,16 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const AppLogo(size: 28, showSubtitle: false, direction: Axis.horizontal),
         centerTitle: true,
         elevation: 0,
+        actions: [
+          // The guide is one tap from the first screen on purpose: a new user
+          // who does not know what a "config" is will not go looking in
+          // Settings for help.
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: 'guide'.tr,
+            onPressed: () => Get.to(() => const GuideScreen()),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -454,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               await _configController.fetchFromAllSources();
                             },
                         icon: const Icon(Icons.refresh, size: 16),
-                        label: const Text('Refresh'),
+                        label: Text('refresh'.tr),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -466,7 +491,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               await _configController.testAllConfigs();
                             },
                         icon: const Icon(Icons.speed, size: 16),
-                        label: const Text('Test All'),
+                        label: Text('test_all'.tr),
                       ),
                     ),
                   ],

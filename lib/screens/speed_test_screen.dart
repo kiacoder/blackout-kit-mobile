@@ -130,7 +130,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Speed & Latency Benchmark'),
+        title: Text('speed_benchmark'.tr),
         elevation: 0,
       ),
       body: Column(
@@ -264,7 +264,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.green.shade900,
                     ),
-                    child: const Text('Connect'),
+                    child: Text('connect'.tr),
                   ),
                 ],
               ),
@@ -279,7 +279,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
               final configs = _configController.visibleConfigs;
               if (configs.isEmpty) {
                 return Center(
-                  child: Text('No configs to benchmark', style: TextStyle(color: theme.hintColor)),
+                  child: Text('no_configs_benchmark'.tr, style: TextStyle(color: theme.hintColor)),
                 );
               }
 

@@ -53,6 +53,16 @@ class BlackoutVpnService : VpnService() {
         const val EXTRA_SOCKS_PORT = "socksPort"
         const val EXTRA_DNS = "dns"
         const val EXTRA_DNS_SERVERS = "dnsServers"
+
+        /**
+         * DNS-only session: advertise the resolvers, route nothing.
+         *
+         * No core is started and no route is added, so ordinary traffic keeps
+         * using the physical network; only name lookups move to the chosen
+         * resolver. That is the "change only my DNS" case, which previously
+         * required a full tunnel.
+         */
+        const val EXTRA_DNS_ONLY = "dnsOnly"
         const val EXTRA_ALLOWED_APPS = "allowedApps"
         const val EXTRA_DISALLOWED_APPS = "disallowedApps"
 
@@ -249,9 +259,13 @@ class BlackoutVpnService : VpnService() {
             intent?.getStringArrayListExtra(EXTRA_DISALLOWED_APPS) ?: emptyList()
         val xrayConfig = intent?.getStringExtra(EXTRA_XRAY_CONFIG)
         val singboxConfig = intent?.getStringExtra(EXTRA_SINGBOX_CONFIG)
+        val dnsOnly = intent?.getBooleanExtra(EXTRA_DNS_ONLY, false) ?: false
 
         Thread({
-            val ok = establish(
+            val ok = if (dnsOnly) {
+                establishDnsOnly(dnsServers, displayName)
+            } else {
+                establish(
                 protocol = protocol,
                 displayName = displayName,
                 socksPort = socksPort,
@@ -259,9 +273,10 @@ class BlackoutVpnService : VpnService() {
                 allowed = allowed,
                 disallowed = disallowed,
                 holdOnFailure = holdOnFailure,
-                xrayConfig = xrayConfig,
-                singboxConfig = singboxConfig
-            )
+                    xrayConfig = xrayConfig,
+                    singboxConfig = singboxConfig
+                )
+            }
 
             mainHandler.post {
                 connectResultCallback?.invoke(ok)
@@ -503,6 +518,80 @@ class BlackoutVpnService : VpnService() {
             protocol = protocol
         )
     }
+
+    /**
+     * DNS-only session: advertise the resolvers and route nothing.
+     *
+     * The interface is created so Android adopts these resolvers for every app,
+     * but no route is added — so ordinary traffic keeps using the physical
+     * network and only name lookups move. The tun descriptor is held open
+     * (nothing reads it) purely to keep the interface, and with it the DNS
+     * setting, alive; `teardown()` closes it as usual.
+     *
+     * This exists because changing DNS used to require a full tunnel: a user
+     * who only wanted a different resolver had to have a config and route all
+     * their traffic through a server to get it.
+     */
+    private fun establishDnsOnly(dnsServers: List<String>, displayName: String): Boolean {
+        if (tun != null) teardown()
+
+        return try {
+            val builder = Builder()
+                .setSession(displayName)
+                .setMtu(VPN_MTU)
+                .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
+
+            var accepted = 0
+            for (server in dnsServers) {
+                try {
+                    builder.addDnsServer(server)
+                    accepted++
+                } catch (e: Exception) {
+                    Log.w(TAG, "rejected DNS server '$server': ${e.message}")
+                }
+            }
+            // Without a resolver this would be a VPN that changes nothing while
+            // telling the user it changed something.
+            if (accepted == 0) {
+                lastError = "No usable DNS server was accepted ($dnsServers)."
+                Log.e(TAG, lastError!!)
+                notifyStatus("error")
+                return false
+            }
+
+            // Deliberately NO addRoute(). Anything routed would be captured by
+            // an interface nothing reads, and the device would go dark.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                builder.setMetered(false)
+            }
+
+            val fd = builder.establish()
+            if (fd == null) {
+                lastError = "establish() returned null - VPN consent missing or revoked"
+                Log.e(TAG, lastError!!)
+                notifyStatus("error")
+                return false
+            }
+            tun = fd
+
+            activeProtocol = "dns"
+            activeName = displayName
+            isRunning = true
+            activeProtocolId = "dns"
+            activeDisplayName = displayName
+            connectedAtMs = System.currentTimeMillis()
+            lastError = null
+            Log.i(TAG, "DNS-only up: ${dnsServers.joinToString()} tun=${fd.fd}")
+            notifyStatus("connected")
+            true
+        } catch (e: Exception) {
+            lastError = "DNS-only establish failed: ${e.message}"
+            Log.e(TAG, lastError, e)
+            notifyStatus("error")
+            false
+        }
+    }
+
 
     /** The system revoked our tunnel (another VPN took over, or the user disabled it). */
     override fun onRevoke() {

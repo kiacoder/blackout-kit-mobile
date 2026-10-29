@@ -32,7 +32,7 @@ class _DebugScreenState extends State<DebugScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Debug & Logs'),
+        title: Text('debug_logs'.tr),
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
@@ -73,11 +73,11 @@ class _DebugScreenState extends State<DebugScreen>
                   onPressed: () {
                     _debugService.clearLogs();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Logs cleared')),
+                      SnackBar(content: Text('logs_cleared'.tr)),
                     );
                   },
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('Clear'),
+                  label: Text('clear'.tr),
                 ),
                 const SizedBox(width: 8),
                 TextButton.icon(
@@ -85,7 +85,7 @@ class _DebugScreenState extends State<DebugScreen>
                     _showExportDialog();
                   },
                   icon: const Icon(Icons.share),
-                  label: const Text('Export'),
+                  label: Text('export'.tr),
                 ),
               ],
             ),
@@ -297,7 +297,7 @@ class _DebugScreenState extends State<DebugScreen>
             _showExportDialog();
           },
           icon: const Icon(Icons.download),
-          label: const Text('Export All Logs'),
+          label: Text('export_all_logs'.tr),
         ),
       ],
     );
@@ -326,14 +326,14 @@ class _DebugScreenState extends State<DebugScreen>
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Export Logs'),
-          content: const Text('Logs exported to clipboard'),
+          title: Text('export_logs'.tr),
+          content: Text('logs_exported'.tr),
           actions: [
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
               },
-              child: const Text('Close'),
+              child: Text('close'.tr),
             ),
           ],
         );

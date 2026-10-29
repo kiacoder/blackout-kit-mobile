@@ -84,7 +84,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Split Tunneling Apps'),
+        title: Text('split_tunneling_apps'.tr),
         elevation: 0,
       ),
       body: Column(
@@ -129,18 +129,18 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                 }),
                 const Divider(),
                 const SizedBox(height: 8),
-                const Text('Mode:', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text('mode_label'.tr, style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Obx(() => Row(
                       children: [
                         Expanded(
                           child: ChoiceChip(
-                            label: const Row(
+                            label: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.filter_alt_outlined, size: 16),
                                 SizedBox(width: 4),
-                                Text('Whitelist (VPN Only)'),
+                                Text('split_mode_whitelist'.tr),
                               ],
                             ),
                             selected: _service.mode == 'whitelist',
@@ -152,12 +152,12 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: ChoiceChip(
-                            label: const Row(
+                            label: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.block_outlined, size: 16),
                                 SizedBox(width: 4),
-                                Text('Bypass (Direct)'),
+                                Text('split_mode_bypass'.tr),
                               ],
                             ),
                             selected: _service.mode == 'blacklist',

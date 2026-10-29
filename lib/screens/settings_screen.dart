@@ -12,6 +12,8 @@ import '../controllers/connection_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../models/dns_provider.dart';
 import '../services/dns_exit_advisor.dart';
+import 'guide_screen.dart';
+import '../services/localization_service.dart';
 import '../services/dns_leak_prevention_service.dart';
 import '../services/ip_info_service.dart';
 import '../services/kill_switch_service.dart';
@@ -59,7 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text('settings'.tr),
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -73,15 +75,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'VPN Settings',
               children: [
                 Obx(() => SwitchListTile(
-                  title: const Text('Auto-Connect on Launch'),
+                  title: Text('auto_connect'.tr),
                   subtitle:
-                    const Text('Automatically connect to VPN when app starts'),
+                    Text('auto_connect_desc'.tr),
                   value: _settingsController.autoConnect.value,
                   onChanged: _settingsController.toggleAutoConnect,
                 )),
                 Obx(() => SwitchListTile(
-                  title: const Text('Kill Switch'),
-                  subtitle: const Text('Block all traffic if VPN disconnects'),
+                  title: Text('kill_switch'.tr),
+                  subtitle: Text('block_non_vpn_desc'.tr),
                   value: _settingsController.killSwitchEnabled.value,
                   onChanged: _settingsController.toggleKillSwitch,
                 )),
@@ -92,7 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // the kill-switch flow already uses.
                 ListTile(
                   leading: const Icon(Icons.shield_outlined),
-                  title: const Text('Block Non-VPN Traffic'),
+                  title: Text('block_non_vpn'.tr),
                   subtitle: const Text(
                     'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.',
                   ),
@@ -100,14 +102,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => Get.find<KillSwitchService>().openSystemSettings(),
                 ),
                 Obx(() => SwitchListTile(
-                  title: const Text('Split Tunneling'),
-                  subtitle: const Text('Route selected apps outside VPN'),
+                  title: Text('split_tunneling'.tr),
+                  subtitle: Text('split_tunneling_desc'.tr),
                   value: _settingsController.splitTunnelingEnabled.value,
                   onChanged: _settingsController.toggleSplitTunneling,
                 )),
                 ListTile(
-                  title: const Text('Select Apps for Split Tunneling'),
-                  subtitle: Obx(() => Text('${_settingsController.splitTunnelingApps.length} apps selected')),
+                  title: Text('select_apps'.tr),
+                  subtitle: Obx(() => Text('${_settingsController.splitTunnelingApps.length} ${'apps_selected'.tr}')),
                   leading: const Icon(Icons.apps),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -122,7 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Appearance',
               children: [
                 Obx(() => ListTile(
-                  title: const Text('Theme'),
+                  title: Text('theme'.tr),
                   subtitle: Text(_getThemeLabel(
                     _settingsController.theme.value,
                   )),
@@ -136,14 +138,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _showThemeDialog,
                 )),
                 Obx(() => SwitchListTile(
-                  title: const Text('Keep Screen Awake'),
-                  subtitle: const Text('Prevent screen from turning off during config testing or active VPN'),
+                  title: Text('keep_screen_awake'.tr),
+                  subtitle: Text('keep_screen_awake_desc'.tr),
                   secondary: const Icon(Icons.wb_incandescent_outlined),
                   value: _settingsController.keepScreenAwake.value,
                   onChanged: _settingsController.toggleKeepScreenAwake,
                 )),
                 Obx(() => SwitchListTile(
-                  title: const Text('Show Speed in Status Bar'),
+                  title: Text('show_speed_status_bar'.tr),
                   // Honest subtitle: the tester measures latency, not throughput.
                   // The old copy promised a live speed the app never produced.
                   subtitle: const Text(
@@ -168,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'DNS',
               children: [
                 Obx(() => SwitchListTile(
-                  title: const Text('DNS leak prevention'),
+                  title: Text('dns_leak_prevention'.tr),
                   subtitle: Text(
                     _settingsController.dnsLeakPreventionEnabled.value
                         ? 'DNS queries are resolved inside the tunnel through '
@@ -180,15 +182,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _settingsController.toggleDnsLeakPrevention(value);
                   },
                 )),
+                // "Change DNS only" — the answer to "I just want a different
+                // resolver, not a VPN". It builds an interface with the
+                // resolver attached and no routes, so nothing is tunnelled.
+                Obx(() => SwitchListTile(
+                  title: Text('dns_only_mode'.tr),
+                  subtitle: Text('dns_only_mode_desc'.tr),
+                  secondary: const Icon(Icons.dns),
+                  value: _settingsController.dnsOnlyMode.value,
+                  onChanged: (value) {
+                    _settingsController.setDnsOnlyMode(value);
+                    if (Get.isRegistered<ConnectionController>() &&
+                        Get.find<ConnectionController>().isConnected) {
+                      Get.snackbar(
+                        'reconnect_to_apply'.tr,
+                        'dns_only_mode_desc'.tr,
+                        snackPosition: SnackPosition.BOTTOM,
+                        duration: const Duration(seconds: 4),
+                      );
+                    }
+                  },
+                )),
                 Obx(() => ListTile(
-                  title: const Text('DNS resolver'),
+                  title: Text('dns_resolver'.tr),
                   // Shows the whole pair, not just the primary: the tunnel
                   // advertises both addresses, and hiding the secondary made
                   // the "why is it using 185.51.200.2" question unanswerable.
                   subtitle: Text(_dnsSelectionSummary()),
                   leading: const Icon(Icons.dns_outlined),
-                  enabled: _settingsController.dnsLeakPreventionEnabled.value,
-                  onTap: _settingsController.dnsLeakPreventionEnabled.value
+                  // Enabled for DNS-only mode as well: picking a resolver is
+                  // the whole point of that mode, and gating this on the
+                  // leak-prevention toggle made the picker unreachable exactly
+                  // when the user wanted it.
+                  enabled: _settingsController.dnsLeakPreventionEnabled.value ||
+                      _settingsController.dnsOnlyMode.value,
+                  onTap: (_settingsController.dnsLeakPreventionEnabled.value ||
+                          _settingsController.dnsOnlyMode.value)
                       ? _showDnsResolverDialog
                       : null,
                 )),
@@ -210,7 +239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               .setDnsProvider(suggestion.suggestedKey);
                           _hintDnsTakesEffectOnReconnect();
                         },
-                        child: const Text('Use global'),
+                        child: Text('use_global'.tr),
                       ),
                     ),
                   );
@@ -221,15 +250,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // question that matters when a "connected" tunnel resolves
                 // nothing.
                 Obx(() => ListTile(
-                  title: const Text('Check resolvers'),
+                  title: Text('check_resolvers'.tr),
                   subtitle: const Text(
                     'Opens a TCP connection to port 53 on each address. A '
                     'resolver that fails here can still work over UDP — this '
                     'is a reachability hint, not a verdict.',
                   ),
                   leading: const Icon(Icons.network_check),
-                  enabled: _settingsController.dnsLeakPreventionEnabled.value,
-                  onTap: _settingsController.dnsLeakPreventionEnabled.value
+                  enabled: _settingsController.dnsLeakPreventionEnabled.value ||
+                      _settingsController.dnsOnlyMode.value,
+                  onTap: (_settingsController.dnsLeakPreventionEnabled.value ||
+                          _settingsController.dnsOnlyMode.value)
                       ? _checkDnsResolvers
                       : null,
                 )),
@@ -248,11 +279,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.language),
                   onTap: _showLanguageDialog,
                 )),
+                ListTile(
+                  title: Text('guide'.tr),
+                  subtitle: Text('guide_subtitle'.tr),
+                  leading: const Icon(Icons.menu_book_outlined),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Get.to(() => const GuideScreen()),
+                ),
                 // "Analytics" claimed to send anonymous usage data while nothing
                 // was ever transmitted anywhere. The toggle is kept as a stored
                 // preference, but its description now says exactly that.
                 Obx(() => SwitchListTile(
-                  title: const Text('Show my location'),
+                  title: Text('show_my_location'.tr),
                   subtitle: const Text(
                     'Asks a third-party service for your IP and country. Off by '
                     'default - nothing leaves your device while it is off.',
@@ -281,7 +319,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 )),
                 Obx(() => SwitchListTile(
-                  title: const Text('Analytics'),
+                  title: Text('analytics'.tr),
                   subtitle: const Text(
                     'No data leaves your device - this only stores your preference',
                   ),
@@ -297,7 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 ListTile(
                   title: Text('engine_hub'.tr),
-                  subtitle: const Text('See which engines this build can actually run'),
+                  subtitle: Text('engine_hub_desc'.tr),
                   leading: const Icon(Icons.memory),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -313,14 +351,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _showProtocolDialog,
                 )),
                 Obx(() => SwitchListTile(
-                  title: const Text('Auto-Select Fastest'),
+                  title: Text('auto_select_fastest'.tr),
                   subtitle:
-                    const Text('Automatically use fastest working config'),
+                    Text('auto_select_fastest_desc'.tr),
                   value: _settingsController.autoSelectFastest.value,
                   onChanged: _settingsController.toggleAutoSelectFastest,
                 )),
                 Obx(() => ListTile(
-                  title: const Text('Auto-Test Interval'),
+                  title: Text('auto_test_interval'.tr),
                   subtitle: Text(
                     '${_settingsController.autoTestIntervalMinutes.value} minutes — '
                     'while the app is open, re-checks that the tunnel still loads '
@@ -331,7 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _showTestIntervalDialog,
                 )),
                 Obx(() => SwitchListTile(
-                  title: const Text('Site Check'),
+                  title: Text('site_check'.tr),
                   subtitle: const Text(
                     'Verify candidate configs by fetching real websites '
                     'through them, not just pinging the server',
@@ -340,7 +378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: _settingsController.setSiteCheckEnabled,
                 )),
                 Obx(() => SwitchListTile(
-                  title: const Text('Verbose core logs'),
+                  title: Text('verbose_core_logs'.tr),
                   subtitle: const Text(
                     'Core reports every packet decision to logcat — for '
                     'diagnosing a connected-but-nothing-loads tunnel',
@@ -349,7 +387,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: _settingsController.setCoreDebugLogs,
                 )),
                 Obx(() => ListTile(
-                  title: const Text('Site Check Websites'),
+                  title: Text('site_check_websites'.tr),
                   subtitle: Text(
                     _settingsController.siteCheckUrls.join(', '),
                     maxLines: 2,
@@ -368,8 +406,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Obx(() {
                   final sources = _configController.sources;
                   if (sources.isEmpty) {
-                    return const ListTile(
-                      title: Text('No repositories loaded'),
+                    return ListTile(
+                      title: Text('no_repositories'.tr),
                     );
                   }
                   // Count for every source in ONE pass. Calling this inside the
@@ -452,8 +490,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Advanced & Diagnostics',
               children: [
                 ListTile(
-                  title: const Text('System Logs & Inspector'),
-                  subtitle: const Text('View, filter, copy, and export real-time application logs'),
+                  title: Text('system_logs_inspector'.tr),
+                  subtitle: Text('debug_logs_desc'.tr),
                   leading: const Icon(Icons.article_outlined),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -468,12 +506,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'About',
               children: [
                 ListTile(
-                  title: const Text('App Version'),
+                  title: Text('app_version'.tr),
                   subtitle: Text(_appVersion),
                   leading: const Icon(Icons.info_outline),
                 ),
                 ListTile(
-                  title: const Text('GitHub'),
+                  title: Text('github'.tr),
                   subtitle: const Text('github.com/kiacoder/blackout-kit-mobile'),
                   leading: const Icon(Icons.code),
                   onTap: () {
@@ -486,8 +524,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
                 ListTile(
-                  title: const Text('Privacy Policy'),
-                  subtitle: const Text('No data collection. Open source & transparent.'),
+                  title: Text('privacy_policy'.tr),
+                  subtitle: Text('analytics_desc'.tr),
                   leading: const Icon(Icons.privacy_tip_outlined),
                   onTap: () {
                     Get.snackbar(
@@ -508,7 +546,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _showResetDialog,
                   icon: const Icon(Icons.restore),
-                  label: const Text('Reset to Defaults'),
+                  label: Text('reset_to_defaults'.tr),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
@@ -589,12 +627,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showThemeDialog() {
     Get.dialog(
       AlertDialog(
-        title: const Text('Select Theme'),
+        title: Text('select_theme'.tr),
         content: Obx(() => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             RadioListTile(
-              title: const Text('System Default'),
+              title: Text('theme_system'.tr),
               value: 'system',
               groupValue: _settingsController.theme.value,
               onChanged: (value) {
@@ -603,7 +641,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             RadioListTile(
-              title: const Text('Light'),
+              title: Text('theme_light'.tr),
               value: 'light',
               groupValue: _settingsController.theme.value,
               onChanged: (value) {
@@ -612,7 +650,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
             RadioListTile(
-              title: const Text('Dark'),
+              title: Text('theme_dark'.tr),
               value: 'dark',
               groupValue: _settingsController.theme.value,
               onChanged: (value) {
@@ -684,7 +722,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final service = Get.find<DNSLeakPreventionService>();
     Get.dialog(
       AlertDialog(
-        title: const Text('Resolver reachability'),
+        title: Text('resolver_reachability'.tr),
         content: FutureBuilder<Map<String, bool>>(
           future: service.probeResolvers(),
           builder: (context, snapshot) {
@@ -696,7 +734,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             }
             final results = snapshot.data!;
             if (results.isEmpty) {
-              return const Text('No resolver is selected.');
+              return Text('no_resolver_selected'.tr);
             }
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -727,7 +765,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
         ),
         actions: [
-          TextButton(onPressed: Get.back, child: const Text('Close')),
+          TextButton(onPressed: Get.back, child: Text('close'.tr)),
         ],
       ),
     );
@@ -741,9 +779,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showDnsResolverDialog() {
     final controller =
         TextEditingController(text: _settingsController.customDnsServer.value);
+    // What the field held when the dialog opened. "Done" only applies the
+    // typed address if the user actually changed it — otherwise picking a
+    // provider from the list and pressing Done immediately overwrote that
+    // choice with the stale text, silently switching the selection back to
+    // 'custom' and the old address.
+    final openingText = controller.text.trim();
     Get.dialog(
       AlertDialog(
-        title: const Text('DNS resolver'),
+        title: Text('dns_resolver'.tr),
         contentPadding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
         content: SizedBox(
           width: 360,
@@ -781,7 +825,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               setDialogState(() {});
                               _hintDnsTakesEffectOnReconnect();
                             },
-                            child: const Text('Use global'),
+                            child: Text('use_global'.tr),
                           ),
                         ],
                       ),
@@ -812,6 +856,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               onChanged: (value) {
                                 if (value == null) return;
                                 _settingsController.setDnsProvider(value);
+                                // Mirror the choice in the text field so it
+                                // never shows an address the app is not using.
+                                controller.text = _settingsController
+                                    .customDnsServer.value;
                                 setDialogState(() {});
                                 _hintDnsTakesEffectOnReconnect();
                               },
@@ -844,19 +892,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: Get.back, child: const Text('Cancel')),
+          TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
           TextButton(
             onPressed: () async {
               final trimmed = controller.text.trim();
-              if (trimmed.isNotEmpty &&
-                  trimmed != _settingsController.customDnsServer.value) {
+              // `trimmed != openingText` is the part that matters: comparing
+              // against the stored value meant a provider picked from the list
+              // was replaced by whatever the field still contained.
+              if (trimmed.isNotEmpty && trimmed != openingText) {
                 // Keep the dialog open when the address is refused, so the
                 // user can fix it instead of closing on a silent no-op.
                 if (!await _applyCustomDns(trimmed)) return;
               }
               Get.back();
             },
-            child: const Text('Done'),
+            child: Text('done'.tr),
           ),
         ],
       ),
@@ -899,20 +949,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showLanguageDialog() {
     Get.dialog(
       AlertDialog(
-        title: const Text('Select Language'),
+        title: Text('select_language'.tr),
         content: Obx(() => SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildLangRadio('English', 'en'),
-              _buildLangRadio('Español', 'es'),
-              _buildLangRadio('Français', 'fr'),
-              _buildLangRadio('Deutsch', 'de'),
-              _buildLangRadio('中文', 'zh'),
-              _buildLangRadio('日本語', 'ja'),
-              _buildLangRadio('Русский', 'ru'),
-              _buildLangRadio('العربية', 'ar'),
-              _buildLangRadio('Português', 'pt'),
+              // Driven by the catalogue, not a hand-written list: the old
+              // dialog offered nine languages while only three had any
+              // translated body text, so picking Spanish changed almost
+              // nothing and looked broken.
+              for (final entry
+                  in LocalizationService.supportedLanguages.entries)
+                _buildLangRadio(entry.value, entry.key),
             ],
           ),
         )),
@@ -1003,14 +1051,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     enabled: false,
                     dense: true,
                     title: Text(protocol.toUpperCase()),
-                    subtitle: const Text('Requires the sing-box runtime'),
+                    subtitle: Text('requires_singbox'.tr),
                   ),
               ],
             ],
           ),
         )),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Close')),
+          TextButton(onPressed: () => Get.back(), child: Text('close'.tr)),
         ],
       ),
     );
@@ -1027,7 +1075,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     Get.dialog(
       AlertDialog(
-        title: const Text('Site Check Websites'),
+        title: Text('site_check_websites'.tr),
         content: SizedBox(
           width: double.maxFinite,
           child: TextField(
@@ -1049,11 +1097,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _settingsController.resetSiteCheckUrls();
               controller.text = _settingsController.siteCheckUrls.join('\n');
             },
-            child: const Text('Reset to defaults'),
+            child: Text('reset_to_defaults'.tr),
           ),
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr),
           ),
           ElevatedButton(
             onPressed: () {
@@ -1062,7 +1110,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
               Get.back();
             },
-            child: const Text('Save'),
+            child: Text('save'.tr),
           ),
         ],
       ),
@@ -1076,7 +1124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     Get.dialog(
       AlertDialog(
-        title: const Text('Auto-Test Interval'),
+        title: Text('auto_test_interval'.tr),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
@@ -1088,7 +1136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr),
           ),
           ElevatedButton(
             onPressed: () {
@@ -1101,7 +1149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
               Get.back();
             },
-            child: const Text('Save'),
+            child: Text('save'.tr),
           ),
         ],
       ),
@@ -1173,7 +1221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _configController.fetchFromSource(source);
                 },
                 icon: const Icon(Icons.refresh),
-                label: const Text('Refresh Configs'),
+                label: Text('refresh_configs'.tr),
               ),
             ),
           ],
@@ -1188,14 +1236,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showResetDialog() {
     Get.dialog(
       AlertDialog(
-        title: const Text('Reset to Defaults?'),
+        title: Text('reset_to_defaults_confirm'.tr),
         content: const Text(
           'This will reset all settings to their default values. Your saved configs will not be affected.',
         ),
         actions: [
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1212,7 +1260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Reset'),
+            child: Text('reset'.tr),
           ),
         ],
       ),
@@ -1387,16 +1435,16 @@ class _UpdateSectionState extends State<_UpdateSection> {
               ),
             'available' => ElevatedButton(
                 onPressed: _downloadAndInstall,
-                child: const Text('Update'),
+                child: Text('update'.tr),
               ),
             'ready' => ElevatedButton(
                 // _startInstaller, not a bare installApk: the raw call throws
                 // on a refused install permission and the tile then sat on
                 // "ready" forever with no explanation.
                 onPressed: _startInstaller,
-                child: const Text('Install'),
+                child: Text('install'.tr),
               ),
-            'error' => TextButton(onPressed: _check, child: const Text('Retry')),
+            'error' => TextButton(onPressed: _check, child: Text('retry'.tr)),
             _ => IconButton(onPressed: _check, icon: const Icon(Icons.refresh)),
           },
         ),

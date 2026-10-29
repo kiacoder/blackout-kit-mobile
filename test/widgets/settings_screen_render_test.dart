@@ -21,6 +21,7 @@ import 'package:blackout_kit_mobile/services/github_service.dart';
 import 'package:blackout_kit_mobile/services/secure_vault.dart';
 import 'package:blackout_kit_mobile/services/tester_service.dart';
 import 'package:blackout_kit_mobile/services/update_service.dart';
+import 'package:blackout_kit_mobile/services/localization_service.dart';
 
 void main() {
   late Directory dir;
@@ -54,7 +55,15 @@ void main() {
   testWidgets('settings renders its sections, not a blank gray box',
       (tester) async {
     await tester.pumpWidget(
-      GetMaterialApp(home: const SettingsScreen()),
+      GetMaterialApp(
+        // The real app always installs the catalogue; without it `.tr`
+        // resolves to the raw key and every assertion here would be looking
+        // for `settings` instead of `Settings`.
+        translations: LocalizationService(),
+        locale: const Locale('en'),
+        fallbackLocale: const Locale('en'),
+        home: const SettingsScreen(),
+      ),
     );
     await tester.pump();
 
@@ -68,7 +77,15 @@ void main() {
   testWidgets('settings scrolls end to end without a layout exception',
       (tester) async {
     await tester.pumpWidget(
-      GetMaterialApp(home: const SettingsScreen()),
+      GetMaterialApp(
+        // The real app always installs the catalogue; without it `.tr`
+        // resolves to the raw key and every assertion here would be looking
+        // for `settings` instead of `Settings`.
+        translations: LocalizationService(),
+        locale: const Locale('en'),
+        fallbackLocale: const Locale('en'),
+        home: const SettingsScreen(),
+      ),
     );
     await tester.pump();
 

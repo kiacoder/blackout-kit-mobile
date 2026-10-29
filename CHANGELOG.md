@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-29
+
+### Added
+- **The app speaks three languages, and only three.** English, Persian
+  (فارسی) and Simplified Chinese (简体中文). The picker used to list nine while
+  only three had any translated body text, so choosing Spanish moved a radio
+  button and left the UI in English — which looked broken. The list is now
+  driven by the catalogue itself, and every visible string goes through it:
+  a language change re-renders the whole app, including dialogs, snackbars and
+  the new guide. Persian switches the layout to RTL.
+  `test/localization_coverage_test.dart` fails the build if a hardcoded English
+  string reappears in a screen or widget.
+- **"Change DNS only"** — change the resolver without a VPN. It establishes an
+  interface with the resolver attached and **no routes**, so ordinary traffic
+  keeps going out directly and only name lookups move. No config, no server,
+  no core. This was impossible before: DNS was a builder-time input to a
+  tunnel, so a user who only wanted a different resolver had to find a config
+  and route everything through a server to get one.
+- **Built-in guide** (`lib/screens/guide_screen.dart`), one tap from the home
+  screen and from Settings. Six steps in plain language, no jargon, translated
+  into all three languages: get a config, add it, connect, check it works, what
+  to do when a site is slow or asks for a captcha, and how to change only DNS.
+
+### Fixed
+- **Selecting a resolver did nothing when "Change DNS only" was on.** The
+  resolver row was enabled only while DNS leak prevention was on, so the picker
+  was unreachable in exactly the mode that needs it — and even when reachable,
+  the service returned `1.1.1.1` while the toggle was off, so the DNS-only
+  session silently used Cloudflare instead of the chosen pair.
+  `selectedResolvers` is now independent of the toggle; `resolvers` keeps its
+  tunnel meaning.
+- **Picking a resolver and pressing Done reverted it.** The dialog compared the
+  text field against the stored address, so the old value (still in the field)
+  was re-applied and the selection flipped back to "custom". It now only
+  applies the typed address when the user actually changed it, and the field
+  mirrors a picked provider.
+
 ## [1.14.0] - 2026-10-29
 
 ### Added

@@ -112,7 +112,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Blackout Engine Hub'),
+        title: Text('engine_hub'.tr),
         elevation: 0,
         actions: [
           IconButton(
@@ -476,7 +476,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 12),
-              const Text('Supported Protocols:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('supported_protocols'.tr, style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 8,
@@ -495,7 +495,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 12),
-              const Text('Requirements:', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('requirements'.tr, style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               for (final req in engine.requirements)
                 Padding(

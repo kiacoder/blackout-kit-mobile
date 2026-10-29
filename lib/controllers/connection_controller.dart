@@ -60,6 +60,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   final RxBool isDNSLeakPreventionEnabled = RxBool(false);
   final RxBool isSplitTunnelingEnabled = RxBool(false);
 
+  /// True while the live session only changes DNS (no routes, no engine).
+  final RxBool isDnsOnly = RxBool(false);
+
   /// Batched full-scan: the candidate list is walked in groups of this size.
   /// Each batch is TCP-probed, its survivors site-checked and connect-verified
   /// in rank order, and only a fully exhausted batch advances to the next one.
@@ -957,6 +960,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         exitIpInfo.value = null;
         connectionUptime.value = 0;
         _connectionStartTime = null;
+        isDnsOnly.value = false;
         debugService.logInfo('VPN disconnected');
         debugService.logAction('disconnected');
         // Unawaited: the home row refreshes in the background.
@@ -1138,6 +1142,55 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       case ConnectionState.error:
         return 'error';
     }
+  }
+
+  /// Start a DNS-only session: change the resolver, route nothing.
+  ///
+  /// The tunnel's DNS is otherwise a builder-time decision that requires a
+  /// config and a server. Someone who only wants a different resolver had no
+  /// way to get one, so this path takes the same resolvers and establishes an
+  /// interface with no routes and no engine: traffic stays direct, name
+  /// lookups move.
+  Future<bool> connectDnsOnly() async {
+    // selectedResolvers, not resolvers: the latter answers 1.1.1.1 while the
+    // leak-prevention toggle is off, which is exactly the case DNS-only mode
+    // exists for.
+    final resolvers = dnsLeakPreventionService.selectedResolvers
+        .where(VpnSessionOptions.isTunnelDns)
+        .toList();
+    if (resolvers.isEmpty) {
+      state.value = ConnectionState.error;
+      statusMessage.value = 'dns_only_needs_resolver'.tr;
+      return false;
+    }
+
+    state.value = ConnectionState.connecting;
+    _sessionEpoch++;
+    isDnsOnly.value = true;
+    statusMessage.value = '${'connecting'.tr} ${resolvers.join(", ")}';
+
+    final prepared = await vpnService.prepare();
+    if (!prepared) {
+      state.value = ConnectionState.error;
+      isDnsOnly.value = false;
+      statusMessage.value = vpnService.lastError ?? 'VPN permission was denied';
+      return false;
+    }
+
+    final ok = await vpnService.connectDnsOnly(resolvers);
+    if (!ok) {
+      state.value = ConnectionState.error;
+      isDnsOnly.value = false;
+      statusMessage.value = vpnService.lastError ?? 'dns_only_needs_resolver'.tr;
+      return false;
+    }
+
+    state.value = ConnectionState.connected;
+    statusMessage.value = 'dns_only_started'.tr;
+    _connectionStartTime = DateTime.now();
+    _startUptimeCounter();
+    debugService.logInfo('DNS-only session: ${resolvers.join(", ")}');
+    return true;
   }
 
   /// Assembles the builder-time options from the three feature services.

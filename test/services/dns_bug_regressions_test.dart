@@ -182,4 +182,94 @@ void main() {
       expect(servers.contains('localhost'), isFalse);
     });
   });
+
+  // ── BUG 7: DNS-only mode ignored the chosen resolver ─────────────────────
+  //
+  // `resolvers` answers 1.1.1.1 whenever the leak-prevention toggle is off,
+  // which is precisely the state DNS-only mode runs in — so "change DNS only"
+  // silently used Cloudflare instead of the pair the user picked.
+  group('the selected pair survives the leak-prevention toggle', () {
+    late Directory dir;
+    late SettingsController settings;
+    late DNSLeakPreventionService service;
+
+    setUp(() async {
+      await Hive.close();
+      dir = await Directory.systemTemp.createTemp('bk_dns_selected');
+      Hive.init(dir.path);
+      settings = SettingsController();
+      Get.put<SettingsController>(settings);
+      await settings.initialize();
+      service = DNSLeakPreventionService();
+    });
+
+    tearDown(() async {
+      Get.reset();
+      await Hive.close();
+      await dir.delete(recursive: true);
+    });
+
+    test('selectedResolvers ignores isEnabled', () {
+      settings.setDnsProvider('shecan');
+      expect(settings.dnsLeakPreventionEnabled.value, isFalse);
+
+      expect(service.resolvers, ['1.1.1.1']); // tunnel answer, unchanged
+      expect(service.selectedResolvers, ['178.22.122.100', '185.51.200.2']);
+    });
+
+    test('selectedResolvers follows the toggle when enabled', () {
+      settings.toggleDnsLeakPrevention(true);
+      settings.setDnsProvider('google');
+      expect(service.selectedResolvers, ['8.8.8.8', '8.8.4.4']);
+      expect(service.resolvers, ['8.8.8.8', '8.8.4.4']);
+    });
+
+    test('a custom address is still honoured with the toggle off', () {
+      settings.setCustomDnsServer('9.9.9.9');
+      expect(service.selectedResolvers, ['9.9.9.9']);
+    });
+
+    test('DNS-only uses the selected pair, not the fallback', () {
+      // The controller reads selectedResolvers; this pins the contract it
+      // depends on so a future change to `resolvers` cannot silently undo it.
+      settings.setDnsProvider('radar');
+      final forDnsOnly = service.selectedResolvers
+          .where(VpnSessionOptions.isTunnelDns)
+          .toList();
+      expect(forDnsOnly, ['10.202.10.10', '10.202.10.11']);
+    });
+  });
+
+  // ── BUG 8: a picked provider was overwritten by the stale text field ─────
+  //
+  // The dialog compared the text field against the *stored* address, so
+  // picking a provider and pressing Done immediately re-applied the old
+  // address and switched the selection back to 'custom'.
+  group('picking a provider does not get reverted by the custom field', () {
+    late Directory dir;
+    late SettingsController settings;
+
+    setUp(() async {
+      await Hive.close();
+      dir = await Directory.systemTemp.createTemp('bk_dns_dialog');
+      Hive.init(dir.path);
+      settings = SettingsController();
+      Get.put<SettingsController>(settings);
+      await settings.initialize();
+    });
+
+    tearDown(() async {
+      Get.reset();
+      await Hive.close();
+      await dir.delete(recursive: true);
+    });
+
+    test('the field mirrors the picked provider', () {
+      settings.setCustomDnsServer('9.9.9.9');
+      settings.setDnsProvider('cloudflare');
+      // What the dialog does after a pick: controller.text = customDnsServer.
+      expect(settings.customDnsServer.value, '1.1.1.1');
+      expect(settings.dnsProviderKey.value, 'cloudflare');
+    });
+  });
 }

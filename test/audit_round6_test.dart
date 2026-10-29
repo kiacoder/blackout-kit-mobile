@@ -130,7 +130,9 @@ void main() {
   group('BKM-012 the Paste button uses the multi-config path', () {
     test('paste does not call ConfigParser.parse directly', () {
       final src = _source('lib/screens/config_import_screen.dart');
-      final pasteAt = src.indexOf("label: const Text('Paste')");
+      // The label is translated now, so it is `'paste'.tr` rather than a
+      // literal - the assertion is about the handler, not the wording.
+      final pasteAt = src.indexOf("label: Text('paste'.tr)");
       expect(pasteAt, greaterThan(-1));
       // The handler sits just above the label.
       final window = src.substring(

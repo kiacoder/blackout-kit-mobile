@@ -107,6 +107,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             // runtime grant; the permission was declared but never asked for.
             "requestNotificationPermission" -> handleNotificationPermission(result)
             "connect" -> handleConnect(call, result)
+            // DNS-only session: same consent, no core, no routes. Separate
+            // entry point because it needs no config document at all.
+            "connectDnsOnly" -> handleConnect(call, result, dnsOnly = true)
             "disconnect" -> handleDisconnect(result)
             "isRunning" -> result.success(BlackoutVpnService.isRunning)
             "getStatus" -> result.success(statusMap())
@@ -273,7 +276,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         act.startActivityForResult(consent, PREPARE_REQUEST)
     }
 
-    private fun handleConnect(call: MethodCall, result: MethodChannel.Result) {
+    private fun handleConnect(
+        call: MethodCall,
+        result: MethodChannel.Result,
+        dnsOnly: Boolean = false
+    ) {
         val ctx = appContext
         if (ctx == null) {
             result.error("NO_CONTEXT", "Plugin is not attached to a Flutter engine", null)
@@ -330,6 +337,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 BlackoutVpnService.EXTRA_DISALLOWED_APPS,
                 ArrayList(call.argument<List<String>>("disallowedApps") ?: emptyList())
             )
+            putExtra(BlackoutVpnService.EXTRA_DNS_ONLY, dnsOnly)
         }
 
         try {

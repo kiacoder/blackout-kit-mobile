@@ -144,7 +144,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
 
     Get.dialog(
       AlertDialog(
-        title: Text('QR Code - ${widget.config.displayName}'),
+        title: Text('${'qr_code'.tr} - ${widget.config.displayName}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -205,7 +205,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
         actions: [
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Close'),
+            child: Text('close'.tr),
           ),
           ElevatedButton.icon(
             onPressed: () {
@@ -219,7 +219,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               );
             },
             icon: const Icon(Icons.copy),
-            label: const Text('Copy Config'),
+            label: Text('copy_config'.tr),
           ),
         ],
       ),
@@ -233,7 +233,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Edit: ${widget.config.displayName}'),
+        title: Text('${'edit_config'.tr}: ${widget.config.displayName}'),
         elevation: 0,
         actions: [
           IconButton(
@@ -334,7 +334,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               child: OutlinedButton.icon(
                 onPressed: _showQrDialog,
                 icon: const Icon(Icons.qr_code),
-                label: const Text('Show QR Code'),
+                label: Text('show_qr'.tr),
               ),
             ),
             const SizedBox(width: 12),
@@ -342,7 +342,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               child: ElevatedButton.icon(
                 onPressed: _saveChanges,
                 icon: const Icon(Icons.save),
-                label: const Text('Save Config'),
+                label: Text('save_config'.tr),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,

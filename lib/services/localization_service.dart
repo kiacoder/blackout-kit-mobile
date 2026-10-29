@@ -65,6 +65,24 @@ class LocalizationService extends GetxService implements Translations {
   static bool isSupported(String languageCode) =>
       supportedLanguages.containsKey(languageCode);
 
+  /// Resolve [key] for non-widget code (controllers, services, log lines).
+  ///
+  /// Widgets should use `'key'.tr`. Code outside the tree should use this
+  /// instead: `.tr` depends on GetX's active locale, which is null in a plain
+  /// unit test, so a service would return the raw key — and `describe()` is
+  /// rendered in Settings, not only written to a log.
+  ///
+  /// Falls back to English when no locale is active, and substitutes `@name`
+  /// placeholders from [params].
+  static String t(String key, [Map<String, String>? params]) {
+    final language = Get.locale?.languageCode ?? fallbackLanguageCode;
+    var text = translate(key, language: language);
+    if (params != null) {
+      params.forEach((name, value) => text = text.replaceAll('@$name', value));
+    }
+    return text;
+  }
+
   /// Resolve [key] in an explicit language, for callers that are not inside a
   /// widget tree (services, log lines, tests). Widgets should use `'key'.tr`.
   static String translate(
@@ -284,6 +302,42 @@ class LocalizationService extends GetxService implements Translations {
       'dns_only_started': 'DNS only - traffic still goes out directly',
       'dns_only_needs_resolver': 'Pick a resolver first (Settings, DNS).',
       'dns_only_no_config_needed': 'No config needed for DNS only.',
+
+      // Status line (connection controller). Shown on the home screen, so it
+      // follows the language like everything else.
+      'status_ready': 'Ready',
+      'status_tunnel_ended': 'Tunnel ended',
+      'status_finding_fastest': 'Finding fastest config...',
+      'status_connecting_to': 'Connecting to @name...',
+      'status_connected_to': 'Connected to @name',
+      'status_disconnected': 'Disconnected',
+      'status_disconnecting': 'Disconnecting...',
+      'status_failed_disconnect': 'Failed to disconnect',
+      'status_stopping': 'Stopping...',
+      'status_scan_stopped': 'Scan stopped',
+      'status_pinging': 'Pinging @label (@count servers)...',
+      'status_invalid_config': 'Invalid config',
+      'status_connection_error': 'Connection error: @error',
+      'status_disconnect_error': 'Disconnect error: @error',
+      'status_test_error': 'Test error: @error',
+      'status_testing_connection': 'Testing connection...',
+      'status_connection_test_failed': 'Connection test failed',
+      'status_error': 'Error: @error',
+      'status_permission_denied': 'VPN permission was denied',
+      'status_dns_applies': 'DNS leak prevention applies after reconnecting',
+      'status_split_applies': 'Split tunneling applies after reconnecting',
+
+      // Feature summaries (used as subtitles, not only in logs).
+      'split_desc_off': 'Off',
+      'split_desc_no_apps': 'On, but no apps selected',
+      'split_desc_only': 'On - only @count app(s)',
+      'split_desc_except': 'On - all except @count app(s)',
+      'ks_desc_off': 'Off',
+      'ks_desc_full': 'On - blocks traffic if the tunnel drops, including after a reboot',
+      'ks_desc_always_on': 'On - blocks traffic while the app runs. Turn on "Block connections without VPN" in system settings for full protection',
+      'ks_desc_running': 'On - blocks traffic while the app runs. Set this app as always-on VPN in system settings to also cover reboots and force-stops',
+      'dns_desc_off': 'Off - the system resolver is used',
+      'dns_desc_on': 'On - queries resolved inside the tunnel via @name (@servers)',
     },
 
     // ───────────────────────────── Persian ─────────────────────────────
@@ -478,6 +532,39 @@ class LocalizationService extends GetxService implements Translations {
       'dns_only_started': 'فقط DNS - ترافیک همچنان مستقیم می‌رود',
       'dns_only_needs_resolver': 'اول یک سرور DNS انتخاب کنید (تنظیمات، DNS).',
       'dns_only_no_config_needed': 'برای فقط DNS به کانفیگ نیازی نیست.',
+
+      'status_ready': 'آماده',
+      'status_tunnel_ended': 'تونل بسته شد',
+      'status_finding_fastest': 'در حال یافتن سریع‌ترین کانفیگ...',
+      'status_connecting_to': 'در حال اتصال به @name...',
+      'status_connected_to': 'متصل به @name',
+      'status_disconnected': 'قطع شد',
+      'status_disconnecting': 'در حال قطع...',
+      'status_failed_disconnect': 'قطع اتصال ناموفق بود',
+      'status_stopping': 'در حال توقف...',
+      'status_scan_stopped': 'اسکن متوقف شد',
+      'status_pinging': 'در حال پینگ @label (@count سرور)...',
+      'status_invalid_config': 'کانفیگ نامعتبر',
+      'status_connection_error': 'خطای اتصال: @error',
+      'status_disconnect_error': 'خطای قطع اتصال: @error',
+      'status_test_error': 'خطای آزمایش: @error',
+      'status_testing_connection': 'در حال آزمایش اتصال...',
+      'status_connection_test_failed': 'آزمایش اتصال ناموفق بود',
+      'status_error': 'خطا: @error',
+      'status_permission_denied': 'اجازه VPN داده نشد',
+      'status_dns_applies': 'جلوگیری از نشت DNS پس از اتصال دوباره اعمال می‌شود',
+      'status_split_applies': 'تونل تفکیکی پس از اتصال دوباره اعمال می‌شود',
+
+      'split_desc_off': 'خاموش',
+      'split_desc_no_apps': 'روشن، ولی برنامه‌ای انتخاب نشده',
+      'split_desc_only': 'روشن - فقط @count برنامه',
+      'split_desc_except': 'روشن - همه به‌جز @count برنامه',
+      'ks_desc_off': 'خاموش',
+      'ks_desc_full': 'روشن - اگر تونل قطع شود ترافیک مسدود می‌شود، حتی پس از ری‌استارت',
+      'ks_desc_always_on': 'روشن - تا وقتی برنامه اجراست ترافیک مسدود می‌شود. برای محافظت کامل «مسدود کردن اتصال بدون VPN» را در تنظیمات سیستم روشن کنید',
+      'ks_desc_running': 'روشن - تا وقتی برنامه اجراست ترافیک مسدود می‌شود. این برنامه را در تنظیمات سیستم VPN همیشه‌روشن کنید تا ری‌استارت هم پوشش داده شود',
+      'dns_desc_off': 'خاموش - از سرور DNS سیستم استفاده می‌شود',
+      'dns_desc_on': 'روشن - پرسش‌ها داخل تونل با @name پاسخ داده می‌شوند (@servers)',
     },
 
     // ───────────────────────────── Chinese ─────────────────────────────
@@ -665,6 +752,39 @@ class LocalizationService extends GetxService implements Translations {
       'dns_only_started': '仅 DNS - 流量仍然直连',
       'dns_only_needs_resolver': '请先选择一个 DNS 服务器（设置 → DNS）。',
       'dns_only_no_config_needed': '仅 DNS 不需要配置。',
+
+      'status_ready': '就绪',
+      'status_tunnel_ended': '隧道已结束',
+      'status_finding_fastest': '正在寻找最快的配置...',
+      'status_connecting_to': '正在连接到 @name...',
+      'status_connected_to': '已连接到 @name',
+      'status_disconnected': '已断开',
+      'status_disconnecting': '正在断开...',
+      'status_failed_disconnect': '断开失败',
+      'status_stopping': '正在停止...',
+      'status_scan_stopped': '扫描已停止',
+      'status_pinging': '正在测试 @label（@count 个服务器）...',
+      'status_invalid_config': '配置无效',
+      'status_connection_error': '连接错误：@error',
+      'status_disconnect_error': '断开错误：@error',
+      'status_test_error': '测试错误：@error',
+      'status_testing_connection': '正在测试连接...',
+      'status_connection_test_failed': '连接测试失败',
+      'status_error': '错误：@error',
+      'status_permission_denied': 'VPN 权限被拒绝',
+      'status_dns_applies': '防止 DNS 泄漏将在重新连接后生效',
+      'status_split_applies': '分流将在重新连接后生效',
+
+      'split_desc_off': '关闭',
+      'split_desc_no_apps': '已开启，但未选择应用',
+      'split_desc_only': '已开启 - 仅 @count 个应用',
+      'split_desc_except': '已开启 - 除 @count 个应用外全部',
+      'ks_desc_off': '关闭',
+      'ks_desc_full': '已开启 - 隧道断开时阻断流量，重启后仍然有效',
+      'ks_desc_always_on': '已开启 - 应用运行时阻断流量。请在系统设置中打开“无 VPN 时阻止连接”以获得完整保护',
+      'ks_desc_running': '已开启 - 应用运行时阻断流量。请在系统设置中将本应用设为始终开启的 VPN，以覆盖重启和强制停止',
+      'dns_desc_off': '关闭 - 使用系统 DNS',
+      'dns_desc_on': '已开启 - 查询在隧道内由 @name 解析（@servers）',
     },
   };
 }

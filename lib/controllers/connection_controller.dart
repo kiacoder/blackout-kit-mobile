@@ -10,6 +10,7 @@ import 'config_controller.dart';
 import 'settings_controller.dart';
 import '../models/config.dart';
 import '../models/test_result.dart';
+import '../services/localization_service.dart';
 import '../models/vpn_session_options.dart';
 import '../services/vpn_service.dart';
 import '../services/tester_service.dart';
@@ -53,7 +54,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   final Rx<ConnectionState> state = ConnectionState.idle.obs;
   final Rx<Config?> selectedConfig = Rx<Config?>(null);
   final Rx<TestResult?> selectedConfigResult = Rx<TestResult?>(null);
-  final RxString statusMessage = RxString('Ready');
+  final RxString statusMessage = RxString('');
   final Rxn<String> connectedIP = Rxn<String>();
   final RxDouble connectionUptime = RxDouble(0.0); // seconds
   final RxBool isKillSwitchEnabled = RxBool(false);
@@ -123,6 +124,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   @override
   void onInit() {
     super.onInit();
+    // Translated here rather than in the field initialiser: `.tr` needs the
+    // catalogue, which is registered by the time onInit runs.
+    if (statusMessage.value.isEmpty) statusMessage.value = LocalizationService.t('status_ready');
     _log.i('ConnectionController initialized');
     _initIpInfo();
     // Android may kill the Flutter process while the foreground VpnService
@@ -155,7 +159,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       case 'disconnected':
         if (isConnected) {
           state.value = ConnectionState.idle;
-          statusMessage.value = 'Tunnel ended';
+          statusMessage.value = LocalizationService.t('status_tunnel_ended');
           selectedConfig.value = null;
           connectedIP.value = null;
           exitIpInfo.value = null;
@@ -350,7 +354,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         });
       } else if (!nativeRunning && isConnected) {
         state.value = ConnectionState.idle;
-        statusMessage.value = 'Tunnel ended';
+        statusMessage.value = LocalizationService.t('status_tunnel_ended');
         selectedConfig.value = null;
         selectedConfigResult.value = null;
         connectedIP.value = null;
@@ -431,7 +435,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   }) async {
     try {
       state.value = ConnectionState.selecting;
-      statusMessage.value = 'Finding fastest config...';
+      statusMessage.value = LocalizationService.t('status_finding_fastest');
 
       // Honour the protocol preference instead of ignoring it: configs using
       // the preferred protocol are tried first, everything else keeps its
@@ -469,7 +473,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       // tap ran the full scan regardless of what the user chose.
       if (!Get.find<SettingsController>().autoSelectFastest.value) {
         final chosen = candidates.first;
-        statusMessage.value = 'Connecting to ${chosen.displayName}...';
+        statusMessage.value =
+            LocalizationService.t('status_connecting_to', {'name': chosen.displayName});
         return _connectImpl(chosen);
       }
 
@@ -519,7 +524,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       for (var batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         if (_cancelRequested) {
           _log.i('Scan cancelled by the user after ${batchIndex} batch(es)');
-          statusMessage.value = 'Scan stopped';
+          statusMessage.value = LocalizationService.t('status_scan_stopped');
           state.value = ConnectionState.idle;
           return false;
         }
@@ -530,7 +535,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             'batch ${batchIndex + 1}/$totalBatches';
 
         state.value = ConnectionState.selecting;
-        statusMessage.value = 'Pinging $batchLabel (${batch.length} servers)...';
+        statusMessage.value = 'status_pinging'.trParams(
+          {'label': batchLabel, 'count': '${batch.length}'});
         var probed = 0;
         final progressToken = testerService.beginProgressRun((hash, status) {
           // onProgress fires a 'testing' event at probe start AND a terminal
@@ -632,7 +638,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         for (var attempt = 0; attempt < attemptLimit; attempt++) {
           if (_cancelRequested) {
             _log.i('Scan cancelled during $batchLabel');
-            statusMessage.value = 'Scan stopped';
+            statusMessage.value = LocalizationService.t('status_scan_stopped');
             state.value = ConnectionState.idle;
             return false;
           }
@@ -692,7 +698,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       return false;
     } catch (e) {
       state.value = ConnectionState.error;
-      statusMessage.value = 'Error: $e';
+      statusMessage.value = LocalizationService.t('status_error', {'error': '$e'});
       _log.e('Error connecting to fastest: $e');
       return false;
     }
@@ -717,7 +723,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   bool cancelScan() {
     if (!_operationInFlight) return false;
     _cancelRequested = true;
-    statusMessage.value = 'Stopping...';
+    statusMessage.value = LocalizationService.t('status_stopping');
     return true;
   }
   bool get operationInFlight => _operationInFlight;
@@ -746,7 +752,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     try {
       if (!config.validate()) {
         state.value = ConnectionState.error;
-        statusMessage.value = 'Invalid config';
+        statusMessage.value = LocalizationService.t('status_invalid_config');
         return false;
       }
 
@@ -764,7 +770,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       // A new session starts here: anything still in flight belongs to the
       // previous one and must not write over this one's state.
       _sessionEpoch++;
-      statusMessage.value = 'Connecting to ${config.displayName}...';
+      statusMessage.value =
+            LocalizationService.t('status_connecting_to', {'name': config.displayName});
       selectedConfig.value = config;
       selectedConfigResult.value = testResult;
 
@@ -774,7 +781,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final prepared = await vpnService.prepare();
       if (!prepared) {
         state.value = ConnectionState.error;
-        statusMessage.value = vpnService.lastError ?? 'VPN permission was denied';
+        statusMessage.value = vpnService.lastError ?? LocalizationService.t('status_permission_denied');
         return false;
       }
 
@@ -800,7 +807,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
       if (success) {
         state.value = ConnectionState.connected;
-        statusMessage.value = 'Connected to ${config.displayName}';
+        statusMessage.value =
+            LocalizationService.t('status_connected_to', {'name': config.displayName});
         debugService.logAction('connected', {
           'config': config.displayName,
           'protocol': config.protocol,
@@ -846,7 +854,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
     } catch (e) {
       state.value = ConnectionState.error;
-      statusMessage.value = 'Connection error: $e';
+      statusMessage.value = LocalizationService.t('status_connection_error', {'error': '$e'});
       _log.e('Error connecting: $e');
       return false;
     }
@@ -935,7 +943,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   Future<bool> _disconnectImpl() async {
     try {
       state.value = ConnectionState.disconnecting;
-      statusMessage.value = 'Disconnecting...';
+      statusMessage.value = LocalizationService.t('status_disconnecting');
       // Invalidate in-flight exit-IP lookups. _fetchConnectedIP captures this
       // token and refuses to write its result if it changed - but nothing ever
       // changed it, so the only guard left was `!isConnected`, which a quick
@@ -953,7 +961,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
       if (success) {
         state.value = ConnectionState.idle;
-        statusMessage.value = 'Disconnected';
+        statusMessage.value = LocalizationService.t('status_disconnected');
         selectedConfig.value = null;
         selectedConfigResult.value = null;
         connectedIP.value = null;
@@ -968,12 +976,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         return true;
       } else {
         state.value = ConnectionState.error;
-        statusMessage.value = 'Failed to disconnect';
+        statusMessage.value = LocalizationService.t('status_failed_disconnect');
         return false;
       }
     } catch (e) {
       state.value = ConnectionState.error;
-      statusMessage.value = 'Disconnect error: $e';
+      statusMessage.value = LocalizationService.t('status_disconnect_error', {'error': '$e'});
       _log.e('Error disconnecting: $e');
       return false;
     }
@@ -1018,7 +1026,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
     try {
       state.value = ConnectionState.testing;
-      statusMessage.value = 'Testing connection...';
+      statusMessage.value = LocalizationService.t('status_testing_connection');
 
       final result = await testerService.testConfig(selectedConfig.value!);
       selectedConfigResult.value = result;
@@ -1033,12 +1041,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         return true;
       } else {
         state.value = ConnectionState.error;
-        statusMessage.value = 'Connection test failed';
+        statusMessage.value = LocalizationService.t('status_connection_test_failed');
         return false;
       }
     } catch (e) {
       state.value = ConnectionState.error;
-      statusMessage.value = 'Test error: $e';
+      statusMessage.value = LocalizationService.t('status_test_error', {'error': '$e'});
       return false;
     }
   }
@@ -1061,7 +1069,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
       debugService.logInfo('DNS leak prevention: ${dnsLeakPreventionService.describe()}');
       if (next && isConnected) {
-        statusMessage.value = 'DNS leak prevention applies after reconnecting';
+        statusMessage.value = LocalizationService.t('status_dns_applies');
       }
       return true;
     } catch (e) {
@@ -1109,7 +1117,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
       debugService.logInfo('Split tunneling: ${splitTunnelingService.describe()}');
       if (next && isConnected) {
-        statusMessage.value = 'Split tunneling applies after reconnecting';
+        statusMessage.value = LocalizationService.t('status_split_applies');
       }
       return true;
     } catch (e) {
@@ -1160,20 +1168,21 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         .toList();
     if (resolvers.isEmpty) {
       state.value = ConnectionState.error;
-      statusMessage.value = 'dns_only_needs_resolver'.tr;
+      statusMessage.value = LocalizationService.t('dns_only_needs_resolver');
       return false;
     }
 
     state.value = ConnectionState.connecting;
     _sessionEpoch++;
     isDnsOnly.value = true;
-    statusMessage.value = '${'connecting'.tr} ${resolvers.join(", ")}';
+    statusMessage.value =
+        '${LocalizationService.t('connecting')} ${resolvers.join(', ')}';
 
     final prepared = await vpnService.prepare();
     if (!prepared) {
       state.value = ConnectionState.error;
       isDnsOnly.value = false;
-      statusMessage.value = vpnService.lastError ?? 'VPN permission was denied';
+      statusMessage.value = vpnService.lastError ?? LocalizationService.t('status_permission_denied');
       return false;
     }
 
@@ -1181,12 +1190,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     if (!ok) {
       state.value = ConnectionState.error;
       isDnsOnly.value = false;
-      statusMessage.value = vpnService.lastError ?? 'dns_only_needs_resolver'.tr;
+      statusMessage.value = vpnService.lastError ?? LocalizationService.t('dns_only_needs_resolver');
       return false;
     }
 
     state.value = ConnectionState.connected;
-    statusMessage.value = 'dns_only_started'.tr;
+    statusMessage.value = LocalizationService.t('dns_only_started');
     _connectionStartTime = DateTime.now();
     _startUptimeCounter();
     debugService.logInfo('DNS-only session: ${resolvers.join(", ")}');

@@ -68,4 +68,53 @@ void main() {
       }
     }
   });
+
+  test('no hardcoded status line in the controllers', () {
+    // The status line is rendered on the home screen. It used to be ~20 English
+    // literals set from ConnectionController, which meant a Persian user saw
+    // "Connecting to X..." in the middle of an otherwise translated screen.
+    final offenders = <String>[];
+    // Negative lookahead: a key followed by .tr / .trParams is correct.
+    final pattern = RegExp(r"statusMessage\.value = '([^']*)'(?!\.tr)");
+
+    for (final file in Directory('lib/controllers').listSync()) {
+      if (file is! File || !file.path.endsWith('.dart')) continue;
+      final source = file.readAsStringSync();
+      for (final match in pattern.allMatches(source)) {
+        final literal = match.group(1)!;
+        if (literal.contains('\$') || literal.trim().isEmpty) continue;
+        final line = source.substring(0, match.start).split('\n').length;
+        offenders.add('${file.path}:$line -> "$literal"');
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason: 'Status messages must come from the catalogue://n'
+          '${offenders.join('\n')}',
+    );
+  });
+
+  test('describe() summaries are translated', () {
+    // These are subtitles in Settings, not just log lines.
+    final offenders = <String>[];
+    for (final file in Directory('lib/services').listSync()) {
+      if (file is! File || !file.path.endsWith('.dart')) continue;
+      final source = file.readAsStringSync();
+      final start = source.indexOf('String describe()');
+      if (start == -1) continue;
+      final end = source.indexOf('\n  }', start);
+      if (end == -1) continue;
+      final body = source.substring(start, end);
+      for (final match in RegExp(r"return '([^']*)'(?!\.tr)").allMatches(body)) {
+        final literal = match.group(1)!;
+        if (!literal.contains(' ')) continue;
+        offenders.add('${file.path} -> "$literal"');
+      }
+    }
+    expect(offenders, isEmpty,
+        reason: 'describe() must return catalogue strings://n'
+            '${offenders.join('\n')}');
+  });
 }

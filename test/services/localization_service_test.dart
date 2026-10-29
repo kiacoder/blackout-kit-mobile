@@ -166,4 +166,51 @@ void main() {
       }
     });
   });
+
+  group('LocalizationService.t (non-widget callers)', () {
+    test('falls back to English when no locale is active', () {
+      // Controllers and services call this; in a unit test Get.locale is null,
+      // and returning the raw key would leak `status_connecting_to` into a
+      // subtitle that a user reads.
+      expect(LocalizationService.t('status_ready'), 'Ready');
+      expect(LocalizationService.t('split_desc_off'), 'Off');
+    });
+
+    test('substitutes @placeholders', () {
+      expect(
+        LocalizationService.t('status_connecting_to', {'name': 'Berlin'}),
+        'Connecting to Berlin...',
+      );
+      expect(
+        LocalizationService.t('status_pinging', {'label': 'batch 1', 'count': '5'}),
+        'Pinging batch 1 (5 servers)...',
+      );
+      expect(
+        LocalizationService.t('status_error', {'error': 'boom'}),
+        'Error: boom',
+      );
+    });
+
+    test('every status key has a translation in every language', () {
+      const keys = [
+        'status_ready', 'status_tunnel_ended', 'status_finding_fastest',
+        'status_connecting_to', 'status_connected_to', 'status_disconnected',
+        'status_disconnecting', 'status_failed_disconnect', 'status_stopping',
+        'status_scan_stopped', 'status_pinging', 'status_invalid_config',
+        'status_connection_error', 'status_disconnect_error',
+        'status_test_error', 'status_testing_connection',
+        'status_connection_test_failed', 'status_error',
+        'status_permission_denied', 'status_dns_applies', 'status_split_applies',
+        'split_desc_off', 'split_desc_no_apps', 'split_desc_only',
+        'split_desc_except', 'ks_desc_off', 'ks_desc_full',
+        'ks_desc_always_on', 'ks_desc_running', 'dns_desc_off', 'dns_desc_on',
+      ];
+      for (final language in LocalizationService.supportedLanguages.keys) {
+        for (final key in keys) {
+          final value = LocalizationService.translate(key, language: language);
+          expect(value, isNot(key), reason: '$key missing from $language');
+        }
+      }
+    });
+  });
 }

@@ -1,3 +1,4 @@
+import 'localization_service.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
@@ -132,19 +133,15 @@ class KillSwitchService extends GetxService {
       );
 
   /// What is protecting the user right now, in plain language.
+  /// Human-readable summary, translated: this is shown in Settings, not only
+  /// written to the log.
   String describe() {
-    if (!isEnabled) return 'Off';
+    if (!isEnabled) return LocalizationService.t('ks_desc_off');
 
     final state = systemState.value;
-    if (state.systemKillSwitchActive) {
-      return 'On - blocks traffic if the tunnel drops, including after a reboot';
-    }
-    if (state.isAlwaysOnForThisApp) {
-      return 'On - blocks traffic while the app runs. Turn on "Block connections '
-          'without VPN" in system settings for full protection';
-    }
-    return 'On - blocks traffic while the app runs. Set this app as always-on '
-        'VPN in system settings to also cover reboots and force-stops';
+    if (state.systemKillSwitchActive) return LocalizationService.t('ks_desc_full');
+    if (state.isAlwaysOnForThisApp) return LocalizationService.t('ks_desc_always_on');
+    return LocalizationService.t('ks_desc_running');
   }
 
   /// Whether the user still needs to visit system settings for full coverage.

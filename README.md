@@ -88,8 +88,14 @@ it made the app look broken when someone picked Spanish and the body text
 stayed English.
 
 Persian flips the whole tree to RTL. Every visible string goes through the
-catalogue; `test/localization_coverage_test.dart` fails the build if a
-hardcoded English string appears in a screen or widget.
+catalogue — screens, dialogs, snackbars, the status line the connection
+controller writes, the feature summaries in Settings, and the launcher label
+(`values-fa/`). `test/localization_coverage_test.dart` fails the build if a
+hardcoded English string appears in a screen, a widget, a controller status
+line or a `describe()` return.
+
+Non-widget code uses `LocalizationService.t(key, params)` rather than `.tr`:
+`.tr` reads GetX's active locale, which is null outside the widget tree.
 
 ## The guide
 

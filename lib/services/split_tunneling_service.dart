@@ -1,3 +1,4 @@
+import 'localization_service.dart';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -248,11 +249,13 @@ class SplitTunnelingService extends GetxService {
   }
 
   /// Human-readable description of what is currently configured.
+  /// Human-readable summary. Rendered as a subtitle in the UI, so it follows
+  /// the language setting rather than staying English.
   String describe() {
-    if (!isEnabled) return 'Off';
-    if (selectedApps.isEmpty) return 'On, but no apps selected';
-    final label = mode == 'whitelist' ? 'only' : 'all except';
-    return 'On - $label ${selectedApps.length} app(s)';
+    if (!isEnabled) return LocalizationService.t('split_desc_off');
+    if (selectedApps.isEmpty) return LocalizationService.t('split_desc_no_apps');
+    final key = mode == 'whitelist' ? 'split_desc_only' : 'split_desc_except';
+    return LocalizationService.t(key, {'count': '${selectedApps.length}'});
   }
 
   @override

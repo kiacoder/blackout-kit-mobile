@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-10-29
+
+### Fixed
+- **The status line stayed English.** ~20 literals set from
+  `ConnectionController` ("Connecting to X...", "Finding fastest config...",
+  "Tunnel ended", "Invalid config") were rendered straight onto the home
+  screen, so a Persian user saw a translated interface with an English
+  sentence in the middle of it. They now come from the catalogue, with
+  `@name` / `@error` placeholders so word order can differ per language.
+- **`describe()` summaries stayed English.** The split-tunneling, kill-switch
+  and DNS summaries are subtitles in Settings, not just log lines.
+- **The launcher label was never localised.** Added `values-fa/` (بلک‌اوت کیت)
+  and `values-zh/`; `android:label` resolves per system locale, so a Persian
+  phone shows the Persian name before any Flutter code runs.
+
+### Added
+- `LocalizationService.t(key, params)` for non-widget callers. `.tr` depends on
+  GetX's active locale, which is null outside the widget tree — a service
+  calling it returned the raw key, and `describe()` is user-visible.
+- The localisation guard now also scans `lib/controllers` and `lib/services`,
+  not just screens: a hardcoded status line or an English `describe()` return
+  fails the build. Verified by injecting a regression and watching it fail.
+
+
 ## [1.15.0] - 2026-10-29
 
 ### Added

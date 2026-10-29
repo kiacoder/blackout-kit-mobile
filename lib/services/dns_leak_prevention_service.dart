@@ -1,3 +1,4 @@
+import 'localization_service.dart';
 import 'dart:io';
 
 import 'package:get/get.dart';
@@ -166,10 +167,11 @@ class DNSLeakPreventionService extends GetxService {
 
   /// Human-readable summary for settings screens.
   String describe() {
-    if (!isEnabled) return 'Off - the system resolver is used';
-    final provider = selectedProvider;
-    final label = provider?.name ?? 'Custom';
-    return 'On - queries resolved inside the tunnel via $label '
-        '(${resolvers.join(", ")})';
+    if (!isEnabled) return LocalizationService.t('dns_desc_off');
+    final label = selectedProvider?.name ?? 'Custom';
+    return LocalizationService.t('dns_desc_on', {
+      'name': label,
+      'servers': resolvers.join(', '),
+    });
   }
 }

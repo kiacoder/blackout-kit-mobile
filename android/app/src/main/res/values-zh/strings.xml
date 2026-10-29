@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Chinese launcher label.
+
+  The product name stays in Latin script on purpose: "Blackout Kit" is a brand,
+  and Chinese app launchers commonly keep such names untranslated. The rest of
+  the UI is translated by LocalizationService.
+-->
+<resources>
+    <string name="app_name">Blackout Kit</string>
+</resources>

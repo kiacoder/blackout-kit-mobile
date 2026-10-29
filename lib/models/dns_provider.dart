@@ -14,6 +14,7 @@
 library;
 
 import 'vpn_session_options.dart';
+import '../services/localization_service.dart';
 
 enum DnsCategory { sanctions, speed, extra }
 
@@ -33,6 +34,17 @@ class DnsProvider {
     this.secondary,
     this.note = '',
   });
+
+  /// Display name in the current language, falling back to [name].
+  ///
+  /// The catalogue's `name` is the service's own name (Shecan, Cloudflare) and
+  /// is what the desktop CLI prints. Persian users know several of them by a
+  /// Persian name — شکن for Shecan, بگزار for Begzar — so the UI asks the
+  /// catalogue for `dns_name_<key>` first.
+  String get localizedName {
+    final translated = LocalizationService.t('dns_name_$key');
+    return translated == 'dns_name_$key' ? name : translated;
+  }
 
   /// Primary first, then secondary — the order the tunnel should advertise.
   List<String> get servers =>

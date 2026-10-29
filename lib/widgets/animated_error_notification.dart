@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// Animated error notification with slide-up and fade effects
 class AnimatedErrorNotification extends StatefulWidget {
@@ -131,7 +132,7 @@ Future<void> showAnimatedErrorNotification(
   return showGeneralDialog(
     context: context,
     barrierDismissible: true,
-    barrierLabel: 'Error Notification',
+    barrierLabel: 'Error Notification'.tr,
     barrierColor: Colors.black.withOpacity(0.2),
     transitionDuration: const Duration(milliseconds: 400),
     pageBuilder: (context, animation, secondaryAnimation) {

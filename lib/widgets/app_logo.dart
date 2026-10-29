@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// Official Blackout Kit Logo Widget
 class AppLogo extends StatelessWidget {
@@ -71,7 +72,7 @@ class AppLogo extends StatelessWidget {
       children: [
         if (showTitle)
           Text(
-            'blackout kit',
+            'blackout kit'.tr,
             style: TextStyle(
               fontSize: size * 0.35,
               fontWeight: FontWeight.w900,
@@ -82,7 +83,7 @@ class AppLogo extends StatelessWidget {
         if (showSubtitle) ...[
           const SizedBox(height: 2),
           Text(
-            'Trustworthy Open-Source VPN',
+            'Trustworthy Open-Source VPN'.tr,
             style: TextStyle(
               fontSize: size * 0.16,
               fontWeight: FontWeight.w500,

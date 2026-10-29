@@ -1,3 +1,5 @@
+import '../services/localization_service.dart';
+
 /// Engine capability model.
 /// Mirrors Blackout Kit CLI's EngineCapability catalogue: ten engines, with the
 /// protocols and platform each one claims to support.
@@ -81,6 +83,12 @@ class EngineCapability {
     compatibleProtocols.contains(protocol);
 
   @override
+  /// Display name in the current language, falling back to [displayName].
+  String get localizedName {
+    final translated = LocalizationService.t('engine_$key');
+    return translated == 'engine_$key' ? displayName : translated;
+  }
+
   String toString() =>
     'EngineCapability(key=$key, displayName=$displayName, platforms=$platformSupport)';
 }

@@ -36,9 +36,9 @@ class _DebugScreenState extends State<DebugScreen>
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
+          tabs: [
             Tab(text: 'Logs', icon: Icon(Icons.description)),
-            Tab(text: 'Debug Info', icon: Icon(Icons.info_outline)),
+            Tab(text: 'Debug Info'.tr, icon: Icon(Icons.info_outline)),
             Tab(text: 'Diagnostics', icon: Icon(Icons.medical_services)),
           ],
         ),
@@ -94,7 +94,7 @@ class _DebugScreenState extends State<DebugScreen>
             child: _debugService.logEntries.isEmpty
                 ? Center(
                     child: Text(
-                      'No logs yet',
+                      'No logs yet'.tr,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   )
@@ -165,15 +165,15 @@ class _DebugScreenState extends State<DebugScreen>
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
-        _buildInfoCard('App Information', {
+        _buildInfoCard('App Information'.tr, {
           'Name': debugInfo['app_name'],
           'Version': debugInfo['version'],
-          'Debug Mode': debugInfo['debug_mode'].toString(),
+          'Debug Mode'.tr: debugInfo['debug_mode'].toString(),
         }),
         const SizedBox(height: 16),
         _buildInfoCard('Logs', {
-          'Total Entries': debugInfo['log_count'].toString(),
-          'Max Buffer Size': '500',
+          'Total Entries'.tr: debugInfo['log_count'].toString(),
+          'Max Buffer Size'.tr: '500',
           'Exported': DateTime.now().toIso8601String(),
         }),
       ],
@@ -241,7 +241,7 @@ class _DebugScreenState extends State<DebugScreen>
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Debug Mode',
+                        'Debug Mode'.tr,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
@@ -267,12 +267,12 @@ class _DebugScreenState extends State<DebugScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Log Statistics',
+                  'Log Statistics'.tr,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 12),
                 _buildDiagnosticRow(
-                  'Total Logs',
+                  'Total Logs'.tr,
                   _debugService.logCount.toString(),
                 ),
                 _buildDiagnosticRow(
@@ -284,7 +284,7 @@ class _DebugScreenState extends State<DebugScreen>
                   _debugService.getWarningLogs().length.toString(),
                 ),
                 _buildDiagnosticRow(
-                  'Buffer Capacity',
+                  'Buffer Capacity'.tr,
                   '${_debugService.logCount}/500',
                 ),
               ],

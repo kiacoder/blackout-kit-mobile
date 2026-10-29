@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-29
+
+### Fixed
+- **193 strings across every screen were still English.** The coverage guard
+  only looked for `Text('...')` on a single line, so it missed multi-line
+  concatenations, `hintText:` / `labelText:` / `tooltip:`, dialog bodies and
+  snackbars. All of them now go through the catalogue, and the guard was
+  rewritten to scan every literal in `lib/screens` and `lib/widgets` — it would
+  have caught these.
+- **Service and engine names never translated.** Shecan, Radar, Electro and
+  Begzar now show their Persian names (شکن، رادار، الکترو، بگزار), the rest are
+  transliterated; engines (XRay Core → هسته XRay) follow the same rule. Google,
+  Alibaba, Tencent and Wikimedia use their conventional Chinese names; other
+  brands stay Latin, which is what Chinese tech writing does.
+
+### Added
+- `DnsProvider.localizedName` and `EngineCapability.localizedName`, falling
+  back to the catalogue name when a key is missing.
+- `test/services/localized_names_test.dart` — every provider and engine must
+  have a name in all three languages, and no `localizedName` may leak a raw key.
+
+
 ## [1.15.1] - 2026-10-29
 
 ### Fixed

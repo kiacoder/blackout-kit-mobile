@@ -168,7 +168,7 @@ class DNSLeakPreventionService extends GetxService {
   /// Human-readable summary for settings screens.
   String describe() {
     if (!isEnabled) return LocalizationService.t('dns_desc_off');
-    final label = selectedProvider?.name ?? 'Custom';
+    final label = selectedProvider?.localizedName ?? 'Custom';
     return LocalizationService.t('dns_desc_on', {
       'name': label,
       'servers': resolvers.join(', '),

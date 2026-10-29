@@ -57,7 +57,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
     if (!mounted) return;
     if (apps.isEmpty && _service.lastError.value != null) {
       Get.snackbar(
-        'Could not load apps',
+        'Could not load apps'.tr,
         _service.lastError.value!,
         snackPosition: SnackPosition.BOTTOM,
       );
@@ -97,8 +97,8 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
               children: [
                 Obx(() => SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'Enable Split Tunneling',
+                      title: Text(
+                        'Enable Split Tunneling'.tr,
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(_service.describe()),
@@ -116,10 +116,9 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                         Icon(Icons.info_outline,
                             size: 16, color: theme.colorScheme.primary),
                         const SizedBox(width: 6),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Reconnect for this selection to take effect. '
-                            'Android fixes the app list when the tunnel opens.',
+                            'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.'.tr,
                             style: TextStyle(fontSize: 12),
                           ),
                         ),
@@ -172,7 +171,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                 TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Search installed apps...',
+                    hintText: 'Search installed apps...'.tr,
                     prefixIcon: const Icon(Icons.search),
                     isDense: true,
                     border:
@@ -196,7 +195,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                     child: Text(
                       _service.installedApps.isEmpty
                           ? (_service.lastError.value ??
-                              'No launchable apps were found on this device.')
+                              'No launchable apps were found on this device.'.tr)
                           : 'No apps match "$_searchQuery".',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: theme.hintColor),

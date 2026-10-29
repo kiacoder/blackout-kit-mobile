@@ -42,37 +42,37 @@ class _LibraryScreenState extends State<LibraryScreen> {
           IconButton(
             icon: const Icon(Icons.speed),
             onPressed: () => Get.to(() => const SpeedTestScreen()),
-            tooltip: 'Speed Benchmark',
+            tooltip: 'Speed Benchmark'.tr,
           ),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
             onPressed: () => Get.to(() => const ConfigImportScreen()),
-            tooltip: 'Import Config / Scan QR',
+            tooltip: 'Import Config / Scan QR'.tr,
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () async {
               Get.snackbar(
                 'Fetching',
-                'Updating repositories and configs...',
+                'Updating repositories and configs...'.tr,
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 colorText: Theme.of(context).colorScheme.onPrimary,
                 duration: const Duration(seconds: 2),
               );
               final count = await _configController.fetchFromAllSources(force: true);
               Get.snackbar(
-                'Update Complete',
+                'Update Complete'.tr,
                 '$count configs updated',
                 backgroundColor: Colors.green,
                 colorText: Colors.white,
               );
             },
-            tooltip: 'Refresh all sources',
+            tooltip: 'Refresh all sources'.tr,
           ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: _showAddCustomSourceDialog,
-            tooltip: 'Add custom source',
+            tooltip: 'Add custom source'.tr,
           ),
         ],
       ),
@@ -99,7 +99,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     Expanded(
                       child: Text(
                         _configController.refreshStatus.value.isEmpty
-                            ? 'Updating repositories & configs...'
+                            ? 'Updating repositories & configs...'.tr
                             : _configController.refreshStatus.value,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
@@ -175,7 +175,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'No configs found',
+                              'No configs found'.tr,
                               style: TextStyle(
                                 fontSize: 16,
                                 color: Theme.of(context).textTheme.bodyMedium?.color,
@@ -186,7 +186,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                               onPressed: () async {
                                 final count = await _configController.fetchFromAllSources(force: true);
                                 Get.snackbar(
-                                  'Configs Fetched',
+                                  'Configs Fetched'.tr,
                                   '$count configs loaded',
                                   backgroundColor: Colors.green,
                                   colorText: Colors.white,
@@ -221,8 +221,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             onPressed: _configController.showMoreConfigs,
                             icon: const Icon(Icons.expand_more),
                             label: Text(
-                              'Show ${ConfigController.configPageSize} more '
-                              '— $remaining of ${filtered.length} not shown',
+                              'Show ${ConfigController.configPageSize} more — $remaining of ${filtered.length} not shown',
                             ),
                           ),
                         ),
@@ -273,7 +272,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Could not load your configs',
+                  'Could not load your configs'.tr,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -284,8 +283,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Text(
-                    'Your saved configs are not lost — the update failed. '
-                    'Check your connection and try again.',
+                    'Your saved configs are not lost — the update failed. Check your connection and try again.'.tr,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -354,7 +352,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       {'id': 'trojan', 'label': 'Trojan'},
       {'id': 'shadowsocks', 'label': 'Shadowsocks'},
       {'id': 'wireguard', 'label': 'WireGuard'},
-      {'id': 'hysteria2', 'label': 'Hysteria 2'},
+      {'id': 'hysteria2', 'label': 'Hysteria 2'.tr},
       {'id': 'tuic', 'label': 'TUIC'},
       {'id': 'openvpn', 'label': 'OpenVPN'},
       {'id': 'amneziawg', 'label': 'AmneziaWG'},
@@ -387,7 +385,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Obx(() => Row(
             children: [
               Text(
-                'Sort by:',
+                'Sort by:'.tr,
                 style: TextStyle(color: theme.textTheme.bodyMedium?.color),
               ),
               const SizedBox(width: 8),
@@ -402,9 +400,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     }
                   },
                   items: [
-                    _buildDropdownItem('speed', 'Speed (fastest first)'),
-                    _buildDropdownItem('name', 'Name (A-Z)'),
-                    _buildDropdownItem('recently_added', 'Recently added'),
+                    _buildDropdownItem('speed', 'Speed (fastest first)'.tr),
+                    _buildDropdownItem('name', 'Name (A-Z)'.tr),
+                    _buildDropdownItem('recently_added', 'Recently added'.tr),
                   ],
                 ),
               ),
@@ -510,12 +508,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                   child: Text(
                     isTesting
-                        ? '⏳ Testing…'
+                        ? '⏳ Testing…'.tr
                         : result?.isWorking == true
-                            ? '✓ Working'
+                            ? '✓ Working'.tr
                             : (result != null && !result.isWorking)
-                                ? '✗ Failed'
-                                : '• Untested',
+                                ? '✗ Failed'.tr
+                                : '• Untested'.tr,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -617,7 +615,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             if (result != null && result.isWorking == false) ...[
               const SizedBox(height: 12),
               Text(
-                'Last failure: ${result.error ?? 'no response'}',
+                'Last failure: ${result.error ?? 'no response'.tr}',
                 style: TextStyle(fontSize: 11, color: theme.colorScheme.error),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -642,7 +640,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  tooltip: isTesting ? 'Testing…' : 'Test now',
+                  tooltip: isTesting ? 'Testing…' : 'Test now'.tr,
                   onPressed: isTesting
                       ? null
                       : () => _configController.testSingleConfig(config),
@@ -656,7 +654,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_note, size: 28),
-                  tooltip: 'Edit & Share QR',
+                  tooltip: 'Edit & Share QR'.tr,
                   onPressed: () {
                     Get.back();
                     Get.to(() => ConfigEditorScreen(config: config));
@@ -711,7 +709,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       // error) - show it.
       final reason = _connectionController.statusMessage.value;
       Get.snackbar(
-        'Connection Failed',
+        'Connection Failed'.tr,
         reason.isEmpty ? 'Could not connect to ${config.displayName}' : reason,
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -765,33 +763,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Source Name',
-                hintText: 'e.g., My Configs',
+              decoration: InputDecoration(
+                labelText: 'Source Name'.tr,
+                hintText: 'e.g., My Configs'.tr,
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: ownerController,
-              decoration: const InputDecoration(
-                labelText: 'GitHub Owner',
-                hintText: 'e.g., username',
+              decoration: InputDecoration(
+                labelText: 'GitHub Owner'.tr,
+                hintText: 'e.g., username'.tr,
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: repoController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Repository',
-                hintText: 'e.g., vpn-configs',
+                hintText: 'e.g., vpn-configs'.tr,
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: branchController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Branch',
-                hintText: 'e.g., main',
+                hintText: 'e.g., main'.tr,
               ),
             ),
           ],
@@ -814,8 +812,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
               if (addedSource != null) {
                 Get.snackbar(
-                  'Source Added',
-                  'Fetching configs...',
+                  'Source Added'.tr,
+                  'Fetching configs...'.tr,
                   backgroundColor: Colors.green,
                   colorText: Colors.white,
                 );
@@ -823,8 +821,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 await _configController.fetchFromSource(addedSource);
               } else {
                 Get.snackbar(
-                  'Could Not Add Source',
-                  'The repository could not be saved - check the name and try again',
+                  'Could Not Add Source'.tr,
+                  'The repository could not be saved - check the name and try again'.tr,
                   backgroundColor: Colors.orange,
                   colorText: Colors.white,
                 );

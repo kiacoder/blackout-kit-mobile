@@ -45,8 +45,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     final configs = _configController.visibleConfigs;
     if (configs.isEmpty) {
       Get.snackbar(
-        'No Configs',
-        'Please import or fetch configs before running speed tests',
+        'No Configs'.tr,
+        'Please import or fetch configs before running speed tests'.tr,
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -90,7 +90,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     } catch (e) {
       if (mounted) {
         Get.snackbar(
-          'Benchmark Failed',
+          'Benchmark Failed'.tr,
           'The speed test could not finish: $e',
           backgroundColor: Colors.red,
           colorText: Colors.white,
@@ -114,9 +114,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
           .where((r) => r.isWorking)
           .length;
       Get.snackbar(
-        'Benchmark Complete',
-        '$working of ${sample.length} servers responded '
-        '(library holds ${configs.length} configs)',
+        'Benchmark Complete'.tr,
+        '$working of ${sample.length} servers responded (library holds ${configs.length} configs)',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -147,8 +146,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Performance Tester',
+                        Text(
+                          'Performance Tester'.tr,
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),
@@ -172,7 +171,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.speed),
-                      label: Text(_isTesting ? 'Testing...' : 'Test All'),
+                      label: Text(_isTesting ? 'Testing...' : 'Test All'.tr),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.colorScheme.primary,
                         foregroundColor: Colors.white,
@@ -222,8 +221,8 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Fastest Configuration',
+                        Text(
+                          'Fastest Configuration'.tr,
                           style: TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                         Text(
@@ -348,7 +347,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                                 ),
                               ),
                               Text(
-                                result.latencyMs != null ? '${result.latencyMs}ms' : 'No response',
+                                result.latencyMs != null ? '${result.latencyMs}ms' : 'No response'.tr,
                                 style: TextStyle(fontSize: 11, color: theme.hintColor),
                               ),
                             ],
@@ -358,7 +357,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                         IconButton(
                           icon: const Icon(Icons.play_arrow),
                           onPressed: () => _configController.testConfig(config),
-                          tooltip: 'Test single config',
+                          tooltip: 'Test single config'.tr,
                         ),
                       ],
                     ),

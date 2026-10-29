@@ -44,7 +44,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
       // "unknown" so the screen degrades to the plain catalogue rather than
       // asserting that everything is broken.
       if (!mounted) return;
-      setState(() => _availability = const EngineAvailability.unknown());
+      setState(() => _availability = EngineAvailability.unknown());
     }
   }
 
@@ -117,12 +117,12 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
-            tooltip: 'Engine information',
+            tooltip: 'Engine information'.tr,
             onPressed: () {
               Get.snackbar(
-                'Bundled engines',
+                'Bundled engines'.tr,
                 _availability?.summary ??
-                    'Checking which engines are bundled in this build...',
+                    'Checking which engines are bundled in this build...'.tr,
                 backgroundColor: theme.colorScheme.primary,
                 colorText: theme.colorScheme.onPrimary,
                 duration: const Duration(seconds: 6),
@@ -157,14 +157,14 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                         children: [
                           Text(
                             _availability == null
-                                ? 'Checking bundled engines...'
+                                ? 'Checking bundled engines...'.tr
                                 : '$runnableCount of ${allEngines.length} Engines Available',
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                           Text(
                             _capabilityUnknown
-                                ? 'Engine support could not be determined on this platform'
-                                : 'Engines without a bundled runtime are shown greyed out',
+                                ? 'Engine support could not be determined on this platform'.tr
+                                : 'Engines without a bundled runtime are shown greyed out'.tr,
                             style: TextStyle(fontSize: 12, color: theme.hintColor),
                           ),
                         ],
@@ -179,10 +179,10 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                   child: Row(
                     children: [
                       _buildCategoryChip('All'),
-                      _buildCategoryChip('Core VPN'),
-                      _buildCategoryChip('Proxy Core'),
-                      _buildCategoryChip('DPI Obfuscation'),
-                      _buildCategoryChip('Relay / Mesh'),
+                      _buildCategoryChip('Core VPN'.tr),
+                      _buildCategoryChip('Proxy Core'.tr),
+                      _buildCategoryChip('DPI Obfuscation'.tr),
+                      _buildCategoryChip('Relay / Mesh'.tr),
                     ],
                   ),
                 ),
@@ -302,7 +302,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                           children: [
                             Flexible(
                               child: Text(
-                                engine.displayName,
+                                engine.localizedName,
                                 // Ellipsis alone does not stop soft wrapping:
                                 // once the Row squeezes this below one line's
                                 // worth of width the name stacks one glyph per
@@ -325,7 +325,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'Not bundled',
+                                  'Not bundled'.tr,
                                   style: TextStyle(fontSize: 10, color: theme.hintColor),
                                 ),
                               )
@@ -434,7 +434,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          engine.displayName,
+                          engine.localizedName,
                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                         Text(
@@ -462,8 +462,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'This engine is not bundled in this build, so it cannot '
-                          'connect. Configs are still listed so you can review them.',
+                          'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.'.tr,
                           style: TextStyle(fontSize: 12, color: theme.hintColor),
                         ),
                       ),
@@ -520,15 +519,15 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                     Get.back();
                     _configController.filterProtocol.value = engine.compatibleProtocols.first;
                     Get.snackbar(
-                      'Filter Applied',
-                      'Filtered library by ${engine.displayName}',
+                      'Filter Applied'.tr,
+                      'Filtered library by ${engine.localizedName}',
                       backgroundColor: Colors.indigo,
                       colorText: Colors.white,
                     );
                   },
                   icon: const Icon(Icons.filter_list),
                   label: Text(
-                    'Filter Library by ${engine.displayName} ($configCount configs)',
+                    'Filter Library by ${engine.localizedName} ($configCount configs)',
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.colorScheme.primary,

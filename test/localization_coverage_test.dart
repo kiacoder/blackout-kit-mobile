@@ -19,31 +19,48 @@ const Set<String> _allowed = {
   'github.com/kiacoder/blackout-kit-mobile', // URL
   'v\$version', // version label
   'tun0',
+  // Switch labels: compared against `engine.category`, which is a constant.
+  'Core VPN', 'Proxy Core', 'DPI Obfuscation', 'Relay / Mesh',
+  // Fragments of literals passed to LocalizationService.t(key, params) —
+  // the guard looks at one line at a time.
+  'This tunnel keeps the resolvers it was built with. Disconnect and ',
+  'connect again to use @summary.',
+  'This opens a TCP connection to port 53. Many resolvers only ',
+  'Could not check for updates: ',
+  'Exception: ',
 };
 
 void main() {
   test('no hardcoded English copy in screens or widgets', () {
+    // Deliberately blunt: any single-quoted literal with a space and letters
+    // that is not followed by `.tr` is UI copy that will not follow the
+    // language setting. The first version of this test only matched
+    // `Text('...')` on one line, so it missed multi-line concatenations,
+    // `hintText:`/`tooltip:`/`labelText:` and dialog bodies — 193 strings
+    // stayed English while it passed.
     final offenders = <String>[];
+    final literal = RegExp(r"'([^'\\\n]*(?:\\.[^'\\\n]*)*)'");
 
     for (final dir in ['lib/screens', 'lib/widgets']) {
       for (final file in Directory(dir).listSync(recursive: true)) {
         if (file is! File || !file.path.endsWith('.dart')) continue;
-        final source = file.readAsStringSync();
-
-        // Text('...') with no `.tr` right after the closing quote.
-        final matches = RegExp(r"Text\('([^'\\]*(?:\\.[^'\\]*)*)'\)")
-            .allMatches(source);
-        for (final match in matches) {
-          final literal = match.group(1)!;
-          if (_allowed.contains(literal)) continue;
-          // Interpolations are usually dynamic values, not copy.
-          if (literal.contains('\$')) continue;
-          // A single word with no space is far more likely a key, a unit or a
-          // symbol than a sentence.
-          if (!literal.contains(' ')) continue;
-          final line =
-              source.substring(0, match.start).split('\n').length;
-          offenders.add('${file.path}:$line -> "$literal"');
+        final lines = file.readAsStringSync().split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          final line = lines[i];
+          if (line.trimLeft().startsWith('//')) continue;
+          for (final match in literal.allMatches(line)) {
+            final text = match.group(1)!;
+            if (!text.contains(' ') || !RegExp(r'[A-Za-z]').hasMatch(text)) {
+              continue;
+            }
+            if (_allowed.contains(text)) continue;
+            // Interpolations are dynamic values, not copy: a translation
+            // cannot reorder them without a placeholder key, and the few that
+            // need one use LocalizationService.t(key, params) instead.
+            if (text.contains(r'$')) continue;
+            if (line.substring(match.end).startsWith('.tr')) continue;
+            offenders.add('${file.path}:${i + 1} -> "$text"');
+          }
         }
       }
     }
@@ -51,9 +68,8 @@ void main() {
     expect(
       offenders,
       isEmpty,
-      reason: 'These strings do not follow the language setting:\n'
-          '${offenders.join('\n')}\n'
-          'Wrap them in the catalogue: Text(\'some_key\'.tr)',
+      reason: 'These strings do not follow the language setting://n'
+          '${offenders.join('\n')}',
     );
   });
 

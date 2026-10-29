@@ -23,11 +23,11 @@ class ConfigTile extends StatelessWidget {
   }) : super(key: key);
 
   static String _badgeLabel(TestStatus status) => switch (status) {
-        TestStatus.success => '✓ Working',
-        TestStatus.failed => '✗ Failed',
-        TestStatus.timeout => '⏱ Timeout',
+        TestStatus.success => '✓ Working'.tr,
+        TestStatus.failed => '✗ Failed'.tr,
+        TestStatus.timeout => '⏱ Timeout'.tr,
         TestStatus.testing => 'Testing…',
-        TestStatus.notTested => 'Not tested',
+        TestStatus.notTested => 'Not tested'.tr,
       };
 
   static Color _badgeBackground(TestStatus status) => switch (status) {
@@ -137,7 +137,7 @@ class ConfigTile extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'Not Tested',
+                                  'Not Tested'.tr,
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,

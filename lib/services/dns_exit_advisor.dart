@@ -61,7 +61,8 @@ class DnsSuggestion {
       'destination sees a location contradiction). A global resolver such as '
       '${_name(suggestedKey)} matches the exit instead.';
 
-  static String _name(String key) => DnsCatalog.byKey(key)?.name ?? key;
+  static String _name(String key) =>
+      DnsCatalog.byKey(key)?.localizedName ?? key;
 
   @override
   String toString() =>

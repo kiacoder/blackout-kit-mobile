@@ -95,13 +95,13 @@ class _LogsScreenState extends State<LogsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.copy_all),
-            tooltip: 'Copy all logs',
+            tooltip: 'Copy all logs'.tr,
             onPressed: () {
               final text = _debugService.exportLogsAsText();
               Clipboard.setData(ClipboardData(text: text));
               Get.snackbar(
                 'Copied',
-                'System logs copied to clipboard',
+                'System logs copied to clipboard'.tr,
                 backgroundColor: Colors.green,
                 colorText: Colors.white,
                 duration: const Duration(seconds: 2),
@@ -110,7 +110,7 @@ class _LogsScreenState extends State<LogsScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
-            tooltip: 'Clear logs',
+            tooltip: 'Clear logs'.tr,
             onPressed: () async {
               final confirm = await Get.dialog<bool>(
                 AlertDialog(
@@ -153,7 +153,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Search logs...',
+                    hintText: 'Search logs...'.tr,
                     prefixIcon: const Icon(Icons.search, size: 20),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
@@ -200,7 +200,7 @@ class _LogsScreenState extends State<LogsScreen> {
                       Text(
                         _searchQuery.isNotEmpty
                             ? 'No logs matching "$_searchQuery"'
-                            : 'No log entries recorded',
+                            : 'No log entries recorded'.tr,
                         style: TextStyle(color: theme.hintColor),
                       ),
                     ],
@@ -297,7 +297,7 @@ class _LogsScreenState extends State<LogsScreen> {
             );
           }
         },
-        tooltip: 'Scroll to bottom',
+        tooltip: 'Scroll to bottom'.tr,
         child: const Icon(Icons.arrow_downward),
       ),
     );

@@ -57,8 +57,8 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     final newText = _textController.text.trim();
     if (newText.isEmpty) {
       Get.snackbar(
-        'Empty Config',
-        'Config text cannot be empty',
+        'Empty Config'.tr,
+        'Config text cannot be empty'.tr,
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -68,8 +68,8 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     final parsed = ConfigParser.parse(newText);
     if (parsed == null) {
       Get.snackbar(
-        'Invalid Syntax',
-        'Could not parse configuration syntax',
+        'Invalid Syntax'.tr,
+        'Could not parse configuration syntax'.tr,
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -81,10 +81,8 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     // Config". Catch the invalid case here, where the reason is known.
     if (!parsed.validate()) {
       Get.snackbar(
-        'Incomplete Config',
-        'This config parses but is missing required fields - check the '
-        'address, the port, and the credentials for this protocol. '
-        'Nothing was saved.',
+        'Incomplete Config'.tr,
+        'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.'.tr,
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -116,10 +114,10 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
       // above: either the library already holds this exact config, or the
       // write itself failed.
       Get.snackbar(
-        isDuplicate ? 'Duplicate Config' : 'Could Not Save',
+        isDuplicate ? 'Duplicate Config'.tr : 'Could Not Save'.tr,
         isDuplicate
-            ? 'Another config in your library is identical - the original was left untouched'
-            : 'The config could not be written to storage. The original was left untouched.',
+            ? 'Another config in your library is identical - the original was left untouched'.tr
+            : 'The config could not be written to storage. The original was left untouched.'.tr,
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -131,7 +129,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
 
     Get.back();
     Get.snackbar(
-      'Config Updated',
+      'Config Updated'.tr,
       'Saved changes for ${parsed.displayName}',
       backgroundColor: Colors.green,
       colorText: Colors.white,
@@ -175,14 +173,14 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
                                 size: 40, color: Colors.orange),
                             const SizedBox(height: 8),
                             Text(
-                              'Too long for a QR code',
+                              'Too long for a QR code'.tr,
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: Colors.orange),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Copy the text and share it instead',
+                              'Copy the text and share it instead'.tr,
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
@@ -195,8 +193,8 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Scan with Blackout Kit or any VPN app to import',
+            Text(
+              'Scan with Blackout Kit or any VPN app to import'.tr,
               style: TextStyle(fontSize: 12),
               textAlign: TextAlign.center,
             ),
@@ -213,7 +211,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               Get.back();
               Get.snackbar(
                 'Copied',
-                'Config URI copied to clipboard',
+                'Config URI copied to clipboard'.tr,
                 backgroundColor: Colors.green,
                 colorText: Colors.white,
               );
@@ -238,17 +236,17 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_2),
-            tooltip: 'Share QR Code',
+            tooltip: 'Share QR Code'.tr,
             onPressed: _showQrDialog,
           ),
           IconButton(
             icon: const Icon(Icons.copy),
-            tooltip: 'Copy config text',
+            tooltip: 'Copy config text'.tr,
             onPressed: () {
               Clipboard.setData(ClipboardData(text: _textController.text));
               Get.snackbar(
                 'Copied',
-                'Configuration copied to clipboard',
+                'Configuration copied to clipboard'.tr,
                 backgroundColor: Colors.green,
                 colorText: Colors.white,
                 duration: const Duration(seconds: 2),
@@ -257,7 +255,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.save),
-            tooltip: 'Save changes',
+            tooltip: 'Save changes'.tr,
             onPressed: _saveChanges,
           ),
         ],
@@ -284,8 +282,8 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
                 const SizedBox(width: 8),
                 Text(
                   _isValid
-                      ? 'Valid Config'
-                      : (_parses ? 'Parses, but incomplete' : 'Syntax Error'),
+                      ? 'Valid Config'.tr
+                      : (_parses ? 'Parses, but incomplete'.tr : 'Syntax Error'.tr),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: _isValid
@@ -315,9 +313,9 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
                   fontSize: 13,
                   height: 1.4,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   border: InputBorder.none,
-                  hintText: 'Enter raw configuration text...',
+                  hintText: 'Enter raw configuration text...'.tr,
                 ),
                 onChanged: _validateContent,
               ),

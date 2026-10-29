@@ -79,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Get available configs (only from enabled sources)
     final configs = _configController.visibleConfigs;
     if (configs.isEmpty) {
-      _showSnackbar('No configs available', Colors.orange);
+      _showSnackbar('No configs available'.tr, Colors.orange);
       return;
     }
 
@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showSnackbar(String message, Color color) {
     Get.snackbar(
-      'Blackout Kit',
+      'Blackout Kit'.tr,
       message,
       backgroundColor: color,
       colorText: Colors.white,
@@ -235,10 +235,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final homeLabel = (home == null || home.isEmpty)
         ? null
-        : '${home.ip} — ${home.placeLabel.isEmpty ? 'location unknown' : home.placeLabel}';
+        : '${home.ip} — ${home.placeLabel.isEmpty ? 'location unknown'.tr : home.placeLabel}'.tr;
     final exitLabel = (exit == null || exit.isEmpty)
         ? null
-        : '${exit.ip} — ${exit.placeLabel.isEmpty ? 'location unknown' : exit.placeLabel}';
+        : '${exit.ip} — ${exit.placeLabel.isEmpty ? 'location unknown'.tr : exit.placeLabel}'.tr;
 
     TextStyle rowStyle(bool accent) => TextStyle(
           fontSize: 12,
@@ -262,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  homeLabel ?? 'Your real IP: unavailable',
+                  homeLabel ?? 'Your real IP: unavailable'.tr,
                   style: rowStyle(false),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -278,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  exitLabel ?? 'Exit location: resolving…',
+                  exitLabel ?? 'Exit location: resolving…'.tr,
                   style: rowStyle(true),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -392,11 +392,11 @@ class _HomeScreenState extends State<HomeScreen> {
               // so a "Speed" card could only ever read "Not tested" forever.
               // Latency is the figure that is actually measured.
               'Latency',
-              result?.latencyMs != null ? '${result!.latencyMs} ms' : 'Not tested',
+              result?.latencyMs != null ? '${result!.latencyMs} ms' : 'Not tested'.tr,
               Icons.speed,
             ),
             _buildStatCard(
-              'Configs (visible/stored)',
+              'Configs (visible/stored)'.tr,
               '${stats['total']}/${stats['stored']}',
               Icons.settings,
             ),
@@ -407,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             _buildStatCard(
               'Reliability',
-              '${(stats['average_reliability'] as double).toStringAsFixed(0)}%',
+              '${(stats['average_reliability'] as double).toStringAsFixed(0)}%'.tr,
               Icons.trending_up,
             ),
           ],
@@ -454,8 +454,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Configuration Info',
+                Text(
+                  'Configuration Info'.tr,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -465,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   'Visible: ${_configController.visibleConfigs.length} configs '
                   '(stored: ${_configController.allConfigs.length}) — '
-                  'disabled sources stay saved but are hidden and untested',
+                  'disabled sources stay saved but are hidden and untested'.tr,
                   style: const TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 8),

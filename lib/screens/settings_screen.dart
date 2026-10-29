@@ -72,7 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // VPN Settings Section
             _buildSection(
               context: context,
-              title: 'VPN Settings',
+              title: 'VPN Settings'.tr,
               children: [
                 Obx(() => SwitchListTile(
                   title: Text('auto_connect'.tr),
@@ -95,8 +95,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ListTile(
                   leading: const Icon(Icons.shield_outlined),
                   title: Text('block_non_vpn'.tr),
-                  subtitle: const Text(
-                    'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.',
+                  subtitle: Text(
+                    'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.'.tr,
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Get.find<KillSwitchService>().openSystemSettings(),
@@ -148,8 +148,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text('show_speed_status_bar'.tr),
                   // Honest subtitle: the tester measures latency, not throughput.
                   // The old copy promised a live speed the app never produced.
-                  subtitle: const Text(
-                    'Shows the latency of the selected config in the notification',
+                  subtitle: Text(
+                    'Shows the latency of the selected config in the notification'.tr,
                   ),
                   value: _settingsController.showSpeedInTray.value,
                   onChanged: (value) {
@@ -173,9 +173,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: Text('dns_leak_prevention'.tr),
                   subtitle: Text(
                     _settingsController.dnsLeakPreventionEnabled.value
-                        ? 'DNS queries are resolved inside the tunnel through '
-                            '${_dnsSelectionSummary()}.'
-                        : 'Off - your provider can see which domains you resolve.',
+                        ? 'DNS queries are resolved inside the tunnel through ${_dnsSelectionSummary()}.'
+                        : 'Off - your provider can see which domains you resolve.'.tr,
                   ),
                   value: _settingsController.dnsLeakPreventionEnabled.value,
                   onChanged: (value) {
@@ -251,10 +250,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // nothing.
                 Obx(() => ListTile(
                   title: Text('check_resolvers'.tr),
-                  subtitle: const Text(
-                    'Opens a TCP connection to port 53 on each address. A '
-                    'resolver that fails here can still work over UDP — this '
-                    'is a reachability hint, not a verdict.',
+                  subtitle: Text(
+                    'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.'.tr,
                   ),
                   leading: const Icon(Icons.network_check),
                   enabled: _settingsController.dnsLeakPreventionEnabled.value ||
@@ -291,9 +288,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // preference, but its description now says exactly that.
                 Obx(() => SwitchListTile(
                   title: Text('show_my_location'.tr),
-                  subtitle: const Text(
-                    'Asks a third-party service for your IP and country. Off by '
-                    'default - nothing leaves your device while it is off.',
+                  subtitle: Text(
+                    'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.'.tr,
                   ),
                   value: _settingsController.showMyLocation.value,
                   onChanged: (value) {
@@ -320,8 +316,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 )),
                 Obx(() => SwitchListTile(
                   title: Text('analytics'.tr),
-                  subtitle: const Text(
-                    'No data leaves your device - this only stores your preference',
+                  subtitle: Text(
+                    'No data leaves your device - this only stores your preference'.tr,
                   ),
                   value: _settingsController.analyticsEnabled.value,
                   onChanged: _settingsController.toggleAnalytics,
@@ -331,7 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Protocol Preference Section
             _buildSection(
               context: context,
-              title: 'Protocol & Engines',
+              title: 'Protocol & Engines'.tr,
               children: [
                 ListTile(
                   title: Text('engine_hub'.tr),
@@ -360,9 +356,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Obx(() => ListTile(
                   title: Text('auto_test_interval'.tr),
                   subtitle: Text(
-                    '${_settingsController.autoTestIntervalMinutes.value} minutes — '
-                    'while the app is open, re-checks that the tunnel still loads '
-                    'websites (0 disables)',
+                    '${_settingsController.autoTestIntervalMinutes.value} minutes — while the app is open, re-checks that the tunnel still loads websites (0 disables)'.tr,
                     maxLines: 3,
                   ),
                   leading: const Icon(Icons.timer_outlined),
@@ -370,18 +364,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 )),
                 Obx(() => SwitchListTile(
                   title: Text('site_check'.tr),
-                  subtitle: const Text(
-                    'Verify candidate configs by fetching real websites '
-                    'through them, not just pinging the server',
+                  subtitle: Text(
+                    'Verify candidate configs by fetching real websites through them, not just pinging the server'.tr,
                   ),
                   value: _settingsController.siteCheckEnabled.value,
                   onChanged: _settingsController.setSiteCheckEnabled,
                 )),
                 Obx(() => SwitchListTile(
                   title: Text('verbose_core_logs'.tr),
-                  subtitle: const Text(
-                    'Core reports every packet decision to logcat — for '
-                    'diagnosing a connected-but-nothing-loads tunnel',
+                  subtitle: Text(
+                    'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel'.tr,
                   ),
                   value: _settingsController.coreDebugLogs.value,
                   onChanged: _settingsController.setCoreDebugLogs,
@@ -454,8 +446,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             subtitle: Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Text(
-                                '${source.owner}/${source.repo} (${source.branch ?? "main"})'
-                                ' — ${sourceCounts[source.id] ?? 0} configs',
+                                '${source.owner}/${source.repo} (${source.branch ?? "main"}) — ${sourceCounts[source.id] ?? 0} configs',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -487,7 +478,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Advanced Section
             _buildSection(
               context: context,
-              title: 'Advanced & Diagnostics',
+              title: 'Advanced & Diagnostics'.tr,
               children: [
                 ListTile(
                   title: Text('system_logs_inspector'.tr),
@@ -516,7 +507,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.code),
                   onTap: () {
                     Get.snackbar(
-                      'GitHub Repository',
+                      'GitHub Repository'.tr,
                       'github.com/kiacoder/blackout-kit-mobile',
                       backgroundColor: theme.colorScheme.primary,
                       colorText: theme.colorScheme.onPrimary,
@@ -529,8 +520,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.privacy_tip_outlined),
                   onTap: () {
                     Get.snackbar(
-                      'Privacy Policy',
-                      'No user tracking or data collection.',
+                      'Privacy Policy'.tr,
+                      'No user tracking or data collection.'.tr,
                       backgroundColor: theme.colorScheme.primary,
                       colorText: theme.colorScheme.onPrimary,
                     );
@@ -669,11 +660,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final primary = _settingsController.customDnsServer.value;
     final secondary = _settingsController.dnsSecondaryServer.value;
     final provider = DnsCatalog.byKey(_settingsController.dnsProviderKey.value);
-    if (primary.isEmpty) return 'Not set - pick one to enable leak prevention';
+    if (primary.isEmpty) return 'Not set - pick one to enable leak prevention'.tr;
     if (provider == null) {
       return secondary.isEmpty ? '$primary (custom)' : '$primary, $secondary (custom)';
     }
-    return '${provider.name} — ${provider.servers.join(", ")}';
+    return '${provider.localizedName} — ${provider.servers.join(", ")}';
   }
 
   /// Mismatch between the selected resolver's country and the tunnel's exit.
@@ -705,9 +696,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!Get.isRegistered<ConnectionController>()) return;
     if (!Get.find<ConnectionController>().isConnected) return;
     Get.snackbar(
-      'Reconnect to apply',
-      'This tunnel keeps the resolvers it was built with. Disconnect and '
-          'connect again to use ${_dnsSelectionSummary()}.',
+      'Reconnect to apply'.tr,
+      LocalizationService.t(
+        'This tunnel keeps the resolvers it was built with. Disconnect and '
+        'connect again to use @summary.',
+        {'summary': _dnsSelectionSummary()},
+      ),
       snackPosition: SnackPosition.BOTTOM,
       duration: const Duration(seconds: 5),
     );
@@ -750,14 +744,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: Text(entry.key),
                     subtitle: Text(
                       entry.value
-                          ? 'TCP 53 answered'
-                          : 'No TCP 53 answer - it may still work over UDP',
+                          ? 'TCP 53 answered'.tr
+                          : 'No TCP 53 answer - it may still work over UDP'.tr,
                     ),
                   ),
                 const SizedBox(height: 8),
                 Text(
                   'This opens a TCP connection to port 53. Many resolvers only '
-                  'answer UDP, so treat a miss as inconclusive.',
+                          'answer UDP, so treat a miss as inconclusive.'.tr,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -812,9 +806,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Expanded(
                             child: Text(
                               'Your exit is ${suggestion.exitCountry}. '
-                              '${DnsCatalog.byKey(suggestion.providerKey)?.name ?? suggestion.providerKey} '
+                              '${DnsCatalog.byKey(suggestion.providerKey)?.localizedName ?? suggestion.providerKey} '
                               'is a ${suggestion.resolverCountry} resolver, so '
-                              'answers will be geo-mismatched.',
+                              'answers will be geo-mismatched.'.tr,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ),
@@ -850,7 +844,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               // ignore: deprecated_member_use
                               groupValue:
                                   _settingsController.dnsProviderKey.value,
-                              title: Text(provider.name),
+                              title: Text(provider.localizedName),
                               subtitle: Text(provider.servers.join('  ·  ')),
                               // ignore: deprecated_member_use
                               onChanged: (value) {
@@ -874,8 +868,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: TextField(
                       controller: controller,
                       keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                        labelText: 'Custom (IP address)',
+                      decoration: InputDecoration(
+                        labelText: 'Custom (IP address)'.tr,
                         hintText: '1.1.1.1',
                         isDense: true,
                       ),
@@ -935,7 +929,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final problem = service.lastError.value;
     if (problem != null) {
       Get.snackbar(
-        'Resolver not applied',
+        'Resolver not applied'.tr,
         problem,
         snackPosition: SnackPosition.BOTTOM,
         duration: const Duration(seconds: 6),
@@ -1038,7 +1032,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Padding(
                   padding: const EdgeInsets.only(left: 16, bottom: 4),
                   child: Text(
-                    'Not available in this build',
+                    'Not available in this build'.tr,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -1082,12 +1076,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             controller: controller,
             maxLines: 8,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'One host per line',
+            decoration: InputDecoration(
+              labelText: 'One host per line'.tr,
               hintText: 'google.com\nyoutube.com',
               helperText:
-                  'Checked through each candidate config. Defaults are '
-                  'restored if everything is removed.',
+                  'Checked through each candidate config. Defaults are restored if everything is removed.'.tr,
             ),
           ),
         ),
@@ -1237,8 +1230,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Get.dialog(
       AlertDialog(
         title: Text('reset_to_defaults_confirm'.tr),
-        content: const Text(
-          'This will reset all settings to their default values. Your saved configs will not be affected.',
+        content: Text(
+          'This will reset all settings to their default values. Your saved configs will not be affected.'.tr,
         ),
         actions: [
           TextButton(
@@ -1251,7 +1244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Get.back();
               Get.snackbar(
                 'Reset',
-                'Settings have been reset to defaults',
+                'Settings have been reset to defaults'.tr,
                 backgroundColor: Colors.green,
                 colorText: Colors.white,
               );
@@ -1404,16 +1397,15 @@ class _UpdateSectionState extends State<_UpdateSection> {
           // every build left the whole Settings screen blank.
           title: _phase == 'downloading'
               ? Obx(() => Text(
-                    'Downloading '
-                    '${(_service.progress.value * 100).toStringAsFixed(0)}%',
+                    'Downloading ${(_service.progress.value * 100).toStringAsFixed(0)}%',
                   ))
               : Text(switch (_phase) {
-                  'checking' => 'Checking for updates...',
-                  'latest' => 'App is up to date',
+                  'checking' => 'Checking for updates...'.tr,
+                  'latest' => 'App is up to date'.tr,
                   'available' => 'Update available: ${_update!.tagName}',
-                  'ready' => 'Ready to install - tap to open the installer',
-                  'error' => 'Update failed',
-                  _ => 'App update',
+                  'ready' => 'Ready to install - tap to open the installer'.tr,
+                  'error' => 'Update failed'.tr,
+                  _ => 'App update'.tr,
                 }),
           // The failure reason (missing install permission, truncated
           // download, ...) is the whole point here, so it gets room to wrap
@@ -1422,7 +1414,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
             _phase == 'error'
                 ? _error
                 : (_currentVersion.isEmpty
-                    ? 'Tap to check for updates'
+                    ? 'Tap to check for updates'.tr
                     : 'Installed: $_currentVersion'),
             maxLines: 5,
             overflow: TextOverflow.ellipsis,

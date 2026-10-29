@@ -200,8 +200,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         if (content.length > maxImportBytes) {
           if (!mounted) return;
           Get.snackbar(
-            'File Too Large',
-            'This file is larger than 5 MB - paste the configs instead',
+            'File Too Large'.tr,
+            'This file is larger than 5 MB - paste the configs instead'.tr,
             backgroundColor: Colors.red,
             colorText: Colors.white,
           );
@@ -236,8 +236,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             _showParsedDialog(multiple.first);
           } else {
             Get.snackbar(
-              'Import Failed',
-              'Could not parse a valid VPN config from file',
+              'Import Failed'.tr,
+              'Could not parse a valid VPN config from file'.tr,
               backgroundColor: Colors.red,
               colorText: Colors.white,
             );
@@ -246,7 +246,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       }
     } catch (e) {
       Get.snackbar(
-        'File Error',
+        'File Error'.tr,
         'Failed to read file: $e',
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -263,7 +263,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       await _configController.loadConfigs();
       Get.back();
       Get.snackbar(
-        'Config Saved',
+        'Config Saved'.tr,
         '${config.displayName} added to Library',
         backgroundColor: Colors.green,
         colorText: Colors.white,
@@ -274,10 +274,10 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       final alreadyStored = _configController.allConfigs
           .any((c) => c.getHash() == config.getHash());
       Get.snackbar(
-        alreadyStored ? 'Duplicate Config' : 'Save Failed',
+        alreadyStored ? 'Duplicate Config'.tr : 'Save Failed'.tr,
         alreadyStored
-            ? 'This configuration already exists in your library'
-            : 'The config could not be written to storage - try again',
+            ? 'This configuration already exists in your library'.tr
+            : 'The config could not be written to storage - try again'.tr,
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -298,7 +298,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         // Every entry already existed. The old message still said
         // "Successfully added 0 configs", which reads like a success.
         Get.snackbar(
-          'Already in Library',
+          'Already in Library'.tr,
           'All ${configs.length} configs were duplicates - nothing was added',
           backgroundColor: Colors.orange,
           colorText: Colors.white,
@@ -309,8 +309,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         'Imported',
         savedCount == configs.length
             ? 'Added $savedCount configs to Library'
-            : 'Added $savedCount of ${configs.length} configs '
-                '(${configs.length - savedCount} were already in your library)',
+            : 'Added $savedCount of ${configs.length} configs (${configs.length - savedCount} were already in your library)',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -345,7 +344,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             const SizedBox(height: 8),
             Text(
               'Address: ${config.address}:${config.port}',
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              style: TextStyle(fontSize: 12, fontFamily: 'monospace'),
             ),
           ],
         ),
@@ -358,7 +357,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           ),
           ElevatedButton.icon(
             onPressed: _saving ? null : () => _saveConfig(config),
-            icon: const Icon(Icons.add),
+            icon: Icon(Icons.add),
             label: Text('add_to_library'.tr),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
@@ -421,10 +420,10 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         title: Text('import_vpn_config'.tr),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.qr_code_scanner), text: 'Scan QR'),
-            Tab(icon: Icon(Icons.paste), text: 'Clipboard & Text'),
-            Tab(icon: Icon(Icons.file_present), text: 'Import File'),
+          tabs: [
+            Tab(icon: Icon(Icons.qr_code_scanner), text: 'Scan QR'.tr),
+            Tab(icon: Icon(Icons.paste), text: 'Clipboard & Text'.tr),
+            Tab(icon: Icon(Icons.file_present), text: 'Import File'.tr),
           ],
         ),
       ),
@@ -494,8 +493,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                             if (!mounted) return;
                             setState(() => _torchEnabled = false);
                             Get.snackbar(
-                              'Torch Unavailable',
-                              'This camera does not expose a torch',
+                              'Torch Unavailable'.tr,
+                              'This camera does not expose a torch'.tr,
                               backgroundColor: Colors.orange,
                               colorText: Colors.white,
                               duration: const Duration(seconds: 2),
@@ -513,8 +512,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                           } catch (_) {
                             if (!mounted) return;
                             Get.snackbar(
-                              'Camera Unavailable',
-                              'Could not switch camera',
+                              'Camera Unavailable'.tr,
+                              'Could not switch camera'.tr,
                               backgroundColor: Colors.orange,
                               colorText: Colors.white,
                               duration: const Duration(seconds: 2),
@@ -551,8 +550,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Paste Configuration Text or URI',
+              Text(
+                'Paste Configuration Text or URI'.tr,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               ElevatedButton.icon(
@@ -589,7 +588,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             maxLines: 8,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...',
+              hintText: 'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...'.tr,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onChanged: (text) {
@@ -667,13 +666,13 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           children: [
             Icon(Icons.file_open_outlined, size: 80, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
-            const Text(
-              'Import Configuration File',
+            Text(
+              'Import Configuration File'.tr,
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)',
+              'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)'.tr,
               textAlign: TextAlign.center,
               style: TextStyle(color: theme.hintColor),
             ),

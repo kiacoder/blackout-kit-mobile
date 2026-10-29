@@ -13,6 +13,8 @@
 /// order the OS should try them.
 library;
 
+import 'vpn_session_options.dart';
+
 enum DnsCategory { sanctions, speed, extra }
 
 class DnsProvider {
@@ -358,6 +360,32 @@ class DnsCatalog {
     category: DnsCategory.speed,
   );
 
+  /// Resolvers that only make sense from one country.
+  ///
+  /// A national resolver answers with answers tailored to *its* country: the
+  /// CDN node, the localised frontend, sometimes a filtered view. Using one
+  /// while the tunnel exits somewhere else hands the destination a
+  /// contradiction — a German exit IP served from an Iranian frontend — which
+  /// is slower and more anomalous than using a global resolver.
+  ///
+  /// The desktop CLI ships the same catalogue; keep the keys in step.
+  static const Map<String, String> localResolverCountries = {
+    'shecan': 'IR',
+    'electro': 'IR',
+    'begzar': 'IR',
+    'radar': 'IR',
+    '403': 'IR',
+    'alibaba': 'CN',
+    'tencent': 'CN',
+    '114dns': 'CN',
+  };
+
+  /// ISO country a provider is tied to, or '' when it is global.
+  static String countryOf(String key) => localResolverCountries[key] ?? '';
+
+  /// True when [key] is a national resolver rather than a global one.
+  static bool isCountryLocal(String key) => localResolverCountries.containsKey(key);
+
   static List<DnsProvider> inCategory(DnsCategory category) =>
       all.where((p) => p.category == category).toList();
 
@@ -384,23 +412,24 @@ class DnsCatalog {
 
   /// Accepts a bare IPv4/IPv6 literal. Android's `addDnsServer` only takes
   /// literals, so anything else would be silently dropped by the OS.
-  static bool isIpLiteral(String value) {
-    final raw = value.trim();
-    if (raw.isEmpty) return false;
-    if (raw.contains(':')) return true; // IPv6
-    final parts = raw.split('.');
-    if (parts.length != 4) return false;
-    for (final part in parts) {
-      final n = int.tryParse(part);
-      if (n == null || n < 0 || n > 255) return false;
-    }
-    return true;
-  }
+  ///
+  /// Delegates to [VpnSessionOptions.isIpLiteral] — this used to be its own
+  /// `contains(':')` check, which accepted `"a:b"` and `"http://x"` as IPv6
+  /// and let a garbage resolver reach the connect path.
+  static bool isIpLiteral(String value) => VpnSessionOptions.isIpLiteral(value);
 
-  /// Splits `"1.1.1.1, 1.0.0.1"` into its IP literals, dropping the rest.
+  /// A resolver this tunnel can actually reach.
+  ///
+  /// The TUN has an IPv4 address only (IPv6 is routed into the interface and
+  /// black-holed on purpose), so an IPv6 resolver can never be answered. Use
+  /// this — not [isIpLiteral] — when picking a resolver for the tunnel.
+  static bool isUsableResolver(String value) =>
+      VpnSessionOptions.isTunnelDns(value);
+
+  /// Splits `"1.1.1.1, 1.0.0.1"` into its usable IP literals, dropping the rest.
   static List<String> parseServers(String raw) => raw
       .split(RegExp(r'[,\s]+'))
       .map((s) => s.trim())
-      .where(isIpLiteral)
+      .where(isUsableResolver)
       .toList();
 }

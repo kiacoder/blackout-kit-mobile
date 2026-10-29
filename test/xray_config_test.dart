@@ -186,7 +186,7 @@ Endpoint = vpn.example.com:51820
       expect(tun['tag'], 'tun');
       final settings = tun['settings'] as Map;
       expect(settings['name'], 'xray0');
-      expect(settings['mtu'], 1500);
+      expect(settings['mtu'], 1400);
       expect(settings['userLevel'], 8);
       expect(settings['gateway'], ['10.111.222.2/30']);
       expect(settings['dns'], ['1.1.1.1', '8.8.8.8']);

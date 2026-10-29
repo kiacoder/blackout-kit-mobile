@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-29
+
+### Added
+- **The resolver now knows where you exit.** A national resolver (Shecan,
+  Radar, Electro, Begzar, 403.online for Iran; Alibaba, Tencent, 114DNS for
+  China) is the right answer when you are not tunnelling and the *wrong* one
+  inside a tunnel that exits elsewhere: geo-DNS returns country-local answers,
+  so the destination sees an exit IP in one country served from a frontend in
+  another. Settings → DNS now shows a warning when the resolver's country and
+  the exit's country disagree, with a one-tap switch to a global resolver, and
+  the picker carries the same banner. Nothing changes behind the user's back —
+  it only suggests.
+- **"Check resolvers"** in Settings → DNS: probes each selected address on
+  TCP 53 and reports which answered. Labelled as a hint, not a verdict —
+  a resolver can refuse TCP and still serve UDP.
+
+### Fixed
+- **The chosen resolver was never used on sing-box protocols.** `remote-dns`
+  was hardcoded to `https://1.1.1.1` with `final` pointing at it; the caller's
+  address sat in a `remote-dns-ip` entry nothing referenced, and the secondary
+  was dropped entirely. On hysteria2 / TUIC / AnyTLS (and all of iOS) the
+  resolver picked in Settings did nothing — and on a network where 1.1.1.1 is
+  filtered, in-tunnel DNS simply died.
+- **Xray tried the chosen pair last.** Two hardcoded DoH endpoints came first,
+  so every lookup on a filtered network paid two timeouts before reaching the
+  resolver the user actually chose. The pair now leads; DoH follows as a
+  fallback.
+- **IPv6 resolvers were accepted but could never answer.** The interface is
+  built with an IPv4 address only and `::/0` is routed in and black-holed on
+  purpose, so a v6 resolver's queries were dropped: the tunnel reported
+  "connected" and resolved nothing. `VpnSessionOptions.isTunnelDns` now
+  rejects them with an explanation, and a config's own v6 DNS is dropped
+  (falling back to defaults) instead of blocking the connect.
+- **Garbage passed as a DNS address.** `DnsCatalog` and the DNS service each
+  had their own `contains(':')` check, so `a:b` and `http://x` were accepted
+  as IPv6 and stored. Both now use the strict validator.
+- **A tunnel could come up with no DNS at all.** If Android rejected every
+  `addDnsServer` call the errors were logged and the interface was established
+  anyway — the system then fell back to the carrier resolver while the UI said
+  leak prevention was on. It now refuses to establish and reports why.
+- **Settings loaded twice.** `onInit()` and `initialize()` each started their
+  own `openBox` + load; the second landed asynchronously and wrote stored
+  values back over anything changed in between.
+- **TUN MTU 1500 → 1400.** The payload is re-encapsulated, so a full-size inner
+  packet plus outer IP/TCP/TLS (or QUIC) headers exceeded a 1500-byte path and
+  fragmented or black-holed. The symptom was silent: large responses stalled
+  while small ones worked. WireGuard outbounds in this app already used 1420
+  for the same reason.
+- The resolver picker no longer silently no-ops on a live session — changing
+  it now says "reconnect to apply".
+
 ## [1.13.0] - 2026-10-28
 
 ### Added

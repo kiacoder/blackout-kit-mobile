@@ -87,9 +87,17 @@ void main() {
       expect(options.validationError, isNull);
     });
 
-    test('accepts IPv6 literals', () {
+    test('accepts IPv6 as a literal but refuses it as a tunnel resolver', () {
+      // `addDnsServer` does take a v6 literal, which is what this used to
+      // assert — but the interface is built with an IPv4 address only and
+      // `::/0` is routed into it as a deliberate v6 kill switch, so a v6
+      // resolver's queries are dropped before they leave the device. Accepting
+      // one produced a tunnel that reported "connected" and resolved nothing.
+      expect(VpnSessionOptions.isIpLiteral('2606:4700:4700::1111'), isTrue);
+      expect(VpnSessionOptions.isTunnelDns('2606:4700:4700::1111'), isFalse);
+
       const options = VpnSessionOptions(dnsServers: ['2606:4700:4700::1111']);
-      expect(options.validationError, isNull);
+      expect(options.validationError, contains('IPv6'));
     });
 
     test('rejects a hostname, because addDnsServer only takes IPs', () {

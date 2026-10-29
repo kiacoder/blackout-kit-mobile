@@ -283,6 +283,15 @@ addresses on each row; a typed custom address clears the pair. The selection is
 stored as `dnsProviderKey` / `customDnsServer` / `dnsSecondaryServer` and is
 reset with the rest of the settings.
 
+**National resolvers are for direct use, not for tunnelling abroad.** A
+resolver tied to one country answers with that country's frontends, so using
+Shecan while the tunnel exits in Germany hands the destination a location
+contradiction — slower, and one more reason for a service to ask you to prove
+you are human. The app watches for exactly that: when the selected resolver's
+country and the exit's country disagree, Settings → DNS shows a warning and
+offers a one-tap switch to a global resolver. It never changes the choice on its
+own.
+
 ### Phase 3 — Security features ✅ Complete (corrected design)
 - **Split tunneling** — `addAllowedApplication` / `addDisallowedApplication`,
   fed from a real `PackageManager` app list

@@ -76,7 +76,22 @@ class BlackoutVpnService : VpnService() {
          */
         private const val VPN_ADDRESS_V4 = "10.111.222.1"
         private const val VPN_PREFIX_V4 = 30
-        internal const val VPN_MTU = 1500
+        /**
+         * MTU of the TUN interface.
+         *
+         * 1400, not 1500. Every inner packet is re-encapsulated: TCP-based
+         * cores add IP+TCP (~40) and a TLS record with its AEAD tag (~29-45),
+         * UDP-based cores (hysteria2, TUIC, QUIC) add a QUIC packet header and
+         * its own AEAD tag on top of that. A 1500-byte inner packet therefore
+         * leaves no room and the outer datagram either fragments (UDP - and
+         * fragmented UDP is widely dropped) or stalls on a PMTU blackhole.
+         *
+         * The symptom is not an error: big pages stop halfway, YouTube spins,
+         * uploads hang. 1400 leaves ~100 bytes of headroom, which covers the
+         * worst case (QUIC inside UDP). WireGuard outbounds in this app
+         * already default to 1420 for the same reason - see xray_config.dart.
+         */
+        internal const val VPN_MTU = 1400
         private const val DEFAULT_DNS = "1.1.1.1"
 
         const val DEFAULT_SOCKS_PORT = 10808
@@ -293,12 +308,26 @@ class BlackoutVpnService : VpnService() {
             // DNS leak prevention: every resolver the tunnel advertises is one
             // we control. The system resolver is never offered, so queries
             // cannot silently fall back to the carrier.
+            var acceptedDns = 0
             for (server in dnsServers) {
                 try {
                     builder.addDnsServer(server)
+                    acceptedDns++
                 } catch (e: Exception) {
                     Log.w(TAG, "rejected DNS server '$server': ${e.message}")
                 }
+            }
+            // Every server was refused. Establishing anyway would give Android
+            // an interface with no DNS at all, and the system would quietly
+            // fall back to the carrier's resolver while the UI still says leak
+            // prevention is on — a silent leak is worse than a failed connect.
+            if (dnsServers.isNotEmpty() && acceptedDns == 0) {
+                lastError = "Every DNS server was rejected by Android " +
+                    "($dnsServers). Refusing to build a tunnel that would " +
+                    "silently fall back to the carrier resolver."
+                Log.e(TAG, lastError!!)
+                notifyStatus("error")
+                return false
             }
 
             // NOTE: deliberately no setBlocking(). The Xray tun inbound reads

@@ -132,19 +132,31 @@ class SettingsController extends GetxController {
     } catch (_) {}
   }
 
+  /// The single in-flight load, shared by [onInit] and [initialize].
+  ///
+  /// Both used to call `_initSettings()` independently, so registering the
+  /// controller and then awaiting `initialize()` ran TWO `openBox` + two
+  /// `_loadSettings()` passes. The second one landed asynchronously and wrote
+  /// stored values back over anything changed in between — a value set right
+  /// after `await initialize()` could silently revert, and the extra open kept
+  /// the box alive past `Hive.close()` in tests.
+  Future<void>? _initFuture;
+
   @override
   void onInit() {
     super.onInit();
     // Fire-and-forget is fine for the UI, but main() awaits initialize()
     // explicitly before building the services that read these values.
-    _initSettings();
+    initialize();
   }
 
   /// Load persisted settings. Callers that immediately construct something
   /// reading settings (the site-check service, the connection controller's
-  /// auto-connect and watchdog setup) must await this first: onInit() starts
-  /// the load but does not wait for it.
-  Future<void> initialize() => _initSettings();
+  /// auto-connect and watchdog setup) must await this first.
+  ///
+  /// Idempotent: awaiting this after `onInit()` has already started the load
+  /// waits for that same load instead of starting a second one.
+  Future<void> initialize() => _initFuture ??= _initSettings();
 
   /// Initialize Hive box and load settings
   Future<void> _initSettings() async {

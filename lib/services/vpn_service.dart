@@ -40,7 +40,12 @@ class VPNService {
   static const int defaultSocksPort = 10808;
 
   /// TUN interface MTU. Must match BlackoutVpnService.VPN_MTU.
-  static const int tunMtu = 1500;
+  ///
+  /// 1400 rather than 1500: the payload is re-encapsulated, so a full-size
+  /// inner packet plus outer IP/TCP/TLS (or QUIC) headers exceeds a 1500-byte
+  /// path and either fragments or black-holes. The failure mode is silent —
+  /// large responses stall while small ones work.
+  static const int tunMtu = 1400;
 
   /// Address the Xray netstack answers on. Must share a subnet with
   /// BlackoutVpnService.VPN_ADDRESS_V4 (10.111.222.1/30) or replies written
@@ -225,9 +230,11 @@ class VPNService {
 
   /// DNS servers to hand the core, taken from the config where it specifies any.
   ///
-  /// Non-literal entries (a profile may carry a hostname resolver) are
-  /// dropped: `VpnSessionOptions.validationError` refuses anything that is not
-  /// an IP literal, and letting one through would block the whole connect.
+  /// Non-literal entries (a profile may carry a hostname resolver) and IPv6
+  /// entries are dropped: `VpnSessionOptions.validationError` refuses anything
+  /// that is not an IPv4 literal, and the tunnel has no IPv6 address, so a v6
+  /// resolver would be black-holed. Letting one through would either block the
+  /// whole connect or produce a tunnel with no working DNS.
   static List<String> dnsServersForConfig(Config config) {
     final dns = switch (config) {
       WireGuardConfig c when c.dns.isNotEmpty => c.dns,
@@ -238,7 +245,7 @@ class VPNService {
     final parsed = dns
         .split(',')
         .map((e) => e.trim())
-        .where((e) => e.isNotEmpty && VpnSessionOptions.isIpLiteral(e))
+        .where((e) => e.isNotEmpty && VpnSessionOptions.isTunnelDns(e))
         .toList();
     return parsed.isEmpty ? const ['1.1.1.1', '8.8.8.8'] : parsed;
   }

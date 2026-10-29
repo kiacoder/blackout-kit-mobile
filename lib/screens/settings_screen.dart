@@ -11,6 +11,8 @@ import '../controllers/config_controller.dart';
 import '../controllers/connection_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../models/dns_provider.dart';
+import '../services/dns_exit_advisor.dart';
+import '../services/dns_leak_prevention_service.dart';
 import '../services/ip_info_service.dart';
 import '../services/kill_switch_service.dart';
 import '../services/update_service.dart';
@@ -188,6 +190,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   enabled: _settingsController.dnsLeakPreventionEnabled.value,
                   onTap: _settingsController.dnsLeakPreventionEnabled.value
                       ? _showDnsResolverDialog
+                      : null,
+                )),
+                // Shown only when the resolver's country and the exit's
+                // country disagree — see DnsExitAdvisor for why that matters.
+                Obx(() {
+                  final suggestion = _dnsSuggestion();
+                  if (suggestion == null) return const SizedBox.shrink();
+                  return Container(
+                    color: Colors.orange.withOpacity(0.10),
+                    child: ListTile(
+                      leading: const Icon(Icons.warning_amber_rounded,
+                          color: Colors.orange),
+                      title: Text(suggestion.title),
+                      subtitle: Text(suggestion.message),
+                      trailing: TextButton(
+                        onPressed: () {
+                          _settingsController
+                              .setDnsProvider(suggestion.suggestedKey);
+                          _hintDnsTakesEffectOnReconnect();
+                        },
+                        child: const Text('Use global'),
+                      ),
+                    ),
+                  );
+                }),
+                // The reachability probe existed in the service but nothing
+                // ever called it, so there was no way to find out whether the
+                // selected resolver answers from this network — the one
+                // question that matters when a "connected" tunnel resolves
+                // nothing.
+                Obx(() => ListTile(
+                  title: const Text('Check resolvers'),
+                  subtitle: const Text(
+                    'Opens a TCP connection to port 53 on each address. A '
+                    'resolver that fails here can still work over UDP — this '
+                    'is a reachability hint, not a verdict.',
+                  ),
+                  leading: const Icon(Icons.network_check),
+                  enabled: _settingsController.dnsLeakPreventionEnabled.value,
+                  onTap: _settingsController.dnsLeakPreventionEnabled.value
+                      ? _checkDnsResolvers
                       : null,
                 )),
               ],
@@ -595,6 +638,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return '${provider.name} — ${provider.servers.join(", ")}';
   }
 
+  /// Mismatch between the selected resolver's country and the tunnel's exit.
+  ///
+  /// Returns null when leak prevention is off, when nothing is connected (no
+  /// exit to compare against), or when the pair already matches.
+  DnsSuggestion? _dnsSuggestion() {
+    if (!_settingsController.dnsLeakPreventionEnabled.value) return null;
+    if (!Get.isRegistered<ConnectionController>()) return null;
+    final exit = Get.find<ConnectionController>()
+            .exitIpInfo
+            .value
+            ?.countryCode ??
+        '';
+    return DnsExitAdvisor.evaluate(
+      providerKey: _settingsController.dnsProviderKey.value,
+      exitCountryCode: exit,
+    );
+  }
+
+  /// Warns that a resolver change only takes effect on the next connect.
+  ///
+  /// The tunnel's DNS servers are frozen by `Builder.establish()`. The leak
+  /// prevention toggle and split tunneling both say "applies after
+  /// reconnecting"; picking a different *resolver* did not, so a user could
+  /// switch from Cloudflare to Shecan on a live session, watch the row update,
+  /// and keep resolving through Cloudflare with no explanation.
+  void _hintDnsTakesEffectOnReconnect() {
+    if (!Get.isRegistered<ConnectionController>()) return;
+    if (!Get.find<ConnectionController>().isConnected) return;
+    Get.snackbar(
+      'Reconnect to apply',
+      'This tunnel keeps the resolvers it was built with. Disconnect and '
+          'connect again to use ${_dnsSelectionSummary()}.',
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 5),
+    );
+  }
+
+  /// Reports whether each selected resolver answers on TCP port 53.
+  ///
+  /// Deliberately labelled a hint: a resolver can refuse TCP 53 and still
+  /// serve UDP perfectly, so "no answer" here is not proof of a broken choice.
+  void _checkDnsResolvers() {
+    if (!Get.isRegistered<DNSLeakPreventionService>()) return;
+    final service = Get.find<DNSLeakPreventionService>();
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Resolver reachability'),
+        content: FutureBuilder<Map<String, bool>>(
+          future: service.probeResolvers(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox(
+                height: 72,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final results = snapshot.data!;
+            if (results.isEmpty) {
+              return const Text('No resolver is selected.');
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final entry in results.entries)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      entry.value ? Icons.check_circle_outline : Icons.help_outline,
+                      color: entry.value ? Colors.green : Colors.orange,
+                    ),
+                    title: Text(entry.key),
+                    subtitle: Text(
+                      entry.value
+                          ? 'TCP 53 answered'
+                          : 'No TCP 53 answer - it may still work over UDP',
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Text(
+                  'This opens a TCP connection to port 53. Many resolvers only '
+                  'answer UDP, so treat a miss as inconclusive.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          TextButton(onPressed: Get.back, child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
   /// Picks the resolver pair used while DNS leak prevention is on.
   ///
   /// The list is the shared [DnsCatalog], grouped by category, so the mobile
@@ -612,8 +750,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
           height: 420,
           child: StatefulBuilder(
             builder: (context, setDialogState) {
+              // Recomputed on every rebuild, so the banner disappears the
+              // moment the user picks a resolver that matches the exit.
+              final suggestion = _dnsSuggestion();
               return Column(
                 children: [
+                  if (suggestion != null)
+                    Container(
+                      width: double.infinity,
+                      color: Colors.orange.withOpacity(0.12),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded,
+                              size: 20, color: Colors.orange),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Your exit is ${suggestion.exitCountry}. '
+                              '${DnsCatalog.byKey(suggestion.providerKey)?.name ?? suggestion.providerKey} '
+                              'is a ${suggestion.resolverCountry} resolver, so '
+                              'answers will be geo-mismatched.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              _settingsController
+                                  .setDnsProvider(suggestion.suggestedKey);
+                              setDialogState(() {});
+                              _hintDnsTakesEffectOnReconnect();
+                            },
+                            child: const Text('Use global'),
+                          ),
+                        ],
+                      ),
+                    ),
                   Expanded(
                     child: ListView(
                       padding: EdgeInsets.zero,
@@ -641,6 +813,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 if (value == null) return;
                                 _settingsController.setDnsProvider(value);
                                 setDialogState(() {});
+                                _hintDnsTakesEffectOnReconnect();
                               },
                             ),
                         ],
@@ -658,11 +831,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         hintText: '1.1.1.1',
                         isDense: true,
                       ),
-                      onSubmitted: (value) {
-                        final trimmed = value.trim();
-                        if (trimmed.isEmpty) return;
-                        _settingsController.setCustomDnsServer(trimmed);
-                        setDialogState(() {});
+                      onSubmitted: (value) async {
+                        if (await _applyCustomDns(value)) {
+                          setDialogState(() {});
+                        }
                       },
                     ),
                   ),
@@ -674,11 +846,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(onPressed: Get.back, child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               final trimmed = controller.text.trim();
               if (trimmed.isNotEmpty &&
                   trimmed != _settingsController.customDnsServer.value) {
-                _settingsController.setCustomDnsServer(trimmed);
+                // Keep the dialog open when the address is refused, so the
+                // user can fix it instead of closing on a silent no-op.
+                if (!await _applyCustomDns(trimmed)) return;
               }
               Get.back();
             },
@@ -687,6 +861,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  /// Validates and stores a hand-typed resolver.
+  ///
+  /// Goes through [DNSLeakPreventionService] when it is registered, because
+  /// that is where the "is this address usable inside this tunnel" rule
+  /// lives (IPv4 literal, reachable on the v4-only interface). Calling the
+  /// settings controller directly — as this dialog used to — stored whatever
+  /// was typed, including `http://x` and IPv6 addresses that could never
+  /// answer, and the user only found out at connect time.
+  Future<bool> _applyCustomDns(String value) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+
+    if (!Get.isRegistered<DNSLeakPreventionService>()) {
+      _settingsController.setCustomDnsServer(trimmed);
+      return true;
+    }
+
+    final service = Get.find<DNSLeakPreventionService>();
+    await service.setCustomDnsServer(trimmed);
+    final problem = service.lastError.value;
+    if (problem != null) {
+      Get.snackbar(
+        'Resolver not applied',
+        problem,
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 6),
+      );
+      return false;
+    }
+    _hintDnsTakesEffectOnReconnect();
+    return true;
   }
 
   void _showLanguageDialog() {

@@ -224,8 +224,9 @@ Endpoint = awg.server.com:51820
       final servers = dns['servers'] as List;
       // legacy `address` form was removed in sing-box 1.14
       expect(servers.every((s) => !(s as Map).containsKey('address')), isTrue);
-      expect((servers.first as Map)['type'], 'https');
-      expect((servers.last as Map)['type'], 'udp');
+      // Plain `udp` throughout: these resolvers are addressed by IP and speak
+      // port 53. A DoH endpoint on an arbitrary resolver IP does not exist.
+      expect(servers.every((s) => (s as Map)['type'] == 'udp'), isTrue);
       // the outbound DNS rule item is removed; the association lives in dial fields
       expect(dns.containsKey('rules'), isFalse);
 
@@ -233,6 +234,48 @@ Endpoint = awg.server.com:51820
       expect(route['default_domain_resolver'], isNotNull);
       final proxy = (doc['outbounds'] as List).firstWhere((o) => o['tag'] == 'proxy') as Map;
       expect(proxy['domain_resolver'], isNotNull);
+    });
+
+    test('the chosen resolver pair is what actually answers queries', () {
+      // Regression: `remote-dns` was hardcoded to https://1.1.1.1 and the
+      // caller's addresses went into an unreferenced `remote-dns-ip` entry, so
+      // the resolver picked in Settings was never used on any sing-box
+      // protocol — and the secondary was dropped entirely.
+      const builder = SingboxConfigBuilder(
+        routeDnsThroughProxy: true,
+        dnsServers: ['178.22.122.100', '185.51.200.2'],
+      );
+      final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
+      final doc = builder.build(config);
+
+      final dns = doc['dns'] as Map;
+      final servers = (dns['servers'] as List).cast<Map>();
+      final byTag = {for (final s in servers) s['tag']: s};
+
+      expect(dns['final'], 'remote-dns');
+      expect(byTag['remote-dns']!['server'], '178.22.122.100');
+      expect(byTag['remote-dns']!['detour'], 'proxy');
+      // The bootstrap resolver must also be an IP literal of the pair, or a
+      // filtered 1.1.1.1 stops the tunnel from ever resolving its own host.
+      expect(byTag['bootstrap-dns']!['server'], '178.22.122.100');
+      expect(byTag['bootstrap-dns']!.containsKey('detour'), isFalse);
+      // Both halves of the pair are present.
+      expect(byTag['remote-dns-2']!['server'], '185.51.200.2');
+      expect(byTag['remote-dns-2']!['detour'], 'proxy');
+    });
+
+    test('a single resolver still produces a complete DNS section', () {
+      const builder = SingboxConfigBuilder(
+        routeDnsThroughProxy: true,
+        dnsServers: ['9.9.9.9'],
+      );
+      final config = ConfigParser.parse('hy2://pass@example.com:443?sni=example.com')!;
+      final doc = builder.build(config);
+
+      final servers = ((doc['dns'] as Map)['servers'] as List).cast<Map>();
+      expect(servers.map((s) => s['tag']), containsAll(['bootstrap-dns', 'remote-dns']));
+      expect(servers.any((s) => s['tag'] == 'remote-dns-2'), isFalse);
+      expect((doc['dns'] as Map)['final'], 'remote-dns');
     });
 
     test('without proxied DNS there is no dns block to go stale', () {

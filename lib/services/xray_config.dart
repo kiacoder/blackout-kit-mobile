@@ -98,7 +98,7 @@ class XrayConfigBuilder {
   const XrayConfigBuilder({
     this.socksPort = 10808,
     this.httpPort,
-    this.mtu = 1500,
+    this.mtu = 1400,
     this.gatewayCidr = '10.111.222.2/30',
     this.dnsServers = const ['1.1.1.1', '8.8.8.8'],
     this.routeDnsThroughProxy = false,
@@ -158,11 +158,18 @@ class XrayConfigBuilder {
       // the tunnel, exactly what the setting claims to prevent. The DoH
       // endpoints are dialled by the core and matched by the port-53 rule
       // below; no local fallback is kept.
+      //
+      // Order matters: Xray queries these in sequence, so the user's chosen
+      // resolvers must come FIRST. With the two DoH endpoints ahead of them
+      // the picked pair was effectively a last resort - and on a network where
+      // cloudflare-dns.com / dns.google are filtered, every single lookup paid
+      // two timeouts before reaching the resolver the user actually chose.
       document['dns'] = {
         'servers': [
+          ...dnsServers,
+          // Fallbacks, only reached when the chosen pair cannot answer.
           'https://cloudflare-dns.com/dns-query',
           'https://dns.google/dns-query',
-          ...dnsServers,
         ],
         'queryStrategy': 'UseIP',
       };

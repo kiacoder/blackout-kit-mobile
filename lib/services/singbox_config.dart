@@ -223,13 +223,27 @@ class SingboxConfigBuilder {
       //                   the tunnel. It never sees the user's browsing.
       //   remote-dns    - IP literal, through the proxy. Resolves everything
       //                   the user actually visits.
+      //
+      // The chosen pair is what `remote-dns` (and therefore `final`) uses. The
+      // previous version hardcoded `https://1.1.1.1` as `remote-dns` and put
+      // the user's address in a `remote-dns-ip` entry that nothing referenced:
+      // on every sing-box protocol (and all of iOS) the resolver the user
+      // picked in Settings was never used, and the secondary was dropped
+      // entirely. On a network where 1.1.1.1 is filtered — the exact reason
+      // someone picks Shecan or Radar — in-tunnel DNS simply died.
+      //
+      // Plain `udp` rather than DoH on purpose: these resolvers are addressed
+      // by IP and speak port 53. DoH on an arbitrary IP is not something most
+      // of them offer, so a `https` server here would fail to come up.
+      final primary = dnsServers.isNotEmpty ? dnsServers.first : '1.1.1.1';
+      final secondary = dnsServers.length > 1 ? dnsServers[1] : null;
       document['dns'] = {
         'servers': [
           {
-            'type': 'https',
+            'type': 'udp',
             'tag': 'bootstrap-dns',
             // IP literal: no name resolution needed to reach it.
-            'server': '1.1.1.1',
+            'server': primary,
             // NO `detour: "direct"` here. The default dialer already dials
             // direct, and the bundled core REFUSES the explicit form with
             // `start dns/https[bootstrap-dns]: detour to an empty direct
@@ -239,16 +253,20 @@ class SingboxConfigBuilder {
             // that one points at a real outbound.
           },
           {
-            'type': 'https',
+            'type': 'udp',
             'tag': 'remote-dns',
-            'server': '1.1.1.1',
+            'server': primary,
             'detour': 'proxy',
           },
-          if (dnsServers.isNotEmpty)
+          // The secondary address of the pair. sing-box has no automatic
+          // failover between servers, but keeping it defined means a future
+          // rule (or a core that rotates) can use it, and it documents what
+          // the user selected.
+          if (secondary != null)
             {
               'type': 'udp',
-              'tag': 'remote-dns-ip',
-              'server': dnsServers.first,
+              'tag': 'remote-dns-2',
+              'server': secondary,
               'detour': 'proxy',
             },
         ],

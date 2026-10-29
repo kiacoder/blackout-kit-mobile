@@ -88,9 +88,25 @@ class VpnSessionOptions {
         return '"$server" is not an IP address. Android only accepts literal '
             'IPs for addDnsServer().';
       }
+      if (!isTunnelDns(server)) {
+        return '"$server" is an IPv6 resolver, but this tunnel has no IPv6 '
+            'address: IPv6 is routed into the interface and black-holed on '
+            'purpose, so a v6 resolver can never answer. Pick an IPv4 '
+            'resolver.';
+      }
     }
     return null;
   }
+
+  /// True for a resolver this tunnel can actually reach.
+  ///
+  /// The interface is built with an IPv4 address only and `::/0` routed into
+  /// it as a deliberate v6 kill switch (see `BlackoutVpnService`), so a v6
+  /// resolver's packets are dropped before they leave the device. Accepting
+  /// one produced a tunnel that came up "connected" with every lookup
+  /// black-holed — no error, no internet.
+  static bool isTunnelDns(String value) =>
+      isIpLiteral(value) && !value.trim().contains(':');
 
   /// Test hook for the DNS-address validator.
   static bool looksLikeIpForTest(String value) => isIpLiteral(value);

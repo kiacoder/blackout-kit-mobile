@@ -82,12 +82,22 @@ class DNSLeakPreventionService extends GetxService {
   }
 
   Future<void> setCustomDnsServer(String server) async {
-    if (!_isIpLiteral(server)) {
+    final trimmed = server.trim();
+    // One validator, not three. This used to be a local `contains(':')` check
+    // that accepted "a:b" and "http://x" as IPv6, so garbage reached the
+    // settings file and only failed later, at connect time.
+    if (!VpnSessionOptions.isIpLiteral(trimmed)) {
       lastError.value =
           '"$server" is not an IP address. Android only accepts literal IPs.';
       return;
     }
-    _settings?.setCustomDnsServer(server);
+    if (!VpnSessionOptions.isTunnelDns(trimmed)) {
+      lastError.value = '"$server" is IPv6, and this tunnel has no IPv6 '
+          'address (v6 is black-holed on purpose), so it could never answer. '
+          'Use an IPv4 resolver.';
+      return;
+    }
+    _settings?.setCustomDnsServer(trimmed);
     lastError.value = null;
   }
 
@@ -139,18 +149,6 @@ class DNSLeakPreventionService extends GetxService {
       _logger.w('Resolver $host:$port did not answer: $e');
       return false;
     }
-  }
-
-  static bool _isIpLiteral(String value) {
-    if (value.isEmpty) return false;
-    if (value.contains(':')) return true; // IPv6
-    final parts = value.split('.');
-    if (parts.length != 4) return false;
-    for (final part in parts) {
-      final n = int.tryParse(part);
-      if (n == null || n < 0 || n > 255) return false;
-    }
-    return true;
   }
 
   /// Human-readable summary for settings screens.

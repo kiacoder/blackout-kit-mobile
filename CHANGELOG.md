@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.2] - 2026-10-30
+
+### Security
+- **Backups were enabled.** `allowBackup` was unset, so it defaulted to true and
+  `adb backup` could pull saved configs — server addresses and credentials —
+  off the device. Now `false`, plus an explicit `dataExtractionRules` that
+  excludes every domain from cloud backup and device-to-device transfer.
+- **Third-party actions pinned to commit SHAs.** A tag can be moved under you;
+  a SHA cannot.
+
+### Changed
+- CodeQL now scans every language this repository actually has (actions,
+  java-kotlin, python on push; swift weekly on macOS), and the eight alerts it
+  raised that were not defects are dismissed with written reasons rather than
+  silenced.
+
+
 ## [1.16.1] - 2026-10-30
 
 ### Fixed

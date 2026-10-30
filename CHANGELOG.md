@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.3] - 2026-10-30
+
+### Fixed
+- **The library offered Connect for protocols this build cannot run.** Tapping
+  it on an AmneziaWG config produced a full-screen red banner explaining that no
+  engine serves that protocol — which the app already knew. Unsupported configs
+  now render a disabled Connect button with the reason shown inline.
+
+### Added
+- Screenshots in the README. The connected screen's addresses are replaced with
+  the documentation range 203.0.113.0/24; the library shots were left out
+  because every tile in them carried a live server address.
+
+
 ## [1.16.2] - 2026-10-30
 
 ### Security

@@ -84,8 +84,10 @@ jobs:
           flutter-version: '3.24.0'
           channel: stable
 
+      # v4: v3 is deprecated in December 2026. The action warned about it on the
+      # first run, so this is fixed now rather than in a panic later.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -101,6 +103,6 @@ jobs:
           flutter build apk --debug
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: '/language:${{ matrix.language }}'

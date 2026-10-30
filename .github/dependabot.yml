@@ -2,29 +2,67 @@ version: 2
 
 # CodeQL cannot see Dart (see .github/workflows/codeql.yml for the full story),
 # so dependency vulnerabilities are the one class of issue Dependabot can still
-# catch for the half of this project that CodeQL is blind to. Keeping it on
-# `pub` matters more here than usual.
+# catch for the half of this project that CodeQL is blind to.
+#
+# Tuned to be quiet. The first run opened nine PRs at once, and three of them
+# were major bumps that would have broken the Android build on merge:
+#
+#   com.android.application  7.4.2 -> 9.5.0
+#   gradle-wrapper           7.6.3 -> 9.8.2
+#   org.jetbrains.kotlin     1.9.24 -> 2.4.21
+#
+# Major upgrades of the Android toolchain are a project, not a pull request:
+# they need a migration, a full rebuild and device testing. So:
+#   * majors are ignored entirely — do those by hand, deliberately
+#   * minor + patch arrive as ONE grouped PR per ecosystem, weekly
+#   * at most one open PR per ecosystem, so the tab stays readable
+#
+# Security advisories still come through regardless of these rules.
+
 updates:
   - package-ecosystem: 'pub'
     directory: '/'
     schedule:
       interval: 'weekly'
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
     commit-message:
       prefix: 'deps(pub)'
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      pub-minor-patch:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
 
   - package-ecosystem: 'gradle'
     directory: '/android'
     schedule:
       interval: 'weekly'
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
     commit-message:
       prefix: 'deps(gradle)'
+    # The Android toolchain (AGP, Gradle, Kotlin) moves together and needs a
+    # coordinated upgrade, never a lone bump.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      gradle-minor-patch:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
 
-  # The workflows pin actions by major tag; this keeps those tags current.
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
       interval: 'weekly'
+    open-pull-requests-limit: 1
     commit-message:
       prefix: 'deps(actions)'
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      actions-minor-patch:
+        patterns: ['*']
+        update-types: ['minor', 'patch']

@@ -24,7 +24,12 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
-    open-pull-requests-limit: 1
+    # Security updates only. Routine pub bumps cannot pass CI here: intl is
+    # pinned by the Flutter SDK, and test/mockito constrain each other
+    # (bumping `test` alone breaks `mockito ^5.8.1`). A limit of 0 disables
+    # version-update PRs while still raising one for a vulnerable package —
+    # which is the part that actually matters for Dart.
+    open-pull-requests-limit: 0
     commit-message:
       prefix: 'deps(pub)'
     ignore:

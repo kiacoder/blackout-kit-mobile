@@ -11,6 +11,11 @@ class ConfigTile extends StatelessWidget {
   final TestResult? testResult;
   final VoidCallback? onTap;
   final VoidCallback? onConnect;
+
+  /// Non-null when this build has no engine for the protocol. The Connect
+  /// button is then rendered disabled and the reason is shown inline, instead
+  /// of letting the tap fail with a red "Connection Failed" banner.
+  final String? connectBlockedReason;
   final VoidCallback? onDelete;
 
   const ConfigTile({
@@ -19,6 +24,7 @@ class ConfigTile extends StatelessWidget {
     this.testResult,
     this.onTap,
     this.onConnect,
+    this.connectBlockedReason,
     this.onDelete,
   }) : super(key: key);
 
@@ -188,6 +194,25 @@ class ConfigTile extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (connectBlockedReason != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.info_outline,
+                        size: 12, color: Colors.orange.shade300),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        connectBlockedReason!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.orange.shade300,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (hasResult) ...[
                 const SizedBox(height: 8),
                 // Test metrics row
@@ -241,12 +266,20 @@ class ConfigTile extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  if (onConnect != null)
+                  if (onConnect != null || connectBlockedReason != null)
                     SizedBox(
                       height: 32,
                       child: ElevatedButton.icon(
-                        onPressed: onConnect,
-                        icon: const Icon(Icons.vpn_lock, size: 14),
+                        // A disabled button that says nothing is worse than a
+                        // working one: keep the label, drop the action.
+                        onPressed:
+                            connectBlockedReason == null ? onConnect : null,
+                        icon: Icon(
+                          connectBlockedReason == null
+                              ? Icons.vpn_lock
+                              : Icons.block,
+                          size: 14,
+                        ),
                         label: Text('connect'.tr),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 12),

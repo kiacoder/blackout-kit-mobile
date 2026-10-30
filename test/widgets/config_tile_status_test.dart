@@ -69,4 +69,56 @@ void main() {
     expect(find.text('Testing…'), findsOneWidget);
     expect(find.text('✗ Failed'), findsNothing);
   });
+
+  testWidgets('a protocol with no bundled engine greys out Connect',
+      (tester) async {
+    // The bug this locks down: the library offered a green Connect button for
+    // AmneziaWG, and tapping it produced a full-screen "Connection Failed"
+    // banner explaining that no engine serves that protocol — something the
+    // app already knew from the capability probe.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConfigTile(
+            config: sampleConfig(),
+            testResult: null,
+            onConnect: () {},
+            connectBlockedReason: 'Not available in this build',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // ElevatedButton.icon builds a private subclass, so byType would miss it.
+    final button = tester
+        .widgetList(find.byWidgetPredicate((w) => w is ElevatedButton))
+        .cast<ElevatedButton>()
+        .single;
+    expect(button.onPressed, isNull, reason: 'Connect must not be tappable');
+    expect(find.text('Not available in this build'), findsOneWidget,
+        reason: 'the reason must be visible, not hidden in a tooltip');
+  });
+
+  testWidgets('a supported protocol keeps Connect enabled', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConfigTile(
+            config: sampleConfig(),
+            testResult: null,
+            onConnect: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final button = tester
+        .widgetList(find.byWidgetPredicate((w) => w is ElevatedButton))
+        .cast<ElevatedButton>()
+        .single;
+    expect(button.onPressed, isNotNull);
+    expect(find.text('Not available in this build'), findsNothing);
+  });
 }

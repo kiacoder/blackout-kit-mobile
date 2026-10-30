@@ -30,6 +30,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.initState();
     _configController = Get.find<ConfigController>();
     _connectionController = Get.find<ConnectionController>();
+    // Ask which protocols this build can actually run, so tiles can grey out
+    // the ones it cannot before the user taps Connect.
+    _connectionController.ensureEngineAvailability();
   }
 
   @override
@@ -236,6 +239,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       testResult: result,
                       onTap: () => _showConfigDetails(config, result),
                       onConnect: () => _handleConnect(config),
+                      connectBlockedReason:
+                          _connectionController.isProtocolSupported(config.protocol)
+                              ? null
+                              : 'not_available_in_build'.tr,
                       onDelete: () => _handleDelete(config),
                     );
                   },

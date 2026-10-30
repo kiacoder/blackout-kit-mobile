@@ -52,6 +52,22 @@ WireGuard `.conf` or subscription link → **Connect**.
 
 Building from source instead? See [Setup](#setup).
 
+### Screenshots
+
+<p align="center">
+  <img src="assets/images/screenshots/connected.png" width="240" alt="Blackout Kit connected screen: green CONNECTED button, exit location resolved to Frankfurt, and a status line confirming the tunnel carries traffic">
+  <img src="assets/images/screenshots/stats.png" width="240" alt="Blackout Kit statistics: latency, number of stored configs, how many are working, and measured reliability">
+  <img src="assets/images/screenshots/dns.png" width="240" alt="Blackout Kit DNS leak prevention settings: resolver picker with Cloudflare selected, and the option to change DNS without a VPN">
+</p>
+
+<p align="center">
+  <img src="assets/images/screenshots/settings.png" width="240" alt="Blackout Kit settings: auto-connect on launch, kill switch, split tunnelling and a manual check for updates">
+  <img src="assets/images/screenshots/language.png" width="240" alt="Blackout Kit language picker showing English, Persian and Simplified Chinese">
+</p>
+
+<sub>Addresses in these screenshots are documentation placeholders (203.0.113.0/24).</sub>
+
+
 ## Status
 
 **Verified on hardware (Android):** the in-process Xray path carries live traffic

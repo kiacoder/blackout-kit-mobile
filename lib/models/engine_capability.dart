@@ -82,7 +82,6 @@ class EngineCapability {
   bool supportsProtocol(String protocol) =>
     compatibleProtocols.contains(protocol);
 
-  @override
   /// Display name in the current language, falling back to [displayName].
   String get localizedName {
     final translated = LocalizationService.t('engine_$key');

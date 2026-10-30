@@ -899,6 +899,31 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     return servable;
   }
 
+  /// True when a bundled engine can serve [protocol].
+  ///
+  /// Fails open: until the capability probe has answered, everything is
+  /// reported as supported, because refusing a connect that might have worked
+  /// is worse than letting the native layer say no.
+  bool isProtocolSupported(String protocol) {
+    final availability = _engineAvailability;
+    if (availability == null || !availability.isKnown) return true;
+    return availability.canConnect(protocol);
+  }
+
+  /// Runs the engine capability probe if it has not answered yet.
+  ///
+  /// The library calls this so its tiles can grey out protocols this build
+  /// cannot run *before* the user taps Connect and gets a red error for
+  /// something the app already knew.
+  Future<void> ensureEngineAvailability() async {
+    if (_engineAvailability != null) return;
+    try {
+      _engineAvailability = await vpnService.getEngineInfo();
+    } catch (e) {
+      _log.w('Engine capability probe failed: $e');
+    }
+  }
+
   /// Returns a human-readable refusal when no bundled engine can serve
   /// [config]'s protocol, or null when the attempt should go ahead.
   ///

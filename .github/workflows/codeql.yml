@@ -59,8 +59,11 @@ on:
 # language's configuration on the Security tab then reads "CodeQL exited with
 # errors / No code scanning results" until the next successful scan — which is
 # exactly how swift ended up red after a push interrupted it.
+# Keyed by event as well as ref. With a bare ref, the weekly swift scan (15+
+# minutes on macOS) blocked every push scan queued behind it — a push would sit
+# in "pending" until the macOS job finished.
 concurrency:
-  group: codeql-${{ github.ref }}
+  group: codeql-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

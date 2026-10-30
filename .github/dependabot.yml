@@ -1,0 +1,30 @@
+version: 2
+
+# CodeQL cannot see Dart (see .github/workflows/codeql.yml for the full story),
+# so dependency vulnerabilities are the one class of issue Dependabot can still
+# catch for the half of this project that CodeQL is blind to. Keeping it on
+# `pub` matters more here than usual.
+updates:
+  - package-ecosystem: 'pub'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps(pub)'
+
+  - package-ecosystem: 'gradle'
+    directory: '/android'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'deps(gradle)'
+
+  # The workflows pin actions by major tag; this keeps those tags current.
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    commit-message:
+      prefix: 'deps(actions)'

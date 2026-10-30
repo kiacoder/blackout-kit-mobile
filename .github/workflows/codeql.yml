@@ -1,23 +1,36 @@
 name: CodeQL
 
-# Why this workflow exists alongside CodeQL's "default setup".
+# What this covers, and what CodeQL simply cannot cover.
 #
-# Default setup kept four language configurations alive that could never
-# succeed on this repository:
+# CodeQL supports eleven languages: C/C++, C#, Go, Java, Kotlin, JavaScript,
+# TypeScript, Python, Ruby, Rust, Swift, and GitHub Actions.
 #
-#   ruby        — there are no .rb files at all. It cannot ever produce a scan.
-#   swift       — needs a macOS runner plus a signed, pod-installed Xcode
-#                 build. iOS is a compile-only target here (no Apple developer
-#                 account), so this errored on every run.
-#   c-cpp       — the only C/C++ in the tree is CMake scratch under
-#                 android/app/.cxx, i.e. build output, not source.
-#   java-kotlin — needs a real Android build (Kotlin has no build-mode: none),
-#                 which default setup cannot perform.
+# **Dart is not one of them.** The 48 Dart files in lib/ — the actual app — are
+# invisible to CodeQL no matter how this file is written. That is a hard limit
+# of the tool, not a configuration choice. Dart is covered by `flutter analyze`
+# and the 483 tests in test.yml, and dependency CVEs by Dependabot.
 #
-# Each dead configuration showed up as a red "CodeQL is reporting errors"
-# banner on the Security tab. Default setup is now limited to `actions` (no
-# build needed, ~1 minute), and this workflow owns java-kotlin, which needs a
-# real Android build that default setup cannot perform.
+# So "scan everything" here means every language that exists in this repository
+# AND can be extracted:
+#
+#   java-kotlin  android/  — 11 Kotlin files (VpnService, engine runner, plugin)
+#   swift        ios/      — 4 Swift files (AppDelegate, tunnel provider, plugin)
+#   python       tool/     — 1 script
+#   actions      — handled by CodeQL default setup, not here (see below)
+#
+# Two languages are deliberately absent, because scanning them produces an
+# error row on the Security tab rather than a scan:
+#
+#   ruby   The only Ruby file is ios/Podfile. CodeQL's Ruby extractor does not
+#          treat it as source, so the job fails with "No Ruby code found" —
+#          exactly the red X this repository used to show.
+#   c-cpp  There is no C or C++ source. The only matches are CMake scratch
+#          files under android/app/.cxx, which are build output.
+#
+# Ownership: CodeQL *default setup* keeps `actions` (no build needed, and it
+# keeps working even if this file is ever disabled). This workflow owns the
+# compiled and scripted languages. One owner per language means no duplicate
+# uploads to the same category and no duplicated configuration rows.
 
 permissions:
   contents: read
@@ -27,10 +40,12 @@ on:
     branches: [main]
     paths:
       - 'android/**'
+      - 'ios/**'
+      - 'tool/**'
       - 'lib/**'
       - '.github/workflows/codeql.yml'
-  # Security scanning does not need to gate every PR, and the Kotlin job builds
-  # the whole APK (~10 min). Weekly keeps the results fresh.
+  # Security scanning should not gate every commit. Weekly keeps every language
+  # fresh, including Swift, which needs a macOS runner and a full iOS build.
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
@@ -42,34 +57,51 @@ concurrency:
 jobs:
   analyze:
     name: Analyze ${{ matrix.language }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 90
+    # The macOS/Swift entry only runs weekly and on demand. Gating at job level
+    # (not per step) means a push never spins up a macOS runner at all.
+    if: ${{ matrix.heavy != true || github.event_name != 'push' }}
 
     permissions:
       # Required to upload results to the code scanning dashboard.
       security-events: write
-      # Required by CodeQL to read workflow metadata on private repos.
+      # Required by CodeQL to read workflow metadata.
       actions: read
       contents: read
 
-    # Only java-kotlin lives here. Workflow files are scanned by default setup,
-    # which needs no build; keeping them out of this matrix means one owner per
-    # language and no duplicate uploads to the same category.
     strategy:
       fail-fast: false
       matrix:
         include:
-          # The VpnService, engine runner and DNS plumbing. Kotlin has no
-          # `none` build mode — CodeQL must observe a real compile — so this
-          # job builds the debug APK under the tracer.
+          # The native layer: VpnService, establishDnsOnly, EngineRunner,
+          # VpnPlugin. Kotlin has no `none` build mode (Java does, Kotlin does
+          # not), so CodeQL must observe a real compile.
           - language: java-kotlin
             build-mode: manual
+            runs-on: ubuntu-latest
+            heavy: false
+
+          # One script, no build. Cheap enough to run on every push.
+          - language: python
+            build-mode: none
+            runs-on: ubuntu-latest
+            heavy: false
+
+          # The iOS sources. Needs a macOS runner plus the Libbox framework and
+          # a full `flutter build ios` — roughly 15 minutes at 10x the minute
+          # cost of Linux. Skipped on push, run weekly and on demand: scanning
+          # a compile-only target should not tax every commit.
+          - language: swift
+            build-mode: manual
+            runs-on: macos-15
+            heavy: true
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Java
-        if: matrix.language == 'java-kotlin'
+        if: ${{ matrix.language == 'java-kotlin' }}
         uses: actions/setup-java@v4
         with:
           # Must match android/app/build.gradle (sourceCompatibility 17).
@@ -77,31 +109,48 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Flutter
-        if: matrix.language == 'java-kotlin'
+        if: ${{ matrix.language == 'java-kotlin' || matrix.language == 'swift' }}
         uses: subosito/flutter-action@v2
         with:
-          # Keep in step with build.yml and test.yml: the dependency set
+          # Keep in step with build.yml / ios.yml / test.yml: the dependency set
           # requires Dart >= 3.5, so Flutter must be >= 3.24.0.
           flutter-version: '3.24.0'
           channel: stable
 
-      # v4: v3 is deprecated in December 2026. The action warned about it on the
-      # first run, so this is fixed now rather than in a panic later.
+      - name: Set up Go (Libbox)
+        if: ${{ matrix.language == 'swift' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          # Default query suite: this is a small native layer, and the extended
-          # suites double the runtime for queries it has no surface for.
+          # security-and-quality, not the bare default: this is the only static
+          # analysis the native layer gets, so the extra queries are worth the
+          # runtime.
+          queries: security-and-quality
 
-      - name: Build the Android app
-        if: matrix.language == 'java-kotlin'
-        # A debug build is enough for the tracer to see every Kotlin compilation
-        # unit, and it skips the signing setup the release build needs.
+      - name: Build Android (Kotlin)
+        if: ${{ matrix.language == 'java-kotlin' }}
+        # A debug build is enough for the tracer to see every Kotlin
+        # compilation unit, and it skips the release signing setup.
         run: |
           flutter pub get
           flutter build apk --debug
+
+      - name: Build iOS (Swift)
+        if: ${{ matrix.language == 'swift' }}
+        # Same recipe as ios.yml: the Runner target imports Libbox, which is
+        # built from sing-box with the pinned gomobile fork. Without it the
+        # Swift compile fails before CodeQL ever sees the sources.
+        run: |
+          flutter pub get
+          chmod +x tool/build_libbox.sh
+          ./tool/build_libbox.sh
+          flutter build ios --no-codesign
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4

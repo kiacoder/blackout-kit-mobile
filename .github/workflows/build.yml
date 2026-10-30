@@ -153,7 +153,7 @@ jobs:
         # Single owner of release creation (release.yml was removed — its
         # ncipollo step raced this one and could mint a second, empty release).
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ steps.relmeta.outputs.title }}

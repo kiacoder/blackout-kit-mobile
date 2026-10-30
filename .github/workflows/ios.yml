@@ -7,6 +7,13 @@ name: Build iOS (no codesign)
 # push that touches ios/ or the engine code — so the platform never rots
 # while it waits for signing.
 
+# Least privilege: this workflow checks out the repo and compiles it. It never
+# writes back, so the token only needs read access. Without an explicit block
+# GitHub applies the repository default, which for older repos is read/write —
+# CodeQL reports that as actions/missing-workflow-permissions.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]

@@ -1,5 +1,10 @@
 name: Build APK
 
+# Least privilege at the workflow level; the build job escalates to
+# contents: write because it attaches the APKs to a Release.
+permissions:
+  contents: read
+
 on:
   push:
     tags:

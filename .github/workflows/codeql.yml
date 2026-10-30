@@ -8,7 +8,7 @@ name: CodeQL
 # **Dart is not one of them.** The 48 Dart files in lib/ — the actual app — are
 # invisible to CodeQL no matter how this file is written. That is a hard limit
 # of the tool, not a configuration choice. Dart is covered by `flutter analyze`
-# and the 483 tests in test.yml, and dependency CVEs by Dependabot.
+# and the tests in test.yml, and dependency CVEs by Dependabot.
 #
 # So "scan everything" here means every language that exists in this repository
 # AND can be extracted:
@@ -55,13 +55,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Everything that runs on Linux: cheap, so it runs on every push.
   analyze:
     name: Analyze ${{ matrix.language }}
-    runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 90
-    # The macOS/Swift entry only runs weekly and on demand. Gating at job level
-    # (not per step) means a push never spins up a macOS runner at all.
-    if: ${{ matrix.heavy != true || github.event_name != 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     permissions:
       # Required to upload results to the code scanning dashboard.
@@ -79,23 +77,9 @@ jobs:
           # not), so CodeQL must observe a real compile.
           - language: java-kotlin
             build-mode: manual
-            runs-on: ubuntu-latest
-            heavy: false
-
-          # One script, no build. Cheap enough to run on every push.
+          # One script, no build.
           - language: python
             build-mode: none
-            runs-on: ubuntu-latest
-            heavy: false
-
-          # The iOS sources. Needs a macOS runner plus the Libbox framework and
-          # a full `flutter build ios` — roughly 15 minutes at 10x the minute
-          # cost of Linux. Skipped on push, run weekly and on demand: scanning
-          # a compile-only target should not tax every commit.
-          - language: swift
-            build-mode: manual
-            runs-on: macos-15
-            heavy: true
 
     steps:
       - uses: actions/checkout@v4
@@ -109,19 +93,13 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Flutter
-        if: ${{ matrix.language == 'java-kotlin' || matrix.language == 'swift' }}
+        if: ${{ matrix.language == 'java-kotlin' }}
         uses: subosito/flutter-action@v2
         with:
           # Keep in step with build.yml / ios.yml / test.yml: the dependency set
           # requires Dart >= 3.5, so Flutter must be >= 3.24.0.
           flutter-version: '3.24.0'
           channel: stable
-
-      - name: Set up Go (Libbox)
-        if: ${{ matrix.language == 'swift' }}
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
@@ -141,8 +119,51 @@ jobs:
           flutter pub get
           flutter build apk --debug
 
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:${{ matrix.language }}'
+
+  # The iOS sources. Needs a macOS runner plus the Libbox framework and a full
+  # `flutter build ios` — roughly 15 minutes at 10x the minute cost of Linux.
+  # Weekly and on demand only: scanning a compile-only target should not tax
+  # every commit.
+  #
+  # A separate job rather than a matrix entry: `matrix` is not available in a
+  # job-level `if`, so the push gate has to be decided without it.
+  analyze-swift:
+    name: Analyze swift
+    if: github.event_name != 'push'
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+
+      - name: Set up Go (Libbox)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: swift
+          build-mode: manual
+          queries: security-and-quality
+
       - name: Build iOS (Swift)
-        if: ${{ matrix.language == 'swift' }}
         # Same recipe as ios.yml: the Runner target imports Libbox, which is
         # built from sing-box with the pinned gomobile fork. Without it the
         # Swift compile fails before CodeQL ever sees the sources.
@@ -155,4 +176,4 @@ jobs:
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
         with:
-          category: '/language:${{ matrix.language }}'
+          category: '/language:swift'

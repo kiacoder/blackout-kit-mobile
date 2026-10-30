@@ -117,7 +117,7 @@ jobs:
 
       - name: Upload APK artifacts
         # Always, so workflow_dispatch runs still yield something downloadable.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blackout-kit-mobile-apks
           path: build/app/outputs/flutter-apk/*.apk

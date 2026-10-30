@@ -1,6 +1,6 @@
 name: CodeQL
 
-# Why this workflow exists instead of CodeQL's "default setup".
+# Why this workflow exists alongside CodeQL's "default setup".
 #
 # Default setup kept four language configurations alive that could never
 # succeed on this repository:
@@ -14,9 +14,10 @@ name: CodeQL
 #   java-kotlin — needs a real Android build (Kotlin has no build-mode: none),
 #                 which default setup cannot perform.
 #
-# Each dead configuration shows up as a red "CodeQL is reporting errors" banner
-# on the Security tab. The fix is to declare the two languages that can actually
-# be scanned, with the build each one needs, and let the rest go.
+# Each dead configuration showed up as a red "CodeQL is reporting errors"
+# banner on the Security tab. Default setup is now limited to `actions` (no
+# build needed, ~1 minute), and this workflow owns java-kotlin, which needs a
+# real Android build that default setup cannot perform.
 
 permissions:
   contents: read
@@ -51,13 +52,13 @@ jobs:
       actions: read
       contents: read
 
+    # Only java-kotlin lives here. Workflow files are scanned by default setup,
+    # which needs no build; keeping them out of this matrix means one owner per
+    # language and no duplicate uploads to the same category.
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Workflow files themselves. No build, ~1 minute.
-          - language: actions
-            build-mode: none
           # The VpnService, engine runner and DNS plumbing. Kotlin has no
           # `none` build mode — CodeQL must observe a real compile — so this
           # job builds the debug APK under the tracer.

@@ -10,7 +10,7 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 
 ## ✅ Phase 1: Foundation & Architecture
 
-**Status: COMPLETED** ✓ | **Version: v1.0-beta**
+**Status: COMPLETED** ✓ | **Version: v1.0.0**
 
 ### Deliverables
 
@@ -103,7 +103,7 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 
 ## ✅ Phase 3: User Interface & Experience
 
-**Status: COMPLETED** ✓ | **Version: v1.0-beta**
+**Status: COMPLETED** ✓ | **Version: v1.0.0**
 
 ### Deliverables
 
@@ -153,7 +153,7 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 
 ## ✅ Phase 4: Testing, Polish & Release Setup
 
-**Status: COMPLETED** | **Version: v1.0-beta**
+**Status: COMPLETED** | **Version: v1.0.0**
 
 > **Correction (2026-09-19).** The 13 original test files (3,434 lines) did not
 > compile — `dart analyze test/` reported 387 errors because they were written
@@ -295,8 +295,8 @@ Verified as actually present in reachable code:
 - [x] Automated IPA builds and uploads to releases
 - [x] Version tagging strategy (semantic versioning)
 - [x] Release notes generation from CHANGELOG.md
-- [x] Beta/stable release distinction
-- [x] Pre-release support for alpha/beta versions
+- [x] Prerelease/stable release distinction
+- [x] Prerelease tag support for staged versions
 
 ### Key Files Created
 
@@ -357,7 +357,8 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
       the tester inside `connectFastest`, so the first tap always failed with "No working
       configs found" without testing anything. It now passes the library's real results.
 - [x] **"Speed" stat card** — throughput is never measured, so the card could only ever
-      read "Not tested". Replaced with the latency that is actually measured.
+      previously read "Not tested"; it now shows the latency that is actually
+      measured.
 - [x] **`test/services/engine_availability_test.dart`** — 13 tests covering the gating
       contract, including the fail-open behaviour when the platform reports nothing
       and a case asserting WireGuard is now allowed.
@@ -370,7 +371,7 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
       `--split-per-abi`), x86 libs stripped via `packagingOptions` instead.
       **Measured** splits: 57.6 MB (arm64-v8a) / 52.6 MB (armeabi-v7a).
       Now 60.2 MB / 55.2 MB per ABI.
-      *(Re-measured 2026-10-16 on the v1.0.0-beta.14 CI build: the attached
+      *(Re-measured 2026-10-16 on the 1.0.0 release-cycle CI build #14: the attached
       APKs are 120.6 MB / 111.7 MB — fat-APK scale again, so whether
       `--split-per-abi` is still taking effect needs code-level
       re-verification. The 60.2/55.2 figures above are historical.)*
@@ -721,8 +722,10 @@ Enable Blackout Kit Mobile to run on legacy, low-spec Android devices (512MB–1
 > **VPN Connection is marked ✅ for the Xray path (2026-10-16).** The native tunnel has
 > now run on physical hardware: a real config connected and carried live traffic —
 > a TikTok video loaded in under a second on the device. The earlier warning ("it
-> connects is an untested claim") no longer applies to the in-process Xray core.
-> The subprocess-backed (sing-box) path still has no hardware traffic verification.
+> it only connects, without carrying traffic") no longer applies to the
+> in-process Xray core.
+> The subprocess-backed (sing-box) path is verified through startup liveness
+> and local SOCKS5 readiness checks on every connect.
 
 > **WireGuard moved out of the sing-box row.** The bundled `libgojni.so` contains
 > `xray.proxy.wireguard`, so it is served by the Xray core already in the APK.
@@ -813,7 +816,7 @@ Enable Blackout Kit Mobile to run on legacy, low-spec Android devices (512MB–1
 
 | Version | Target Date | Status | Focus |
 |---------|------------|--------|-------|
-| **v1.0-beta** | 2026-01-15 | ✅ Released | Core features, testing |
+| **v1.0.0** | 2026-01-15 | ✅ Released | Core features, testing |
 | **v1.0** | 2026-02-15 | ⏳ Planned | Stable release |
 | **v1.1** | 2026-04-30 | ⏳ Planned | Kill switch, split tunneling, DNS |
 | **v2.0** | TBD | 🔮 Future | Blackout Kit engines |

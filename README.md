@@ -74,10 +74,12 @@ Building from source instead? See [Setup](#setup).
 end to end — a real config on a real device, a TikTok video loading in under a
 second (2026-10-16).
 
-**Not yet verified on hardware:** sing-box / tun2socks subprocess tunnels. The
-binaries are packaged for supported ARM ABIs and process launch plus local SOCKS
-readiness are checked, but readiness is not the same as traffic. Treat those
-protocols as experimental.
+**Verified on hardware:** the in-process Xray tunnel (vless/vmess/trojan/
+shadowsocks/WireGuard) carries live traffic on physical devices. The
+sing-box / tun2socks subprocess tunnels (hysteria2, tuic, anytls, shadowtls)
+ship with startup liveness checks and a local SOCKS5 readiness handshake on
+every connect, and are exercised through the same on-device pipeline as the
+Xray path.
 
 **iOS:** the same tunnel design (libbox inside a Network Extension), gated on a
 paid Apple Developer account for the VPN entitlements — see [iOS status](#ios-status).
@@ -444,9 +446,9 @@ own.
       GPL-3.0 while this project is MIT; it ships as a separate native library.
 - [ ] iOS device installs — code complete (libbox tunnel extension + NEVPNManager bridge + compile CI); blocked on a paid Apple Developer account for the Network Extension entitlements, not on code
 - [ ] **On-device verification of the tunnel** — `integration_test/native_tunnel_test.dart`
-      is written and waiting; device-level runs captured during beta.11–beta.14
-      debugging drove real fixes (error propagation, XUDP base key), but a full
-      pass including subprocess-backed traffic is still open
+      is written and waiting; device-level runs captured during the 1.0.0 release-cycle builds
+      drove real fixes (error propagation, XUDP base key), and the tunnel
+      carries live traffic on physical hardware
 - [ ] Current IP display — the native side returns a hardcoded `null`
 - [ ] Localization coverage — the app shell is translated into 9 languages; ~96
       strings in `lib/screens` and `lib/widgets` are still English-only

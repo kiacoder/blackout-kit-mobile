@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-30
+
+### Added
+- **Open-with and share receive.** .conf/.ovpn attachments and shared vless:///
+  vmess:// links can be handed straight to the app from Gmail, Telegram or the
+  browser share sheet. Native side resolves content:// documents into the app
+  cache while the grant is live; Dart ingests into the normal import flow.
+- Hysteria 2 multi-port authorities (`:20000-30000`, `:443,8443`) and the
+  `mport=` parameter now import and drive sing-box `server_ports` port hopping.
+- Regression suite `test/verified_bug_regressions_test.dart` locking every fix
+  below (11 tests; suite 485 → 496).
+
+### Fixed
+- **Config dedup hash** now hashes UTF-8 bytes. The old hash fed UTF-16 code
+  units into SHA-256, so Persian/Arabic server names (ی vs ي, ک vs ك) sharing a
+  low byte collided and the second server was silently dropped on import.
+- **TCP HTTP-obfuscation** (`headerType=http` / vmess `type:http`) is now
+  emitted as `tcpSettings.header`. It was parsed and then dropped, so those
+  configs dialled a plaintext handshake at servers waiting for the disguise.
+- An **empty `security=`** parameter no longer wraps plaintext links in TLS.
+- **Trojan `security=none`** is respected (plain-WS CDN trojan was forced TLS).
+- **TLS serverName fallback**: vless/trojan links with `host=` but no `sni=`
+  now present the host to the CDN, like VMess already did.
+- **ss:// userinfo** is percent-decoded before the `method:password` split, so
+  fully-encoded ss-2022 credentials import.
+- **Port validation** enforces the 1–65535 range in every protocol override.
+- **Line-wrapped base64 blobs** (email/PDF copy-paste) parse on every import
+  path instead of being silently discarded.
+- Form-encoded `+` in server-name fragments renders as a space.
+- The engine-availability probe is observable: Connect tiles grey out as soon
+  as capability is known, not only after an unrelated rebuild.
+- Missing translation keys `status_connected` and `not_available_in_build`
+  added for en/fa/zh; users no longer see raw keys.
+- **File import picker** opens to all files — the extension filter relied on
+  Android SAF MIME matching, which greys out `.conf`/`.ovpn` (no registered
+  MIME type) on real devices.
+
+
 ## [1.16.3] - 2026-10-30
 
 ### Fixed

@@ -7,7 +7,7 @@ Complete guide for testing, deploying, and releasing Blackout Kit Mobile to prod
 1. [Release Checklist](#release-checklist)
 2. [Version Bumping](#version-bumping)
 3. [Build & Sign](#build--sign)
-4. [Beta Testing](#beta-testing)
+4. [Release Verification](#release-verification)
 5. [Production Release](#production-release)
 6. [Rollback Procedures](#rollback-procedures)
 7. [Monitoring](#monitoring)
@@ -160,7 +160,7 @@ signingConfigs {
 
 ---
 
-## Beta Testing
+## Release Verification
 
 ### TestFlight (iOS)
 
@@ -186,7 +186,7 @@ signingConfigs {
    - Go to TestFlight → Testers
    - Add tester emails
 
-### Google Play Beta
+### Google Play Internal / Closed Testing Track
 
 1. **Build APK:**
    ```bash
@@ -195,7 +195,7 @@ signingConfigs {
 
 2. **Upload to Google Play Console:**
    - [Open Play Console](https://play.google.com/console)
-   - Your app → Release → Internal / Alpha / Beta testing
+   - Your app → Release → Internal / Closed testing
    - Upload APK
    - Fill release notes
    - Start rollout (~2 hours for review)
@@ -366,7 +366,6 @@ git push origin :v1.0.0  # or use GitHub web interface
 
 **Critical Bug (needs immediate fix):**
 - Create hotfix following hotfix-release process above
-- Skip beta testing
 - Go straight to production after local verification
 
 ---
@@ -425,7 +424,7 @@ git push origin :v1.0.0  # or use GitHub web interface
 
 | Phase | Duration | Version | Focus |
 |-------|----------|---------|-------|
-| **v1.0-beta** | 4 weeks | Beta | Core features, testing, polish |
+| **v1.0.0** | 4 weeks | Release | Core features, testing, polish |
 | **v1.0** | - | Stable | Production release |
 | **v1.1** | 4-6 weeks | Minor | Kill switch, split tunneling, DNS |
 | **v2.0** | TBD | Major | V2 engines (V2Ray, Trojan, etc.) |

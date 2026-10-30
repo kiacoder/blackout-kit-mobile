@@ -177,7 +177,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         if (isConnected || state.value == ConnectionState.connecting) {
           state.value = ConnectionState.error;
           statusMessage.value =
-              error ?? 'The tunnel stopped unexpectedly. Reconnect to retry.';
+              error ??
+              LocalizationService.t('The tunnel stopped unexpectedly. Reconnect to retry.');
           connectedIP.value = null;
           exitIpInfo.value = null;
           connectionUptime.value = 0;
@@ -315,6 +316,10 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       if (nativeRunning && _canAdopt && !isConnected) {
         final name = status['name'] as String?;
         final protocol = status['protocol'] as String?;
+        // A DNS-only session has no config and no core, so the config lookup
+        // below cannot match it and _fetchConnectedIP() would dial a SOCKS
+        // inbound that does not exist — six retries, ~15 seconds of nothing.
+        final dnsOnlySession = protocol == 'dns';
         Config? config;
         try {
           final configController = Get.find<ConfigController>();
@@ -328,10 +333,14 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         }
 
         selectedConfig.value = config;
+        isDnsOnly.value = dnsOnlySession;
         state.value = ConnectionState.connected;
-        statusMessage.value = config != null
-            ? 'Restored: ${config.displayName} (tunnel was already running)'
-            : 'Restored connection (tunnel was already running)';
+        statusMessage.value = dnsOnlySession
+            ? LocalizationService.t('dns_only_started')
+            : config != null
+                ? LocalizationService.t('Restored: @name (tunnel was already running)',
+                    {'name': config.displayName})
+                : LocalizationService.t('Restored connection (tunnel was already running)');
 
         final startedAtMs = (status['connectedAtMs'] as num?)?.toInt() ?? 0;
         _connectionStartTime = startedAtMs > 0
@@ -343,7 +352,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             Get.find<ConfigController>().markConnected(config);
           } catch (_) {}
         }
-        _fetchConnectedIP();
+        // Nothing to resolve: a DNS-only interface has no exit to describe.
+        if (!dnsOnlySession) _fetchConnectedIP();
 
         _log.i('Adopted a running native tunnel'
             '${config != null ? " (${config.displayName})" : ""}');
@@ -355,6 +365,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       } else if (!nativeRunning && isConnected) {
         state.value = ConnectionState.idle;
         statusMessage.value = LocalizationService.t('status_tunnel_ended');
+        isDnsOnly.value = false;
         selectedConfig.value = null;
         selectedConfigResult.value = null;
         connectedIP.value = null;
@@ -462,8 +473,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       if (candidates.isEmpty) {
         state.value = ConnectionState.error;
         statusMessage.value = availableConfigs.isEmpty
-            ? 'No configs available'
-            : 'None of your configs use a protocol this build can serve';
+            ? LocalizationService.t('No configs available')
+            : LocalizationService.t('None of your configs use a protocol this build can serve');
         return false;
       }
 
@@ -535,16 +546,17 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             'batch ${batchIndex + 1}/$totalBatches';
 
         state.value = ConnectionState.selecting;
-        statusMessage.value = 'status_pinging'.trParams(
-          {'label': batchLabel, 'count': '${batch.length}'});
+        statusMessage.value = LocalizationService.t(
+            'status_pinging', {'label': batchLabel, 'count': '${batch.length}'});
         var probed = 0;
         final progressToken = testerService.beginProgressRun((hash, status) {
           // onProgress fires a 'testing' event at probe start AND a terminal
           // event at the end — counting both reported double progress.
           if (status == TestStatus.testing) return;
           probed++;
-          statusMessage.value =
-              'Pinging $batchLabel... $probed/${batch.length}';
+          statusMessage.value = LocalizationService.t(
+              'Pinging @label... @done/@total',
+              {'label': batchLabel, 'done': '$probed', 'total': '${batch.length}'});
         });
         List<TestResult> probedResults;
         try {
@@ -584,7 +596,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         var reports = const <String, SiteCheckReport>{};
         if (check != null && check.enabled) {
           statusMessage.value =
-              'Verifying websites, $batchLabel...';
+              LocalizationService.t('Verifying websites, @label...', {'label': batchLabel});
           final shortlist = working
               .take(_siteCheckShortlistSize)
               .map((r) => batch.firstWhereOrNull(
@@ -648,21 +660,23 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           );
           if (config == null) continue;
 
-          statusMessage.value =
-              'Connecting ($batchLabel, config ${attempt + 1})...';
+          statusMessage.value = LocalizationService.t(
+              'Connecting (@label, config @n)...',
+              {'label': batchLabel, 'n': '${attempt + 1}'});
 
           final connected = await _connectImpl(config, testResult: result);
           if (!connected) continue;
           if (!liveVerifyEnabled) return true;
 
           state.value = ConnectionState.testing;
-          statusMessage.value =
-              'Checking websites through the tunnel ($batchLabel, config ${attempt + 1})...';
+          statusMessage.value = LocalizationService.t(
+              'Checking websites through the tunnel (@label, config @n)...',
+              {'label': batchLabel, 'n': '${attempt + 1}'});
           final alive = await verify.verifyLiveConnection();
           if (alive) {
             state.value = ConnectionState.connected;
-            statusMessage.value =
-                'Connected to ${config.displayName} — verified';
+            statusMessage.value = LocalizationService.t(
+                'Connected to @name — verified', {'name': config.displayName});
             _log.i('Live verification passed for ${config.displayName} '
                 '($batchLabel)');
             debugService.logAction('scan_verified', {
@@ -690,10 +704,10 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           check2.enabled &&
           check2.liveCheckHosts.isNotEmpty;
       statusMessage.value = verificationOn
-          ? 'Scanned all ${toScan.length} configs but none could load '
-              'websites. Refresh your sources or disable the site check to '
-              'connect anyway.'
-          : 'No working configs found';
+          ? LocalizationService.t(
+              'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.',
+              {'count': '${toScan.length}'})
+          : LocalizationService.t('No working configs found');
       debugService.logAction('scan_exhausted', {'configs': toScan.length});
       return false;
     } catch (e) {
@@ -845,7 +859,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         return true;
       } else {
         state.value = ConnectionState.error;
-        statusMessage.value = vpnService.lastError ?? 'Failed to connect';
+        statusMessage.value =
+            vpnService.lastError ?? LocalizationService.t('Failed to connect');
         debugService.logAction('connect_failed', {
           'config': config.displayName,
           'reason': vpnService.lastError ?? 'unknown',
@@ -1036,8 +1051,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         // Report the real measured figure. Throughput is not measured by the
         // tester, so the previous "Connected (43.2Mbps)" was fabricated.
         statusMessage.value = result.latencyMs != null
-            ? 'Connected (${result.latencyMs}ms to the server)'
-            : 'Connected';
+            ? LocalizationService.t('Connected (@ms ms to the server)',
+                {'ms': '${result.latencyMs}'})
+            : LocalizationService.t('status_connected');
         return true;
       } else {
         state.value = ConnectionState.error;
@@ -1093,9 +1109,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
       debugService.logInfo('Kill switch: ${killSwitchService.describe()}');
       if (next && killSwitchService.needsUserAction) {
-        statusMessage.value =
-            'For full protection, set this app as always-on VPN and enable '
-            '"Block connections without VPN" in system settings';
+        statusMessage.value = LocalizationService.t(
+            'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.');
       }
       return true;
     } catch (e) {

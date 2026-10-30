@@ -662,7 +662,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final provider = DnsCatalog.byKey(_settingsController.dnsProviderKey.value);
     if (primary.isEmpty) return 'Not set - pick one to enable leak prevention'.tr;
     if (provider == null) {
-      return secondary.isEmpty ? '$primary (custom)' : '$primary, $secondary (custom)';
+      return secondary.isEmpty
+          ? LocalizationService.t('@ip (custom)', {'ip': primary})
+          : LocalizationService.t('@ip, @secondary (custom)',
+              {'ip': primary, 'secondary': secondary});
     }
     return '${provider.localizedName} — ${provider.servers.join(", ")}';
   }
@@ -832,7 +835,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                             child: Text(
-                              DnsCatalog.categoryLabels[category]!,
+                              LocalizationService.t('dns_cat_${category.name}'),
                               style: Theme.of(context).textTheme.labelMedium,
                             ),
                           ),

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-10-30
+
+### Fixed
+- **A running DNS-only session was adopted as a normal tunnel.** After a cold
+  start the app matched no config for it, then called `_fetchConnectedIP()` —
+  which dials the core's SOCKS inbound, an inbound DNS-only mode never starts.
+  Six retries with 1..5s delays meant ~15 seconds of nothing on launch. The
+  adopt path now recognises `protocol == "dns"`, sets `isDnsOnly`, and skips
+  the exit lookup.
+- **The status card said "Not Connected" under a connected DNS-only session.**
+  It keyed off `config != null`, and DNS-only has no config. It now shows
+  "DNS only".
+- **The DNS picker's section headers were English in every language.** They
+  came from `DnsCatalog.categoryLabels`, which the screen printed directly:
+  "Sanctions — resolvers chosen to survive national filtering", "Speed — …",
+  "Extra — …". Now `dns_cat_*` catalogue keys.
+- **~20 more status messages were still English.** Every assignment whose
+  right-hand side was a ternary or an interpolation was invisible to the old
+  guard: "No configs available", "Failed to connect", "Pinging batch… 3/50",
+  "Verifying websites, …", "Connected (43 ms to the server)", the always-on-VPN
+  hint, and the scan-exhausted message.
+- **"(custom)" in the resolver summary** now comes from the catalogue.
+
+### Added
+- The localisation guard now reads whole `statusMessage.value = …;`
+  expressions (ternaries included), and a new test fails if a screen renders
+  `DnsCatalog.categoryLabels` directly instead of the catalogue.
+- `test/services/dns_only_reconcile_test.dart` — proves a DNS-only session is
+  adopted as DNS-only and that a normal tunnel still resolves its exit. Verified
+  by removing the guard and watching the test fail.
+
+
 ## [1.16.0] - 2026-10-29
 
 ### Fixed

@@ -188,7 +188,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              if (config != null)
+              // A DNS-only session has no config, so this row used to read
+              // "Not connected" under a button that said connected.
+              if (_connectionController.isDnsOnly.value)
+                Text(
+                  'dns_only_connected'.tr,
+                  style: const TextStyle(fontSize: 14),
+                )
+              else if (config != null)
                 Text(
                   '${'connected_to'.tr}: ${config.displayName}',
                   style: const TextStyle(fontSize: 14),

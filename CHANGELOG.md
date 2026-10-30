@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   below (11 tests; suite 485 → 496).
 
 ### Fixed
+- **Update over a differently-signed install** now shows a recovery panel
+  (uninstall → install from the release link → re-import) instead of dumping
+  raw `PlatformException` text with a Retry button that can never succeed.
 - **Config dedup hash** now hashes UTF-8 bytes. The old hash fed UTF-16 code
   units into SHA-256, so Persian/Arabic server names (ی vs ي, ک vs ك) sharing a
   low byte collided and the second server was silently dropped on import.

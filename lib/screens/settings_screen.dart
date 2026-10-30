@@ -4,6 +4,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -1297,6 +1298,11 @@ class _UpdateSectionState extends State<_UpdateSection> {
   String _error = '';
   String? _apkPath;
 
+  /// The installed app and the update are signed with different keys (e.g. a
+  /// debug-signed build trying to take a release-signed update). Retry can
+  /// NEVER succeed here, so the tile swaps to a recovery panel instead.
+  bool _signerMismatch = false;
+
   @override
   void initState() {
     super.initState();
@@ -1307,6 +1313,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
     setState(() {
       _phase = 'checking';
       _error = '';
+      _signerMismatch = false;
     });
     try {
       final info = await PackageInfo.fromPlatform();
@@ -1338,9 +1345,20 @@ class _UpdateSectionState extends State<_UpdateSection> {
     if (path == null) return;
     await _service.installApk(path).catchError((Object e) {
       if (!mounted) return;
+      final code = e is PlatformException ? e.code : '';
       setState(() {
-        _phase = 'error';
-        _error = 'Could not start the installer: $e';
+        if (code == 'SIGNER_MISMATCH') {
+          // The native check refused BEFORE the installer ran: the update is
+          // keyed differently (debug-signed install taking a release-signed
+          // update, or the reverse). Retry loops forever, so show recovery.
+          _phase = 'error';
+          _signerMismatch = true;
+          _error = 'signer_mismatch_title'.tr;
+        } else {
+          _phase = 'error';
+          _error = 'installer_failed'.tr +
+              e.toString().replaceFirst('Exception: ', '');
+        }
       });
     });
   }
@@ -1413,7 +1431,13 @@ class _UpdateSectionState extends State<_UpdateSection> {
           // The failure reason (missing install permission, truncated
           // download, ...) is the whole point here, so it gets room to wrap
           // instead of being clipped to one line in the title.
-          subtitle: Text(
+          subtitle: _phase == 'error' && _signerMismatch
+              ? Text(
+                  'signer_mismatch_body'.tr,
+                  maxLines: 12,
+                  overflow: TextOverflow.ellipsis,
+                )
+              : Text(
             _phase == 'error'
                 ? _error
                 : (_currentVersion.isEmpty
@@ -1438,6 +1462,21 @@ class _UpdateSectionState extends State<_UpdateSection> {
                 // "ready" forever with no explanation.
                 onPressed: _startInstaller,
                 child: Text('install'.tr),
+              ),
+            'error' when _signerMismatch => TextButton(
+                onPressed: () async {
+                  // Recovery is manual (uninstall + fresh install); hand the
+                  // user the release page instead of a Retry that cannot work.
+                  await Clipboard.setData(const ClipboardData(
+                      text: 'https://github.com/kiacoder/blackout-kit-mobile/releases/latest'));
+                  Get.snackbar(
+                    'Copied'.tr,
+                    'Release link copied - open it in a browser'.tr,
+                    backgroundColor: Colors.indigo,
+                    colorText: Colors.white,
+                  );
+                },
+                child: Text('copy_release_link'.tr),
               ),
             'error' => TextButton(onPressed: _check, child: Text('retry'.tr)),
             _ => IconButton(onPressed: _check, icon: const Icon(Icons.refresh)),

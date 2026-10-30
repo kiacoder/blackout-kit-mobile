@@ -121,7 +121,10 @@ void main() {
     test('progress is reactive and install errors reach the UI', () {
       final src = source('lib/screens/settings_screen.dart');
       expect(src.contains('title: Obx(() => Text('), isTrue);
-      expect(src.contains('Could not start the installer'), isTrue);
+      // Install failures reach the UI, and a signing-key mismatch gets the
+      // recovery panel instead of a Retry that can never succeed.
+      expect(src.contains('installer_failed'), isTrue);
+      expect(src.contains('_signerMismatch = true;'), isTrue);
     });
   });
 

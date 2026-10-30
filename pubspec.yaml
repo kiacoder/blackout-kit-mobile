@@ -40,9 +40,9 @@ dependencies:
   # strongSwan IKEv2/IPSec wrapper and cannot carry WireGuard, OpenVPN or V2Ray.
 
   # Utilities
-  crypto: ^3.0.2  # For config hashing
+  crypto: ^3.0.8  # For config hashing
   logger: ^2.0.1  # Better logging
-  intl: ^0.19.0
+  intl: ^0.20.3
   # Material/Cupertino localizations, so Arabic (and the other
   # right-to-left languages) get real RTL layout instead of LTR widgets
   # with translated strings.
@@ -63,8 +63,8 @@ dev_dependencies:
   flutter_lints: ^3.0.0
 
   # Testing
-  mockito: ^5.4.0
-  test: ^1.24.0
+  mockito: ^5.8.1
+  test: ^1.31.1
 
 dependency_overrides:
   shared_preferences_android: 2.3.4

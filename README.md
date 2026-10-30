@@ -1,29 +1,76 @@
-# Blackout Kit Mobile - Open-Source VPN App
+<p align="center">
+  <img src="assets/images/logo.png" width="112" alt="Blackout Kit logo - open-source VPN client for Android and iOS">
+</p>
 
-An open-source VPN client for Android and iOS, built with Flutter. It fetches VPN configurations from GitHub, checks server reachability, and provides one-tap connection.
+<h1 align="center">Blackout Kit</h1>
 
-**Status**: v1.12.1 — Android VPN service and in-process Xray core are implemented, and
-the Xray tunnel path is **verified working on physical hardware** (2026-10-16): a real
-config on a real device carries live traffic end to end — a TikTok video loads in under a
-second. Saved configs are encrypted at rest since v1.12.1 (see
-[SECURITY.md](SECURITY.md)); the key lives in the Android Keystore. Sing-box/tun2socks
-binaries are packaged for supported ARM ABIs; process launch and local SOCKS readiness are
-checked, but end-to-end traffic through subprocess-backed tunnels remains unverified on
-hardware. The iOS target runs the same tunnel design (libbox inside a Network Extension), gated on a paid Apple Developer account for the VPN entitlements — see [iOS status](#ios-status).
+<p align="center">
+  <b>A free, open-source VPN client for Android and iOS that survives censorship.</b><br>
+  Paste a config, tap connect. No account, no ads, no telemetry.
+</p>
 
-> ⚠️ **Read this before testing.** The Android tunnel is now real: a Kotlin
-> `VpnService` owns the TUN interface and the bundled Xray core runs in-process
-	> behind it. Earlier beta releases (archived in [CHANGELOG.md](CHANGELOG.md)) record device-guided debugging,
-	> but local process/SOCKS readiness does not establish end-to-end traffic.
-	> Subprocess-backed tunnel traffic still needs a physical-device test.
+<p align="center">
+  <a href="https://github.com/kiacoder/blackout-kit-mobile/releases/latest"><img src="https://img.shields.io/github/v/release/kiacoder/blackout-kit-mobile?label=latest" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/kiacoder/blackout-kit-mobile" alt="License"></a>
+  <a href="https://github.com/kiacoder/blackout-kit-mobile/stargazers"><img src="https://img.shields.io/github/stars/kiacoder/blackout-kit-mobile?style=flat" alt="GitHub stars"></a>
+  <img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-blue" alt="Platforms: Android and iOS">
+</p>
 
+---
 
-> **AmneziaWG on mobile:** the native userspace core now ships with `gomobile` bindings
-> (`StartTunnel(configText, tunFd)` / `StopTunnel` / `GetTunnelStats`) in the desktop repo's
-> `core/amneziawg-go/cmd/awg-mobile`. Cross-compiles for `linux/arm64`; `VpnService` wiring is
-> the next milestone. The desktop CLI's AWG path is verified end to end (handshake + egress).
->
-> **Xray-core protocols:** VLESS, VMess, Trojan, Shadowsocks, and WireGuard. Sing-box-backed Hysteria 2, TUIC, AmneziaWG, and WARP are gated on bundled-runtime capability and local process/SOCKS readiness; readiness does not verify end-to-end traffic.
+**Blackout Kit** is an open-source VPN client for **Android and iOS**, built with
+Flutter. It turns a subscription link, a config file or a QR code into a
+one-tap connection, and it is designed for **censorship circumvention in Iran** —
+where a VPN that cannot survive filtering is no VPN at all.
+
+It speaks the protocols Iranian providers actually hand out: **VLESS, VMess,
+Trojan, Shadowsocks, WireGuard, Hysteria 2, TUIC, AmneziaWG and Cloudflare WARP**,
+served by an in-process **Xray** core or a bundled **sing-box** runtime.
+
+- **No account, no ads, no telemetry.** Nothing leaves the device unless you turn
+  on the optional exit-IP lookup.
+- **Configs are encrypted at rest**, with the key in the Android Keystore
+  (see [SECURITY.md](SECURITY.md)).
+- **Servers are tested before they are used** — a dead config is skipped instead
+  of becoming a "connected but nothing loads" tunnel.
+- **DNS leak prevention** with per-provider selection, including the Iranian
+  resolvers (شکن، بگزار، رادار، الکترو) that exist to get around sanctions.
+
+### Install
+
+Download the APK for your phone from the
+[latest release](https://github.com/kiacoder/blackout-kit-mobile/releases/latest):
+
+| Build | Use it for |
+|---|---|
+| `arm64-v8a` | Almost every phone made since 2017 |
+| `armeabi-v7a` | Older 32-bit devices |
+| `universal` | If you are not sure |
+
+Then: **Import** → paste your `vless://`, `vmess://`, `trojan://`, `ss://`,
+WireGuard `.conf` or subscription link → **Connect**.
+
+Building from source instead? See [Setup](#setup).
+
+## Status
+
+**Verified on hardware (Android):** the in-process Xray path carries live traffic
+end to end — a real config on a real device, a TikTok video loading in under a
+second (2026-10-16).
+
+**Not yet verified on hardware:** sing-box / tun2socks subprocess tunnels. The
+binaries are packaged for supported ARM ABIs and process launch plus local SOCKS
+readiness are checked, but readiness is not the same as traffic. Treat those
+protocols as experimental.
+
+**iOS:** the same tunnel design (libbox inside a Network Extension), gated on a
+paid Apple Developer account for the VPN entitlements — see [iOS status](#ios-status).
+
+> **AmneziaWG on mobile:** the native userspace core ships with `gomobile`
+> bindings (`StartTunnel(configText, tunFd)` / `StopTunnel` / `GetTunnelStats`)
+> in the desktop repo's `core/amneziawg-go/cmd/awg-mobile`. Cross-compiles for
+> `linux/arm64`; `VpnService` wiring is the next milestone. The desktop CLI's AWG
+> path is verified end to end (handshake + egress).
 >
 > [PHASES.md](PHASES.md) carries the authoritative, current phase status.
 

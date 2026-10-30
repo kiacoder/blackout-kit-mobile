@@ -1,0 +1,106 @@
+name: CodeQL
+
+# Why this workflow exists instead of CodeQL's "default setup".
+#
+# Default setup kept four language configurations alive that could never
+# succeed on this repository:
+#
+#   ruby        — there are no .rb files at all. It cannot ever produce a scan.
+#   swift       — needs a macOS runner plus a signed, pod-installed Xcode
+#                 build. iOS is a compile-only target here (no Apple developer
+#                 account), so this errored on every run.
+#   c-cpp       — the only C/C++ in the tree is CMake scratch under
+#                 android/app/.cxx, i.e. build output, not source.
+#   java-kotlin — needs a real Android build (Kotlin has no build-mode: none),
+#                 which default setup cannot perform.
+#
+# Each dead configuration shows up as a red "CodeQL is reporting errors" banner
+# on the Security tab. The fix is to declare the two languages that can actually
+# be scanned, with the build each one needs, and let the rest go.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'lib/**'
+      - '.github/workflows/codeql.yml'
+  # Security scanning does not need to gate every PR, and the Kotlin job builds
+  # the whole APK (~10 min). Weekly keeps the results fresh.
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    permissions:
+      # Required to upload results to the code scanning dashboard.
+      security-events: write
+      # Required by CodeQL to read workflow metadata on private repos.
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Workflow files themselves. No build, ~1 minute.
+          - language: actions
+            build-mode: none
+          # The VpnService, engine runner and DNS plumbing. Kotlin has no
+          # `none` build mode — CodeQL must observe a real compile — so this
+          # job builds the debug APK under the tracer.
+          - language: java-kotlin
+            build-mode: manual
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v4
+        with:
+          # Must match android/app/build.gradle (sourceCompatibility 17).
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Flutter
+        if: matrix.language == 'java-kotlin'
+        uses: subosito/flutter-action@v2
+        with:
+          # Keep in step with build.yml and test.yml: the dependency set
+          # requires Dart >= 3.5, so Flutter must be >= 3.24.0.
+          flutter-version: '3.24.0'
+          channel: stable
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # Default query suite: this is a small native layer, and the extended
+          # suites double the runtime for queries it has no surface for.
+
+      - name: Build the Android app
+        if: matrix.language == 'java-kotlin'
+        # A debug build is enough for the tracer to see every Kotlin compilation
+        # unit, and it skips the signing setup the release build needs.
+        run: |
+          flutter pub get
+          flutter build apk --debug
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'

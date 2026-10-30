@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing is extractable.
+
+  Saved configs carry server addresses and credentials. `allowBackup` is false,
+  so the platform should never call this, but Android 12+ reads
+  `dataExtractionRules` for device-to-device transfer and for cloud backup, and
+  the default for both is "everything". Stating it explicitly means a future
+  `allowBackup` change cannot quietly start shipping credentials to Google's
+  servers or to a new phone over the transfer cable.
+
+  Configs are re-importable from the original subscription or QR code, so the
+  cost of this is a re-import, not data loss.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

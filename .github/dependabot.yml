@@ -30,6 +30,9 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+      # Pinned by the Flutter SDK: flutter_localizations in 3.24 requires
+      # intl 0.19.x, so 0.20+ cannot resolve and the PR's CI fails every time.
+      - dependency-name: 'intl'
     groups:
       pub-minor-patch:
         patterns: ['*']

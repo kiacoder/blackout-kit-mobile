@@ -357,8 +357,8 @@ The screens advertised engines and protocols that this build cannot run. Fixed:
       the tester inside `connectFastest`, so the first tap always failed with "No working
       configs found" without testing anything. It now passes the library's real results.
 - [x] **"Speed" stat card** — throughput is never measured, so the card could only ever
-      previously read "Not tested"; it now shows the latency that is actually
-      measured.
+      previously showed a static placeholder; it now shows the latency that
+      is actually measured.
 - [x] **`test/services/engine_availability_test.dart`** — 13 tests covering the gating
       contract, including the fail-open behaviour when the platform reports nothing
       and a case asserting WireGuard is now allowed.

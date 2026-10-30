@@ -179,14 +179,30 @@ jobs:
           queries: security-and-quality
 
       - name: Build iOS (Swift)
-        # Same recipe as ios.yml: the Runner target imports Libbox, which is
-        # built from sing-box with the pinned gomobile fork. Without it the
-        # Swift compile fails before CodeQL ever sees the sources.
+        # Driven through xcodebuild directly, not `flutter build ios`.
+        #
+        # Flutter shells out to xcodebuild, which compiles through the
+        # XCBBuildService daemon; the daemon does not inherit the shimmed PATH
+        # CodeQL installs to trace swiftc, so the build succeeds and the
+        # extractor sees zero Swift. Invoking xcodebuild from this shell keeps
+        # the compile inside the traced environment.
+        #
+        # Libbox first: the Runner target imports it, and the framework is built
+        # from sing-box with the pinned gomobile fork (same as ios.yml).
         run: |
           flutter pub get
           chmod +x tool/build_libbox.sh
           ./tool/build_libbox.sh
-          flutter build ios --no-codesign
+          cd ios
+          pod install --repo-update
+          xcodebuild build \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4

@@ -55,9 +55,13 @@ on:
     - cron: '0 3 * * 1'
   workflow_dispatch:
 
+# Never cancel a CodeQL run. A cancelled analysis uploads nothing, and the
+# language's configuration on the Security tab then reads "CodeQL exited with
+# errors / No code scanning results" until the next successful scan — which is
+# exactly how swift ended up red after a push interrupted it.
 concurrency:
   group: codeql-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # Everything that runs on Linux: cheap, so it runs on every push.

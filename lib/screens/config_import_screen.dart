@@ -12,6 +12,10 @@ import '../models/config.dart';
 class ConfigImportScreen extends StatefulWidget {
   const ConfigImportScreen({Key? key}) : super(key: key);
 
+  /// Payload handed over from outside the app ("Open with" / share sheet),
+  /// stashed by [RootScreen] before navigation. Consumed once in initState.
+  static Map<String, String>? pendingPayload;
+
   @override
   State<ConfigImportScreen> createState() => _ConfigImportScreenState();
 }
@@ -41,6 +45,61 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     _configController = Get.find<ConfigController>();
 
     _autoCheckClipboard();
+    _consumeIntentPayload();
+  }
+
+  /// Ingests a payload received via "Open with" / share (see IntentService).
+  /// Text is parsed like a paste; the file is a native-side cache copy with a
+  /// REAL path (never a content:// URI), so dart:io is safe here.
+  Future<void> _consumeIntentPayload() async {
+    final payload = ConfigImportScreen.pendingPayload;
+    if (payload == null) return;
+    ConfigImportScreen.pendingPayload = null;
+    if (_dialogOpen || _saving || !mounted) return;
+    try {
+      String content;
+      final sourceName = 'shared-config';
+      if (payload['type'] == 'text') {
+        content = payload['text'] ?? '';
+      } else if (payload['type'] == 'file') {
+        final path = payload['path'];
+        if (path == null) return;
+        content = await File(path).readAsString();
+      } else {
+        return;
+      }
+      if (!mounted || content.trim().isEmpty) return;
+      final multiple = ConfigParser.parseMultiple(content);
+      final single = multiple.length > 1
+          ? null
+          : ConfigParser.parse(content, customName: sourceName);
+      setState(() {
+        _textController.text = content;
+        _parsedConfig = single ?? (multiple.isNotEmpty ? multiple.first : null);
+      });
+      if (multiple.length > 1) {
+        _showMultipleParsedDialog(multiple);
+      } else if (single != null) {
+        _showParsedDialog(single);
+      } else if (multiple.isNotEmpty) {
+        _showParsedDialog(multiple.first);
+      } else {
+        Get.snackbar(
+          'Import Failed'.tr,
+          'Could not parse a valid VPN config from file'.tr,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Get.snackbar(
+        'File Error'.tr,
+        'Failed to read file: $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 
   @override
@@ -176,9 +235,14 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   Future<void> _pickFile() async {
     if (_dialogOpen || _saving) return; // one import dialog at a time
     try {
+      // FileType.custom + allowedExtensions is a trap on Android: SAF matches
+      // by MIME type, .conf/.ovpn have no standard MIME, so Gmail/downloaded
+      // configs render GREYED OUT and unselectable. Open to all files instead
+      // and let ConfigParser validate the content; withData guarantees bytes
+      // for content:// URIs that never get a real filesystem path.
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['conf', 'ovpn', 'txt', 'json'],
+        type: FileType.any,
+        withData: true,
       );
 
       if (result != null && result.files.isNotEmpty) {
@@ -202,6 +266,17 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           Get.snackbar(
             'File Too Large'.tr,
             'This file is larger than 5 MB - paste the configs instead'.tr,
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+          );
+          return;
+        }
+
+        if (content.isEmpty) {
+          if (!mounted) return;
+          Get.snackbar(
+            'File Error'.tr,
+            'Could not read the selected file'.tr,
             backgroundColor: Colors.red,
             colorText: Colors.white,
           );

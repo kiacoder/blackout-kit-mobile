@@ -57,6 +57,29 @@ const Set<String> kLibboxProtocols = {
 bool isSingboxProtocol(String protocol) => kSingboxProtocols.contains(protocol);
 
 /// Builds the full sing-box JSON document for [config].
+/// Converts a hop-ports spec into sing-box's `server_ports` + `hop_interval`
+/// fields. `20000-30000` → `20000:30001`; `443,8443` → `443:444,8443:8444`.
+Map<String, dynamic> buildServerPorts(String spec) {
+  try {
+    final parts = <String>[];
+    for (final piece in spec.split(',')) {
+      final p = piece.trim();
+      if (p.contains('-')) {
+        final lo = int.parse(p.split('-')[0]);
+        final hi = int.parse(p.split('-')[1]);
+        parts.add('$lo:${hi + 1}');
+      } else {
+        final port = int.parse(p);
+        parts.add('$port:${port + 1}');
+      }
+    }
+    if (parts.isEmpty) return {};
+    return {'server_ports': parts.join(','), 'hop_interval': 30};
+  } on Object {
+    return {};
+  }
+}
+
 class SingboxConfigBuilder {
   /// Loopback SOCKS port. Must match [BlackoutVpnService.DEFAULT_SOCKS_PORT].
   final int socksPort;
@@ -326,6 +349,11 @@ class SingboxConfigBuilder {
           'server': c.address,
           'server_port': c.port,
           'password': c.password,
+          // Port hopping: sing-box expects `server_ports` as `start:end`
+          // (exclusive end, colon-separated) plus `hop_interval` seconds.
+          // Accepts both `20000-30000` (range) and `443,8443` (list) forms.
+          if (c.hopPorts != null && c.hopPorts!.isNotEmpty)
+            ...buildServerPorts(c.hopPorts!),
           if (c.upMbps != null && c.upMbps! > 0) 'up_mbps': c.upMbps,
           if (c.downMbps != null && c.downMbps! > 0) 'down_mbps': c.downMbps,
           if (c.obfs != null && c.obfs!.isNotEmpty)

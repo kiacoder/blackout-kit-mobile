@@ -42,8 +42,14 @@ abstract class Config {
   Future<void> disconnect();
   Future<bool> isRunning();
 
-  /// Get unique hash for deduplication
-  String getHash() => sha256.convert(rawUri.codeUnits).toString();
+  /// Get unique hash for deduplication.
+  ///
+  /// This MUST hash the UTF-8 bytes, not `codeUnits`: code units are UTF-16,
+  /// and every non-ASCII character becomes a number above 255 whose low byte
+  /// is all the digest sees. Persian/Arabic names (ی vs ي, ک vs ك) that share
+  /// a low byte produced identical hashes, and saveConfig() then treated the
+  /// second config as a duplicate and silently dropped it.
+  String getHash() => sha256.convert(utf8.encode(rawUri)).toString();
 
   /// Validate config before connection
   bool validate() => address.isNotEmpty && port > 0 && port < 65536;
@@ -172,7 +178,7 @@ class AnyTlsConfig extends Config {
   @override Future<bool> connect() async => true;
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
-  @override bool validate() => address.isNotEmpty && port > 0 && password.isNotEmpty;
+  @override bool validate() => address.isNotEmpty && port > 0 && port < 65536 && password.isNotEmpty;
 
   static AnyTlsConfig? fromUri(String uri, {String? customName}) {
     try {
@@ -223,7 +229,7 @@ class ShadowTlsConfig extends Config {
   @override Future<bool> connect() async => true;
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
-  @override bool validate() => address.isNotEmpty && port > 0 && password.isNotEmpty;
+  @override bool validate() => address.isNotEmpty && port > 0 && port < 65536 && password.isNotEmpty;
 
   static ShadowTlsConfig? fromUri(String uri, {String? customName}) {
     try {
@@ -559,7 +565,10 @@ class ShadowsocksConfig extends Config {
       // Check if base64 encoded (ss://BASE64@host:port) or full base64 (ss://BASE64)
       if (!cleanUri.contains('@')) {
         try {
-          final normalized = base64.normalize(cleanUri);
+          // Line-wrapped payloads (email copy-paste) carry internal
+          // whitespace that base64.normalize rejects — squash it first.
+          final normalized =
+              base64.normalize(cleanUri.replaceAll(RegExp(r'\s+'), ''));
           final decoded = utf8.decode(base64.decode(normalized));
           cleanUri = decoded;
         } catch (_) {}
@@ -567,7 +576,8 @@ class ShadowsocksConfig extends Config {
         final parts = cleanUri.split('@');
         final encodedCreds = parts[0];
         try {
-          final normalized = base64.normalize(encodedCreds);
+          final normalized = base64
+              .normalize(encodedCreds.replaceAll(RegExp(r'\s+'), ''));
           final decodedCreds = utf8.decode(base64.decode(normalized));
           cleanUri = '$decodedCreds@${parts[1]}';
         } catch (_) {}
@@ -590,7 +600,14 @@ class ShadowsocksConfig extends Config {
           .split('/')[0]
           .trim();
 
-      final credParts = creds.split(':');
+      // Decode the WHOLE userinfo BEFORE splitting on ':'. Some generators
+      // percent-encode the entire userinfo (the colon becomes %3A), so
+      // splitting first left a single part and the config was silently
+      // rejected — ss-2022 keys from those generators never imported.
+      // Decoding first also keeps passwords that legitimately contain a
+      // literal ':' encoded as %3A intact after the first-colon split.
+      final decodedCreds = ConfigParser._decodeUserInfo(creds);
+      final credParts = decodedCreds.split(':');
       if (credParts.length < 2) return null;
 
       // SIP002 allows a NON-base64 `method:password` userinfo. This branch is
@@ -707,7 +724,9 @@ class VlessConfig extends Config {
   /// is an error.
   @override
   bool validate() {
-    if (address.isEmpty || port <= 0 || !isValidUuid(uuid)) return false;
+    if (address.isEmpty || port <= 0 || port >= 65536 || !isValidUuid(uuid)) {
+      return false;
+    }
     if (security.toLowerCase() == 'reality') {
       return publicKey != null && publicKey!.isNotEmpty;
     }
@@ -749,9 +768,14 @@ class VlessConfig extends Config {
               '')
           .toLowerCase();
 
+      // `security=` present but EMPTY (`&security=` from sloppy generators)
+      // used to survive as '' — the builder only skips TLS on the literal
+      // 'none', so a plaintext link was silently wrapped in a TLS
+      // ClientHello it can never answer.
+      final securityRaw = params['security'] ?? '';
       return VlessConfig(
         name: name, rawUri: uri, uuid: uuid, address: host, port: port,
-        security: params['security'] ?? 'none',
+        security: securityRaw.isEmpty ? 'none' : securityRaw,
         flow: params['flow'],
         sni: params['sni'],
         fingerprint: params['fp'],
@@ -791,6 +815,7 @@ class VmessConfig extends Config {
   final String cipher;
   final String network;
   final String? tls;
+  final String? headerType; // vmess JSON `type`: TCP/mKCP http-obfs
   final String? sni;
   final String? path;
   final String? host;
@@ -810,7 +835,8 @@ class VmessConfig extends Config {
     required this.name, required this.rawUri, required this.uuid,
     required this.address, required this.port,
     this.alterId = '0', this.cipher = 'auto', this.network = 'tcp',
-    this.tls, this.sni, this.path, this.host, this.serviceName,
+    this.tls, this.headerType, this.sni, this.path, this.host,
+    this.serviceName,
     this.allowInsecure = false, this.fingerprint, this.alpn,
   });
 
@@ -820,14 +846,18 @@ class VmessConfig extends Config {
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
   @override bool validate() =>
-      address.isNotEmpty && port > 0 && isValidUuid(uuid);
+      address.isNotEmpty && port > 0 && port < 65536 && isValidUuid(uuid);
 
   /// vmess://BASE64(JSON)
   static VmessConfig? fromUri(String uri, {String? customName}) {
     try {
       uri = ConfigParser.normalizeScheme(uri.trim());
       if (!uri.startsWith('vmess://')) return null;
-      final encoded = uri.substring(8).trim().split('#')[0];
+      // Email clients and PDFs line-wrap the base64 payload; Dart's
+      // base64.normalize throws on internal whitespace, and the catch below
+      // swallowed the error as a silent drop. Squash ALL whitespace first.
+      final encoded =
+          uri.substring(8).trim().split('#')[0].replaceAll(RegExp(r'\s+'), '');
       final normalized = base64.normalize(encoded);
       final decoded = utf8.decode(base64.decode(normalized));
       final json = jsonDecode(decoded) as Map<String, dynamic>;
@@ -856,6 +886,9 @@ class VmessConfig extends Config {
         cipher: json['scy']?.toString() ?? 'auto',
         network: json['net']?.toString() ?? 'tcp',
         tls: json['tls']?.toString(),
+        // vmess JSON `type` is the TCP/mKCP header disguise (`http`, `none`).
+        // Never read before, so vmess-over-http-obfs dialled raw TCP.
+        headerType: json['type']?.toString(),
         sni: json['sni']?.toString(),
         path: json['path']?.toString(),
         host: json['host']?.toString(),
@@ -881,6 +914,7 @@ class TrojanConfig extends Config {
   final String address;
   final int port;
   final String? sni;
+  final String? security; // 'tls' (default) or 'none' for plain-WS CDN trojan
   final bool allowInsecure;
   final String? fingerprint;
   final String? network;
@@ -896,8 +930,8 @@ class TrojanConfig extends Config {
   TrojanConfig({
     required this.name, required this.rawUri, required this.password,
     required this.address, required this.port,
-    this.sni, this.allowInsecure = false, this.fingerprint, this.network,
-    this.path, this.host, this.alpn, this.serviceName,
+    this.sni, this.security, this.allowInsecure = false, this.fingerprint,
+    this.network, this.path, this.host, this.alpn, this.serviceName,
   });
 
   @override String get protocol => 'trojan';
@@ -905,7 +939,7 @@ class TrojanConfig extends Config {
   @override Future<bool> connect() async => true;
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
-  @override bool validate() => address.isNotEmpty && port > 0 && password.isNotEmpty;
+  @override bool validate() => address.isNotEmpty && port > 0 && port < 65536 && password.isNotEmpty;
 
   /// trojan://password@host:port?sni=...#name
   static TrojanConfig? fromUri(String uri, {String? customName}) {
@@ -939,6 +973,7 @@ class TrojanConfig extends Config {
         password: decodedPassword,
         address: u.host, port: u.port,
         sni: u.queryParameters['sni'],
+        security: u.queryParameters['security'],
         // The helper already returns a bool. Comparing it to the strings it
         // replaced (`insecureFlag == '1'`) compiles - `==` takes any Object -
         // but is always false, which would have quietly disabled the flag.
@@ -974,11 +1009,15 @@ class Hysteria2Config extends Config {
   final String? obfs;
   final String? obfsPassword;
 
+  /// Port-hopping range/list, e.g. `20000-30000` or `443,8443`. From the
+  /// `mport=` query parameter or a multi-port URI authority.
+  final String? hopPorts;
+
   Hysteria2Config({
     required this.name, required this.rawUri, required this.password,
     required this.address, required this.port,
     this.sni, this.insecure = false, this.upMbps, this.downMbps,
-    this.obfs, this.obfsPassword,
+    this.obfs, this.obfsPassword, this.hopPorts,
   });
 
   @override String get protocol => 'hysteria2';
@@ -986,18 +1025,60 @@ class Hysteria2Config extends Config {
   @override Future<bool> connect() async => true;
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
-  @override bool validate() => address.isNotEmpty && port > 0 && password.isNotEmpty;
+  @override bool validate() => address.isNotEmpty && port > 0 && port < 65536 && password.isNotEmpty;
 
   /// hy2://password@host:port?sni=...&insecure=1
   static Hysteria2Config? fromUri(String uri, {String? customName}) {
     try {
       uri = ConfigParser.normalizeScheme(uri.trim());
       if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://') && !uri.startsWith('hysteria://')) return null;
-      final u = ConfigParser.tryParseUri(uri);
+      // The official Hysteria 2 syntax allows a comma-separated port LIST or
+      // a RANGE in the authority (`:443,8443`, `:20000-30000`). Uri parsing
+      // can't make an int of that — tryParseUri throws FormatException and
+      // the config used to be rejected outright, exactly the servers that
+      // port-hop to dodge UDP throttling. Rewrite a multi-port authority to
+      // a placeholder port first; the real range is captured below.
+      String authorityPort(String raw) {
+        final a = raw.indexOf('://');
+        if (a == -1) return '';
+        var rest = raw.substring(a + 3);
+        final slash = rest.indexOf('/');
+        if (slash != -1) rest = rest.substring(0, slash);
+        final at = rest.lastIndexOf('@');
+        if (at != -1) rest = rest.substring(at + 1);
+        for (final stop in ['?', '#']) {
+          final i = rest.indexOf(stop);
+          if (i != -1) rest = rest.substring(0, i);
+        }
+        final colon = rest.lastIndexOf(':');
+        return colon == -1 ? '' : rest.substring(colon + 1);
+      }
+
+      final multiPort = RegExp(r'^\d+([-,]\d+)+$');
+      final rawAuthorityPort = authorityPort(uri);
+      String parseSource = uri;
+      if (multiPort.hasMatch(rawAuthorityPort)) {
+        final portStart =
+            uri.lastIndexOf(':$rawAuthorityPort');
+        parseSource = uri.replaceRange(
+            portStart + 1, portStart + 1 + rawAuthorityPort.length, '443');
+      }
+      final u = ConfigParser.tryParseUri(parseSource);
       if (u == null) return null;
       String name = customName ?? 'Hysteria2 (${u.host}:${u.port})';
       if (customName == null && u.fragment.isNotEmpty) {
         name = ConfigParser.safeFragment(uri, fallback: name);
+      }
+      final mport = u.queryParameters['mport'];
+      String? hopPorts;
+      int port = u.port;
+      if (multiPort.hasMatch(rawAuthorityPort)) {
+        hopPorts = rawAuthorityPort;
+        final first =
+            int.tryParse(rawAuthorityPort.split(RegExp('[-,]')).first);
+        if (first != null) port = first;
+      } else if (mport != null && multiPort.hasMatch(mport)) {
+        hopPorts = mport;
       }
       return Hysteria2Config(
         name: name, rawUri: uri,
@@ -1005,7 +1086,8 @@ class Hysteria2Config extends Config {
         // p%40ss must reach the engine as p@ss, or authentication
         // fails on every server whose password has a reserved char.
         password: ConfigParser._decodeUserInfo(u.userInfo),
-        address: u.host, port: u.port,
+        address: u.host, port: port,
+        hopPorts: hopPorts,
         sni: u.queryParameters['sni'],
         insecure: ConfigParser._insecure(u.queryParameters),
         upMbps: int.tryParse(u.queryParameters['up'] ?? ''),
@@ -1044,7 +1126,7 @@ class TuicConfig extends Config {
   @override Future<void> disconnect() async {}
   @override Future<bool> isRunning() async => false;
   @override bool validate() =>
-      address.isNotEmpty && port > 0 && isValidUuid(uuid);
+      address.isNotEmpty && port > 0 && port < 65536 && isValidUuid(uuid);
 
   /// tuic://uuid:password@host:port?sni=...
   static TuicConfig? fromUri(String uri, {String? customName}) {
@@ -1382,10 +1464,13 @@ class ConfigParser {
     final h = uri.indexOf('#');
     if (h == -1 || h == uri.length - 1) return fallback;
     final raw = uri.substring(h + 1);
+    // Form-encoded generators use '+' for a space. Replace BEFORE
+    // percent-decoding so a deliberate `%2B` still survives as a plus.
+    final formFixed = raw.replaceAll('+', ' ');
     try {
-      return Uri.decodeComponent(raw);
+      return Uri.decodeComponent(formFixed);
     } on Object {
-      return raw;
+      return formFixed;
     }
   }
 

@@ -470,6 +470,13 @@ class XrayConfigBuilder {
   String _realityServerName(VlessConfig c) =>
       _orDefault(c.sni, _orDefault(c.host, c.address));
 
+  /// `sni`, else `host` (where CDN-fronted links put the SNI domain), else the
+  /// address. Null when nothing usable — the TLS block omits `serverName`.
+  String? _sniOrHost(String? sni, String? host, String address) {
+    final s = _orDefault(sni, _orDefault(host, address));
+    return s.isEmpty ? null : s;
+  }
+
   /// Builds `streamSettings` — transport, then security.
   ///
   /// Mirrors `_build_outbound()` in `xray.py`: transport is chosen first and
@@ -575,7 +582,33 @@ class XrayConfigBuilder {
           if (host != null && host.isNotEmpty) 'host': host,
         };
       case 'tcp':
-        // Raw TCP carries no settings of its own.
+        // `headerType=http` (VLESS) / vmess `type:http` disguises the raw TCP
+        // stream as HTTP requests. The parser reads it, but this case used to
+        // emit nothing, so the client dialled a plaintext handshake at a
+        // server waiting for an HTTP disguise - a dead connection that only
+        // shows up as a timeout. Very common in Iranian subscription lists
+        // (port 80/8080, host=speedtest.net).
+        final headerType = switch (config) {
+          VlessConfig c => c.headerType,
+          // vmess JSON `type:http` — never read before this fix.
+          VmessConfig c => c.headerType,
+          _ => null,
+        };
+        if (headerType != null && headerType.toLowerCase() == 'http') {
+          stream['tcpSettings'] = {
+            'header': {
+              'type': 'http',
+              'request': {
+                // Xray requires both keys; empty Host falls back to the
+                // address, matching what other clients send.
+                'path': [(path == null || path.isEmpty) ? '/' : path],
+                'headers': {
+                  'Host': [(host == null || host.isEmpty) ? config.address : host],
+                },
+              },
+            },
+          };
+        }
         break;
       // 'http' (h2) and 'quic' are handled above: their settings blocks are
       // still emitted, but the bundled core has no transport package for
@@ -616,24 +649,31 @@ class XrayConfigBuilder {
         (c.tls == null || c.tls!.isEmpty || c.tls!.toLowerCase() == 'none')
             ? 'none'
             : 'tls',
-      TrojanConfig _ => 'tls', // Trojan is TLS by definition.
+      // Trojan is TLS by definition — but a link that explicitly says
+      // `security=none` (plain-WS trojan behind a CDN on port 80) means what
+      // it says; forcing TLS here made those configs undialable.
+      TrojanConfig c => (c.security == null || c.security!.isEmpty)
+          ? 'tls'
+          : c.security!.toLowerCase(),
       _ => 'none',
     };
 
-    if (security == 'none' && config is! TrojanConfig) {
+    if (security == 'none') {
       stream['security'] = 'none';
       return stream;
     }
 
     final sni = switch (config) {
-      VlessConfig c => c.sni,
+      // VLESS and Trojan get the same `host` fallback VMess already had:
+      // CDN-fronted links (`host=cdn.example.com`, no `sni`) presented the
+      // bare IP in the handshake and the CDN rejected the connection.
+      VlessConfig c => _sniOrHost(c.sni, c.host, c.address),
       // VMess links usually put the CDN domain in `host` and leave `sni`
       // empty. The transport below already falls back to `host`; this block
       // did not, so no serverName was emitted and the handshake presented the
       // bare IP - which the CDN rejects.
-      VmessConfig c =>
-        (c.sni != null && c.sni!.isNotEmpty) ? c.sni : c.host,
-      TrojanConfig c => c.sni,
+      VmessConfig c => _sniOrHost(c.sni, c.host, c.address),
+      TrojanConfig c => _sniOrHost(c.sni, c.host, c.address),
       _ => null,
     };
     final fingerprint = switch (config) {

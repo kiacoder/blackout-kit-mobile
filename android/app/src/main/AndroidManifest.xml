@@ -40,6 +40,29 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!--
+              Receive VPN config files ("Open with" from Gmail/Telegram/file
+              managers). .conf/.ovpn have no registered MIME type — providers
+              report application/octet-stream, so matching only pathPatterns
+              would miss exactly the attachments users are sent. pathPattern
+              entries on */* keep extension-named files selectable too.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="*/*" android:pathPattern=".*\.conf" />
+                <data android:mimeType="*/*" android:pathPattern=".*\.ovpn" />
+            </intent-filter>
+            <!-- Receive shared links (vless://, vmess://, subscription URLs)
+                 from the browser/messenger share sheet. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!--

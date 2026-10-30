@@ -16,7 +16,7 @@ name: CodeQL
 #   java-kotlin  android/  — 11 Kotlin files (VpnService, engine runner, plugin)
 #   swift        ios/      — 4 Swift files (AppDelegate, tunnel provider, plugin)
 #   python       tool/     — 1 script
-#   actions      — handled by CodeQL default setup, not here (see below)
+#   actions      .github/  — the workflow files themselves
 #
 # Two languages are deliberately absent, because scanning them produces an
 # error row on the Security tab rather than a scan:
@@ -27,10 +27,15 @@ name: CodeQL
 #   c-cpp  There is no C or C++ source. The only matches are CMake scratch
 #          files under android/app/.cxx, which are build output.
 #
-# Ownership: CodeQL *default setup* keeps `actions` (no build needed, and it
-# keeps working even if this file is ever disabled). This workflow owns the
-# compiled and scripted languages. One owner per language means no duplicate
-# uploads to the same category and no duplicated configuration rows.
+# Every language is owned by THIS workflow, and CodeQL default setup is
+# disabled. That is not a style choice: GitHub refuses to process an advanced
+# configuration while default setup is on, with
+#
+#   "CodeQL analyses from advanced configurations cannot be processed when the
+#    default setup is enabled"
+#
+# which fails every job at the upload step. Default setup also cannot build
+# Kotlin, so it cannot be the one that stays.
 
 permissions:
   contents: read
@@ -77,6 +82,9 @@ jobs:
           # not), so CodeQL must observe a real compile.
           - language: java-kotlin
             build-mode: manual
+          # Workflow files themselves. No build.
+          - language: actions
+            build-mode: none
           # One script, no build.
           - language: python
             build-mode: none

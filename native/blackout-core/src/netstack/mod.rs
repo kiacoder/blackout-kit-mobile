@@ -144,6 +144,14 @@ impl NetstackCore {
                 ))
                 .expect("core interface address slot");
         });
+        // AnyIP acceptance requires a route whose gateway is one of our own
+        // addresses (smoltcp routes.lookup → has_ip_addr(router)). The
+        // default route through ourselves accepts packets to ANY v4 dst —
+        // exactly what a TUN netstack masquerading as arbitrary servers needs.
+        iface
+            .routes_mut()
+            .add_default_ipv4_route(Ipv4Address([a, b, c, d]))
+            .expect("core default route slot");
         let sockets = SocketSet::new(vec![]);
         let udp_relay_enabled = matches!(outbound, TcpOutbound::Direct);
         if !udp_relay_enabled {
@@ -345,6 +353,17 @@ impl NetstackCore {
                 socket.close();
             }
 
+            // e') Peer-FIN probe: after the peer's FIN, the rx buffer is
+            // empty so can_recv() is false and the recv loop above never
+            // runs. A recv_slice attempt errors with Finished exactly when
+            // the peer has closed — that error drives the close chain.
+            if !flow.peer_eof_seen && flow.up_tx.is_some() && !socket.can_recv() {
+                let mut probe = [0u8; 1];
+                if socket.recv_slice(&mut probe).is_err() {
+                    flow.peer_eof_seen = true;
+                }
+            }
+
             // e) Move app data from the smoltcp rx buffer toward upstream.
             while socket.can_recv() && flow.pending_to_upstream.len() < 64 {
                 let mut buf = [0u8; 16384];
@@ -380,12 +399,21 @@ impl NetstackCore {
                 flow.up_tx = None;
             }
 
-            // f) Retire finished flows.
+            // f) Retire finished flows. Aborted sockets are kept for one
+            // extra poll: smoltcp emits the RST from the CLOSED state during
+            // dispatch, so removing the socket in the same tick would eat it.
             let state = socket.state();
-            if flow.dead || state == TcpState::Closed || state == TcpState::TimeWait {
-                if flow.dead && state != TcpState::Closed {
-                    socket.abort();
+            let remove = if flow.dead {
+                if flow.rst_flushed {
+                    true
+                } else {
+                    flow.rst_flushed = true;
+                    false
                 }
+            } else {
+                state == TcpState::Closed || state == TcpState::TimeWait
+            };
+            if remove {
                 self.sockets.remove(handle);
                 self.tcp_flows.remove(&key);
             }

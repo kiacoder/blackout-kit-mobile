@@ -11,7 +11,7 @@
 //! 5. If the probe has the valid key/HMAC, the server switches to proxy mode.
 
 use std::io::{self, Error, ErrorKind};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use ring::hmac;
 use ring::rand::SecureRandom;

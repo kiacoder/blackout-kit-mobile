@@ -95,3 +95,6 @@ coverage/
 
 # Native build artifacts
 android/app/.cxx/
+
+# Rust build artifacts (in-house native core)
+native/blackout-core/target/

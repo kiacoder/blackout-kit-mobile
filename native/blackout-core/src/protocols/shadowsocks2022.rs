@@ -7,8 +7,7 @@
 //! - 2022-blake3-chacha20-poly1305
 //! - Fixed-length header with monotonic timestamp to prevent replay attacks.
 
-use std::io::{self, Error, ErrorKind};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::io::{self};
 use tokio::net::TcpStream;
 
 pub struct Shadowsocks2022Dialer {

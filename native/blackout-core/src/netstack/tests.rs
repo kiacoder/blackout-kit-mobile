@@ -80,10 +80,25 @@ struct Harness {
     client_iface: Interface,
     client_sockets: SocketSet<'static>,
     client_device: ClientDevice,
+    /// Test-visible copy of every packet the netstack emitted toward the
+    /// "app" (the client iface consumes its own ingress queue during poll,
+    /// dropping packets it has no socket for — e.g. relayed UDP responses).
+    app_ingress: VecDeque<Vec<u8>>,
     round: i64,
 }
 
 const CLIENT_ADDR: Ipv4Addr = Ipv4Addr::new(10, 0, 0, 5);
+
+static TRACING: std::sync::Once = std::sync::Once::new();
+
+/// Enable tracing output during tests (RUST_LOG=debug cargo test ...).
+fn init_tracing() {
+    TRACING.call_once(|| {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init();
+    });
+}
 
 impl Harness {
     fn new(core: NetstackCore, egress_rx: tokio::sync::mpsc::Receiver<Vec<u8>>) -> Self {
@@ -113,6 +128,7 @@ impl Harness {
             client_iface,
             client_sockets,
             client_device,
+            app_ingress: VecDeque::new(),
             round: 0,
         }
     }
@@ -127,8 +143,9 @@ impl Harness {
         }
         // Netstack servicing step.
         self.core.tick().await;
-        // Netstack egress → client ingress.
+        // Netstack egress → client ingress (plus a test-visible copy).
         while let Ok(pkt) = self.egress_rx.try_recv() {
+            self.app_ingress.push_back(pkt.clone());
             self.client_device.ingress.push_back(pkt);
         }
         // Client servicing step.
@@ -271,6 +288,7 @@ async fn tcp_echo_flows_bidirectionally_through_netstack() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn udp_relay_injects_wellformed_response_packets() {
+    init_tracing();
     // UDP echo "server" = the "DNS server". Owned by the test (not spawned)
     // so the test can verify exactly one request/reply exchange.
     let echo = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -289,7 +307,7 @@ async fn udp_relay_injects_wellformed_response_packets() {
     let payload = b"blackout-udp-probe";
     let mut datagram = Vec::new();
     datagram.push(0x45);
-    datagram.extend_from_slice(&[0, 0]);
+    datagram.extend_from_slice(&[0]); // TOS (1 byte)
     let total_len = (20 + 8 + payload.len()) as u16;
     datagram.extend_from_slice(&total_len.to_be_bytes());
     datagram.extend_from_slice(&[0, 0, 0, 0]); // id + flags
@@ -325,8 +343,8 @@ async fn udp_relay_injects_wellformed_response_packets() {
     let mut response: Option<Vec<u8>> = None;
     for _ in 0..200 {
         harness.drive().await;
-        // Netstack egress is delivered into the app-side ingress by drive().
-        while let Some(pkt) = harness.client_device.ingress.pop_front() {
+        // Netstack egress is mirrored into app_ingress by drive().
+        while let Some(pkt) = harness.app_ingress.pop_front() {
             if let Some(header) = PacketHeader::parse(&pkt) {
                 if header.protocol == 17 && header.src_port == echo_addr.port() {
                     response = Some(pkt);
@@ -395,11 +413,13 @@ async fn unsupported_outbound_resets_flows_instead_of_leaking() {
     let mut saw_rst = false;
     for _ in 0..300 {
         harness.drive().await;
-        // Netstack egress (the RST) is delivered into the app-side ingress.
-        while let Some(pkt) = harness.client_device.ingress.pop_front() {
+        // Netstack egress (the RST) is mirrored into app_ingress by drive().
+        while let Some(pkt) = harness.app_ingress.pop_front() {
             if let Some(header) = PacketHeader::parse(&pkt) {
-                if header.protocol == 6 && header.tcp_flags(&pkt) == Some(0x04) {
-                    saw_rst = true;
+                if let Some(flags) = header.tcp_flags(&pkt) {
+                    if flags & 0x04 != 0 {
+                        saw_rst = true;
+                    }
                 }
             }
         }

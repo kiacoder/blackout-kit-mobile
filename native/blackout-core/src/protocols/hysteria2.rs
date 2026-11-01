@@ -7,9 +7,8 @@
 //! - Multi-port hopping to bypass UDP rate-limiting.
 //! - HTTP/3 style authentication frame exchange.
 
-use std::io::{self, Error, ErrorKind};
+use std::io::{self};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::net::UdpSocket;
 
 pub struct Hysteria2Dialer {

@@ -7,7 +7,6 @@
 //! - uTLS Chrome / Safari fingerprint spoofing.
 
 use std::io::{self, Error, ErrorKind};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 pub struct VlessRealityDialer {

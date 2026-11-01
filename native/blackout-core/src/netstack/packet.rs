@@ -313,7 +313,9 @@ mod tests {
         header[16..20].copy_from_slice(&[10, 0, 0, 5]);
         let csum = internet_checksum(&header);
         header[10..12].copy_from_slice(&csum.to_be_bytes());
-        assert_eq!(internet_checksum(&header), 0xffff);
+        // RFC 1071: the ones'-complement checksum over the complete header
+        // (checksum included) is 0.
+        assert_eq!(internet_checksum(&header), 0);
     }
 
     #[test]

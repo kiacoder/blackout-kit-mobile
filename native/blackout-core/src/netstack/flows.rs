@@ -51,6 +51,8 @@ pub struct TcpFlow {
     pub pending_to_upstream: VecDeque<Vec<u8>>,
     /// Set on DialFailed or unrecoverable socket errors → RST + remove.
     pub dead: bool,
+    /// True once one poll has run after `dead` was set (RST emitted).
+    pub rst_flushed: bool,
     /// Upstream EOF seen → FIN the socket toward the app.
     pub upstream_eof_seen: bool,
     /// The app sent its FIN (recv returned an error).
@@ -68,6 +70,7 @@ impl TcpFlow {
             pending_to_socket: VecDeque::new(),
             pending_to_upstream: VecDeque::new(),
             dead: false,
+            rst_flushed: false,
             upstream_eof_seen: false,
             peer_eof_seen: false,
         }
@@ -101,7 +104,7 @@ pub(super) fn spawn_upstream_pump(
     mut from_netstack: mpsc::Receiver<UpstreamMsg>,
 ) {
     tokio::spawn(async move {
-        let mut stream = match outbound.connect_tcp(dst).await {
+        let stream = match outbound.connect_tcp(dst).await {
             Ok(stream) => stream,
             Err(error) => {
                 tracing::warn!(target = %dst, error = %error, "upstream dial failed; aborting flow");

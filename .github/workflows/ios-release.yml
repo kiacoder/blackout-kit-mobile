@@ -1,0 +1,152 @@
+name: Release iOS (signed IPA)
+
+# Produces a SIGNED iOS IPA on GitHub's macOS runners when signing
+# material is provided as repository secrets. The unsigned compile gate
+# lives in ios.yml; this workflow is the shipping path.
+#
+# REQUIRED SECRETS (Settings → Secrets and variables → Actions):
+#   IOS_P12_BASE64        Base64 of the signing certificate + private key
+#                         (e.g. `base64 -i cert.p12 | pbcopy`).
+#   IOS_P12_PASSWORD      Password of the .p12.
+#   IOS_TEAM_ID           Apple Developer Team ID (10 chars, e.g. ABCDE12345).
+#   IOS_PROFILE_APP_B64   Base64 provisioning profile for com.blackoutkit.vpn.
+#   IOS_PROFILE_TUNNEL_B64 Base64 profile for com.blackoutkit.vpn.tunnel.
+#
+# OPTIONAL VARIABLES (Settings → Secrets → Variables):
+#   IOS_SIGNING_METHOD    Export method: ad-hoc (default) |
+#                         app-store-connect | development.
+#
+# Profile TYPE must match the method: ad-hoc → Ad Hoc profiles listing the
+# target device UDIDs; app-store-connect → App Store profiles. Both profiles
+# MUST include the NetworkExtension capability for the tunnel bundle.
+#
+# The workflow skips itself (with a clear note) when the secrets are not
+# configured yet, so it never spams failures before the account exists.
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      flutter_version:
+        description: 'Flutter version'
+        required: false
+        default: '3.24.0'
+
+jobs:
+  sign-ios:
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Check signing secrets
+        id: secrets
+        env:
+          P12: ${{ secrets.IOS_P12_BASE64 }}
+          PROFILE_APP: ${{ secrets.IOS_PROFILE_APP_B64 }}
+          PROFILE_TUNNEL: ${{ secrets.IOS_PROFILE_TUNNEL_B64 }}
+          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          if [ -z "$P12" ] || [ -z "$PROFILE_APP" ] || [ -z "$PROFILE_TUNNEL" ] || [ -z "$TEAM_ID" ]; then
+            echo "::notice::iOS signing secrets are not configured yet — skipping signed build."
+            echo "Add IOS_P12_BASE64 / IOS_P12_PASSWORD / IOS_TEAM_ID / IOS_PROFILE_APP_B64 / IOS_PROFILE_TUNNEL_B64 to repo secrets, then re-run."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.configured == 'true'
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          flutter-version: ${{ inputs.flutter_version || '3.24.0' }}
+          channel: stable
+
+      - uses: actions/setup-go@v5
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          go-version: '1.23'
+
+      - name: Build Libbox.xcframework
+        if: steps.secrets.outputs.configured == 'true'
+        run: |
+          chmod +x tool/build_libbox.sh
+          ./tool/build_libbox.sh
+
+      - name: Import signing certificate into a temporary keychain
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          P12: ${{ secrets.IOS_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/blackout-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          # Allow codesign/access from non-interactive sessions.
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Install provisioning profiles
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          PROFILE_APP: ${{ secrets.IOS_PROFILE_APP_B64 }}
+          PROFILE_TUNNEL: ${{ secrets.IOS_PROFILE_TUNNEL_B64 }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILE_APP"    | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/app.mobileprovision
+          echo "$PROFILE_TUNNEL" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/tunnel.mobileprovision
+          for f in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+            UUID=$(/usr/libexec/PlistBuddy -c 'Print :UUID' /dev/stdin 2>/dev/null <<< "$(security cms -D -i "$f")") || continue
+            cp "$f" ~/Library/MobileDevice/Provisioning\ Profiles/"$UUID".mobileprovision
+          done
+
+      - name: Build signed IPA
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          IOS_SIGNING_METHOD: ${{ vars.IOS_SIGNING_METHOD || 'ad-hoc' }}
+          # FLUTTER_XCODE_* env vars pass straight into the underlying
+          # xcodebuild invocation (all targets: Runner + BlackoutTunnel).
+          FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ secrets.IOS_TEAM_ID }}
+          FLUTTER_XCODE_CODE_SIGN_STYLE: Manual
+        run: |
+          # xcodebuild does not substitute $(VARS) in export option plists,
+          # so render the template ourselves.
+          mkdir -p build/ios/export
+          sed -e "s/\$(IOS_SIGNING_METHOD)/${IOS_SIGNING_METHOD}/" \
+              -e "s/\$(IOS_TEAM_ID)/${IOS_TEAM_ID}/" \
+              tool/ios/exportOptions.plist > build/ios/export/exportOptions.plist
+          flutter build ipa --release \
+            --export-options-plist=build/ios/export/exportOptions.plist
+
+      - name: Locate and verify IPA
+        if: steps.secrets.outputs.configured == 'true'
+        run: |
+          IPA=$(find build/ios/ipa -name "*.ipa" | head -1)
+          test -n "$IPA" || { echo "ERROR: no IPA produced"; exit 1; }
+          echo "IPA: $IPA ($(du -h "$IPA" | cut -f1))"
+          unzip -l "$IPA" | grep -E "Runner.app|BlackoutTunnel.appex" | head -5
+          echo "ipa_path=$IPA" >> "$GITHUB_ENV"
+
+      - name: Upload signed IPA
+        if: steps.secrets.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: blackout-kit-ios-signed
+          path: ${{ env.ipa_path }}
+          if-no-files-found: error
+
+      - name: Cleanup keychain and profiles
+        if: always() && steps.secrets.outputs.configured == 'true'
+        run: |
+          security delete-keychain $RUNNER_TEMP/blackout-signing.keychain-db || true
+          rm -f ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision || true

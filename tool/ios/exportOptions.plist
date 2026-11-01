@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Export options for `xcodebuild -exportArchive` on CI (ios-release.yml).
+		Signing style is MANUAL: the workflow injects the distribution
+		certificate (.p12) and provisioning profiles from GitHub Secrets.
+
+		IOS_SIGNING_METHOD selects the export method; set it as a workflow
+		variable. Common values:
+		  - ad-hoc          : registered device UDIDs; IPA installs via
+		                      Finder/Apple Configurator/AltStore. Best for
+		                      local device testing without TestFlight.
+		  - app-store-connect : for TestFlight / App Store upload.
+		  - development     : development-signed build (free-account teams
+		                      can produce this, but the NetworkExtension
+		                      entitlement will not be honored — the tunnel
+		                      extension will not launch).
+	-->
+	<key>method</key>
+	<string>$(IOS_SIGNING_METHOD)</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>teamID</key>
+	<string>$(IOS_TEAM_ID)</string>
+	<key>stripSwiftSymbols</key>
+	<true/>
+	<key>compileBitcode</key>
+	<false/>
+</dict>
+</plist>

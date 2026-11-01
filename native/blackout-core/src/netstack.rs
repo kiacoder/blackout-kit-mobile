@@ -1,10 +1,11 @@
 //! Netstack & Packet Processing Architecture
 //! Ingests IP packets from TUN descriptor, parses IPv4/IPv6,
-//! and forwards L4 streams to protocol outbounds.
+//! and forwards L4 streams to protocol outbounds or direct TCP targets.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
 #[cfg(unix)]
@@ -251,13 +252,24 @@ pub async fn run_tun_netstack(
                 tx_packets.fetch_add(1, Ordering::Relaxed);
 
                 if let Some(header) = PacketHeader::parse(&buf[..n]) {
-                    tracing::debug!(
-                        proto = header.protocol,
-                        src = %header.src_ip,
-                        dst = %header.dst_ip,
-                        port = header.dst_port,
-                        "Inbound TUN packet routed to netstack dispatcher"
-                    );
+                    if header.protocol == 6 && n > header.payload_offset {
+                        let payload = &buf[header.payload_offset..n];
+                        if !payload.is_empty() {
+                            let dst_addr = format!("{}:{}", header.dst_ip, header.dst_port);
+                            let payload_vec = payload.to_vec();
+                            tokio::spawn(async move {
+                                if let Ok(mut upstream) = TcpStream::connect(&dst_addr).await {
+                                    let _ = upstream.write_all(&payload_vec).await;
+                                    let mut response_buf = [0u8; 4096];
+                                    if let Ok(r_len) = upstream.read(&mut response_buf).await {
+                                        if r_len > 0 {
+                                            tracing::debug!(bytes = r_len, target = %dst_addr, "Proxy response received from upstream TCP target");
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
                 }
             }
             Ok(_) => {

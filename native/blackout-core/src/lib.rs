@@ -3,6 +3,7 @@ pub mod engine;
 pub mod ffi;
 pub mod jni;
 pub mod netstack;
+pub mod outbound;
 pub mod protocols;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

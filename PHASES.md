@@ -4,9 +4,9 @@ Roadmap and implementation status. “Implemented” means code exists; hardware
 
 ## Current Native Rust Engine Status (2026-11-01)
 
-The `native/blackout-core` crate is experimental and is **not** a replacement for the existing Android Xray or sing-box/tun2socks runtime. Its protocol modules are prototypes; the TUN loop currently parses/counts packets but has no outbound flow forwarding or response injection. The tagged `v1.18.0` Rust Android build failed in CI before APK packaging. The local Quinn dependency substitution has not yet been validated by a successful build.
+The `native/blackout-core` crate is experimental and is **not** yet the default runtime; Xray and sing-box/tun2socks remain the shippers. The netstack now terminates TCP properly (smoltcp: handshake, reassembly, ACK/FIN/RST — no more per-segment dialing), injects response packets back into the TUN through the egress writer, and relays UDP via per-flow datagram sockets with full-cone-style response rewriting (Direct outbound only; proxied UDP would bypass the tunnel). TCP flows route through an outbound dispatcher (`src/outbound.rs`): `Direct` and plain-TCP VLESS (`security: none`, no flow) dial end-to-end; REALITY/TLS, Shadowsocks-2022, ShadowTLS, Hysteria 2, TUIC and WireGuard/AWG are refused with RST until their dialers are stream-complete — never silently leaked outside the tunnel. IPv6 is not relayed yet (dropped; apps fall back over v4). The `v1.18.0-beta` tag builds Rust Android APKs in CI.
 
-Do not remove `XrayEngine.kt`, `libsingbox.so`, or `libtun2socks.so` until a replacement has a passing Android ABI build, protocol interoperability evidence, and physical-device tests showing outbound and return traffic through the Rust TUN path. iOS requires separate XCFramework and `PacketTunnelProvider` work and device verification.
+Do not remove `XrayEngine.kt`, `libsingbox.so`, or `libtun2socks.so` until the replacement has protocol interoperability evidence and physical-device tests showing outbound and return traffic through the Rust TUN path. iOS requires separate XCFramework and `PacketTunnelProvider` work and device verification.
 
 ## Overview
 

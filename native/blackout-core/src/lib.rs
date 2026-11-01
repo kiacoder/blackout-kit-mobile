@@ -1,6 +1,7 @@
 pub mod config;
 pub mod engine;
 pub mod ffi;
+pub mod jni;
 pub mod netstack;
 pub mod protocols;
 

@@ -54,6 +54,20 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Set up Rust & Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Build in-house Rust core (libblackout_core.so)
+        run: |
+          set -e
+          cd native/blackout-core
+          cargo ndk -t arm64-v8a -t armeabi-v7a -o ../../android/app/src/main/jniLibs build --release
+
       - name: Set up release signing (optional)
         # Without stable signing every CI run signs with a FRESH debug keystore —
         # hosted runners are ephemeral, so each build gets a different debug key.

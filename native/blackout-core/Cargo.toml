@@ -12,7 +12,7 @@ crate-type = ["cdylib", "staticlib", "lib"]
 
 [dependencies]
 # Async Runtime & Core Utilities
-tokio = { version = "1.38", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+tokio = { version = "1.38", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros", "fs"] }
 futures-util = "0.3"
 bytes = "1.6"
 serde = { version = "1.0", features = ["derive"] }
@@ -21,6 +21,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1.0"
 libc = "0.2"
+
+# JNI for Android VpnService integration
+jni = { version = "0.21", default-features = false }
 
 # Userspace Netstack (Packet-to-Stream translation for TUN fd)
 smoltcp = { version = "0.11", default-features = false, features = ["std", "log", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-udp", "async"] }

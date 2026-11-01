@@ -499,6 +499,14 @@ class BlackoutVpnService : VpnService() {
         // loaded whatever singbox.json was already on disk - the previous
         // session's server, under the new protocol's name. The tunnel came up
         // and reported "connected" while running the wrong proxy.
+        if (BlackoutCoreEngine.isLoaded && !singboxConfig.isNullOrBlank()) {
+            Log.i(TAG, "Starting protocol '$protocol' via in-process BlackoutCoreEngine")
+            if (BlackoutCoreEngine.start(tunFd, singboxConfig)) {
+                return true
+            }
+            Log.w(TAG, "BlackoutCoreEngine failed, falling back to EngineRunner: ${BlackoutCoreEngine.lastError}")
+        }
+
         if (singboxConfig.isNullOrBlank()) {
             lastError =
                 "No sing-box config was supplied for protocol '$protocol'; " +
@@ -613,6 +621,7 @@ class BlackoutVpnService : VpnService() {
         holdTunnelOnFailure = false
         XrayEngine.stop()
         EngineRunner.stop()
+        BlackoutCoreEngine.stop()
         try {
             engineTunFd?.close()
         } catch (e: Exception) {

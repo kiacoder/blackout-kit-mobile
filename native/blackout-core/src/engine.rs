@@ -3,9 +3,10 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 use crate::config::{EngineConfig, OutboundConfig};
+use crate::netstack::{run_tun_netstack, TunDevice};
 use crate::EngineStats;
 
 pub struct EngineSession {
@@ -119,8 +120,29 @@ impl EngineSession {
             }
         }
 
-        // Wait for shutdown trigger
-        let _ = shutdown_rx.await;
+        // Spawn TUN Netstack loop to process raw IP packets
+        let (return_tx, return_rx) = mpsc::channel::<Vec<u8>>(1024);
+        let tun_device = Arc::new(TunDevice::new(self.tun_fd));
+
+        let netstack_future = run_tun_netstack(
+            tun_device,
+            self.stats.tx_bytes.clone(),
+            self.stats.rx_bytes.clone(),
+            self.stats.tx_packets.clone(),
+            self.stats.rx_packets.clone(),
+            self.is_running.clone(),
+            return_rx,
+        );
+
+        tokio::select! {
+            _ = netstack_future => {
+                tracing::warn!("TUN netstack worker completed unexpectedly");
+            }
+            _ = &mut shutdown_rx => {
+                tracing::info!("Shutdown signal received by engine session");
+            }
+        }
+
         self.is_running.store(false, Ordering::SeqCst);
         tracing::info!("Engine session loop shut down cleanly");
     }

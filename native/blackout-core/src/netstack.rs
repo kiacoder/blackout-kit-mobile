@@ -167,8 +167,8 @@ impl PacketHeader {
 mod tests {
     use super::PacketHeader;
 
-    fn ipv4_packet(total_len: u16, protocol: u8) -> [u8; 24] {
-        let mut packet = [0u8; 24];
+    fn ipv4_packet(total_len: u16, protocol: u8) -> [u8; 40] {
+        let mut packet = [0u8; 40];
         packet[0] = 0x45;
         packet[2..4].copy_from_slice(&total_len.to_be_bytes());
         packet[9] = protocol;
@@ -181,11 +181,11 @@ mod tests {
 
     #[test]
     fn parses_valid_ipv4_tcp_header() {
-        let packet = ipv4_packet(24, 6);
+        let packet = ipv4_packet(40, 6);
         let parsed = PacketHeader::parse(&packet).unwrap();
         assert_eq!(parsed.dst_port, 443);
         assert_eq!(parsed.protocol, 6);
-        assert_eq!(parsed.total_len, 24);
+        assert_eq!(parsed.total_len, 40);
     }
 
     #[test]

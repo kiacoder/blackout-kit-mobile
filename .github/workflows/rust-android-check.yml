@@ -1,6 +1,9 @@
 name: Rust Android Check
 
 on:
+  push:
+    branches:
+      - 'ci/validate-*'
   workflow_dispatch:
 
 permissions:

@@ -123,7 +123,7 @@ pub struct NetstackCore {
 
 impl NetstackCore {
     pub fn new(outbound: TcpOutbound, egress_tx: mpsc::Sender<Vec<u8>>) -> Self {
-        let device = ChannelDevice::new(egress_tx, TUN_MTU);
+        let mut device = ChannelDevice::new(egress_tx, TUN_MTU);
         let mut config = smoltcp::iface::Config::new(HardwareAddress::Ip);
         config.random_seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

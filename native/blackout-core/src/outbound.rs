@@ -227,10 +227,14 @@ mod tests {
             protocol: "hysteria2",
             reason: "test".to_string(),
         };
-        let err = outbound
+        // Box<dyn AsyncReadWrite> has no Debug impl, so expect_err is out.
+        let err = match outbound
             .connect_tcp("93.184.216.34:443".parse().unwrap())
             .await
-            .expect_err("unsupported must refuse");
+        {
+            Ok(_) => panic!("unsupported outbound must refuse to dial"),
+            Err(e) => e,
+        };
         assert_eq!(err.kind(), io::ErrorKind::Unsupported);
         assert!(err.to_string().contains("hysteria2"));
         assert!(err.to_string().contains("leaking"));

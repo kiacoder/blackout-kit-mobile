@@ -121,7 +121,7 @@ impl EngineSession {
         }
 
         // Spawn TUN Netstack loop to process raw IP packets
-        let (return_tx, return_rx) = mpsc::channel::<Vec<u8>>(1024);
+        let (_return_tx, return_rx) = mpsc::channel::<Vec<u8>>(1024);
         let tun_device = Arc::new(TunDevice::new(self.tun_fd));
 
         let netstack_future = run_tun_netstack(

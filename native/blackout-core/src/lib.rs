@@ -9,12 +9,22 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[derive(Default)]
 pub struct EngineStats {
-    pub tx_bytes: AtomicU64,
-    pub rx_bytes: AtomicU64,
-    pub tx_packets: AtomicU64,
-    pub rx_packets: AtomicU64,
+    pub tx_bytes: Arc<AtomicU64>,
+    pub rx_bytes: Arc<AtomicU64>,
+    pub tx_packets: Arc<AtomicU64>,
+    pub rx_packets: Arc<AtomicU64>,
+}
+
+impl Default for EngineStats {
+    fn default() -> Self {
+        Self {
+            tx_bytes: Arc::new(AtomicU64::new(0)),
+            rx_bytes: Arc::new(AtomicU64::new(0)),
+            tx_packets: Arc::new(AtomicU64::new(0)),
+            rx_packets: Arc::new(AtomicU64::new(0)),
+        }
+    }
 }
 
 pub struct BlackoutEngine {

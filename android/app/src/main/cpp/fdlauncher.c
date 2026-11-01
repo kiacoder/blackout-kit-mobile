@@ -89,23 +89,45 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
 
     if (pid == 0) {
         /* Child. */
+        /*
+         * First, duplicate the VPN tunnel descriptor to a safe high slot so
+         * stdout/stderr redirection and logFd manipulation cannot clobber it
+         * if fd happened to be 0, 1, 2, or 3.
+         */
+        int vpnFd = fcntl(fd, F_DUPFD_CLOEXEC, 100);
+        if (vpnFd < 0) {
+            vpnFd = fd;
+        }
+
         if (logFd >= 0) {
             dup2(logFd, STDOUT_FILENO);
             dup2(logFd, STDERR_FILENO);
-            if (logFd > STDERR_FILENO) close(logFd);
+            if (logFd != STDOUT_FILENO && logFd != STDERR_FILENO) {
+                close(logFd);
+            }
         }
+
         /*
-         * The engine reads the tunnel from fd 3. Copy the descriptor the VPN
-         * service gave us there; the original stays open in the parent, which
-         * keeps ownership for its own close().
+         * The engine reads the tunnel from fd 3. Copy the descriptor there.
          */
-        if (dup2(fd, 3) < 0) {
+        if (dup2(vpnFd, 3) < 0) {
             /* Report through the log fd; the parent sees exit code 126. */
-            LOGF("dup2(fd=%d, 3) failed: %s", fd, strerror(errno));
+            LOGF("dup2(vpnFd=%d, 3) failed: %s", vpnFd, strerror(errno));
             _exit(126);
         }
+
+        /*
+         * CRUCIAL: Clear FD_CLOEXEC on fd 3!
+         * If fd was already 3 (the first free descriptor returned by
+         * ParcelFileDescriptor.dup() in Java), POSIX specifies that dup2(3, 3)
+         * is a no-op that leaves FD_CLOEXEC UNCHANGED. On execv(), the kernel
+         * then closed fd 3, causing tun2socks to immediately crash with:
+         * "unix.SetNonblock(3) failed: bad file descriptor (EBADF)".
+         */
+        fcntl(3, F_SETFD, 0);
+
         /* Keep the child from holding the parent's other descriptors. */
-        for (int d = 4; d < 64; d++) {
+        for (int d = 4; d < 128; d++) {
             close(d);
         }
         execv(path, argv);

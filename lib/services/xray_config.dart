@@ -301,13 +301,21 @@ class XrayConfigBuilder {
         _validateReality(c);
         final user = <String, dynamic>{'id': c.uuid, 'encryption': 'none'};
         if (c.flow != null && c.flow!.isNotEmpty) user['flow'] = c.flow;
+        // Plaintext VLESS requires a domain or private IP in Xray-core.
+        // If address is a raw IP but c.host is a domain, use c.host so Xray accepts it.
+        final targetAddress = (c.security.toLowerCase() == 'none' &&
+                c.host != null &&
+                c.host!.isNotEmpty &&
+                !RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(c.host!))
+            ? c.host!
+            : c.address;
         return {
           'tag': 'proxy',
           'protocol': 'vless',
           'settings': {
             'vnext': [
               {
-                'address': c.address,
+                'address': targetAddress,
                 'port': c.port,
                 'users': [user],
               },

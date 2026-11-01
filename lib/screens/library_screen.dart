@@ -9,6 +9,7 @@ import '../controllers/config_controller.dart';
 import '../controllers/connection_controller.dart';
 import '../models/config.dart';
 import '../models/test_result.dart';
+import '../services/localization_service.dart';
 import '../widgets/config_tile.dart';
 import 'config_import_screen.dart';
 import 'speed_test_screen.dart';
@@ -39,21 +40,35 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('config_library'.tr),
+        title: Text(
+          'config_library'.tr,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          maxLines: 1,
+        ),
+        titleSpacing: 12,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.speed),
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            icon: const Icon(Icons.speed, size: 22),
             onPressed: () => Get.to(() => const SpeedTestScreen()),
             tooltip: 'Speed Benchmark'.tr,
           ),
           IconButton(
-            icon: const Icon(Icons.qr_code_scanner),
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            icon: const Icon(Icons.qr_code_scanner, size: 22),
             onPressed: () => Get.to(() => const ConfigImportScreen()),
             tooltip: 'Import Config / Scan QR'.tr,
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            icon: const Icon(Icons.refresh, size: 22),
             onPressed: () async {
               Get.snackbar(
                 'Fetching',
@@ -73,10 +88,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
             tooltip: 'Refresh all sources'.tr,
           ),
           IconButton(
-            icon: const Icon(Icons.add),
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            icon: const Icon(Icons.add, size: 22),
             onPressed: _showAddCustomSourceDialog,
             tooltip: 'Add custom source'.tr,
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(
@@ -378,7 +397,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             child: Row(
               children: protocols.map((proto) {
                 final id = proto['id']!;
-                final label = proto['label']!;
+                final label = id == 'all' ? 'all'.tr : proto['label']!;
                 return _buildFilterChip(
                   label: label,
                   selected: _configController.filterProtocol.value == id,
@@ -559,7 +578,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Speed',
+                        'speed'.tr,
                         style: TextStyle(fontSize: 12, color: theme.hintColor),
                       ),
                       Text(
@@ -577,7 +596,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Latency',
+                        'latency'.tr,
                         style: TextStyle(fontSize: 12, color: theme.hintColor),
                       ),
                       Text(
@@ -595,7 +614,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Reliability',
+                        'reliability'.tr,
                         style: TextStyle(fontSize: 12, color: theme.hintColor),
                       ),
                       Text(
@@ -705,8 +724,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     if (success) {
       Get.snackbar(
-        'Connected',
-        'Switched to ${config.displayName}',
+        'connected'.tr,
+        LocalizationService.t('status_connected_to', {'name': config.displayName}),
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );

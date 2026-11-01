@@ -398,7 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
               // Throughput is never measured (the tester only opens a socket),
               // so a "Speed" card could only ever read "Not tested" forever.
               // Latency is the figure that is actually measured.
-              'Latency',
+              'latency'.tr,
               result?.latencyMs != null ? '${result!.latencyMs} ms' : 'Not tested'.tr,
               Icons.speed,
             ),
@@ -408,12 +408,12 @@ class _HomeScreenState extends State<HomeScreen> {
               Icons.settings,
             ),
             _buildStatCard(
-              'Working',
+              'working'.tr,
               '${stats['working']}',
               Icons.check_circle,
             ),
             _buildStatCard(
-              'Reliability',
+              'reliability'.tr,
               '${(stats['average_reliability'] as double).toStringAsFixed(0)}%'.tr,
               Icons.trending_up,
             ),

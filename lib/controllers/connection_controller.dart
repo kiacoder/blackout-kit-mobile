@@ -946,6 +946,32 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     // and after a wasted probe. The core's transport/internet packages are
     // grpc, httpupgrade, hysteria, kcp, reality, splithttp, tcp, tls, udp and
     // websocket; there is no quic and no http (h2).
+    // Plaintext VLESS (security: none) to a raw public IP without a domain host
+    // is refused upfront because Xray-core strictly prohibits it for security
+    // (it leaks the UUID in cleartext over the wire).
+    if (config is VlessConfig &&
+        (config.security.isEmpty || config.security.toLowerCase() == 'none')) {
+      final addr = config.address.trim();
+      final isIp = RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(addr) || addr.contains(':');
+      final isPrivate = addr.startsWith('10.') ||
+          addr.startsWith('192.168.') ||
+          addr.startsWith('127.') ||
+          addr.startsWith('172.16.') ||
+          addr.startsWith('172.17.') ||
+          addr.startsWith('172.18.') ||
+          addr.startsWith('172.19.') ||
+          addr.startsWith('172.2') ||
+          addr.startsWith('172.30.') ||
+          addr.startsWith('172.31.') ||
+          addr == 'localhost';
+      final hasDomainHost = config.host != null &&
+          config.host!.isNotEmpty &&
+          !RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(config.host!);
+      if (isIp && !isPrivate && !hasDomainHost) {
+        return LocalizationService.t('vless_plaintext_public_ip_refusal');
+      }
+    }
+
     final network = switch (config) {
       VlessConfig c => c.network,
       VmessConfig c => c.network,

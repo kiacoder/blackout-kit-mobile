@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.2] - 2026-11-01
+
+### Fixed
+- **Subprocess tunnel crash (Hysteria 2 / TUIC / sing-box)**: Fixed the
+  POSIX `dup2(3, 3)` bug in `fdlauncher.c`. When Android's `ParcelFileDescriptor.dup()`
+  returned descriptor 3, `dup2(3, 3)` left `FD_CLOEXEC` untouched, causing
+  the kernel to close fd 3 on `execv()` and `tun2socks` to crash with
+  `unix.SetNonblock(3) failed: bad file descriptor (EBADF)`. Descriptors are now
+  safely duplicated and `FD_CLOEXEC` explicitly cleared.
+- **Plaintext VLESS public-IP rejection**: Xray-core strictly prohibits unencrypted
+  VLESS outbound to raw public IPs (leaks UUID in cleartext). In `xray_config.dart`,
+  domain `host` is now passed to `vnext` when security is none, and `_engineRefusal`
+  cleanly explains this security restriction if no domain is provided.
+- **Language switching at runtime**: `setLanguage()` now immediately calls
+  `Get.updateLocale()` so the entire UI updates without requiring an app restart.
+- **Persian label in Settings**: Fixed missing `case 'fa'` in `_getLanguageLabel()`;
+  now correctly reads "فارسی" instead of falling back to "English".
+- **Library title truncation**: Reduced action button horizontal padding and
+  spacing so "Config Library" / "کتابخانه کانفیگ‌ها" no longer clips on 1080p.
+- **Untranslated UI labels in RTL/Persian**: Filter chip 'All', 'Sort by:',
+  and Home/Modal stats ('Latency', 'Speed', 'Reliability', 'Working') are now
+  properly localized.
+
 ## [1.17.0] - 2026-10-30
 
 ### Added

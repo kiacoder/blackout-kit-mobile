@@ -482,6 +482,7 @@ class SettingsController extends GetxController {
     selectedLanguage.value = languageCode;
     saveSettings();
     _log.i('Language set to: $languageCode');
+    Get.updateLocale(Locale(languageCode));
   }
 
   /// Toggle analytics

@@ -591,30 +591,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  String _getLanguageLabel(String lang) {
-    switch (lang) {
-      case 'en':
-        return 'English';
-      case 'es':
-        return 'Español';
-      case 'fr':
-        return 'Français';
-      case 'de':
-        return 'Deutsch';
-      case 'zh':
-        return '中文';
-      case 'ja':
-        return '日本語';
-      case 'ru':
-        return 'Русский';
-      case 'ar':
-        return 'العربية';
-      case 'pt':
-        return 'Português';
-      default:
-        return 'English';
-    }
-  }
+  String _getLanguageLabel(String lang) =>
+      LocalizationService.supportedLanguages[lang] ?? 'English';
 
   void _showThemeDialog() {
     Get.dialog(

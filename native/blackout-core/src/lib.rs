@@ -1,4 +1,5 @@
 pub mod config;
+pub mod engine;
 pub mod ffi;
 pub mod netstack;
 pub mod protocols;
@@ -16,9 +17,9 @@ pub struct EngineStats {
 }
 
 pub struct BlackoutEngine {
-    is_running: Arc<AtomicBool>,
-    stats: Arc<EngineStats>,
-    shutdown_tx: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    pub is_running: Arc<AtomicBool>,
+    pub stats: Arc<EngineStats>,
+    pub shutdown_tx: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 
 impl BlackoutEngine {

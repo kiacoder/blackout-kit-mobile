@@ -3,6 +3,23 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "protocol", rename_all = "lowercase")]
 pub enum OutboundConfig {
+    Vless {
+        server: String,
+        server_port: u16,
+        uuid: String,
+        flow: Option<String>,
+        security: String,
+        sni: Option<String>,
+        public_key: Option<String>,
+        short_id: Option<String>,
+        spider_x: Option<String>,
+    },
+    Shadowsocks {
+        server: String,
+        server_port: u16,
+        method: String,
+        password: String,
+    },
     Hysteria2 {
         server: String,
         server_port: u16,

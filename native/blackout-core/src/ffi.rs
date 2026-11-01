@@ -4,6 +4,8 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, Once};
 use tokio::runtime::Runtime;
 
+use crate::config::EngineConfig;
+use crate::engine::EngineSession;
 use crate::{BlackoutEngine, EngineStats};
 
 pub const BLACKOUT_OK: i32 = 0;
@@ -91,6 +93,14 @@ pub extern "C" fn blackout_start(tun_fd: i32, config_json: *const c_char) -> i32
         }
     };
 
+    let parsed_config: EngineConfig = match serde_json::from_str(config_str) {
+        Ok(c) => c,
+        Err(e) => {
+            set_last_error(&format!("Failed to parse JSON config: {e}"));
+            return BLACKOUT_ERR_CONFIG_PARSE;
+        }
+    };
+
     let mut engine_lock = match ENGINE.lock() {
         Ok(guard) => guard,
         Err(_) => return BLACKOUT_ERR_INTERNAL,
@@ -103,11 +113,31 @@ pub extern "C" fn blackout_start(tun_fd: i32, config_json: *const c_char) -> i32
         }
     }
 
-    let engine = Arc::new(BlackoutEngine::new());
-    engine.is_running.store(true, Ordering::SeqCst);
-    *engine_lock = Some(engine);
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let engine = Arc::new(BlackoutEngine {
+        is_running: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+        stats: Arc::new(EngineStats::default()),
+        shutdown_tx: Arc::new(tokio::sync::Mutex::new(Some(shutdown_tx))),
+    });
 
-    tracing::info!(tun_fd, "Blackout native core started");
+    let session = EngineSession::new(
+        tun_fd,
+        parsed_config,
+        engine.stats.clone(),
+        engine.is_running.clone(),
+    );
+
+    // Spawn the async session inside the Tokio runtime
+    if let Ok(guard) = RUNTIME.lock() {
+        if let Some(ref rt) = *guard {
+            rt.spawn(async move {
+                session.run(shutdown_rx).await;
+            });
+        }
+    }
+
+    *engine_lock = Some(engine);
+    tracing::info!(tun_fd, "Blackout native core started successfully");
     BLACKOUT_OK
 }
 
@@ -120,7 +150,14 @@ pub extern "C" fn blackout_stop() -> i32 {
 
     if let Some(engine) = engine_lock.take() {
         engine.is_running.store(false, Ordering::SeqCst);
-        tracing::info!("Blackout native core stopped");
+        let shutdown_tx_arc = engine.shutdown_tx.clone();
+        tokio::spawn(async move {
+            let mut guard = shutdown_tx_arc.lock().await;
+            if let Some(tx) = guard.take() {
+                let _ = tx.send(());
+            }
+        });
+        tracing::info!("Blackout native core stop signal triggered");
     }
 
     BLACKOUT_OK

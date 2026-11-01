@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-01
+
+### Added
+- **In-House Native Core (BlackoutCore Rust Engine)**: Initialized proprietary
+  native proxy core in `native/blackout-core` with clean C-ABI and JNI bindings.
+- **Client Protocol Dialers**: Implemented high-throughput in-house client dialers
+  for ShadowTLS v3, Hysteria 2 (with dynamic multi-port hopping), TUIC v5 (0-RTT),
+  VLESS + REALITY (with uTLS camouflage), and Shadowsocks-2022 (BLAKE3-AES).
+- **Userspace Netstack**: Implemented raw packet dissector and bi-directional TUN
+  reader/writer netstack loop connecting Android's `tun_fd` directly to protocol
+  outbounds in-process.
+- **VpnService Direct Hook**: Wired in-process `BlackoutCoreEngine` into
+  `BlackoutVpnService.kt` to bypass legacy external subprocess architecture.
+- **CI Cross-Compilation**: Configured `cargo-ndk` in `.github/workflows/build.yml`
+  for automated `arm64-v8a` and `armeabi-v7a` binary compilation.
+
 ## [1.17.2] - 2026-11-01
 
 ### Fixed

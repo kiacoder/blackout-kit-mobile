@@ -113,6 +113,20 @@ pub extern "C" fn blackout_start(tun_fd: i32, config_json: *const c_char) -> i32
         }
     }
 
+    let runtime = match RUNTIME.lock() {
+        Ok(guard) => match guard.as_ref() {
+            Some(runtime) => runtime.handle().clone(),
+            None => {
+                set_last_error("Native runtime is not initialized; call blackout_init first");
+                return BLACKOUT_ERR_INTERNAL;
+            }
+        },
+        Err(_) => {
+            set_last_error("Native runtime lock is poisoned");
+            return BLACKOUT_ERR_INTERNAL;
+        }
+    };
+
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let engine = Arc::new(BlackoutEngine {
         is_running: Arc::new(std::sync::atomic::AtomicBool::new(true)),
@@ -127,14 +141,10 @@ pub extern "C" fn blackout_start(tun_fd: i32, config_json: *const c_char) -> i32
         engine.is_running.clone(),
     );
 
-    // Spawn the async session inside the Tokio runtime
-    if let Ok(guard) = RUNTIME.lock() {
-        if let Some(ref rt) = *guard {
-            rt.spawn(async move {
-                session.run(shutdown_rx).await;
-            });
-        }
-    }
+    // Spawn on the runtime handle so this succeeds only after runtime init.
+    runtime.spawn(async move {
+        session.run(shutdown_rx).await;
+    });
 
     *engine_lock = Some(engine);
     tracing::info!(tun_fd, "Blackout native core started successfully");

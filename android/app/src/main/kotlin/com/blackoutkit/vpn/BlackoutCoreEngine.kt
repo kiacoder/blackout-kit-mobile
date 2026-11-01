@@ -43,6 +43,12 @@ object BlackoutCoreEngine {
             lastError = "Native in-house core is not loaded"
             return false
         }
+        val initResult = blackout_init(2)
+        if (initResult != 0) {
+            lastError = "Native core initialization failed: code $initResult"
+            Log.e(TAG, lastError!!)
+            return false
+        }
         val rc = blackout_start(tunFd, configJson)
         if (rc != 0) {
             val buf = ByteArray(512)

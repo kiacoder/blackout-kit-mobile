@@ -1,10 +1,16 @@
 # Blackout Kit Mobile - Development Phases
 
-Complete roadmap showing all development phases, completed work, and future plans. 🗺️
+Roadmap and implementation status. “Implemented” means code exists; hardware or interoperability verification is stated separately and must not be inferred from config parsing or process startup.
+
+## Current Native Rust Engine Status (2026-11-01)
+
+The `native/blackout-core` crate is experimental and is **not** a replacement for the existing Android Xray or sing-box/tun2socks runtime. Its protocol modules are prototypes; the TUN loop currently parses/counts packets but has no outbound flow forwarding or response injection. The tagged `v1.18.0` Rust Android build failed in CI before APK packaging. The local Quinn dependency substitution has not yet been validated by a successful build.
+
+Do not remove `XrayEngine.kt`, `libsingbox.so`, or `libtun2socks.so` until a replacement has a passing Android ABI build, protocol interoperability evidence, and physical-device tests showing outbound and return traffic through the Rust TUN path. iOS requires separate XCFramework and `PacketTunnelProvider` work and device verification.
 
 ## Overview
 
-Blackout Kit Mobile is built in phases, with each phase adding significant features and stability. This document tracks progress from MVP (v1.0) through long-term vision (V2/V3).
+Blackout Kit Mobile is built in phases, with each phase adding features and stability. This document tracks the implemented application and the staged native-engine migration; it does not treat roadmap items as completed support.
 
 ---
 
@@ -41,7 +47,7 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
 
 ## 🟡 Phase 2: VPN Integration & Core Features
 
-**Status: COMPLETED** — native tunnel implemented; not yet verified on hardware
+**Status: Android paths implemented; support varies by engine and verification evidence**
 
 > **Correction (2026-09-19).** This phase was previously marked COMPLETED and
 > listed native files that were never delivered. Commit `4e73204`
@@ -76,7 +82,7 @@ Blackout Kit Mobile is built in phases, with each phase adding significant featu
       survive a bounded startup window and sing-box to answer a local SOCKS5
       greeting before the service reports connected; unexpected child exit
       propagates into the VPN service state (teardown, or kill-switch hold)
-- [ ] iOS `NEVPNManager` integration (existing Swift files are unregistered mocks)
+- [ ] iOS VPN integration. The Rust core has no verified XCFramework / `PacketTunnelProvider` integration or on-device traffic test.
 
 ### Technical Features
 

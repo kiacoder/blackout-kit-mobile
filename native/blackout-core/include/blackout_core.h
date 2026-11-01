@@ -35,8 +35,8 @@ typedef struct {
 } blackout_stats_t;
 
 /**
- * Initializes the native engine runtime & logging subscriber.
- * Safe to call multiple times.
+ * Initializes the async runtime and logging subscriber.
+ * Must succeed before blackout_start. Safe to call multiple times.
  *
  * @param log_level 0=error, 1=warn, 2=info, 3=debug, 4=trace
  * @return BLACKOUT_OK on success
@@ -44,10 +44,11 @@ typedef struct {
 int32_t blackout_init(int32_t log_level);
 
 /**
- * Starts the proxy tunnel on the provided TUN file descriptor.
+ * Starts the experimental session on the provided TUN file descriptor.
+ * The current implementation reads/parses packets but does not forward traffic.
  *
- * In Android VpnService: pass the fd returned by VpnService.Builder.establish().
- * In iOS PacketTunnelProvider: pass the virtual socket descriptor.
+ * In Android VpnService: pass a valid borrowed fd from VpnService.Builder.establish().
+ * iOS integration is not implemented or verified.
  *
  * @param tun_fd Valid open file descriptor to the TUN interface
  * @param config_json Null-terminated JSON string containing proxy options
@@ -64,7 +65,7 @@ int32_t blackout_start(int32_t tun_fd, const char* config_json);
 int32_t blackout_stop(void);
 
 /**
- * Checks if the engine is currently active and processing packets.
+ * Checks whether the session is marked active (not proof of packet forwarding).
  *
  * @return true if running, false otherwise
  */

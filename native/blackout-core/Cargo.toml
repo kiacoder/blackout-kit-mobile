@@ -1,0 +1,49 @@
+[package]
+name = "blackout-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Kiacoder <kiacoder@robohoosh.dev>"]
+description = "High-performance in-house native proxy and VPN engine for Blackout Kit Mobile"
+license = "MIT"
+
+[lib]
+name = "blackout_core"
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dependencies]
+# Async Runtime & Core Utilities
+tokio = { version = "1.38", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+futures-util = "0.3"
+bytes = "1.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
+libc = "0.2"
+
+# Userspace Netstack (Packet-to-Stream translation for TUN fd)
+smoltcp = { version = "0.11", default-features = false, features = ["std", "log", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-udp", "async"] }
+
+# TLS & DPI Resistance (Fingerprinted ClientHello + Fragmentation)
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "0.26"
+ring = "0.17"
+
+# QUIC Stack for Hysteria 2 & TUIC v5
+s2n-quic = { version = "1.38", default-features = false, features = ["provider-tls-rustls"] }
+
+# WireGuard & AmneziaWG (Junk Packet Obfuscation)
+boringtun = "0.6"
+
+# Cryptography & Hashing (Shadowsocks 2022 blake3 / aes-gcm)
+blake3 = "1.5"
+aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

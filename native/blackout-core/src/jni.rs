@@ -1,11 +1,13 @@
-# Android / JNI Bindings for BlackoutCoreEngine
+//! Android / JNI Bindings for BlackoutCoreEngine
 #[cfg(target_os = "android")]
 #[allow(non_snake_case)]
 pub mod android {
-    use super::*;
+    use crate::ffi::*;
     use jni::objects::{JClass, JString};
     use jni::sys::{jboolean, jint, jstring};
     use jni::JNIEnv;
+    use std::ffi::CString;
+    use std::os::raw::c_char;
 
     #[no_mangle]
     pub extern "system" fn Java_com_blackoutkit_vpn_BlackoutCoreEngine_blackout_1init(
@@ -69,11 +71,26 @@ pub mod android {
         buffer: jni::objects::JByteArray,
         max_len: jint,
     ) -> jint {
-        let mut raw_buf = vec![0u8; max_len as usize];
-        let copied = blackout_get_last_error(raw_buf.as_mut_ptr() as *mut c_char, max_len);
+        if max_len <= 0 {
+            return BLACKOUT_ERR_INVALID_PARAM;
+        }
+
+        let capacity = match env.get_array_length(&buffer) {
+            Ok(length) => length,
+            Err(_) => return BLACKOUT_ERR_INVALID_PARAM,
+        };
+        let bounded_len = max_len.min(capacity);
+        if bounded_len <= 0 {
+            return BLACKOUT_ERR_INVALID_PARAM;
+        }
+
+        let mut raw_buf = vec![0u8; bounded_len as usize];
+        let copied = blackout_get_last_error(raw_buf.as_mut_ptr() as *mut c_char, bounded_len);
         if copied > 0 {
             let slice: &[i8] = unsafe { std::slice::from_raw_parts(raw_buf.as_ptr() as *const i8, copied as usize) };
-            let _ = env.set_byte_array_region(&buffer, 0, slice);
+            if env.set_byte_array_region(&buffer, 0, slice).is_err() {
+                return BLACKOUT_ERR_INVALID_PARAM;
+            }
         }
         copied
     }

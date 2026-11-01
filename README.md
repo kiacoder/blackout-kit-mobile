@@ -74,22 +74,24 @@ Building from source instead? See [Setup](#setup).
 end to end — a real config on a real device, a TikTok video loading in under a
 second (2026-10-16).
 
-**Verified on hardware:** the in-process Xray tunnel (vless/vmess/trojan/
-shadowsocks/WireGuard) carries live traffic on physical devices. The
-sing-box / tun2socks subprocess tunnels (hysteria2, tuic, anytls, shadowtls)
-ship with startup liveness checks and a local SOCKS5 readiness handshake on
-every connect, and are exercised through the same on-device pipeline as the
-Xray path.
+**Android runtime status:** this repository retains the existing in-process Xray
+path and sing-box/tun2socks subprocess path. The Rust `native/blackout-core`
+workspace is experimental scaffolding, not a production tunnel: its current TUN
+loop counts/parses packets but does not forward flows to protocol servers or
+inject replies. The Rust protocol modules have not been verified for interoperability.
+The v1.18.0 tagged build's Rust CI step failed before APK packaging, so that run
+produced no APK artifacts. Any later or separately published release must be
+checked independently; this statement refers specifically to that failed CI run.
 
-**iOS:** the same tunnel design (libbox inside a Network Extension), gated on a
-paid Apple Developer account for the VPN entitlements — see [iOS status](#ios-status).
+A successful service/engine startup or local SOCKS5 readiness handshake is not
+proof of end-to-end Internet traffic. Only the Xray path has the hardware evidence
+recorded above; other protocol paths must be treated according to the current
+phase/test notes, not inferred from their config parsers or module names.
 
-> **AmneziaWG on mobile:** the native userspace core ships with `gomobile`
-> bindings (`StartTunnel(configText, tunFd)` / `StopTunnel` / `GetTunnelStats`)
-> in the desktop repo's `core/amneziawg-go/cmd/awg-mobile`. Cross-compiles for
-> `linux/arm64`; `VpnService` wiring is the next milestone. The desktop CLI's AWG
-> path is verified end to end (handshake + egress).
->
+**iOS:** the repository does not yet have a verified Rust XCFramework and
+PacketTunnelProvider integration. Do not treat iOS platform labeling or older
+libbox references as proof of a currently buildable/tested iOS VPN release.
+
 > [PHASES.md](PHASES.md) carries the authoritative, current phase status.
 
 ## Features
@@ -425,33 +427,19 @@ own.
   field the UI shows as the *server*, so the config list displayed the device's
   own tunnel IP as the host. `validate()` also used `||` where both halves are
   required.
-- **WireGuard now runs at all.** See the Phase 5 note below.
+- **WireGuard config parsing and runtime path are present.** Do not infer native Rust support; see the current migration status below.
 - **The engine hub's availability count used `any`, not `every`.** AmneziaWG
   lists `['amneziawg', 'wireguard']` and WARP lists `['warp', 'wireguard']`, so
   both cards would have shown as available the moment WireGuard became
   servable — despite neither engine being bundled. The rule is now
   `engineIsRunnable` (tested), and the honest count is **3 of 10**.
 
-### Phase 5 — Remaining work ⏳
-- [x] ~~Bundle a sing-box binary so Hysteria2 / TUIC / WireGuard / AmneziaWG /
-      WARP can connect.~~ **Narrowed to four protocols.** WireGuard was removed
-      from this list after the bundled `libgojni.so` was found to contain
-      `xray.proxy.wireguard`; it now runs in-process with no new dependency and
-      no licence change. The remaining four — Hysteria2, TUIC, AmneziaWG and
-      WARP — are now covered by packaged `libsingbox.so` + `libtun2socks.so`
-      binaries (arm64-v8a / armeabi-v7a). A connect attempt additionally checks
-      child-process liveness and a local SOCKS5 readiness handshake before the
-      service reports connected; **this still does not verify end-to-end
-      traffic** — that requires the on-device test below. Note sing-box is
-      GPL-3.0 while this project is MIT; it ships as a separate native library.
-- [ ] iOS device installs — code complete (libbox tunnel extension + NEVPNManager bridge + compile CI); blocked on a paid Apple Developer account for the Network Extension entitlements, not on code
-- [ ] **On-device verification of the tunnel** — `integration_test/native_tunnel_test.dart`
-      is written and waiting; device-level runs captured during the 1.0.0 release-cycle builds
-      drove real fixes (error propagation, XUDP base key), and the tunnel
-      carries live traffic on physical hardware
-- [ ] Current IP display — the native side returns a hardcoded `null`
-- [ ] Localization coverage — the app shell is translated into 9 languages; ~96
-      strings in `lib/screens` and `lib/widgets` are still English-only
+### Native engine migration — status 2026-11-01
+- The Android app still includes the established Xray and sing-box/tun2socks paths; do not remove them during Rust development.
+- The new `native/blackout-core` Rust code is experimental. The TUN loop counts/parses packets but does not route TCP/UDP flows or inject replies, and protocol modules are not verified for interoperability.
+- The `v1.18.0` tagged CI run failed at the Rust dependency build step before APK packaging. The working-tree Quinn substitution is being tested separately with the Rust-only Android CI workflow.
+- **iOS Rust support is not implemented/verified:** no verified Rust XCFramework + PacketTunnelProvider integration or device traffic test.
+- End-to-end verification requires an on-device test proving outbound and return traffic traverse the Rust TUN path; config parsing, process startup, and a local SOCKS greeting are not substitutes.
 
 ### Phase 6 — Extreme Low-Spec, Potato Android & Sub-25MB Architecture (Planned) 🥔
 - **Android 5.0+ (Lollipop API 21) & ARMv7 Support**: Support low-RAM legacy devices (`ro.config.low_ram=true`) without triggering the `lmkd` (Low Memory Killer Daemon) eviction threshold.
@@ -480,11 +468,11 @@ EngineRegistry.register('trojan', TrojanConfig);
 
 ## Threat Model & Security
 
-### What This App Protects Against
-- ISP monitoring of visited websites
-- Regional censorship (content blocking)
-- Man-in-the-middle attacks on public WiFi
-- IP address leaks
+### Intended Protection Goals
+- Reduce exposure of traffic to local network observers when a VPN tunnel is successfully established and carrying traffic
+- Circumvent regional censorship when the selected server and protocol are reachable
+- Protect traffic on public WiFi when the active engine is functioning correctly
+- Reduce IP/DNS leaks through the configured tunnel; verify behavior per platform and engine
 
 ### Limitations
 - Trusts configured VPN servers (supply chain security)
@@ -493,34 +481,21 @@ EngineRegistry.register('trojan', TrojanConfig);
 - No multi-hop routing
 
 ### Open Source for Transparency
-- All code visible on GitHub
-- No closed-source binaries
+- Application and engine integration sources are available for review
+- Existing third-party native components are documented in their respective licenses
 - Community code review
 - Reproducible builds planned
 
 ## iOS Status
 
-The iOS target is real since 1.13: the tunnel is a `PacketTunnelProvider`
-app extension (`ios/BlackoutTunnel`) running sing-box's **libbox** core,
-armed by the app over `NEVPNManager` (`ios/Runner/VpnPlatformPlugin.swift`).
-Every protocol document the app builds is generated in libbox mode and was
-grammar-verified against the real sing-box binary.
+The repository contains iOS application and tunnel-extension code, but this
+document does not treat source presence, compile claims, or config generation as
+proof of a usable iOS VPN. The new Rust core has no verified iOS XCFramework or
+`PacketTunnelProvider` integration. Confirm the current iOS workflow and
+entitlements independently; a paid Apple Developer account may be required for
+signed VPN installation, but that does not replace code or traffic verification.
 
-What works today:
-- Full Dart app (library, tester, site check, import/QR, settings)
-- Compile CI on GitHub's macOS runners: app + extension + libbox link
-  cleanly (`Build iOS (no codesign)` workflow)
-- vless/vmess/trojan/shadowsocks/wireguard/hysteria2/tuic/anytls outbounds
-
-What is blocked, and on what:
-- **Device installs** need the `com.apple.developer.networking.networkextension`
-  entitlement, which Apple only grants to a **paid** Apple Developer Program
-  account ($99/yr). Free-account profiles cannot run a VPN tunnel — this is
-  an Apple policy, not a code gap. Enroll, open `ios/Runner.xcworkspace`,
-  set your team on both targets, and the project is ready.
-
-iOS Simulator cannot exercise the tunnel either (no Network Extension
-support in the simulator), so on-device testing requires the enrollment.
+No iOS Rust-engine release or end-to-end iOS traffic verification is claimed here.
 
 ---
 

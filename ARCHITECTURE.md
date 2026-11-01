@@ -1,13 +1,13 @@
 # Blackout Kit Mobile - Architecture Guide
 
-This document explains the design patterns and extensibility strategy for Blackout Kit Mobile.
+This document describes the current application architecture and the staged native-engine migration. The in-house Rust engine is **experimental** until a physical device demonstrates end-to-end traffic through it. It distinguishes implemented code from tested runtime behavior; protocol config support does not by itself imply a working tunnel.
 
 ## Core Principles
 
-1. **Config-Based, Not Code-Based**: All VPN configs come from external sources (GitHub), not hardcoded
-2. **Extensibility from Day 1**: Designed to scale to V2 (Blackout Kit engines) and V3 (reverse-engineered Hotspot Shield) without major redesign
-3. **Safety-Critical**: No backend API exposure; all trust is explicit and transparent
-4. **Replicate CLI Patterns**: Use the same architectural patterns as Blackout Kit CLI for consistency
+1. **Config-Based, Not Code-Based**: Configs are imported from user-selected sources and parsed locally.
+2. **Incremental Migration**: Preserve existing Android engine paths until a replacement passes build, protocol interoperability, and on-device traffic verification.
+3. **Safety-Critical**: No backend API exposure; lifecycle and packet-flow claims must be backed by tests.
+4. **Explicit Support Status**: A parser or protocol module is not evidence of a working VPN data plane.
 
 ## Architectural Patterns
 

@@ -14,6 +14,7 @@ use std::io::{self, Error, ErrorKind};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use ring::hmac;
+use ring::rand::SecureRandom;
 
 pub struct ShadowTlsDialer {
     pub server: String,

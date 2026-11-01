@@ -272,3 +272,25 @@ pub async fn run_tun_netstack(
         }
     }
 }
+
+
+// Smoltcp virtual interface adapter stub for future packet forwarding
+use smoltcp::phy::{self, DeviceCapabilities, Medium};
+use smoltcp::time::Instant;
+use std::collections::VecDeque;
+
+pub struct SmoltcpTunAdapter {
+    rx_queue: VecDeque<Vec<u8>>,
+    tx_queue: VecDeque<Vec<u8>>,
+    mtu: usize,
+}
+
+impl SmoltcpTunAdapter {
+    pub fn new(mtu: usize) -> Self {
+        Self {
+            rx_queue: VecDeque::with_capacity(64),
+            tx_queue: VecDeque::with_capacity(64),
+            mtu,
+        }
+    }
+}

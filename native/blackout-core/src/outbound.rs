@@ -15,8 +15,14 @@ use tokio::net::TcpStream;
 use crate::config::OutboundConfig;
 use crate::protocols::vless::VlessRealityDialer;
 
+/// Object-safe combined trait so the upstream stream can be boxed as a
+/// single trait object (dyn only allows one non-auto trait).
+pub trait AsyncReadWrite: AsyncRead + AsyncWrite + Unpin + Send {}
+
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> AsyncReadWrite for T {}
+
 /// Object-safe boxed stream handed to the per-flow upstream pump.
-pub type UpstreamStream = Box<dyn AsyncRead + AsyncWrite + Unpin + Send>;
+pub type UpstreamStream = Box<dyn AsyncReadWrite>;
 
 /// TCP outbound dispatcher built from the engine's outbound config.
 #[derive(Clone)]

@@ -126,7 +126,7 @@ pub fn internet_checksum(data: &[u8]) -> u16 {
         sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
     }
     if let [odd] = chunks.remainder() {
-        sum += (*odd as u16) << 8;
+        sum += ((*odd as u16) << 8) as u32;
     }
     // Fold carries until the high 16 bits are zero.
     while sum >> 16 != 0 {
@@ -341,14 +341,16 @@ mod tests {
         // UDP checksum (offset 20+6) must self-validate over pseudo-header.
         let mut udp_and_payload = packet[20..].to_vec();
         let mut pseudo = Vec::new();
-        pseudo.extend_from_slice(match src {
-            IpAddr::V4(s) => &s.octets(),
+        let src_bytes = match src {
+            IpAddr::V4(s) => s.octets(),
             IpAddr::V6(_) => unreachable!(),
-        });
-        pseudo.extend_from_slice(match dst {
-            IpAddr::V4(d) => &d.octets(),
+        };
+        let dst_bytes = match dst {
+            IpAddr::V4(d) => d.octets(),
             IpAddr::V6(_) => unreachable!(),
-        });
+        };
+        pseudo.extend_from_slice(&src_bytes);
+        pseudo.extend_from_slice(&dst_bytes);
         pseudo.extend_from_slice(&[0, 17]);
         let udp_len = (8 + payload.len()) as u16;
         pseudo.extend_from_slice(&udp_len.to_be_bytes());

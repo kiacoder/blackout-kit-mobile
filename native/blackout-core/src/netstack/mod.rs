@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use smoltcp::iface::{Interface, SocketSet};
 use smoltcp::socket::tcp::{Socket as TcpSocket, SocketBuffer, State as TcpState};
-use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr};
+use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr, Ipv4Address, Ipv6Address};
 use tokio::sync::mpsc;
 
 use crate::outbound::TcpOutbound;
@@ -100,8 +100,8 @@ impl TunDevice {
 
 fn to_smoltcp_ip(ip: std::net::IpAddr) -> IpAddress {
     match ip {
-        std::net::IpAddr::V4(v4) => IpAddress::Ipv4(v4),
-        std::net::IpAddr::V6(v6) => IpAddress::Ipv6(v6),
+        std::net::IpAddr::V4(v4) => IpAddress::Ipv4(Ipv4Address(v4.octets())),
+        std::net::IpAddr::V6(v6) => IpAddress::Ipv6(Ipv6Address(v6.octets())),
     }
 }
 
@@ -139,7 +139,7 @@ impl NetstackCore {
         iface.update_ip_addrs(|addrs| {
             addrs
                 .push(IpCidr::new(
-                    IpAddress::Ipv4(std::net::Ipv4Addr::new(a, b, c, d)),
+                    IpAddress::Ipv4(Ipv4Address([a, b, c, d])),
                     CORE_INTERFACE_PREFIX,
                 ))
                 .expect("core interface address slot");
@@ -269,15 +269,19 @@ impl NetstackCore {
             // a) Handshake finished → dial upstream through the dispatcher.
             if !flow.connecting && socket.state() == TcpState::Established {
                 flow.connecting = true;
-                let (net_tx, net_rx) =
+                // Two channels: pump→netstack (upstream data) and
+                // netstack→pump (app data). Both directions need capacity.
+                let (to_netstack_tx, net_rx) =
                     mpsc::channel::<UpstreamMsg>(UPSTREAM_CHANNEL_CAPACITY);
-                flow.up_tx = Some(net_tx.clone());
+                let (net_tx, to_pump_rx) =
+                    mpsc::channel::<UpstreamMsg>(UPSTREAM_CHANNEL_CAPACITY);
+                flow.up_tx = Some(net_tx);
                 flow.up_rx = Some(net_rx);
                 flows::spawn_upstream_pump(
                     self.outbound.clone(),
                     key.target(),
-                    net_tx,
-                    net_rx,
+                    to_netstack_tx,
+                    to_pump_rx,
                 );
             }
 

@@ -8,7 +8,8 @@ use std::net::{IpAddr, Ipv4Addr};
 
 use smoltcp::iface::{Config as IfaceConfig, Interface, SocketSet};
 use smoltcp::socket::tcp::{Socket as TcpSocket, SocketBuffer, State as TcpState};
-use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr};
+use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr, Ipv4Address};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::packet::{internet_checksum, PacketHeader};
 use super::{NetstackCore, TICK_MS};
@@ -50,18 +51,19 @@ struct ClientRxToken(Vec<u8>);
 impl smoltcp::phy::RxToken for ClientRxToken {
     fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&[u8]) -> R,
+        F: FnOnce(&mut [u8]) -> R,
     {
-        f(&self.0)
+        let mut packet = self.0;
+        f(&mut packet)
     }
 }
 
 struct ClientTxToken<'a>(&'a mut VecDeque<Vec<u8>>);
 
 impl smoltcp::phy::TxToken for ClientTxToken<'_> {
-    fn consume<V, F>(self, _timestamp: smoltcp::time::Instant, len: usize, f: F) -> V
+    fn consume<R, F>(self, len: usize, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> V,
+        F: FnOnce(&mut [u8]) -> R,
     {
         let mut buf = vec![0u8; len];
         let result = f(&mut buf);
@@ -98,7 +100,10 @@ impl Harness {
         );
         client_iface.update_ip_addrs(|addrs| {
             addrs
-                .push(IpCidr::new(IpAddress::Ipv4(CLIENT_ADDR), 24))
+                .push(IpCidr::new(
+                    IpAddress::Ipv4(Ipv4Address(CLIENT_ADDR.octets())),
+                    24,
+                ))
                 .expect("client addr slot");
         });
         let client_sockets = SocketSet::new(vec![]);
@@ -213,8 +218,8 @@ async fn tcp_echo_flows_bidirectionally_through_netstack() {
 
     // The "app" opens a connection to the echo server THROUGH the netstack.
     let handle = harness.client_sockets.add(app_client_socket());
-    let remote = (IpAddress::Ipv4(echo_ip), echo_addr.port());
-    let local = (IpAddress::Ipv4(CLIENT_ADDR), 40000u16);
+    let remote = (IpAddress::Ipv4(Ipv4Address(echo_ip.octets())), echo_addr.port());
+    let local = (IpAddress::Ipv4(Ipv4Address(CLIENT_ADDR.octets())), 40000u16);
     {
         let cx = harness.client_iface.context();
         harness
@@ -266,24 +271,14 @@ async fn tcp_echo_flows_bidirectionally_through_netstack() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn udp_relay_injects_wellformed_response_packets() {
-    // UDP echo server = the "DNS server".
+    // UDP echo "server" = the "DNS server". Owned by the test (not spawned)
+    // so the test can verify exactly one request/reply exchange.
     let echo = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
     let echo_addr = echo.local_addr().unwrap();
     let echo_ip = match echo_addr.ip() {
         IpAddr::V4(v4) => v4,
         other => panic!("unexpected echo server family: {other}"),
     };
-    tokio::spawn(async move {
-        let mut buf = [0u8; 2048];
-        loop {
-            match echo.recv_from(&mut buf).await {
-                Ok((n, from)) => {
-                    let _ = echo.send_to(&buf[..n], from).await;
-                }
-                Err(_) => break,
-            }
-        }
-    });
 
     let (egress_tx, egress_rx) = tokio::sync::mpsc::channel(4096);
     let core = NetstackCore::new(TcpOutbound::Direct, egress_tx);
@@ -381,9 +376,13 @@ async fn unsupported_outbound_resets_flows_instead_of_leaking() {
     let mut harness = Harness::new(core, egress_rx);
 
     let handle = harness.client_sockets.add(app_client_socket());
-    // Any address works — the flow must be RST'd before any dial attempt.
-    let remote = (IpAddress::Ipv4(Ipv4Addr::new(203, 0, 113, 7)), 443u16);
-    let local = (IpAddress::Ipv4(CLIENT_ADDR), 40100u16);
+    // Any address works — the flow must be RST'd before any dial attempt,
+    // never silently relayed direct.
+    let remote = (
+        IpAddress::Ipv4(Ipv4Address(Ipv4Addr::new(203, 0, 113, 7).octets())),
+        443u16,
+    );
+    let local = (IpAddress::Ipv4(Ipv4Address(CLIENT_ADDR.octets())), 40100u16);
     {
         let cx = harness.client_iface.context();
         harness

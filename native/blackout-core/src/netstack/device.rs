@@ -33,9 +33,10 @@ pub struct IngressToken(pub Vec<u8>);
 impl smoltcp::phy::RxToken for IngressToken {
     fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&[u8]) -> R,
+        F: FnOnce(&mut [u8]) -> R,
     {
-        f(&self.0)
+        let mut packet = self.0;
+        f(&mut packet)
     }
 }
 
@@ -46,9 +47,9 @@ impl smoltcp::phy::RxToken for IngressToken {
 pub struct EgressToken(pub mpsc::Sender<Vec<u8>>);
 
 impl smoltcp::phy::TxToken for EgressToken {
-    fn consume<V, F>(self, _timestamp: Instant, len: usize, f: F) -> V
+    fn consume<R, F>(self, len: usize, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> V,
+        F: FnOnce(&mut [u8]) -> R,
     {
         let mut buf = vec![0u8; len];
         let result = f(&mut buf);

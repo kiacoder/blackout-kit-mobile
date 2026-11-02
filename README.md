@@ -31,6 +31,9 @@ served by an in-process **Xray** core or a bundled **sing-box** runtime.
   on the optional exit-IP lookup.
 - **Configs are encrypted at rest**, with the key in the Android Keystore
   (see [SECURITY.md](SECURITY.md)).
+- **Accessibility** is a tracked requirement, not an afterthought — see
+  [ACCESSIBILITY.md](ACCESSIBILITY.md) for what we support, what we know is
+  missing, and how to report a barrier.
 - **Servers are tested before they are used** — a dead config is skipped instead
   of becoming a "connected but nothing loads" tunnel.
 - **DNS leak prevention** with per-provider selection, including the Iranian

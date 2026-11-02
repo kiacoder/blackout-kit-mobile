@@ -54,6 +54,16 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Release gate — Dart analyze + unit tests
+        # A tag must not publish unless the Dart layer is clean and the unit
+        # suite passes. Same policy as test.yml (--no-fatal-* keeps infos and
+        # warnings non-fatal). This is the hard gate: a failure here aborts
+        # the whole release, before anything is attached.
+        run: |
+          set -e
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter test
+
       - name: Set up Rust & Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -61,6 +71,15 @@ jobs:
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
+
+      - name: Release gate — Rust core host tests
+        # The blackout-core netstack is embedded into the release APK; run
+        # its host test suite (13 tests: TCP netstack round-trip, UDP relay
+        # validation, packet/checksum units) before shipping it.
+        run: |
+          set -e
+          cd native/blackout-core
+          cargo test
 
       - name: Build in-house Rust core (libblackout_core.so)
         run: |

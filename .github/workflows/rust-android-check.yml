@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - 'ci/validate-*'
+    # The Rust core (netstack + protocol dialers) also gets its host test
+    # suite + Android cross-build on every release tag.
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:

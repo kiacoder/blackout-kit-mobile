@@ -5,6 +5,20 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.2] - 2026-11-02
+
+### Changed
+- **Release integrity**: signing-continuity verified — the release APKs
+  v1.15.0 → v1.18.1 all carry the identical signing certificate
+  (SHA-256 `248aead0…84a`), so in-app updates never require an uninstall
+  and never lose data.
+- **Every release now runs the full check suite before publishing**:
+  the tag pipeline gates on `flutter analyze`, the Dart unit suite and
+  the Rust core host tests (build.yml), and additionally triggers
+  `Tests`, `CodeQL` and `Rust Android Check` on the tag. CodeQL's push
+  trigger now also covers release tags (the old paths filter silently
+  skipped tag pushes).
+
 ## [1.18.1] - 2026-11-02
 
 ### Added

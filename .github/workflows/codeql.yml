@@ -43,12 +43,13 @@ permissions:
 on:
   push:
     branches: [main]
-    paths:
-      - 'android/**'
-      - 'ios/**'
-      - 'tool/**'
-      - 'lib/**'
-      - '.github/workflows/codeql.yml'
+    # Release tags are always scanned. Note: the paths filter is intentionally
+    # gone — GitHub evaluates paths against the pushed commits, and a tag push
+    # pointing at an already-pushed commit carries no commit list, which made
+    # the filter silently skip tag runs. Every main push + every tag now
+    # scans; the Linux matrix is cheap, and the expensive Swift scan stays
+    # scheduled/on-demand.
+    tags: ['v*']
   # Security scanning should not gate every commit. Weekly keeps every language
   # fresh, including Swift, which needs a macOS runner and a full iOS build.
   schedule:

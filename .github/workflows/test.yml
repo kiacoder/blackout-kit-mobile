@@ -3,6 +3,9 @@ name: Tests
 on:
   push:
     branches: [main, develop]
+    # Full unit suite also runs for release tags, in parallel with the
+    # release build (which gates on the same tests).
+    tags: ['v*']
   pull_request:
     branches: [main, develop]
 

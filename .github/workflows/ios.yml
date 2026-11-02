@@ -118,6 +118,27 @@ jobs:
           test -n "$EMBEDDED" || { echo "ERROR: appex exists but is not embedded in any Runner.app"; exit 1; }
           echo "BlackoutTunnel.appex embedded OK: $EMBEDDED"
 
+      - name: Package unsigned IPA
+        # The deliverable for "build iOS": the compiled app (Runner.app +
+        # embedded BlackoutTunnel.appex + Libbox framework) zipped in the
+        # standard Payload/ layout. Unsigned — it is a build artifact, not
+        # an installable app (signing is ios-release.yml's job).
+        run: |
+          APP=$(find build/ios -name "Runner.app" -maxdepth 4 | head -1)
+          test -n "$APP" || { echo "ERROR: Runner.app not found for packaging"; exit 1; }
+          echo "packaging: $APP"
+          mkdir -p build/ios/ipa/Payload
+          cp -R "$APP" build/ios/ipa/Payload/Runner.app
+          (cd build/ios/ipa && zip -qry blackout-kit-ios-unsigned.ipa Payload)
+          du -h build/ios/ipa/blackout-kit-ios-unsigned.ipa
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blackout-kit-ios-unsigned-ipa
+          path: build/ios/ipa/blackout-kit-ios-unsigned.ipa
+          if-no-files-found: error
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4

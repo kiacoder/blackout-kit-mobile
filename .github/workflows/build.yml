@@ -182,9 +182,90 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # The iOS job was removed on 2026-09-19. It ran `flutter build ios --release
-  # --no-codesign` and uploaded ios/build/Release-iphoneos/Runner.app, but the
-  # iOS native layer does not exist: ios/Runner/*.swift are unregistered mocks
-  # and there is no AppDelegate.swift. The build "succeeded" and published an
-  # artifact that cannot connect to anything. Restore this job once the
-  # NEVPNManager / NEPacketTunnelProvider implementation lands.
+  build-ios:
+    # Restored 2026-11-02: the iOS native layer exists (PacketTunnelProvider,
+    # VpnPlatformPlugin, libbox config mode) and ios.yml proves the build
+    # green on every push. This job ships the compiled app on the releases
+    # page as an UNSIGNED IPA — a build deliverable, not an installable app
+    # (signing is ios-release.yml's job, gated on Apple account secrets).
+    needs: build-apk
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    permissions:
+      # Needed by softprops/action-gh-release to attach the IPA.
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build Libbox.xcframework
+        # The script installs sing-box's PINNED gomobile fork itself
+        # (make lib_install) — installing upstream gomobile here would
+        # shadow it and break the bind step.
+        run: |
+          chmod +x tool/build_libbox.sh
+          ./tool/build_libbox.sh
+
+      - name: Build iOS (device, no codesign)
+        # DEVICE build, not simulator: mobile_scanner's GoogleMLKit pods ship
+        # device-only binaries (see ios.yml for the full rationale).
+        run: flutter build ios --no-codesign
+
+      - name: Verify tunnel extension product
+        run: |
+          APPEX=$(find build/ios -name "BlackoutTunnel.appex" | head -1)
+          test -n "$APPEX" || { echo "ERROR: BlackoutTunnel.appex was never built"; exit 1; }
+          EMBEDDED=$(find build/ios -path "*Runner.app*BlackoutTunnel.appex*" | head -1)
+          test -n "$EMBEDDED" || { echo "ERROR: appex exists but is not embedded in any Runner.app"; exit 1; }
+          echo "BlackoutTunnel.appex built and embedded OK: $EMBEDDED"
+
+      - name: Package unsigned IPA
+        # Runner.app (+ embedded BlackoutTunnel.appex + Libbox framework)
+        # zipped in the standard Payload/ layout. Unsigned by design: it is
+        # the build deliverable for the releases page; a signed install IPA
+        # would come from ios-release.yml once Apple account secrets exist.
+        run: |
+          set -e
+          APP=$(find build/ios -name "Runner.app" -maxdepth 4 | head -1)
+          test -n "$APP" || { echo "ERROR: Runner.app not found for packaging"; exit 1; }
+          echo "packaging: $APP"
+          mkdir -p build/ios/ipa/Payload
+          cp -R "$APP" build/ios/ipa/Payload/Runner.app
+          (cd build/ios/ipa && zip -qry "blackout-kit-${GITHUB_REF_NAME}-ios-unsigned.ipa" Payload)
+          du -h "build/ios/ipa/blackout-kit-${GITHUB_REF_NAME}-ios-unsigned.ipa"
+
+      - name: Upload IPA artifact
+        # Always, so workflow_dispatch runs still yield something downloadable.
+        uses: actions/upload-artifact@v4
+        with:
+          name: blackout-kit-mobile-ios-ipa
+          path: build/ios/ipa/blackout-kit-*-ios-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload IPA to Release
+        # Attaches to the release the APK job created for this tag.
+        # needs: build-apk guarantees the release already exists, so this
+        # step only ever uploads — no second-owner creation race, and the
+        # release only publishes when both platforms build.
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: build/ios/ipa/blackout-kit-${{ github.ref_name }}-ios-unsigned.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

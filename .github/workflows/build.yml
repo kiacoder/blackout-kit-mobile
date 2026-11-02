@@ -65,7 +65,7 @@ jobs:
           flutter test
 
       - name: Set up Rust & Android targets
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, commit-pinned (CodeQL: non-immutable action)
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi
 

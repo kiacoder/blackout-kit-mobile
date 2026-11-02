@@ -555,3 +555,11 @@ Open-source under the MIT License. See [LICENSE](LICENSE) for details.
 ---
 
 **Made with ❤️ by Blackout Kit contributors**
+
+## Community
+
+- 💬 **Questions & help** → [Discussions](https://github.com/kiacoder/blackout-kit-mobile/discussions) (start with [How to ask for connection help](https://github.com/kiacoder/blackout-kit-mobile/discussions/14))
+- 🐛 **Bugs & feature requests** → [Issues](https://github.com/kiacoder/blackout-kit-mobile/issues) (templates included)
+- 🔒 **Security vulnerabilities** → [private advisory](https://github.com/kiacoder/blackout-kit-mobile/security/advisories/new) — never a public issue
+- ♿ **Accessibility barriers** → issues tagged `accessibility` (see [ACCESSIBILITY.md](ACCESSIBILITY.md))
+- 📜 Everyone interacting here agrees to the [Code of Conduct](.github/CODE_OF_CONDUCT.md)

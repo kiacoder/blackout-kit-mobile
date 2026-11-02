@@ -2,6 +2,7 @@ package com.blackoutkit.vpn
 
 import android.content.Intent
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import androidx.core.content.IntentCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -98,12 +99,21 @@ class MainActivity : FlutterActivity() {
     /// Copies a picked/received document into our own cache dir and returns
     /// the real path. Content-provider grants can expire after a process
     /// restart, so the copy must happen while the grant is live.
+    ///
+    /// Resolution goes through a [ContentProviderClient] rather than
+    /// `ContentResolver.openInputStream`: the client pins the remote provider
+    /// for the whole copy (no mid-copy provider death), and the read still
+    /// fails closed under the sender's grant scoping.
     private fun copyToCache(uri: Uri?): String? {
         if (uri == null || !isSafeImportUri(uri)) return null
+        val client = contentResolver.acquireUnstableContentProviderClient(uri)
+            ?: return null
         return try {
-            val input = contentResolver.openInputStream(uri) ?: return null
+            val pfd = client.openFile(uri, "r") ?: return null
             val file = File(cacheDir, "import-${System.currentTimeMillis()}.cfg")
-            input.use { source -> file.outputStream().use { source.copyTo(it) } }
+            ParcelFileDescriptor.AutoCloseInputStream(pfd).use { source ->
+                file.outputStream().use { source.copyTo(it) }
+            }
             if (file.length() > 5L * 1024 * 1024) {
                 file.delete()
                 null
@@ -112,6 +122,8 @@ class MainActivity : FlutterActivity() {
             }
         } catch (e: Exception) {
             null
+        } finally {
+            client.release()
         }
     }
 

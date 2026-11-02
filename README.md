@@ -215,7 +215,7 @@ lib/
 ### Installation
 ```bash
 # Clone the repository
-git clone https://github.com/blackout-kit/blackout-kit-mobile.git
+git clone https://github.com/kiacoder/blackout-kit-mobile.git
 cd blackout-kit-mobile
 
 # Get dependencies

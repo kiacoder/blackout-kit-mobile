@@ -1,0 +1,103 @@
+name: 🐛 Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out a bug report! The more detail
+        you give, the faster this gets fixed. Please redact any personal
+        information (usernames, server addresses, subscription URLs) from logs.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android
+        - iOS
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Settings → About, or the release tag (e.g. v1.18.2)
+      placeholder: v1.18.2
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device / OS version
+      placeholder: e.g. Redmi 13, Android 14 (MIUI)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Protocol / engine in use
+      options:
+        - VLESS (REALITY)
+        - VLESS (other transport)
+        - VMess
+        - Shadowsocks
+        - Hysteria 2
+        - TUIC
+        - WireGuard / AmneziaWG
+        - ShadowTLS
+        - Not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What exactly did you do? Numbered steps are best.
+      placeholder: |
+        1. Import config from …
+        2. Tap Connect
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        If the tunnel is involved, `adb logcat -s BlackoutXrayEngine
+        BlackoutVpnService BlackoutCoreEngine GoLog` captured around the
+        failure is gold. Redact personal info first.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I redacted personal information from logs and screenshots
+          required: true
+        - label: I searched existing issues for a duplicate
+          required: true
+        - label: This happens on the latest release
+          required: true

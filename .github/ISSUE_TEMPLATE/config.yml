@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/kiacoder/blackout-kit-mobile/security/advisories/new
+    about: |
+      Please report security vulnerabilities privately via a GitHub security
+      advisory (or security@blackout-kit.dev) — never in a public issue.
+  - name: Documentation
+    url: https://github.com/kiacoder/blackout-kit-mobile#readme
+    about: Setup, build recipes and architecture are covered in the README and IOS_SUPPORT.md.

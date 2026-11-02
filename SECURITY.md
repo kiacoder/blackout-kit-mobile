@@ -6,7 +6,7 @@
 
 ### Report To
 - **Email**: security@blackout-kit.dev
-- **GitHub Private Security Advisory**: [Report vulnerability](https://github.com/blackout-kit/blackout-kit-mobile/security/advisories/new)
+- **GitHub Private Security Advisory**: [Report vulnerability](https://github.com/kiacoder/blackout-kit-mobile/security/advisories/new)
 
 ### What to Include
 1. Description of the vulnerability

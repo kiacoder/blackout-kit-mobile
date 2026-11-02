@@ -123,6 +123,10 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             null
         } finally {
+            // release() is deprecated in favor of close(), but close() only
+            // exists from API 29 and minSdk is 24 — release() is the only
+            // option on the supported range. Dismissed as wont-fix in
+            // CodeQL (#24); switch to client.use { } if minSdk ever reaches 29.
             client.release()
         }
     }

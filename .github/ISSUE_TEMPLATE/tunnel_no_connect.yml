@@ -1,0 +1,92 @@
+name: 🔌 Tunnel won't connect
+description: The app connects (or spins forever) but you have no internet — or connect fails outright
+labels: [bug, tunnel]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most common report — filling these fields precisely is
+        what makes it fixable. Please **redact usernames, server addresses,
+        subscription URLs and any identifying details** before pasting logs.
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What exactly happens?
+      options:
+        - Connect fails immediately with an error
+        - Shows "Connected" but no internet works
+        - Shows "Connected", some sites work, others don't
+        - Stuck on "Connecting…" forever
+        - Speed is unusably slow
+        - Connection drops after a while
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: v1.18.2 (Settings → About)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Protocol
+      options:
+        - VLESS (REALITY)
+        - VLESS (other transport)
+        - VMess
+        - Shadowsocks
+        - Hysteria 2
+        - TUIC
+        - WireGuard / AmneziaWG
+        - ShadowTLS
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Network context
+      description: |
+        Where are you connecting from (country/cARRIER), and does the SAME
+        config work on other networks (e.g. mobile data vs Wi-Fi)? Did other
+        VPN apps work at the same time? This distinguishes censorship issues
+        from app issues.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Import method (file/paste/QR/subscription), which server/config, what you tapped.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logcat capture
+      description: |
+        Run this on a PC with the phone plugged in via USB (Developer options →
+        USB debugging), reproduce the failure, then paste the output here:
+      value: adb logcat -s BlackoutXrayEngine BlackoutVpnService BlackoutCoreEngine EngineRunner GoLog VpnPlugin
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I redacted server addresses and personal info from the logs
+          required: true
+        - label: I searched existing issues for a duplicate
+          required: true
+        - label: This happens on the latest release
+          required: true
+        - label: I tested on another network if possible (mobile data / Wi-Fi)

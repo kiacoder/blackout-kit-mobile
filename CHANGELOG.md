@@ -5,6 +5,38 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.1] - 2026-11-02
+
+### Added
+- **iOS build on the releases page**: every `v*` release now ships an
+  unsigned IPA (`blackout-kit-<tag>-ios-unsigned.ipa`, ~72 MB) built on
+  GitHub's macOS runners — `Runner.app` + the embedded
+  `BlackoutTunnel.appex` + `Libbox.xcframework`. The iOS compile gate also
+  packages the IPA as a run artifact on every push. No Apple account is
+  needed to build; a signed install IPA comes from `ios-release.yml` when
+  Apple account secrets are configured.
+- **Netstack response injection (in-house Rust core)**: upstream responses
+  are now rebuilt as full IP packets and written back into the TUN — the
+  previously idle writer task is finally fed by the smoltcp egress channel.
+- **Real TCP termination**: per-flow smoltcp listeners masquerade as the
+  destination (proper SYN/SYN-ACK/ACK, reassembly, FIN/RST handling)
+  instead of dialing one upstream connection per raw TCP segment.
+- **Outbound dispatcher** (`outbound.rs`): netstack TCP flows route through
+  the configured outbound — `Direct` and plain-TCP VLESS (`security: none`,
+  no flow) dial end-to-end; unsupported stream transports (REALITY/TLS,
+  Shadowsocks-2022, ShadowTLS, Hysteria 2, TUIC, WireGuard/AWG) are refused
+  with RST instead of leaking traffic outside the tunnel.
+- **UDP relay**: per-flow datagram sockets with full-cone-style response
+  rewriting (correct IPv4/IPv6 + UDP headers and checksums); active in
+  Direct mode only, since proxied UDP would bypass the tunnel.
+- Host integration tests: full TCP echo round-trip through the netstack,
+  UDP relay response validation, and unsupported-outbound RST refusal.
+
+### Changed
+- `EngineSession` now actually uses the outbound it builds (previously
+  dialers were constructed, logged, and dropped) and keeps the netstack
+  return channel connected instead of dropping it.
+
 ## [Unreleased]
 
 ### Added

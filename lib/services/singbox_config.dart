@@ -296,21 +296,25 @@ class SingboxConfigBuilder {
         'strategy': 'prefer_ipv4',
         'final': 'remote-dns',
       };
-      document['route']!['default_domain_resolver'] = {
-        'server': 'remote-dns',
-        'strategy': 'prefer_ipv4',
-      };
-      // The proxy's own hostname is the one thing that must resolve outside
-      // the tunnel, or the tunnel can never come up.
-      for (final outbound in [
-        ...(document['outbounds'] as List? ?? const []),
-        ...(document['endpoints'] as List? ?? const []),
-      ]) {
-        if (outbound is Map && outbound['tag'] == 'proxy') {
-          outbound['domain_resolver'] = {
-            'server': 'bootstrap-dns',
-            'strategy': 'prefer_ipv4',
-          };
+      // Dial-time domain resolvers were added in sing-box 1.12+; the bundled
+      // libbox core pins 1.11.4 and strictly rejects unknown fields.
+      if (!libboxMode) {
+        document['route']!['default_domain_resolver'] = {
+          'server': 'remote-dns',
+          'strategy': 'prefer_ipv4',
+        };
+        // The proxy's own hostname is the one thing that must resolve outside
+        // the tunnel, or the tunnel can never come up.
+        for (final outbound in [
+          ...(document['outbounds'] as List? ?? const []),
+          ...(document['endpoints'] as List? ?? const []),
+        ]) {
+          if (outbound is Map && outbound['tag'] == 'proxy') {
+            outbound['domain_resolver'] = {
+              'server': 'bootstrap-dns',
+              'strategy': 'prefer_ipv4',
+            };
+          }
         }
       }
     }

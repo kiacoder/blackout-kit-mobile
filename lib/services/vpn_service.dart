@@ -231,6 +231,24 @@ class VPNService {
         }
       }
 
+      // Android now carries an embedded libbox core as well (same pinned
+      // grammar as iOS): the native layer prefers it over the subprocess
+      // runner. The subprocess config above stays as the last-resort
+      // fallback, so an old core that cannot serve a document still works.
+      String? libboxJson;
+      if (Platform.isAndroid && kSingboxProtocols.contains(config.protocol)) {
+        try {
+          libboxJson = SingboxConfigBuilder(
+            socksPort: defaultSocksPort,
+            dnsServers: session.dnsServers,
+            routeDnsThroughProxy: session.routeDnsThroughProxy,
+            libboxMode: true,
+          ).buildJson(config);
+        } on ArgumentError catch (e) {
+          _log.w('libbox-mode config refused for ${config.protocol}: ${e.message}');
+        }
+      }
+
       // Every tunnel is carried by one of the two cores, and each needs a
       // config document built here. A protocol that produces neither is one
       // this build cannot dial - say so instead of handing the native layer a
@@ -256,6 +274,7 @@ class VPNService {
         ...session.toChannelMap(),
         if (xrayJson != null) 'xrayConfig': xrayJson,
         if (singboxJson != null) 'singboxConfig': singboxJson,
+        if (libboxJson != null) 'libboxConfig': libboxJson,
       });
 
       if (result == true) {
@@ -551,10 +570,18 @@ class EngineAvailability {
   final String? xrayVersion;
   final List<String> xrayProtocols;
   final bool singboxAvailable;
+  final String? singboxVersion;
   final List<String> singboxProtocols;
 
   /// Protocols the native layer has explicitly declared unusable.
   final List<String> unavailableProtocols;
+
+  /// Profile formats accepted for local configuration, even when this build
+  /// has no connection runtime for them yet.
+  final List<String> configurableProtocols;
+
+  /// Endpoint-gated profiles whose server contract or endpoint is not yet ready.
+  final List<String> endpointGatedProtocols;
 
   const EngineAvailability({
     required this.isKnown,
@@ -562,8 +589,11 @@ class EngineAvailability {
     required this.xrayVersion,
     required this.xrayProtocols,
     required this.singboxAvailable,
+    this.singboxVersion,
     required this.singboxProtocols,
     required this.unavailableProtocols,
+    this.configurableProtocols = const [],
+    this.endpointGatedProtocols = const [],
   });
 
   const EngineAvailability.unknown()
@@ -572,8 +602,11 @@ class EngineAvailability {
         xrayVersion = null,
         xrayProtocols = const [],
         singboxAvailable = false,
+        singboxVersion = null,
         singboxProtocols = const [],
-        unavailableProtocols = const [];
+        unavailableProtocols = const [],
+        configurableProtocols = const [],
+        endpointGatedProtocols = const [];
 
   factory EngineAvailability.fromMap(Map<String, dynamic> map) {
     List<String> strings(String key) =>
@@ -584,8 +617,11 @@ class EngineAvailability {
       xrayVersion: map['xrayVersion'] as String?,
       xrayProtocols: strings('xrayProtocols'),
       singboxAvailable: map['singboxAvailable'] == true,
+      singboxVersion: map['singboxVersion'] as String?,
       singboxProtocols: strings('singboxProtocols'),
       unavailableProtocols: strings('unavailableProtocols'),
+      configurableProtocols: strings('configurableProtocols'),
+      endpointGatedProtocols: strings('endpointGatedProtocols'),
     );
   }
 
@@ -604,7 +640,14 @@ class EngineAvailability {
     if (supportedProtocols.isEmpty) {
       return 'No engine is bundled in this build.';
     }
-    return 'Xray ${xrayVersion ?? ""}'.trim() +
-        ' - ${supportedProtocols.join(", ")}';
+    final bundled = <String>[
+      if (xrayAvailable) 'Xray ${xrayVersion ?? ""}'.trim(),
+      if (singboxAvailable) 'sing-box ${singboxVersion ?? ""}'.trim(),
+    ];
+    final configurableOnly = configurableProtocols
+        .where((p) => !supportedProtocols.contains(p))
+        .toList();
+    return '${bundled.join(" + ")} - ${supportedProtocols.join(", ")}'
+        '${configurableOnly.isEmpty ? "" : " | configurable only: ${configurableOnly.join(", ")}"}';
   }
 }

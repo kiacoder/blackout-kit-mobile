@@ -228,6 +228,18 @@ class ConfigService {
       'password': config.password,
       'plugin': config.plugin,
     },
+    if (config is SniRelayConfig) ...{
+      'transport': config.transport,
+      'serverName': config.serverName,
+      'username': config.username,
+      'password': config.password,
+      'tls': config.tls,
+      'allowInsecure': config.allowInsecure,
+    },
+    if (config is MhrvRelayConfig) ...{
+      'endpoint': config.endpoint.toString(),
+      'bearerToken': config.bearerToken,
+    },
   };
 
   /// Save config with deduplication
@@ -658,6 +670,28 @@ class ConfigService {
             configContent: data['configContent'] as String? ?? '',
             address: data['address'] as String? ?? '',
             port: data['port'] as int? ?? 1194,
+          );
+
+        case 'sni':
+          return SniRelayConfig(
+            name: data['displayName'] as String? ?? 'SNI Relay',
+            rawUri: rawUri,
+            address: data['address'] as String? ?? '',
+            port: data['port'] as int? ?? 443,
+            serverName: data['serverName'] as String? ?? '',
+            transport: data['transport'] as String? ?? 'http-connect',
+            username: data['username'] as String?,
+            password: data['password'] as String?,
+            tls: data['tls'] as bool? ?? true,
+            allowInsecure: data['allowInsecure'] as bool? ?? false,
+          );
+
+        case 'mhrv':
+          return MhrvRelayConfig(
+            name: data['displayName'] as String? ?? 'MHRV Relay',
+            rawUri: rawUri,
+            endpoint: Uri.parse(data['endpoint'] as String? ?? ''),
+            bearerToken: data['bearerToken'] as String?,
           );
 
         case 'shadowsocks':

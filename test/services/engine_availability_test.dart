@@ -18,7 +18,9 @@ void main() {
         'xrayProtocols': ['vless', 'vmess', 'trojan', 'shadowsocks', 'wireguard'],
         'singboxAvailable': false,
         'singboxProtocols': <String>[],
-        'unavailableProtocols': ['hysteria2', 'tuic', 'amneziawg', 'warp'],
+        'unavailableProtocols': ['hysteria2', 'tuic', 'amneziawg', 'warp', 'sni', 'mhrv'],
+        'configurableProtocols': ['sni', 'mhrv'],
+        'endpointGatedProtocols': ['sni', 'mhrv'],
       });
 
       expect(availability.isKnown, isTrue);
@@ -27,6 +29,10 @@ void main() {
       expect(availability.xrayProtocols, contains('vless'));
       expect(availability.singboxAvailable, isFalse);
       expect(availability.unavailableProtocols, contains('hysteria2'));
+      expect(availability.configurableProtocols, containsAll(['sni', 'mhrv']));
+      expect(availability.endpointGatedProtocols, containsAll(['sni', 'mhrv']));
+      expect(availability.canConnect('sni'), isFalse);
+      expect(availability.canConnect('mhrv'), isFalse);
     });
 
     test('tolerates a map with missing keys', () {
@@ -38,6 +44,8 @@ void main() {
       expect(availability.xrayProtocols, isEmpty);
       expect(availability.singboxProtocols, isEmpty);
       expect(availability.unavailableProtocols, isEmpty);
+      expect(availability.configurableProtocols, isEmpty);
+      expect(availability.endpointGatedProtocols, isEmpty);
       expect(availability.supportedProtocols, isEmpty);
     });
 

@@ -115,10 +115,10 @@ class EngineRegistry {
       displayName: 'SingBox Core',
       description: 'Ultra-fast QUIC & UDP proxy core: Hysteria2, TUIC v5, AnyTLS, ShadowTLS v3',
       platformSupport: PlatformSupport.all,
-      // No amneziawg: the bundled sing-box is a vanilla build without the
-      // AWG options, so listing it made this engine look unrunnable once the
-      // native capability report stopped claiming it.
-      compatibleProtocols: ['hysteria2', 'tuic', 'anytls', 'shadowtls'],
+      // No amneziawg or shadowtls: the bundled cores serve Hysteria2, TUIC
+      // and AnyTLS. Listing unserved protocols makes this engine look unrunnable
+      // once the native capability report stops claiming them.
+      compatibleProtocols: ['hysteria2', 'tuic', 'anytls'],
       requirements: ['Android 7.0+', 'iOS 14.0+'],
       category: 'Proxy Core',
     ),

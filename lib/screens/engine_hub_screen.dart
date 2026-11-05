@@ -64,6 +64,9 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     if (engine.engine == EngineType.xray && _availability?.xrayVersion != null) {
       return _availability!.xrayVersion;
     }
+    if (engine.engine == EngineType.singbox_proxy && _availability?.singboxVersion != null) {
+      return _availability!.singboxVersion;
+    }
     return engine.version;
   }
 
@@ -84,6 +87,34 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     return _configController.allConfigs.where((c) {
       return engine.compatibleProtocols.contains(c.protocol);
     }).length;
+  }
+
+  bool _isEndpointGated(EngineCapability engine) {
+    final gated = _availability?.endpointGatedProtocols ?? const <String>[];
+    return engine.compatibleProtocols.any(gated.contains);
+  }
+
+  String _engineStatusDescription(EngineCapability engine) {
+    final configurable = _availability?.configurableProtocols ?? const <String>[];
+    final endpointGated = _availability?.endpointGatedProtocols ?? const <String>[];
+    if (engine.key == 'sni' && configurable.contains('sni')) {
+      return endpointGated.contains('sni')
+          ? 'SNI relay profiles can be configured; a compatible endpoint/runtime is not available in this build.'.tr
+          : 'SNI relay configuration is supported.'.tr;
+    }
+    if (engine.key == 'mhrv' && configurable.contains('mhrv')) {
+      return endpointGated.contains('mhrv')
+          ? 'MHRV relay profiles can be configured; a compatible endpoint contract/runtime is not available in this build.'.tr
+          : 'MHRV relay configuration is supported.'.tr;
+    }
+    return engine.description;
+  }
+
+  String _engineUnavailableMessage(EngineCapability engine) {
+    if (_isEndpointGated(engine)) {
+      return 'This profile format is configurable, but this build cannot connect it until a compatible endpoint and runtime are available.'.tr;
+    }
+    return 'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.'.tr;
   }
 
   Color _getCategoryColor(String category) {
@@ -325,27 +356,31 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  'Not bundled'.tr,
+                                  _isEndpointGated(engine) ? 'Endpoint gated'.tr : 'Not bundled'.tr,
                                   style: TextStyle(fontSize: 10, color: theme.hintColor),
                                 ),
                               )
                             else if (version != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: theme.disabledColor.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'v$version',
-                                  style: TextStyle(fontSize: 10, color: theme.hintColor),
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: theme.disabledColor.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'v$version',
+                                    style: TextStyle(fontSize: 10, color: theme.hintColor),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ),
                           ],
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          engine.description,
+                          _engineStatusDescription(engine),
                           style: TextStyle(fontSize: 12, color: theme.hintColor),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -462,7 +497,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.'.tr,
+                          _engineUnavailableMessage(engine),
                           style: TextStyle(fontSize: 12, color: theme.hintColor),
                         ),
                       ),

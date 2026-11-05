@@ -171,13 +171,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             appContext?.applicationInfo?.nativeLibraryDir ?: "",
             "libsingbox.so"
         )
-        val singboxAvailable = singboxSo.exists()
+        val singboxSoExists = singboxSo.exists()
+        val libboxAvailable = LibboxEngine.isAvailable()
+        val libboxVer = LibboxEngine.version()
+        val singboxAvailable = libboxAvailable || singboxSoExists
+        val cleanLibboxVer = libboxVer ?: if (singboxSoExists) "subprocess bundled" else null
+        Log.i(TAG, "engineInfoMap: nativeDir=${appContext?.applicationInfo?.nativeLibraryDir}, singboxSoExists=$singboxSoExists, libboxAvailable=$libboxAvailable, libboxVer=${cleanLibboxVer ?: "unavailable"}, xrayVer=$xrayVersion")
         return mapOf(
             "xrayAvailable" to (xrayVersion != null),
             "xrayVersion" to xrayVersion,
             "xrayProtocols" to
                 listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard"),
             "singboxAvailable" to singboxAvailable,
+            "singboxVersion" to cleanLibboxVer,
             // amneziawg is NOT here on purpose: the bundled libsingbox.so is a
             // vanilla build (no `amnezia` option anywhere in the binary), so an
             // AmneziaWG profile is rejected at config decode time. Advertising
@@ -200,9 +206,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                     listOf("hysteria2", "tuic", "anytls")
                 else emptyList<String>(),
             "unavailableProtocols" to
-                (listOf("openvpn", "psiphon", "amneziawg", "shadowtls", "warp") +
+                (listOf("openvpn", "psiphon", "amneziawg", "shadowtls", "warp", "sni", "mhrv") +
                     if (singboxAvailable) emptyList()
-                    else listOf("hysteria2", "tuic", "anytls"))
+                    else listOf("hysteria2", "tuic", "anytls")),
+            // These are accepted as editable configuration profiles, not
+            // connectable engines in this build. Keep the distinction explicit
+            // so the catalogue can show setup readiness without a false green.
+            "configurableProtocols" to listOf("sni", "mhrv"),
+            "endpointGatedProtocols" to listOf("sni", "mhrv")
         )
     }
 
@@ -328,6 +339,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             putExtra(
                 BlackoutVpnService.EXTRA_SINGBOX_CONFIG,
                 call.argument<String>("singboxConfig")
+            )
+            putExtra(
+                BlackoutVpnService.EXTRA_LIBBOX_CONFIG,
+                call.argument<String>("libboxConfig")
             )
             putStringArrayListExtra(
                 BlackoutVpnService.EXTRA_ALLOWED_APPS,

@@ -184,7 +184,7 @@ object XrayEngine {
     fun version(): String? = try {
         Libv2ray.checkVersionX()
     } catch (t: Throwable) {
-        Log.w(TAG, "checkVersionX failed: ${t.message}")
+        Log.w(TAG, "checkVersionX failed: ${t.javaClass.name}: ${t.message}", t)
         null
     }
 

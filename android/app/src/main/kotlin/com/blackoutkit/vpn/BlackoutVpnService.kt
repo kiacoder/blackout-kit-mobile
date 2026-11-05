@@ -75,6 +75,13 @@ class BlackoutVpnService : VpnService() {
         /** Full sing-box JSON document, built by the Dart side. */
         const val EXTRA_SINGBOX_CONFIG = "singboxConfig"
 
+        /**
+         * Full sing-box JSON document built in libbox mode (tun inbound) by
+         * the Dart side, for the in-process libbox core. Absent on platforms
+         * without an embedded libbox core.
+         */
+        const val EXTRA_LIBBOX_CONFIG = "libboxConfig"
+
         private const val CHANNEL_ID = "blackout_vpn"
         private const val NOTIFICATION_ID = 1001
 
@@ -259,6 +266,7 @@ class BlackoutVpnService : VpnService() {
             intent?.getStringArrayListExtra(EXTRA_DISALLOWED_APPS) ?: emptyList()
         val xrayConfig = intent?.getStringExtra(EXTRA_XRAY_CONFIG)
         val singboxConfig = intent?.getStringExtra(EXTRA_SINGBOX_CONFIG)
+        val libboxConfig = intent?.getStringExtra(EXTRA_LIBBOX_CONFIG)
         val dnsOnly = intent?.getBooleanExtra(EXTRA_DNS_ONLY, false) ?: false
 
         Thread({
@@ -274,7 +282,8 @@ class BlackoutVpnService : VpnService() {
                 disallowed = disallowed,
                 holdOnFailure = holdOnFailure,
                     xrayConfig = xrayConfig,
-                    singboxConfig = singboxConfig
+                    singboxConfig = singboxConfig,
+                    libboxConfig = libboxConfig
                 )
             }
 
@@ -300,7 +309,8 @@ class BlackoutVpnService : VpnService() {
         disallowed: List<String>,
         holdOnFailure: Boolean,
         xrayConfig: String?,
-        singboxConfig: String?
+        singboxConfig: String?,
+        libboxConfig: String?
     ): Boolean {
         if (tun != null) teardown()
 
@@ -424,13 +434,15 @@ class BlackoutVpnService : VpnService() {
             // The engine must be up before we claim success, otherwise all
             // traffic would be black-holed by the default route just installed.
             engineTunFd = engineFd
-            val engineOk = startEngine(protocol, xrayConfig, singboxConfig, engineFd.fd, socksPort)
+            val engineOk =
+                startEngine(protocol, xrayConfig, singboxConfig, libboxConfig, engineFd.fd, socksPort)
             if (!engineOk) {
                 // The engine sets its own lastError with the REAL reason
                 // ("Xray core rejected the configuration: ..."). It used to
                 // stay trapped in XrayEngine while the UI got this generic
                 // fallback, making remote debugging impossible.
                 lastError = XrayEngine.lastError
+                    ?: LibboxEngine.lastError
                     ?: EngineRunner.lastError
                     ?: "Engine failed to start for protocol '$protocol'"
                 Log.e(TAG, lastError!!)
@@ -474,6 +486,7 @@ class BlackoutVpnService : VpnService() {
         protocol: String,
         xrayConfig: String?,
         singboxConfig: String?,
+        libboxConfig: String?,
         tunFd: Int,
         socksPort: Int
     ): Boolean {
@@ -499,12 +512,25 @@ class BlackoutVpnService : VpnService() {
         // loaded whatever singbox.json was already on disk - the previous
         // session's server, under the new protocol's name. The tunnel came up
         // and reported "connected" while running the wrong proxy.
-        if (BlackoutCoreEngine.isLoaded && !singboxConfig.isNullOrBlank()) {
-            Log.i(TAG, "Starting protocol '$protocol' via in-process BlackoutCoreEngine")
-            if (BlackoutCoreEngine.start(tunFd, singboxConfig)) {
-                return true
-            }
-            Log.w(TAG, "BlackoutCoreEngine failed, falling back to EngineRunner: ${BlackoutCoreEngine.lastError}")
+        // The Rust core scaffolding is bundled, but its TCP outbound dispatcher
+        // still refuses the supported sing-box protocols. Do not route a user
+        // tunnel into it until its selected protocol has a tested end-to-end
+        // data path. Libbox is the production in-process sing-box runtime here.
+        if (BlackoutCoreEngine.isLoaded) {
+            Log.d(TAG, "Rust core is bundled but not enabled for '$protocol' until its outbound is implemented")
+        }
+
+        // In-process libbox core before the subprocess fallback: same sing-box
+        // grammar (same pinned version), but the core runs inside this process
+        // and takes the TUN fd directly - no tun2socks, no fdlauncher.
+        LibboxEngine.resetLastError()
+        if (libboxConfig.isNullOrBlank()) {
+            Log.w(TAG, "no libbox-mode config supplied for '$protocol' (older Dart caller?)")
+        } else if (LibboxEngine.start(this, tunFd, libboxConfig)) {
+            Log.i(TAG, "Starting protocol '$protocol' via in-process libbox core")
+            return true
+        } else {
+            Log.w(TAG, "LibboxEngine failed, falling back to EngineRunner: ${LibboxEngine.lastError}")
         }
 
         if (singboxConfig.isNullOrBlank()) {
@@ -622,6 +648,7 @@ class BlackoutVpnService : VpnService() {
         XrayEngine.stop()
         EngineRunner.stop()
         BlackoutCoreEngine.stop()
+        LibboxEngine.stop()
         try {
             engineTunFd?.close()
         } catch (e: Exception) {

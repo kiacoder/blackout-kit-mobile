@@ -1270,6 +1270,150 @@ class AmneziaWGConfig extends Config {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Endpoint-gated SNI relay profile
+// ─────────────────────────────────────────────────────────────────────────────
+/// User-configured SNI relay endpoint.
+///
+/// This is a profile/configuration model only. The Android build does not yet
+/// have a matching generic SNI relay outbound, so [validate] means the profile
+/// is complete enough to save, not that it can connect. The future server
+/// contract must agree on `http-connect` before a runtime is enabled.
+class SniRelayConfig extends Config {
+  final String name;
+  final String rawUri;
+  final String address;
+  final int port;
+  final String serverName;
+  final String transport;
+  final String? username;
+  final String? password;
+  final bool tls;
+  final bool allowInsecure;
+
+  SniRelayConfig({
+    required this.name,
+    required this.rawUri,
+    required this.address,
+    required this.port,
+    required this.serverName,
+    this.transport = 'http-connect',
+    this.username,
+    this.password,
+    this.tls = true,
+    this.allowInsecure = false,
+  });
+
+  @override String get protocol => 'sni';
+  @override String get displayName => name;
+
+  /// Configuration readiness only; this build does not claim a dialer exists.
+  @override bool validate() =>
+      address.isNotEmpty && port > 0 && port < 65536 &&
+      serverName.isNotEmpty && transport == 'http-connect' &&
+      ((username ?? '').isEmpty == ((password ?? '').isEmpty));
+
+  @override Future<bool> connect() async => false;
+  @override Future<void> disconnect() async {}
+  @override Future<bool> isRunning() async => false;
+
+  static SniRelayConfig? fromUri(String uri, {String? customName}) {
+    try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
+      if (!uri.startsWith('sni://')) return null;
+      final parsed = ConfigParser.tryParseUri(uri);
+      if (parsed == null) return null;
+      final q = parsed.queryParameters;
+      final transport = q['transport'] ?? 'http-connect';
+      final insecure = ConfigParser._insecure(q);
+      final name = customName ?? ConfigParser.safeFragment(
+        uri,
+        fallback: 'SNI Relay (${parsed.host}:${parsed.port})',
+      );
+      return SniRelayConfig(
+        name: name,
+        rawUri: uri,
+        address: parsed.host,
+        port: parsed.port,
+        serverName: q['sni'] ?? '',
+        transport: transport,
+        username: parsed.userInfo.isEmpty
+            ? null
+            : ConfigParser._decodeUserInfo(parsed.userInfo.split(':').first),
+        password: parsed.userInfo.contains(':')
+            ? ConfigParser._decodeUserInfo(parsed.userInfo.substring(parsed.userInfo.indexOf(':') + 1))
+            : null,
+        tls: q['tls']?.toLowerCase() != 'false' && q['tls'] != '0',
+        allowInsecure: insecure,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Endpoint-gated MHRV Apps Script relay profile
+// ─────────────────────────────────────────────────────────────────────────────
+/// App-level Apps Script relay endpoint. This is not a packet tunnel.
+///
+/// The exact MHRV request/response contract is not present in this repository;
+/// this type safely stores the deployment endpoint and optional bearer token,
+/// but deliberately does not claim connectability until that contract exists.
+class MhrvRelayConfig extends Config {
+  final String name;
+  final String rawUri;
+  final Uri endpoint;
+  final String? bearerToken;
+
+  MhrvRelayConfig({
+    required this.name,
+    required this.rawUri,
+    required this.endpoint,
+    this.bearerToken,
+  });
+
+  @override String get protocol => 'mhrv';
+  @override String get displayName => name;
+  @override String get address => endpoint.host;
+  @override int get port => endpoint.hasPort ? endpoint.port : 443;
+
+  /// Configuration readiness only; request semantics require the relay contract.
+  @override bool validate() =>
+      endpoint.scheme.toLowerCase() == 'https' &&
+      endpoint.host.isNotEmpty &&
+      endpoint.userInfo.isEmpty;
+
+  @override Future<bool> connect() async => false;
+  @override Future<void> disconnect() async {}
+  @override Future<bool> isRunning() async => false;
+
+  /// mhrv://relay?endpoint=<percent-encoded-https-URL>&token=<optional>
+  static MhrvRelayConfig? fromUri(String uri, {String? customName}) {
+    try {
+      uri = ConfigParser.normalizeScheme(uri.trim());
+      if (!uri.startsWith('mhrv://')) return null;
+      final parsed = ConfigParser.tryParseUri(uri);
+      if (parsed == null) return null;
+      final endpointText = parsed.queryParameters['endpoint'];
+      if (endpointText == null || endpointText.isEmpty) return null;
+      final endpoint = Uri.parse(endpointText);
+      final name = customName ?? ConfigParser.safeFragment(
+        uri,
+        fallback: 'MHRV Relay (${endpoint.host})',
+      );
+      return MhrvRelayConfig(
+        name: name,
+        rawUri: uri,
+        endpoint: endpoint,
+        bearerToken: parsed.queryParameters['token'],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // WARP config  (Cloudflare WARP — no URI standard, uses account key pair)
 // ─────────────────────────────────────────────────────────────────────────────
 class WarpConfig extends Config {
@@ -1587,6 +1731,8 @@ class ConfigParser {
       // scheme is touched; credentials and base64 payloads stay byte-identical.
       final trimmed = ConfigParser.normalizeScheme(text.trim());
       // URI-based single-line protocols
+      if (trimmed.startsWith('sni://'))         return SniRelayConfig.fromUri(trimmed, customName: customName);
+      if (trimmed.startsWith('mhrv://'))        return MhrvRelayConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vless://'))       return VlessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vmess://'))       return VmessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('trojan://'))      return TrojanConfig.fromUri(trimmed, customName: customName);
@@ -1774,7 +1920,7 @@ class ConfigParser {
       // character class keeps `]` so a bracketed IPv6 authority
       // (`vless://id@[2001:db8::1]:443`) is not truncated at the bracket.
       final uriRegex = RegExp(
-        r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg|anytls|shadowtls)://[^\s<>"|]+',
+        r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg|anytls|shadowtls|sni|mhrv)://[^\s<>"|]+',
         caseSensitive: false,
       );
       final matches = uriRegex.allMatches(trimmed);

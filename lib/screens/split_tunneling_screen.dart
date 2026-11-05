@@ -138,8 +138,13 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.filter_alt_outlined, size: 16),
-                                SizedBox(width: 4),
-                                Text('split_mode_whitelist'.tr),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    'split_mode_whitelist'.tr,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ],
                             ),
                             selected: _service.mode == 'whitelist',
@@ -155,8 +160,13 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.block_outlined, size: 16),
-                                SizedBox(width: 4),
-                                Text('split_mode_bypass'.tr),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    'split_mode_bypass'.tr,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ],
                             ),
                             selected: _service.mode == 'blacklist',

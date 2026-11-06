@@ -182,11 +182,11 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Expanded(child: TextField(controller: cJc, decoration: const InputDecoration(labelText: 'awg_jc'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cJc, decoration: InputDecoration(labelText: 'awg_jc'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
                   const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: cJmin, decoration: const InputDecoration(labelText: 'awg_jmin'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cJmin, decoration: InputDecoration(labelText: 'awg_jmin'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
                   const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: cJmax, decoration: const InputDecoration(labelText: 'awg_jmax'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cJmax, decoration: InputDecoration(labelText: 'awg_jmax'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -194,9 +194,9 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Expanded(child: TextField(controller: cS1, decoration: const InputDecoration(labelText: 'awg_s1'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cS1, decoration: InputDecoration(labelText: 'awg_s1'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
                   const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: cS2, decoration: const InputDecoration(labelText: 'awg_s2'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cS2, decoration: InputDecoration(labelText: 'awg_s2'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
                 ],
               ),
               const SizedBox(height: 16),

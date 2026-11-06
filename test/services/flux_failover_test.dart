@@ -1,10 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
-import 'package:hive/hive.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:blackout_kit_mobile/controllers/settings_controller.dart';
 import 'package:blackout_kit_mobile/models/config.dart';
-import 'package:blackout_kit_mobile/services/singbox_config.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

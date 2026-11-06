@@ -21,6 +21,7 @@ import 'package:blackout_kit_mobile/services/dns_leak_prevention_service.dart';
 import 'package:blackout_kit_mobile/services/github_service.dart';
 import 'package:blackout_kit_mobile/services/kill_switch_service.dart';
 import 'package:blackout_kit_mobile/services/secure_vault.dart';
+import 'package:blackout_kit_mobile/services/site_check_service.dart';
 import 'package:blackout_kit_mobile/services/split_tunneling_service.dart';
 import 'package:blackout_kit_mobile/services/tester_service.dart';
 import 'package:blackout_kit_mobile/models/vpn_session_options.dart';
@@ -289,6 +290,36 @@ void main() {
   });
 
   group('scan candidate controls', () {
+    test('plaintext VLESS to a public IP without domain host is refused',
+        () async {
+      final vpn = _RecordingVpnService();
+      final controller = _controller(vpn);
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@203.0.113.8:443?security=none&type=tcp#Plain-IP',
+      )!;
+
+      final connected = await controller.connect(config);
+
+      expect(connected, isFalse);
+      expect(vpn.connectCalls, 0,
+          reason: 'unsafe plaintext public-IP configs are refused before dial');
+      expect(controller.statusMessage.value, contains('Plaintext VLESS'));
+    });
+
+    test('plaintext VLESS to a public IP with domain host is not pre-refused',
+        () async {
+      final vpn = _RecordingVpnService();
+      final controller = _controller(vpn);
+      final config = ConfigParser.parse(
+        'vless://11111111-1111-1111-1111-111111111111@203.0.113.8:443?security=none&type=tcp&host=edge.example.com#Domain-host',
+      )!;
+
+      final connected = await controller.connect(config);
+
+      expect(connected, isTrue);
+      expect(vpn.connectCalls, 1);
+    });
+
     test('shortlist mode attempts its configured candidate count', () async {
       final vpn = _RecordingVpnService()..failedConnectCount = 2;
       final settings = Get.find<SettingsController>();
@@ -308,6 +339,99 @@ void main() {
 
       expect(connected, isTrue);
       expect(vpn.connectCalls, 3);
+    });
+
+    test('native candidate rejection does not request recovery and tries next',
+        () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = false;
+      settings.connectVerificationStrategy.value = 'shortlist';
+      settings.connectScanBatchSize.value = 3;
+      final controller = _controller(vpn);
+      final configs = [
+        vless('rejected.example.com', 'Rejected'),
+        vless('usable.example.com', 'Usable'),
+      ];
+      vpn.onConnect = (config) {
+        if (config.address == 'rejected.example.com') {
+          vpn.lastErrorForTest = 'Xray core rejected this candidate';
+          controller.debugHandleNativeStatusForTest(
+              'error', vpn.lastErrorForTest);
+          return false;
+        }
+        return true;
+      };
+
+      expect(await controller.connectFastest(configs), isTrue);
+      expect(vpn.connectedAddresses,
+          ['rejected.example.com', 'usable.example.com']);
+      expect(controller.recoveryAvailable.value, isFalse);
+      expect(controller.candidateConfig.value, isNull);
+      expect(controller.candidateError.value, isEmpty,
+          reason: 'a successful later candidate clears prior rejection copy');
+      expect(controller.statusMessage.value, contains('Usable'));
+      expect(controller.selectedConfig.value?.address, 'usable.example.com');
+      expect(controller.lastKnownWorkingConfig.value?.address,
+          'usable.example.com');
+    });
+
+    test('site-failing tunnel does not replace the last verified config',
+        () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = true;
+      settings.connectVerificationStrategy.value = 'all';
+      settings.connectWebsitePassThreshold.value = -1;
+      settings.siteCheckUrls.assignAll(['check.example.com']);
+      final checker = _SequenceSiteCheckService(vpn, settings, outcomes: [
+        false,
+        true,
+      ]);
+      final controller = _controller(vpn, siteCheckService: checker);
+      final previouslyGood = vless('good-before.example.com', 'Known good');
+      controller.lastKnownWorkingConfig.value = previouslyGood;
+      controller.selectedConfig.value = previouslyGood;
+      final configs = [
+        vless('bad-websites.example.com', 'Tunnel but no traffic'),
+        vless('good-websites.example.com', 'Loads sites'),
+      ];
+
+      expect(await controller.connectFastest(configs), isTrue);
+      expect(controller.selectedConfig.value?.address,
+          'good-websites.example.com');
+      expect(controller.lastKnownWorkingConfig.value?.address,
+          'good-websites.example.com');
+      expect(vpn.disconnectCalls, 1);
+    });
+
+    test('unresolved exit location does not mark a live tunnel failed',
+        () async {
+      final vpn = _RecordingVpnService();
+      final controller = _controller(vpn);
+      final config = vless('located-later.example.com', 'Location pending');
+      final connected = await controller.connect(config);
+
+      expect(connected, isTrue);
+      expect(controller.isConnected, isTrue);
+      expect(controller.recoveryAvailable.value, isFalse,
+          reason: 'IP/location lookups are informational, not tunnel liveness');
+    });
+
+    test('failed website liveness check opens explicit recovery', () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = true;
+      final checker = _FakeSiteCheckService(vpn, settings, alive: false);
+      final controller = _controller(vpn, siteCheckService: checker);
+      final config = vless('dead-tunnel.example.com', 'Dead tunnel');
+      expect(await controller.connect(config), isTrue);
+
+      await controller.debugVerifyTunnelAliveForTest();
+
+      expect(controller.isConnected, isFalse);
+      expect(controller.recoveryAvailable.value, isTrue);
+      expect(controller.recoveryReason.value, contains('nothing loads'));
     });
 
     test('recovery cursor resumes the remaining config in the same batch',
@@ -356,9 +480,57 @@ void main() {
 
 // ── fakes ─────────────────────────────────────────────────────────────────
 
-ConnectionController _controller(VPNService vpn) {
+class _SequenceSiteCheckService extends SiteCheckService {
+  final List<bool> outcomes;
+  int _nextOutcome = 0;
+
+  _SequenceSiteCheckService(
+    VPNService vpn,
+    SettingsController settings, {
+    required this.outcomes,
+  }) : super(vpnService: vpn, settings: settings);
+
+  @override
+  bool get enabled => true;
+
+  @override
+  Future<List<SiteCheckOutcome>> checkLiveConnection({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final passed = outcomes[_nextOutcome++];
+    return [SiteCheckOutcome(host: 'check.example.com', ok: passed)];
+  }
+
+  @override
+  Future<bool> verifyLiveConnection({
+    Duration timeout = const Duration(seconds: 8),
+  }) async =>
+      outcomes[_nextOutcome++];
+}
+
+class _FakeSiteCheckService extends SiteCheckService {
+  final bool alive;
+
+  _FakeSiteCheckService(VPNService vpn, SettingsController settings,
+      {required this.alive})
+      : super(vpnService: vpn, settings: settings);
+
+  @override
+  bool get enabled => true;
+
+  @override
+  Future<bool> verifyLiveConnection(
+          {Duration timeout = const Duration(seconds: 8)}) async =>
+      alive;
+}
+
+ConnectionController _controller(
+  VPNService vpn, {
+  SiteCheckService? siteCheckService,
+}) {
   return ConnectionController(
     vpnService: vpn,
+    siteCheckService: siteCheckService,
     testerService: _FakeTester(),
     killSwitchService: KillSwitchService(),
     dnsLeakPreventionService: DNSLeakPreventionService(),
@@ -376,7 +548,11 @@ class _RecordingVpnService extends VPNService {
   String? lastConnectedAddress;
   final List<String> connectedAddresses = [];
   int failedConnectCount = 0;
+  String? lastErrorForTest;
   bool Function(Config config)? onConnect;
+
+  @override
+  String? get lastError => lastErrorForTest;
 
   @override
   Future<bool> connect(Config config, {VpnSessionOptions? options}) async {
@@ -384,6 +560,7 @@ class _RecordingVpnService extends VPNService {
     lastConnectedProtocol = config.protocol;
     lastConnectedAddress = config.address;
     connectedAddresses.add(config.address);
+    lastErrorForTest = null;
     if (failedConnectCount > 0) {
       failedConnectCount--;
       return false;

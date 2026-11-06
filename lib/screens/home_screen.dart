@@ -13,6 +13,7 @@ import 'guide_screen.dart';
 import '../controllers/settings_controller.dart';
 import '../controllers/connection_controller.dart';
 import '../models/config.dart';
+import '../services/localization_service.dart';
 import '../widgets/app_logo.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -55,7 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _handleConnectSpecific(Config config) async {
     final result = _configController.testResults[config.getHash()];
     final ok = await _connectionController.connect(config, testResult: result);
-    if (!ok) _showSnackbar(_connectionController.statusMessage.value, Colors.red);
+    if (!ok)
+      _showSnackbar(_connectionController.statusMessage.value, Colors.red);
   }
 
   Future<void> _handleConnectDisconnect() async {
@@ -123,7 +125,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const AppLogo(size: 28, showSubtitle: false, direction: Axis.horizontal),
+        title: const AppLogo(
+            size: 28, showSubtitle: false, direction: Axis.horizontal),
         centerTitle: true,
         elevation: 0,
         actions: [
@@ -182,10 +185,16 @@ class _HomeScreenState extends State<HomeScreen> {
       final phase = _connectionController.scanPhase.value;
       final inProgress = _connectionController.operationInFlight;
       final recovery = _connectionController.recoveryAvailable.value;
-      if (phase == 'idle' && !recovery) return const SizedBox.shrink();
+      final candidateError = _connectionController.candidateError.value;
+      final candidateFailed =
+          _connectionController.candidateAttemptFailed.value && !recovery;
+      if (phase == 'idle' && !recovery && candidateError.isEmpty) {
+        return const SizedBox.shrink();
+      }
 
       final theme = Theme.of(context);
-      final accent = recovery ? theme.colorScheme.error : theme.colorScheme.primary;
+      final accent =
+          recovery ? theme.colorScheme.error : theme.colorScheme.primary;
       final total = _connectionController.scanItemsTotal.value;
       final done = _connectionController.scanItemsDone.value;
       final progress = total == 0 ? null : (done / total).clamp(0.0, 1.0);
@@ -213,12 +222,14 @@ class _HomeScreenState extends State<HomeScreen> {
               end: Alignment.bottomRight,
             ),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 350),
                 transitionBuilder: (child, animation) => ScaleTransition(
-                  scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                  scale: CurvedAnimation(
+                      parent: animation, curve: Curves.easeOutBack),
                   child: FadeTransition(opacity: animation, child: child),
                 ),
                 child: Icon(
@@ -237,13 +248,38 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(phaseLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
-                if (_connectionController.scanCurrentConfig.value.isNotEmpty)
-                  Text(_connectionController.scanCurrentConfig.value,
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall),
-              ])),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(phaseLabel,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    if (recovery &&
+                        _connectionController.lastKnownWorkingConfig.value !=
+                            null)
+                      Text(
+                          _connectionController
+                              .lastKnownWorkingConfig.value!.displayName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall),
+                    if (candidateFailed &&
+                        _connectionController.candidateError.value.isNotEmpty)
+                      Text(_connectionController.candidateError.value,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                          )),
+                    if (!recovery &&
+                        !candidateFailed &&
+                        _connectionController
+                            .scanCurrentConfig.value.isNotEmpty)
+                      Text(_connectionController.scanCurrentConfig.value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall),
+                  ])),
               if (inProgress)
                 SizedBox(
                   width: 30,
@@ -256,7 +292,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
             ]),
-            if (phase == 'ping' || phase == 'connect' || phase == 'websites') ...[
+            if (phase == 'ping' ||
+                phase == 'connect' ||
+                phase == 'websites') ...[
               const SizedBox(height: 14),
               Row(children: [
                 for (final entry in const [
@@ -282,7 +320,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text('$done / $total', style: theme.textTheme.labelSmall),
                 if (phase == 'websites') ...[
                   const SizedBox(width: 8),
-                  Text('${_connectionController.scanSitesDone.value}/${_connectionController.scanSitesTotal.value} sites',
+                  Text(
+                      '${_connectionController.scanSitesDone.value}/${_connectionController.scanSitesTotal.value} sites',
                       style: theme.textTheme.labelSmall),
                 ],
               ]),
@@ -303,6 +342,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ],
+            if (candidateError.isNotEmpty && !recovery) ...[
+              const SizedBox(height: 10),
+              Text(candidateError,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  )),
+            ],
             if (recovery) ...[
               const SizedBox(height: 10),
               Text(_connectionController.recoveryReason.value,
@@ -310,11 +356,14 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 6, children: [
                 FilledButton.icon(
-                  onPressed: () => _connectionController.resumeScanAfterFailure(),
+                  onPressed: () =>
+                      _connectionController.resumeScanAfterFailure(),
                   icon: const Icon(Icons.skip_next),
-                  label: Text(_settingsController.connectFailureScanPolicy.value == 'restart'
-                      ? 'Restart scan'.tr
-                      : 'Continue next batch'.tr),
+                  label: Text(
+                      _settingsController.connectFailureScanPolicy.value ==
+                              'restart'
+                          ? 'Restart scan'.tr
+                          : 'Continue next batch'.tr),
                 ),
                 OutlinedButton(
                   onPressed: _connectionController.dismissRecovery,
@@ -322,9 +371,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ]),
             ],
-            if (inProgress && _connectionController.scanBatchCount.value > 0) ...[
+            if (inProgress &&
+                _connectionController.scanBatchCount.value > 0) ...[
               const SizedBox(height: 6),
-              Text('Batch ${_connectionController.scanBatchIndex.value} of ${_connectionController.scanBatchCount.value}',
+              Text(
+                  'Batch ${_connectionController.scanBatchIndex.value} of ${_connectionController.scanBatchCount.value}',
                   style: theme.textTheme.labelSmall),
             ],
           ]),
@@ -342,11 +393,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildStatusCard() {
     return Obx(() {
-      final isConnected = _connectionController.isConnected;
-      final config = _connectionController.selectedConfig.value;
+      final recovery = _connectionController.recoveryAvailable.value;
+      final candidateFailed =
+          _connectionController.candidateAttemptFailed.value && !recovery;
+      final isConnected = _connectionController.isConnected && !recovery;
+      final candidate = _connectionController.candidateConfig.value;
+      final config = recovery
+          ? _connectionController.lastKnownWorkingConfig.value
+          : (candidate ?? _connectionController.selectedConfig.value);
       final ip = _connectionController.connectedIP.value;
 
       return Card(
+        key: const ValueKey('connection-status-card'),
         margin: const EdgeInsets.symmetric(horizontal: 16),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -365,7 +423,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    _connectionController.getStateLabelKey().tr,
+                    recovery || candidateFailed
+                        ? 'error'.tr
+                        : _connectionController.getStateLabelKey().tr,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -428,10 +488,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final homeLabel = (home == null || home.isEmpty)
         ? null
-        : '${home.ip} — ${home.placeLabel.isEmpty ? 'location unknown'.tr : home.placeLabel}'.tr;
+        : LocalizationService.t('@ip — @place', {
+            'ip': home.ip,
+            'place': home.placeLabel.isEmpty
+                ? LocalizationService.t('location unknown')
+                : home.placeLabel,
+          });
     final exitLabel = (exit == null || exit.isEmpty)
         ? null
-        : '${exit.ip} — ${exit.placeLabel.isEmpty ? 'location unknown'.tr : exit.placeLabel}'.tr;
+        : LocalizationService.t('@ip — @place', {
+            'ip': exit.ip,
+            'place': exit.placeLabel.isEmpty
+                ? LocalizationService.t('location unknown')
+                : exit.placeLabel,
+          });
 
     TextStyle rowStyle(bool accent) => TextStyle(
           fontSize: 12,
@@ -450,8 +520,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.home_outlined,
-                  size: 14, color: Colors.grey),
+              const Icon(Icons.home_outlined, size: 14, color: Colors.grey),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -484,14 +553,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildConnectButton() {    return Obx(() {
+  Widget _buildConnectButton() {
+    return Obx(() {
       final isConnected = _connectionController.isConnected;
-      final isConnecting = _connectionController.state.value ==
-          ConnectionState.connecting;
+      final isConnecting =
+          _connectionController.state.value == ConnectionState.connecting;
       // During a scan the button is live again, as a Cancel action.
-      final isScanning = _connectionController.state.value ==
-              ConnectionState.selecting ||
-          _connectionController.state.value == ConnectionState.testing;
+      final isScanning =
+          _connectionController.state.value == ConnectionState.selecting ||
+              _connectionController.state.value == ConnectionState.testing;
 
       return Center(
         child: GestureDetector(
@@ -570,6 +640,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Obx(() {
       final result = _connectionController.selectedConfigResult.value;
       final stats = _configController.getStats();
+      final reliability = LocalizationService.t('@percentage%', {
+        'percentage':
+            (stats['average_reliability'] as double).toStringAsFixed(0),
+      });
 
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -585,7 +659,9 @@ class _HomeScreenState extends State<HomeScreen> {
               // so a "Speed" card could only ever read "Not tested" forever.
               // Latency is the figure that is actually measured.
               'latency'.tr,
-              result?.latencyMs != null ? '${result!.latencyMs} ms' : 'Not tested'.tr,
+              result?.latencyMs != null
+                  ? '${result!.latencyMs} ms'
+                  : 'Not tested'.tr,
               Icons.speed,
             ),
             _buildStatCard(
@@ -600,7 +676,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             _buildStatCard(
               'reliability'.tr,
-              '${(stats['average_reliability'] as double).toStringAsFixed(0)}%'.tr,
+              reliability,
               Icons.trending_up,
             ),
           ],
@@ -657,8 +733,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 12),
                 Text(
                   'Visible: ${_configController.visibleConfigs.length} configs '
-                  '(stored: ${_configController.allConfigs.length}) — '
-                  'disabled sources stay saved but are hidden and untested'.tr,
+                          '(stored: ${_configController.allConfigs.length}) — disabled sources stay saved but are hidden and untested'
+                      .tr,
                   style: const TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 8),
@@ -669,8 +745,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: _configController.isLoading.value
                             ? null
                             : () async {
-                              await _configController.fetchFromAllSources();
-                            },
+                                await _configController.fetchFromAllSources();
+                              },
                         icon: const Icon(Icons.refresh, size: 16),
                         label: Text('refresh'.tr),
                       ),
@@ -681,8 +757,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: _configController.isLoading.value
                             ? null
                             : () async {
-                              await _configController.testAllConfigs();
-                            },
+                                await _configController.testAllConfigs();
+                              },
                         icon: const Icon(Icons.speed, size: 16),
                         label: Text('test_all'.tr),
                       ),

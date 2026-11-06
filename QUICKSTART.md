@@ -18,7 +18,7 @@ Get up and running with Blackout Kit Mobile in 5 minutes. 🚀
 1. **App Opens** → Loads configured GitHub config sources.
 2. **Test** → The app checks config-server reachability and latency; this does not verify VPN traffic.
 3. **Connect** → Android asks for VPN consent, then establishes the local tunnel.
-4. **Verify separately** → Test traffic and DNS on a physical device; process/listener readiness alone does not prove an exit path works.
+4. **Verify separately** → Test traffic and DNS on a physical device; process/listener readiness alone does not prove an exit path works. During auto-scan, a TCP probe is only a hint: the app still attempts real VPN connections for reachable, unknown, and TCP-failed configs. A candidate that cannot start or fails your website checks is skipped; only actual failure of an established tunnel offers recovery. Exit-location lookup can be unavailable while the VPN is still working.
 
 ### Add Custom VPN Sources
 

@@ -12,6 +12,7 @@ import '../controllers/config_controller.dart';
 import 'guide_screen.dart';
 import '../controllers/settings_controller.dart';
 import '../controllers/connection_controller.dart';
+import '../models/config.dart';
 import '../widgets/app_logo.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -49,6 +50,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initializeApp() async {
     if (_configController.allConfigs.isNotEmpty) return;
     await _configController.fetchFromAllSources();
+  }
+
+  Future<void> _handleConnectSpecific(Config config) async {
+    final result = _configController.testResults[config.getHash()];
+    final ok = await _connectionController.connect(config, testResult: result);
+    if (!ok) _showSnackbar(_connectionController.statusMessage.value, Colors.red);
   }
 
   Future<void> _handleConnectDisconnect() async {
@@ -137,9 +144,25 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 24),
               // Status card
               _buildStatusCard(),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+              _buildScanProgressCard(),
+              const SizedBox(height: 16),
               // Big connect button
               _buildConnectButton(),
+              Obx(() {
+                final last = _connectionController.lastKnownWorkingConfig.value;
+                if (last == null || _connectionController.isConnected) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                  child: OutlinedButton.icon(
+                    onPressed: () => _handleConnectSpecific(last),
+                    icon: const Icon(Icons.place_outlined),
+                    label: Text('Reconnect to last working location'.tr),
+                  ),
+                );
+              }),
               const SizedBox(height: 32),
               // Quick stats
               _buildQuickStats(),
@@ -153,6 +176,169 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  Widget _buildScanProgressCard() {
+    return Obx(() {
+      final phase = _connectionController.scanPhase.value;
+      final inProgress = _connectionController.operationInFlight;
+      final recovery = _connectionController.recoveryAvailable.value;
+      if (phase == 'idle' && !recovery) return const SizedBox.shrink();
+
+      final theme = Theme.of(context);
+      final accent = recovery ? theme.colorScheme.error : theme.colorScheme.primary;
+      final total = _connectionController.scanItemsTotal.value;
+      final done = _connectionController.scanItemsDone.value;
+      final progress = total == 0 ? null : (done / total).clamp(0.0, 1.0);
+      final phaseLabel = switch (phase) {
+        'ping' => 'Checking server reachability'.tr,
+        'connect' => 'Establishing secure tunnel'.tr,
+        'websites' => 'Testing your websites'.tr,
+        'connected' => 'Connection verified'.tr,
+        'recovery' => 'Connection needs attention'.tr,
+        'failed' => 'No verified config found'.tr,
+        _ => _connectionController.statusMessage.value,
+      };
+
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              colors: [accent.withOpacity(0.12), theme.cardColor],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 350),
+                transitionBuilder: (child, animation) => ScaleTransition(
+                  scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: Icon(
+                  switch (phase) {
+                    'ping' => Icons.radar,
+                    'connect' => Icons.lock_clock,
+                    'websites' => Icons.public,
+                    'connected' => Icons.verified,
+                    'recovery' => Icons.sync_problem,
+                    'failed' => Icons.warning_amber_rounded,
+                    _ => Icons.bolt,
+                  },
+                  key: ValueKey(phase),
+                  color: accent,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(phaseLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+                if (_connectionController.scanCurrentConfig.value.isNotEmpty)
+                  Text(_connectionController.scanCurrentConfig.value,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall),
+              ])),
+              if (inProgress)
+                SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 3,
+                    backgroundColor: accent.withOpacity(0.16),
+                    color: accent,
+                  ),
+                ),
+            ]),
+            if (phase == 'ping' || phase == 'connect' || phase == 'websites') ...[
+              const SizedBox(height: 14),
+              Row(children: [
+                for (final entry in const [
+                  ('ping', Icons.radar),
+                  ('connect', Icons.lock),
+                  ('websites', Icons.public),
+                ]) ...[
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: 36,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: _phaseIndex(phase) >= _phaseIndex(entry.$1)
+                          ? accent
+                          : theme.disabledColor.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                const Spacer(),
+                if (total > 0)
+                  Text('$done / $total', style: theme.textTheme.labelSmall),
+                if (phase == 'websites') ...[
+                  const SizedBox(width: 8),
+                  Text('${_connectionController.scanSitesDone.value}/${_connectionController.scanSitesTotal.value} sites',
+                      style: theme.textTheme.labelSmall),
+                ],
+              ]),
+              if (total > 0) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: progress ?? 0),
+                    duration: const Duration(milliseconds: 500),
+                    builder: (context, value, _) => LinearProgressIndicator(
+                      value: value,
+                      minHeight: 5,
+                      color: accent,
+                      backgroundColor: accent.withOpacity(0.12),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+            if (recovery) ...[
+              const SizedBox(height: 10),
+              Text(_connectionController.recoveryReason.value,
+                  style: theme.textTheme.bodySmall),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 6, children: [
+                FilledButton.icon(
+                  onPressed: () => _connectionController.resumeScanAfterFailure(),
+                  icon: const Icon(Icons.skip_next),
+                  label: Text(_settingsController.connectFailureScanPolicy.value == 'restart'
+                      ? 'Restart scan'.tr
+                      : 'Continue next batch'.tr),
+                ),
+                OutlinedButton(
+                  onPressed: _connectionController.dismissRecovery,
+                  child: Text('Stay disconnected'.tr),
+                ),
+              ]),
+            ],
+            if (inProgress && _connectionController.scanBatchCount.value > 0) ...[
+              const SizedBox(height: 6),
+              Text('Batch ${_connectionController.scanBatchIndex.value} of ${_connectionController.scanBatchCount.value}',
+                  style: theme.textTheme.labelSmall),
+            ],
+          ]),
+        ),
+      );
+    });
+  }
+
+  int _phaseIndex(String phase) => switch (phase) {
+        'ping' => 0,
+        'connect' => 1,
+        'websites' => 2,
+        _ => -1,
+      };
 
   Widget _buildStatusCard() {
     return Obx(() {

@@ -70,6 +70,7 @@ class ConfigController extends GetxController {
   }
   final RxString filterProtocol = RxString('all');
   final RxString filterSource = RxString('all');
+  final RxString searchQuery = RxString('');
   final RxString sortBy = RxString('speed'); // speed, name, recently_added
 
   /// How many rows the library renders at a time.
@@ -475,7 +476,7 @@ class ConfigController extends GetxController {
   /// a filter does, so it is cached against those and invalidated explicitly.
   List<Config> getFilteredConfigs() {
     final key = '${filterProtocol.value}|${filterSource.value}|'
-        '${sortBy.value}|$_filterEpoch';
+        '${sortBy.value}|${searchQuery.value.trim().toLowerCase()}|$_filterEpoch';
     if (key == _filteredCacheKey) return _filteredCache;
 
     final filtered = _computeFilteredConfigs();
@@ -493,6 +494,25 @@ class ConfigController extends GetxController {
 
   List<Config> _computeFilteredConfigs() {
     var filtered = visibleConfigs.toList();
+
+    // Search across the display fields without repeated Hive reads. Resolve
+    // source labels from the already-loaded source and attribution maps.
+    final query = searchQuery.value.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      final sourceNames = {for (final source in sources) source.id: source.name.toLowerCase()};
+      filtered = filtered.where((config) {
+        final hash = config.getHash();
+        final sourceIds = sourceIdsByHash[hash] ??
+            (sourceIdByHash[hash] == null ? const <String>{} : {sourceIdByHash[hash]!});
+        final searchable = <String>[
+          config.displayName,
+          config.address,
+          config.protocol,
+          ...sourceIds.map((id) => sourceNames[id] ?? id),
+        ].join(' ').toLowerCase();
+        return searchable.contains(query);
+      }).toList();
+    }
 
     // Filter by protocol
     if (filterProtocol.value != 'all') {

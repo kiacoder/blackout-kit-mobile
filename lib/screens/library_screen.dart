@@ -131,6 +131,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             );
           }),
+          // Search across config names, hosts, protocols and source names.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+            child: Obx(() => TextField(
+              key: const ValueKey('library-config-search'),
+              onChanged: (value) => _configController.searchQuery.value = value,
+              decoration: InputDecoration(
+                hintText: 'Search configs, hosts, protocols, sources'.tr,
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _configController.searchQuery.value.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search'.tr,
+                        icon: const Icon(Icons.close),
+                        onPressed: () => _configController.searchQuery.value = '',
+                      ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                isDense: true,
+              ),
+            )),
+          ),
           // Filter bar
           _buildFilterBar(context),
           // Config list
@@ -177,6 +198,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
               final visibleCount =
                   limit < filtered.length ? limit : filtered.length;
               final remaining = filtered.length - visibleCount;
+
+              if (filtered.isEmpty && _configController.searchQuery.value.trim().isNotEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.search_off, size: 52, color: Theme.of(context).disabledColor),
+                      const SizedBox(height: 12),
+                      Text('No configs match your search'.tr),
+                      TextButton(
+                        onPressed: () => _configController.searchQuery.value = '',
+                        child: Text('Clear search'.tr),
+                      ),
+                    ]),
+                  ),
+                );
+              }
 
               if (filtered.isEmpty) {
                 return RefreshIndicator(

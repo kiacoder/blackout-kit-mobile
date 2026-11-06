@@ -17,6 +17,14 @@ class SettingsController extends GetxController {
   late Box _settingsBox;
   final Logger _log;
 
+  // FLUX / Quick Failover settings
+  final RxBool fluxEnabled = RxBool(true);
+  final RxInt fluxConcurrency = RxInt(3);
+  final RxString fluxProbeTarget = RxString('http://cp.cloudflare.com/generate_204');
+  final RxInt fluxProbeIntervalSeconds = RxInt(10);
+  final RxInt fluxFailureThreshold = RxInt(3);
+  final RxInt fluxHysteresisMs = RxInt(40);
+
   // Observable preferences
   final RxBool autoConnect = RxBool(false);
   final RxBool killSwitchEnabled = RxBool(false);
@@ -238,6 +246,13 @@ class SettingsController extends GetxController {
       coreDebugLogs.value = _settingsBox.get('coreDebugLogs', defaultValue: false);
       XrayConfigBuilder.coreLogLevel = coreDebugLogs.value ? 'debug' : 'warning';
 
+      fluxEnabled.value = _settingsBox.get('fluxEnabled', defaultValue: true);
+      fluxConcurrency.value = _settingsBox.get('fluxConcurrency', defaultValue: 3);
+      fluxProbeTarget.value = _settingsBox.get('fluxProbeTarget', defaultValue: 'http://cp.cloudflare.com/generate_204');
+      fluxProbeIntervalSeconds.value = _settingsBox.get('fluxProbeIntervalSeconds', defaultValue: 10);
+      fluxFailureThreshold.value = _settingsBox.get('fluxFailureThreshold', defaultValue: 3);
+      fluxHysteresisMs.value = _settingsBox.get('fluxHysteresisMs', defaultValue: 40);
+
       // Apply initial theme mode & wakelock
       _applyTheme(theme.value);
       _applyKeepScreenAwake(keepScreenAwake.value);
@@ -280,6 +295,12 @@ class SettingsController extends GetxController {
       'siteCheckEnabled': siteCheckEnabled.value,
       'siteCheckUrls': siteCheckUrls.toList(),
       'coreDebugLogs': coreDebugLogs.value,
+      'fluxEnabled': fluxEnabled.value,
+      'fluxConcurrency': fluxConcurrency.value,
+      'fluxProbeTarget': fluxProbeTarget.value,
+      'fluxProbeIntervalSeconds': fluxProbeIntervalSeconds.value,
+      'fluxFailureThreshold': fluxFailureThreshold.value,
+      'fluxHysteresisMs': fluxHysteresisMs.value,
     };
     try {
       // If init failed entirely this raises LateInitializationError, which
@@ -451,6 +472,55 @@ class SettingsController extends GetxController {
     _action('setting_core_debug_logs', {'value': value});
   }
 
+  /// Toggle FLUX parallel candidate racing.
+  void toggleFlux(bool enabled) {
+    fluxEnabled.value = enabled;
+    saveSettings();
+    _log.i('FLUX enabled: $enabled');
+  }
+
+  /// Set concurrent dial count for FLUX racing (1 to 5).
+  void setFluxConcurrency(int count) {
+    if (count >= 1 && count <= 5) {
+      fluxConcurrency.value = count;
+      saveSettings();
+      _log.i('FLUX concurrency: $count');
+    }
+  }
+
+  /// Target URL for true egress connectivity probing.
+  void setFluxProbeTarget(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isNotEmpty) {
+      fluxProbeTarget.value = trimmed;
+      saveSettings();
+    }
+  }
+
+  /// Interval in seconds between background heartbeat probes.
+  void setFluxProbeInterval(int seconds) {
+    if (seconds >= 3 && seconds <= 60) {
+      fluxProbeIntervalSeconds.value = seconds;
+      saveSettings();
+    }
+  }
+
+  /// Drops before failover is initiated.
+  void setFluxFailureThreshold(int count) {
+    if (count >= 1 && count <= 10) {
+      fluxFailureThreshold.value = count;
+      saveSettings();
+    }
+  }
+
+  /// Required latency difference before migrating established flows.
+  void setFluxHysteresis(int ms) {
+    if (ms >= 0 && ms <= 500) {
+      fluxHysteresisMs.value = ms;
+      saveSettings();
+    }
+  }
+
   /// Replace the site-check host list with [raw] (sanitised first).
   void setSiteCheckUrls(Iterable<String> raw) {
     final hosts = sanitizeSiteCheckUrls(raw);
@@ -558,6 +628,12 @@ class SettingsController extends GetxController {
     siteCheckEnabled.value = true;
     siteCheckUrls.value = List<String>.from(defaultSiteCheckUrls);
     coreDebugLogs.value = false;
+    fluxEnabled.value = true;
+    fluxConcurrency.value = 3;
+    fluxProbeTarget.value = 'http://cp.cloudflare.com/generate_204';
+    fluxProbeIntervalSeconds.value = 10;
+    fluxFailureThreshold.value = 3;
+    fluxHysteresisMs.value = 40;
 
     _applyTheme('system');
     _applyKeepScreenAwake(false);

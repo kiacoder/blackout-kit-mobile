@@ -364,6 +364,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _showTestIntervalDialog,
                 )),
                 Obx(() => SwitchListTile(
+                  title: const Text('FLUX Quick Failover & Racing'),
+                  subtitle: const Text(
+                    'Race top candidate servers concurrently and fail over without hanging',
+                  ),
+                  value: _settingsController.fluxEnabled.value,
+                  onChanged: _settingsController.toggleFlux,
+                )),
+                Obx(() => _settingsController.fluxEnabled.value
+                    ? ListTile(
+                        title: const Text('FLUX Concurrency'),
+                        subtitle: Text(
+                          '${_settingsController.fluxConcurrency.value} simultaneous dials',
+                        ),
+                        leading: const Icon(Icons.flash_on),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove),
+                              onPressed: _settingsController.fluxConcurrency.value > 1
+                                  ? () => _settingsController.setFluxConcurrency(
+                                        _settingsController.fluxConcurrency.value - 1,
+                                      )
+                                  : null,
+                            ),
+                            Text('${_settingsController.fluxConcurrency.value}'),
+                            IconButton(
+                              icon: const Icon(Icons.add),
+                              onPressed: _settingsController.fluxConcurrency.value < 5
+                                  ? () => _settingsController.setFluxConcurrency(
+                                        _settingsController.fluxConcurrency.value + 1,
+                                      )
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink()),
+                Obx(() => SwitchListTile(
                   title: Text('site_check'.tr),
                   subtitle: Text(
                     'Verify candidate configs by fetching real websites through them, not just pinging the server'.tr,

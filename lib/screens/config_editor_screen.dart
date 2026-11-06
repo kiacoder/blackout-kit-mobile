@@ -136,6 +136,133 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     );
   }
 
+
+  void _showAwgObfuscationDialog() {
+    // Parse current values from text
+    final lines = _textController.text.split('\n');
+    String jc = '4', jmin = '40', jmax = '70';
+    String s1 = '', s2 = '', h1 = '', h2 = '', h3 = '', h4 = '';
+
+    for (final line in lines) {
+      final t = line.trim();
+      if (!t.contains('=')) continue;
+      final parts = t.split('=');
+      final k = parts[0].trim().toLowerCase();
+      final v = parts.sublist(1).join('=').trim();
+      if (k == 'jc') jc = v;
+      if (k == 'jmin') jmin = v;
+      if (k == 'jmax') jmax = v;
+      if (k == 's1') s1 = v;
+      if (k == 's2') s2 = v;
+      if (k == 'h1') h1 = v;
+      if (k == 'h2') h2 = v;
+      if (k == 'h3') h3 = v;
+      if (k == 'h4') h4 = v;
+    }
+
+    final cJc = TextEditingController(text: jc);
+    final cJmin = TextEditingController(text: jmin);
+    final cJmax = TextEditingController(text: jmax);
+    final cS1 = TextEditingController(text: s1);
+    final cS2 = TextEditingController(text: s2);
+    final cH1 = TextEditingController(text: h1);
+    final cH2 = TextEditingController(text: h2);
+    final cH3 = TextEditingController(text: h3);
+    final cH4 = TextEditingController(text: h4);
+
+    Get.dialog(
+      AlertDialog(
+        title: const Text('AmneziaWG Obfuscation (AWG)'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Junk Packet Preamble (Jc, Jmin, Jmax):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(child: TextField(controller: cJc, decoration: const InputDecoration(labelText: 'Jc (count)', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  const SizedBox(width: 8),
+                  Expanded(child: TextField(controller: cJmin, decoration: const InputDecoration(labelText: 'Jmin (B)', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  const SizedBox(width: 8),
+                  Expanded(child: TextField(controller: cJmax, decoration: const InputDecoration(labelText: 'Jmax (B)', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Text('Handshake Padding (S1, S2):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(child: TextField(controller: cS1, decoration: const InputDecoration(labelText: 'S1 (Init B)', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  const SizedBox(width: 8),
+                  Expanded(child: TextField(controller: cS2, decoration: const InputDecoration(labelText: 'S2 (Resp B)', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Text('Magic Headers (H1, H2, H3, H4):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(child: TextField(controller: cH1, decoration: const InputDecoration(labelText: 'H1', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  const SizedBox(width: 8),
+                  Expanded(child: TextField(controller: cH2, decoration: const InputDecoration(labelText: 'H2', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: TextField(controller: cH3, decoration: const InputDecoration(labelText: 'H3', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  const SizedBox(width: 8),
+                  Expanded(child: TextField(controller: cH4, decoration: const InputDecoration(labelText: 'H4', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: Text('cancel'.tr)),
+          ElevatedButton(
+            onPressed: () {
+              // Update text content with new params
+              final updated = <String>[];
+              final handled = <String>{'jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4'};
+              for (final line in _textController.text.split('\n')) {
+                final t = line.trim();
+                if (t.contains('=')) {
+                  final k = t.split('=')[0].trim().toLowerCase();
+                  if (handled.contains(k)) continue; // will append in [Interface]
+                }
+                updated.add(line);
+                if (t.toLowerCase() == '[interface]') {
+                  if (cJc.text.trim().isNotEmpty) updated.add('Jc = ${cJc.text.trim()}');
+                  if (cJmin.text.trim().isNotEmpty) updated.add('Jmin = ${cJmin.text.trim()}');
+                  if (cJmax.text.trim().isNotEmpty) updated.add('Jmax = ${cJmax.text.trim()}');
+                  if (cS1.text.trim().isNotEmpty) updated.add('S1 = ${cS1.text.trim()}');
+                  if (cS2.text.trim().isNotEmpty) updated.add('S2 = ${cS2.text.trim()}');
+                  if (cH1.text.trim().isNotEmpty) updated.add('H1 = ${cH1.text.trim()}');
+                  if (cH2.text.trim().isNotEmpty) updated.add('H2 = ${cH2.text.trim()}');
+                  if (cH3.text.trim().isNotEmpty) updated.add('H3 = ${cH3.text.trim()}');
+                  if (cH4.text.trim().isNotEmpty) updated.add('H4 = ${cH4.text.trim()}');
+                }
+              }
+              _textController.text = updated.join('\n');
+              _validateContent(_textController.text);
+              Get.back();
+              Get.snackbar(
+                'AWG Parameters Updated'.tr,
+                'AmneziaWG obfuscation headers injected into config'.tr,
+                backgroundColor: Colors.green,
+                colorText: Colors.white,
+              );
+            },
+            child: Text('apply'.tr),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showQrDialog() {
     final content = _textController.text.trim();
     if (content.isEmpty) return;
@@ -234,6 +361,12 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
         title: Text('${'edit_config'.tr}: ${widget.config.displayName}'),
         elevation: 0,
         actions: [
+          if (widget.config is AmneziaWGConfig || _textController.text.contains('[Interface]'))
+            IconButton(
+              icon: const Icon(Icons.security),
+              tooltip: 'AmneziaWG Obfuscation (AWG)'.tr,
+              onPressed: _showAwgObfuscationDialog,
+            ),
           IconButton(
             icon: const Icon(Icons.qr_code_2),
             tooltip: 'Share QR Code'.tr,

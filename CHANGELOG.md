@@ -51,6 +51,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dialers were constructed, logged, and dropped) and keeps the netstack
   return channel connected instead of dropping it.
 
+## [1.19.0] - 2026-11-06
+
+### Added
+- **AmneziaWG Full Obfuscation Parameter Suite**: Configurable junk packet train (`Jc`, `Jmin`, `Jmax`), handshake padding (`S1`, `S2`), and magic message header remapping (`H1`–`H4`) in `AmneziaWGConfig` and Sing-box wireguard endpoint serialization.
+- **FLUX Quick Failover & Concurrent Route Racing**: Parallel candidate racing engine in `ConnectionController` with user-configurable concurrency (`fluxConcurrency`), heartbeat probing, failure threshold, and link flap hysteresis.
+- **AmneziaWG Obfuscation Editor**: Interactive modal dialog in `ConfigEditorScreen` for visual parameter tuning and header injection into raw config profiles.
+- **Embedded libbox Engine (`libcores.aar`)**: Integrated sing-box 1.11.4 core in-process on Android.
+- **Endpoint-Gated Relay Profiles**: Native parsing and storage models for SNI and MHRV relay profiles.
+
 ## [Unreleased]
 
 ### Added

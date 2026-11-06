@@ -21,6 +21,7 @@ const Set<String> kSingboxProtocols = {
   'hysteria2',
   'tuic',
   'anytls',
+  'amneziawg',
   // 'shadowtls' is intentionally absent: a shadowtls outbound is only a TLS
   // camouflage layer and must carry an inner proxy as its `detour`, which a
   // shadowtls:// link does not contain. Emitting it as the final outbound
@@ -48,6 +49,7 @@ const Set<String> kLibboxProtocols = {
   'trojan',
   'shadowsocks',
   'wireguard',
+  'amneziawg',
   'hysteria2',
   'tuic',
   'anytls',
@@ -456,6 +458,12 @@ class SingboxConfigBuilder {
             'jc': c.junkCount,
             'jmin': c.junkMin,
             'jmax': c.junkMax,
+            if (c.s1 != null) 's1': c.s1,
+            if (c.s2 != null) 's2': c.s2,
+            if (c.h1 != null) 'h1': c.h1,
+            if (c.h2 != null) 'h2': c.h2,
+            if (c.h3 != null) 'h3': c.h3,
+            if (c.h4 != null) 'h4': c.h4,
           },
         };
 

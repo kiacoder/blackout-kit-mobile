@@ -641,6 +641,51 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         final verify = siteCheckService;
         final liveVerifyEnabled =
             verify != null && verify.enabled && verify.liveCheckHosts.isNotEmpty;
+        // FLUX Racing Dispatcher: if enabled, race the top candidates in parallel
+        final settings = Get.find<SettingsController>();
+        if (settings.fluxEnabled.value && working.length > 1) {
+          final raceCount = settings.fluxConcurrency.value.clamp(1, working.length);
+          final candidatesToRace = <(Config, TestResult)>[];
+          for (var i = 0; i < raceCount; i++) {
+            final res = working[i];
+            final cfg = batch.firstWhereOrNull((c) => c.getHash() == res.configHash);
+            if (cfg != null) {
+              candidatesToRace.add((cfg, res));
+            }
+          }
+
+          if (candidatesToRace.isNotEmpty) {
+            statusMessage.value = LocalizationService.t(
+                'FLUX racing top @count servers (@label)...',
+                {'count': '${candidatesToRace.length}', 'label': batchLabel});
+
+            // Race candidate connections concurrently
+            final raceFutures = candidatesToRace.map((pair) async {
+              final ok = await _connectImpl(pair.$1, testResult: pair.$2);
+              if (!ok) throw Exception('connect failed');
+              if (liveVerifyEnabled) {
+                final alive = await verify!.verifyLiveConnection();
+                if (!alive) {
+                  await _disconnectImpl();
+                  throw Exception('live verify failed');
+                }
+              }
+              return pair.$1;
+            }).toList();
+
+            try {
+              final winner = await Future.any(raceFutures);
+              state.value = ConnectionState.connected;
+              statusMessage.value = LocalizationService.t(
+                  'Connected to @name — FLUX winner', {'name': winner.displayName});
+              _log.i('FLUX race won by ${winner.displayName}');
+              return true;
+            } catch (_) {
+              _log.w('FLUX race pool finished without a clean winner, falling back to sequential batch dial');
+            }
+          }
+        }
+
         // Always try several candidates per batch. The old code allowed a
         // single attempt when site checking was off, so one config that
         // accepted the probe but failed to connect threw away the whole

@@ -76,18 +76,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'VPN Settings'.tr,
               children: [
                 Obx(() => SwitchListTile(
-                  title: Text('auto_connect'.tr),
-                  subtitle:
-                    Text('auto_connect_desc'.tr),
-                  value: _settingsController.autoConnect.value,
-                  onChanged: _settingsController.toggleAutoConnect,
-                )),
+                      title: Text('auto_connect'.tr),
+                      subtitle: Text('auto_connect_desc'.tr),
+                      value: _settingsController.autoConnect.value,
+                      onChanged: _settingsController.toggleAutoConnect,
+                    )),
                 Obx(() => SwitchListTile(
-                  title: Text('kill_switch'.tr),
-                  subtitle: Text('block_non_vpn_desc'.tr),
-                  value: _settingsController.killSwitchEnabled.value,
-                  onChanged: _settingsController.toggleKillSwitch,
-                )),
+                      title: Text('kill_switch'.tr),
+                      subtitle: Text('block_non_vpn_desc'.tr),
+                      value: _settingsController.killSwitchEnabled.value,
+                      onChanged: _settingsController.toggleKillSwitch,
+                    )),
                 // Was a switch that could never move (Android owns this
                 // setting; there is no API). Now it is what the user actually
                 // needs: one tap to the system screen where "Always-on VPN"
@@ -100,17 +99,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.'.tr,
                   ),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Get.find<KillSwitchService>().openSystemSettings(),
+                  onTap: () =>
+                      Get.find<KillSwitchService>().openSystemSettings(),
                 ),
                 Obx(() => SwitchListTile(
-                  title: Text('split_tunneling'.tr),
-                  subtitle: Text('split_tunneling_desc'.tr),
-                  value: _settingsController.splitTunnelingEnabled.value,
-                  onChanged: _settingsController.toggleSplitTunneling,
-                )),
+                      title: Text('split_tunneling'.tr),
+                      subtitle: Text('split_tunneling_desc'.tr),
+                      value: _settingsController.splitTunnelingEnabled.value,
+                      onChanged: _settingsController.toggleSplitTunneling,
+                    )),
                 ListTile(
                   title: Text('select_apps'.tr),
-                  subtitle: Obx(() => Text('${_settingsController.splitTunnelingApps.length} ${'apps_selected'.tr}')),
+                  subtitle: Obx(() => Text(
+                      '${_settingsController.splitTunnelingApps.length} ${'apps_selected'.tr}')),
                   leading: const Icon(Icons.apps),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
@@ -125,39 +126,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Appearance',
               children: [
                 Obx(() => ListTile(
-                  title: Text('theme'.tr),
-                  subtitle: Text(_getThemeLabel(
-                    _settingsController.theme.value,
-                  )),
-                  leading: Icon(
-                    _settingsController.theme.value == 'dark'
-                        ? Icons.dark_mode
-                        : (_settingsController.theme.value == 'light'
-                            ? Icons.light_mode
-                            : Icons.brightness_auto),
-                  ),
-                  onTap: _showThemeDialog,
-                )),
+                      title: Text('theme'.tr),
+                      subtitle: Text(_getThemeLabel(
+                        _settingsController.theme.value,
+                      )),
+                      leading: Icon(
+                        _settingsController.theme.value == 'dark'
+                            ? Icons.dark_mode
+                            : (_settingsController.theme.value == 'light'
+                                ? Icons.light_mode
+                                : Icons.brightness_auto),
+                      ),
+                      onTap: _showThemeDialog,
+                    )),
                 Obx(() => SwitchListTile(
-                  title: Text('keep_screen_awake'.tr),
-                  subtitle: Text('keep_screen_awake_desc'.tr),
-                  secondary: const Icon(Icons.wb_incandescent_outlined),
-                  value: _settingsController.keepScreenAwake.value,
-                  onChanged: _settingsController.toggleKeepScreenAwake,
-                )),
+                      title: Text('keep_screen_awake'.tr),
+                      subtitle: Text('keep_screen_awake_desc'.tr),
+                      secondary: const Icon(Icons.wb_incandescent_outlined),
+                      value: _settingsController.keepScreenAwake.value,
+                      onChanged: _settingsController.toggleKeepScreenAwake,
+                    )),
                 Obx(() => SwitchListTile(
-                  title: Text('show_speed_status_bar'.tr),
-                  // Honest subtitle: the tester measures latency, not throughput.
-                  // The old copy promised a live speed the app never produced.
-                  subtitle: Text(
-                    'Shows the latency of the selected config in the notification'.tr,
-                  ),
-                  value: _settingsController.showSpeedInTray.value,
-                  onChanged: (value) {
-                    _settingsController.showSpeedInTray.value = value;
-                    _settingsController.saveSettings();
-                  },
-                )),
+                      title: Text('show_speed_status_bar'.tr),
+                      // Honest subtitle: the tester measures latency, not throughput.
+                      // The old copy promised a live speed the app never produced.
+                      subtitle: Text(
+                        'Shows the latency of the selected config in the notification'.tr,
+                      ),
+                      value: _settingsController.showSpeedInTray.value,
+                      onChanged: (value) {
+                        _settingsController.showSpeedInTray.value = value;
+                        _settingsController.saveSettings();
+                      },
+                    )),
               ],
             ),
             // DNS section.
@@ -171,56 +172,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'DNS',
               children: [
                 Obx(() => SwitchListTile(
-                  title: Text('dns_leak_prevention'.tr),
-                  subtitle: Text(
-                    _settingsController.dnsLeakPreventionEnabled.value
-                        ? 'DNS queries are resolved inside the tunnel through ${_dnsSelectionSummary()}.'
-                        : 'Off - your provider can see which domains you resolve.'.tr,
-                  ),
-                  value: _settingsController.dnsLeakPreventionEnabled.value,
-                  onChanged: (value) {
-                    _settingsController.toggleDnsLeakPrevention(value);
-                  },
-                )),
+                      title: Text('dns_leak_prevention'.tr),
+                      subtitle: Text(
+                        _settingsController.dnsLeakPreventionEnabled.value
+                            ? 'DNS queries are resolved inside the tunnel through ${_dnsSelectionSummary()}.'
+                            : 'Off - your provider can see which domains you resolve.'.tr,
+                      ),
+                      value: _settingsController.dnsLeakPreventionEnabled.value,
+                      onChanged: (value) {
+                        _settingsController.toggleDnsLeakPrevention(value);
+                      },
+                    )),
                 // "Change DNS only" — the answer to "I just want a different
                 // resolver, not a VPN". It builds an interface with the
                 // resolver attached and no routes, so nothing is tunnelled.
                 Obx(() => SwitchListTile(
-                  title: Text('dns_only_mode'.tr),
-                  subtitle: Text('dns_only_mode_desc'.tr),
-                  secondary: const Icon(Icons.dns),
-                  value: _settingsController.dnsOnlyMode.value,
-                  onChanged: (value) {
-                    _settingsController.setDnsOnlyMode(value);
-                    if (Get.isRegistered<ConnectionController>() &&
-                        Get.find<ConnectionController>().isConnected) {
-                      Get.snackbar(
-                        'reconnect_to_apply'.tr,
-                        'dns_only_mode_desc'.tr,
-                        snackPosition: SnackPosition.BOTTOM,
-                        duration: const Duration(seconds: 4),
-                      );
-                    }
-                  },
-                )),
+                      title: Text('dns_only_mode'.tr),
+                      subtitle: Text('dns_only_mode_desc'.tr),
+                      secondary: const Icon(Icons.dns),
+                      value: _settingsController.dnsOnlyMode.value,
+                      onChanged: (value) {
+                        _settingsController.setDnsOnlyMode(value);
+                        if (Get.isRegistered<ConnectionController>() &&
+                            Get.find<ConnectionController>().isConnected) {
+                          Get.snackbar(
+                            'reconnect_to_apply'.tr,
+                            'dns_only_mode_desc'.tr,
+                            snackPosition: SnackPosition.BOTTOM,
+                            duration: const Duration(seconds: 4),
+                          );
+                        }
+                      },
+                    )),
                 Obx(() => ListTile(
-                  title: Text('dns_resolver'.tr),
-                  // Shows the whole pair, not just the primary: the tunnel
-                  // advertises both addresses, and hiding the secondary made
-                  // the "why is it using 185.51.200.2" question unanswerable.
-                  subtitle: Text(_dnsSelectionSummary()),
-                  leading: const Icon(Icons.dns_outlined),
-                  // Enabled for DNS-only mode as well: picking a resolver is
-                  // the whole point of that mode, and gating this on the
-                  // leak-prevention toggle made the picker unreachable exactly
-                  // when the user wanted it.
-                  enabled: _settingsController.dnsLeakPreventionEnabled.value ||
-                      _settingsController.dnsOnlyMode.value,
-                  onTap: (_settingsController.dnsLeakPreventionEnabled.value ||
-                          _settingsController.dnsOnlyMode.value)
-                      ? _showDnsResolverDialog
-                      : null,
-                )),
+                      title: Text('dns_resolver'.tr),
+                      // Shows the whole pair, not just the primary: the tunnel
+                      // advertises both addresses, and hiding the secondary made
+                      // the "why is it using 185.51.200.2" question unanswerable.
+                      subtitle: Text(_dnsSelectionSummary()),
+                      leading: const Icon(Icons.dns_outlined),
+                      // Enabled for DNS-only mode as well: picking a resolver is
+                      // the whole point of that mode, and gating this on the
+                      // leak-prevention toggle made the picker unreachable exactly
+                      // when the user wanted it.
+                      enabled:
+                          _settingsController.dnsLeakPreventionEnabled.value ||
+                              _settingsController.dnsOnlyMode.value,
+                      onTap:
+                          (_settingsController.dnsLeakPreventionEnabled.value ||
+                                  _settingsController.dnsOnlyMode.value)
+                              ? _showDnsResolverDialog
+                              : null,
+                    )),
                 // Shown only when the resolver's country and the exit's
                 // country disagree — see DnsExitAdvisor for why that matters.
                 Obx(() {
@@ -250,18 +253,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // question that matters when a "connected" tunnel resolves
                 // nothing.
                 Obx(() => ListTile(
-                  title: Text('check_resolvers'.tr),
-                  subtitle: Text(
-                    'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.'.tr,
-                  ),
-                  leading: const Icon(Icons.network_check),
-                  enabled: _settingsController.dnsLeakPreventionEnabled.value ||
-                      _settingsController.dnsOnlyMode.value,
-                  onTap: (_settingsController.dnsLeakPreventionEnabled.value ||
-                          _settingsController.dnsOnlyMode.value)
-                      ? _checkDnsResolvers
-                      : null,
-                )),
+                      title: Text('check_resolvers'.tr),
+                      subtitle: Text(
+                        'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.'.tr,
+                      ),
+                      leading: const Icon(Icons.network_check),
+                      enabled:
+                          _settingsController.dnsLeakPreventionEnabled.value ||
+                              _settingsController.dnsOnlyMode.value,
+                      onTap:
+                          (_settingsController.dnsLeakPreventionEnabled.value ||
+                                  _settingsController.dnsOnlyMode.value)
+                              ? _checkDnsResolvers
+                              : null,
+                    )),
               ],
             ),
             // General Section
@@ -270,13 +275,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'General',
               children: [
                 Obx(() => ListTile(
-                  title: Text('language'.tr),
-                  subtitle: Text(_getLanguageLabel(
-                    _settingsController.selectedLanguage.value,
-                  )),
-                  leading: const Icon(Icons.language),
-                  onTap: _showLanguageDialog,
-                )),
+                      title: Text('language'.tr),
+                      subtitle: Text(_getLanguageLabel(
+                        _settingsController.selectedLanguage.value,
+                      )),
+                      leading: const Icon(Icons.language),
+                      onTap: _showLanguageDialog,
+                    )),
                 ListTile(
                   title: Text('guide'.tr),
                   subtitle: Text('guide_subtitle'.tr),
@@ -288,41 +293,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // was ever transmitted anywhere. The toggle is kept as a stored
                 // preference, but its description now says exactly that.
                 Obx(() => SwitchListTile(
-                  title: Text('show_my_location'.tr),
-                  subtitle: Text(
-                    'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.'.tr,
-                  ),
-                  value: _settingsController.showMyLocation.value,
-                  onChanged: (value) {
-                    _settingsController.showMyLocation.value = value;
-                    _settingsController.saveSettings();
-                    // Apply immediately: the connection controller reads the
-                    // service on connect.
-                    try {
-                      Get.find<IpInfoService>().setLookupsEnabled(value);
-                    } catch (_) {}
-                    // Turning it off has to take the resolved IPs off the
-                    // screen too - the service clears its cache, but the home
-                    // screen renders in-memory values that survived. Turning
-                    // it back on refreshes them, since nothing else will.
-                    try {
-                      final connection = Get.find<ConnectionController>();
-                      if (value) {
-                        connection.refreshHomeIpInfo();
-                      } else {
-                        connection.clearIpInfo();
-                      }
-                    } catch (_) {}
-                  },
-                )),
+                      title: Text('show_my_location'.tr),
+                      subtitle: Text(
+                        'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.'.tr,
+                      ),
+                      value: _settingsController.showMyLocation.value,
+                      onChanged: (value) {
+                        _settingsController.showMyLocation.value = value;
+                        _settingsController.saveSettings();
+                        // Apply immediately: the connection controller reads the
+                        // service on connect.
+                        try {
+                          Get.find<IpInfoService>().setLookupsEnabled(value);
+                        } catch (_) {}
+                        // Turning it off has to take the resolved IPs off the
+                        // screen too - the service clears its cache, but the home
+                        // screen renders in-memory values that survived. Turning
+                        // it back on refreshes them, since nothing else will.
+                        try {
+                          final connection = Get.find<ConnectionController>();
+                          if (value) {
+                            connection.refreshHomeIpInfo();
+                          } else {
+                            connection.clearIpInfo();
+                          }
+                        } catch (_) {}
+                      },
+                    )),
                 Obx(() => SwitchListTile(
-                  title: Text('analytics'.tr),
-                  subtitle: Text(
-                    'No data leaves your device - this only stores your preference'.tr,
-                  ),
-                  value: _settingsController.analyticsEnabled.value,
-                  onChanged: _settingsController.toggleAnalytics,
-                )),
+                      title: Text('analytics'.tr),
+                      subtitle: Text(
+                        'No data leaves your device - this only stores your preference'.tr,
+                      ),
+                      value: _settingsController.analyticsEnabled.value,
+                      onChanged: _settingsController.toggleAnalytics,
+                    )),
               ],
             ),
             // Protocol Preference Section
@@ -340,35 +345,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
                 Obx(() => ListTile(
-                  title: Text('preferred_protocol'.tr),
-                  subtitle: Text(
-                    _settingsController.preferredProtocol.value.toUpperCase(),
-                  ),
-                  leading: const Icon(Icons.security),
-                  onTap: _showProtocolDialog,
-                )),
+                      title: Text('preferred_protocol'.tr),
+                      subtitle: Text(
+                        _settingsController.preferredProtocol.value
+                            .toUpperCase(),
+                      ),
+                      leading: const Icon(Icons.security),
+                      onTap: _showProtocolDialog,
+                    )),
                 Obx(() => SwitchListTile(
-                  title: Text('auto_select_fastest'.tr),
-                  subtitle:
-                    Text('auto_select_fastest_desc'.tr),
-                  value: _settingsController.autoSelectFastest.value,
-                  onChanged: _settingsController.toggleAutoSelectFastest,
-                )),
+                      title: Text('auto_select_fastest'.tr),
+                      subtitle: Text('auto_select_fastest_desc'.tr),
+                      value: _settingsController.autoSelectFastest.value,
+                      onChanged: _settingsController.toggleAutoSelectFastest,
+                    )),
                 Obx(() => ListTile(
-                  title: Text('auto_test_interval'.tr),
-                  subtitle: Text(
-                    '${_settingsController.autoTestIntervalMinutes.value} minutes — while the app is open, re-checks that the tunnel still loads websites (0 disables)'.tr,
-                    maxLines: 3,
-                  ),
-                  leading: const Icon(Icons.timer_outlined),
-                  onTap: _showTestIntervalDialog,
-                )),
+                      title: Text('auto_test_interval'.tr),
+                      subtitle: Text(
+                        '${_settingsController.autoTestIntervalMinutes.value} minutes — while the app is open, re-checks that the tunnel still loads websites (0 disables)'
+                            .tr,
+                        maxLines: 3,
+                      ),
+                      leading: const Icon(Icons.timer_outlined),
+                      onTap: _showTestIntervalDialog,
+                    )),
                 Obx(() => SwitchListTile(
-                  title: Text('flux_racing'.tr),
-                  subtitle: Text('flux_racing_desc'.tr),
-                  value: _settingsController.fluxEnabled.value,
-                  onChanged: _settingsController.toggleFlux,
-                )),
+                      title: Text('flux_racing'.tr),
+                      subtitle: Text('flux_racing_desc'.tr),
+                      value: _settingsController.fluxEnabled.value,
+                      onChanged: _settingsController.toggleFlux,
+                    )),
                 Obx(() => _settingsController.fluxEnabled.value
                     ? ListTile(
                         title: Text('flux_concurrency'.tr),
@@ -381,51 +387,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.remove),
-                              onPressed: _settingsController.fluxConcurrency.value > 1
-                                  ? () => _settingsController.setFluxConcurrency(
-                                        _settingsController.fluxConcurrency.value - 1,
-                                      )
-                                  : null,
+                              onPressed:
+                                  _settingsController.fluxConcurrency.value > 1
+                                      ? () => _settingsController
+                                              .setFluxConcurrency(
+                                            _settingsController
+                                                    .fluxConcurrency.value -
+                                                1,
+                                          )
+                                      : null,
                             ),
-                            Text('${_settingsController.fluxConcurrency.value}'),
+                            Text(
+                                '${_settingsController.fluxConcurrency.value}'),
                             IconButton(
                               icon: const Icon(Icons.add),
-                              onPressed: _settingsController.fluxConcurrency.value < 5
-                                  ? () => _settingsController.setFluxConcurrency(
-                                        _settingsController.fluxConcurrency.value + 1,
-                                      )
-                                  : null,
+                              onPressed:
+                                  _settingsController.fluxConcurrency.value < 5
+                                      ? () => _settingsController
+                                              .setFluxConcurrency(
+                                            _settingsController
+                                                    .fluxConcurrency.value +
+                                                1,
+                                          )
+                                      : null,
                             ),
                           ],
                         ),
                       )
                     : const SizedBox.shrink()),
-                Obx(() => SwitchListTile(
-                  title: Text('site_check'.tr),
-                  subtitle: Text(
-                    'Verify candidate configs by fetching real websites through them, not just pinging the server'.tr,
-                  ),
-                  value: _settingsController.siteCheckEnabled.value,
-                  onChanged: _settingsController.setSiteCheckEnabled,
-                )),
-                Obx(() => SwitchListTile(
-                  title: Text('verbose_core_logs'.tr),
-                  subtitle: Text(
-                    'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel'.tr,
-                  ),
-                  value: _settingsController.coreDebugLogs.value,
-                  onChanged: _settingsController.setCoreDebugLogs,
-                )),
                 Obx(() => ListTile(
-                  title: Text('site_check_websites'.tr),
-                  subtitle: Text(
-                    _settingsController.siteCheckUrls.join(', '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  leading: const Icon(Icons.public),
-                  onTap: _showSiteCheckUrlsDialog,
-                )),
+                      title: Text('Scan batch size'.tr),
+                      subtitle: Text(
+                          '${_settingsController.connectScanBatchSize.value} configs per batch'),
+                      leading: const Icon(Icons.view_week_outlined),
+                      onTap: _showScanBatchSizeDialog,
+                    )),
+                Obx(() => ListTile(
+                      title: Text('Candidate verification'.tr),
+                      subtitle: Text(switch (_settingsController
+                          .connectVerificationStrategy.value) {
+                        'all' =>
+                          'Connect and verify every pingable or unknown config'.tr,
+                        'hybrid' =>
+                          'Try up to ${_settingsController.connectHybridCandidateCount.value} candidates per batch'
+                              .tr,
+                        _ => 'Try the fastest candidate first'.tr,
+                      }),
+                      leading: const Icon(Icons.tune),
+                      onTap: _showVerificationModeDialog,
+                    )),
+                Obx(() => ListTile(
+                      title: Text('Website pass requirement'.tr),
+                      subtitle: Text(_settingsController
+                                  .connectWebsitePassThreshold.value <
+                              0
+                          ? 'All configured websites must pass'.tr
+                          : 'At least ${_settingsController.connectWebsitePassThreshold.value} websites must pass'
+                              .tr),
+                      leading: const Icon(Icons.fact_check_outlined),
+                      onTap: _showWebsiteThresholdDialog,
+                    )),
+                Obx(() => ListTile(
+                      title: Text('After a tunnel failure'.tr),
+                      subtitle: Text(
+                          _settingsController.connectFailureScanPolicy.value ==
+                                  'restart'
+                              ? 'Restart scan from the first batch'.tr
+                              : 'Continue from the next batch'.tr),
+                      leading: const Icon(Icons.restart_alt),
+                      onTap: _showFailureScanPolicyDialog,
+                    )),
+                Obx(() => SwitchListTile(
+                      title: Text('site_check'.tr),
+                      subtitle: Text(
+                        'Verify candidate configs by fetching real websites through them, not just pinging the server'.tr,
+                      ),
+                      value: _settingsController.siteCheckEnabled.value,
+                      onChanged: _settingsController.setSiteCheckEnabled,
+                    )),
+                Obx(() => SwitchListTile(
+                      title: Text('verbose_core_logs'.tr),
+                      subtitle: Text(
+                        'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel'.tr,
+                      ),
+                      value: _settingsController.coreDebugLogs.value,
+                      onChanged: _settingsController.setCoreDebugLogs,
+                    )),
+                Obx(() => ListTile(
+                      title: Text('site_check_websites'.tr),
+                      subtitle: Text(
+                        _settingsController.siteCheckUrls.join(', '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      leading: const Icon(Icons.public),
+                      onTap: _showSiteCheckUrlsDialog,
+                    )),
               ],
             ),
             // Repositories Section
@@ -451,25 +508,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       for (final source in sources)
                         Container(
                           width: double.infinity,
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          margin: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
                           decoration: BoxDecoration(
-                            color: isDark ? theme.cardColor : Colors.grey.shade50,
+                            color:
+                                isDark ? theme.cardColor : Colors.grey.shade50,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                              color: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade300,
                             ),
                           ),
                           child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 4),
                             leading: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: (source.isEnabled ? theme.colorScheme.primary : Colors.grey).withOpacity(0.12),
+                                color: (source.isEnabled
+                                        ? theme.colorScheme.primary
+                                        : Colors.grey)
+                                    .withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(
                                 Icons.source_outlined,
-                                color: source.isEnabled ? theme.colorScheme.primary : Colors.grey,
+                                color: source.isEnabled
+                                    ? theme.colorScheme.primary
+                                    : Colors.grey,
                               ),
                             ),
                             title: Text(
@@ -489,7 +556,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                  color: isDark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade600,
                                 ),
                               ),
                             ),
@@ -502,8 +571,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               // hardcoded defaults ahead of stored state, so
                               // the saved `isEnabled: false` was discarded and
                               // the switch snapped back on.
-                              onChanged: (value) =>
-                                _configController.toggleSource(source.id, value),
+                              onChanged: (value) => _configController
+                                  .toggleSource(source.id, value),
                             ),
                             onTap: () => _showSourceDetails(context, source),
                           ),
@@ -541,7 +610,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 ListTile(
                   title: Text('github'.tr),
-                  subtitle: const Text('github.com/kiacoder/blackout-kit-mobile'),
+                  subtitle:
+                      const Text('github.com/kiacoder/blackout-kit-mobile'),
                   leading: const Icon(Icons.code),
                   onTap: () {
                     Get.snackbar(
@@ -636,37 +706,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
       AlertDialog(
         title: Text('select_theme'.tr),
         content: Obx(() => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile(
-              title: Text('theme_system'.tr),
-              value: 'system',
-              groupValue: _settingsController.theme.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setTheme(value);
-                Get.back();
-              },
-            ),
-            RadioListTile(
-              title: Text('theme_light'.tr),
-              value: 'light',
-              groupValue: _settingsController.theme.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setTheme(value);
-                Get.back();
-              },
-            ),
-            RadioListTile(
-              title: Text('theme_dark'.tr),
-              value: 'dark',
-              groupValue: _settingsController.theme.value,
-              onChanged: (value) {
-                if (value != null) _settingsController.setTheme(value);
-                Get.back();
-              },
-            ),
-          ],
-        )),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile(
+                  title: Text('theme_system'.tr),
+                  value: 'system',
+                  groupValue: _settingsController.theme.value,
+                  onChanged: (value) {
+                    if (value != null) _settingsController.setTheme(value);
+                    Get.back();
+                  },
+                ),
+                RadioListTile(
+                  title: Text('theme_light'.tr),
+                  value: 'light',
+                  groupValue: _settingsController.theme.value,
+                  onChanged: (value) {
+                    if (value != null) _settingsController.setTheme(value);
+                    Get.back();
+                  },
+                ),
+                RadioListTile(
+                  title: Text('theme_dark'.tr),
+                  value: 'dark',
+                  groupValue: _settingsController.theme.value,
+                  onChanged: (value) {
+                    if (value != null) _settingsController.setTheme(value);
+                    Get.back();
+                  },
+                ),
+              ],
+            )),
       ),
     );
   }
@@ -676,7 +746,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final primary = _settingsController.customDnsServer.value;
     final secondary = _settingsController.dnsSecondaryServer.value;
     final provider = DnsCatalog.byKey(_settingsController.dnsProviderKey.value);
-    if (primary.isEmpty) return 'Not set - pick one to enable leak prevention'.tr;
+    if (primary.isEmpty)
+      return 'Not set - pick one to enable leak prevention'.tr;
     if (provider == null) {
       return secondary.isEmpty
           ? LocalizationService.t('@ip (custom)', {'ip': primary})
@@ -693,11 +764,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   DnsSuggestion? _dnsSuggestion() {
     if (!_settingsController.dnsLeakPreventionEnabled.value) return null;
     if (!Get.isRegistered<ConnectionController>()) return null;
-    final exit = Get.find<ConnectionController>()
-            .exitIpInfo
-            .value
-            ?.countryCode ??
-        '';
+    final exit =
+        Get.find<ConnectionController>().exitIpInfo.value?.countryCode ?? '';
     return DnsExitAdvisor.evaluate(
       providerKey: _settingsController.dnsProviderKey.value,
       exitCountryCode: exit,
@@ -757,7 +825,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      entry.value ? Icons.check_circle_outline : Icons.help_outline,
+                      entry.value
+                          ? Icons.check_circle_outline
+                          : Icons.help_outline,
                       color: entry.value ? Colors.green : Colors.orange,
                     ),
                     title: Text(entry.key),
@@ -769,8 +839,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 const SizedBox(height: 8),
                 Text(
-                  'This opens a TCP connection to port 53. Many resolvers only '
-                          'answer UDP, so treat a miss as inconclusive.'.tr,
+                  'This opens a TCP connection to port 53. Many resolvers only answer UDP, so treat a miss as inconclusive.'.tr,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -824,10 +893,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Your exit is ${suggestion.exitCountry}. '
-                              '${DnsCatalog.byKey(suggestion.providerKey)?.localizedName ?? suggestion.providerKey} '
-                              'is a ${suggestion.resolverCountry} resolver, so '
-                              'answers will be geo-mismatched.'.tr,
+                              'Your exit is ${suggestion.exitCountry}. ${DnsCatalog.byKey(suggestion.providerKey)?.localizedName ?? suggestion.providerKey} is a ${suggestion.resolverCountry} resolver, so answers will be geo-mismatched.'.tr,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ),
@@ -871,8 +937,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 _settingsController.setDnsProvider(value);
                                 // Mirror the choice in the text field so it
                                 // never shows an address the app is not using.
-                                controller.text = _settingsController
-                                    .customDnsServer.value;
+                                controller.text =
+                                    _settingsController.customDnsServer.value;
                                 setDialogState(() {});
                                 _hintDnsTakesEffectOnReconnect();
                               },
@@ -964,19 +1030,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       AlertDialog(
         title: Text('select_language'.tr),
         content: Obx(() => SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Driven by the catalogue, not a hand-written list: the old
-              // dialog offered nine languages while only three had any
-              // translated body text, so picking Spanish changed almost
-              // nothing and looked broken.
-              for (final entry
-                  in LocalizationService.supportedLanguages.entries)
-                _buildLangRadio(entry.value, entry.key),
-            ],
-          ),
-        )),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Driven by the catalogue, not a hand-written list: the old
+                  // dialog offered nine languages while only three had any
+                  // translated body text, so picking Spanish changed almost
+                  // nothing and looked broken.
+                  for (final entry
+                      in LocalizationService.supportedLanguages.entries)
+                    _buildLangRadio(entry.value, entry.key),
+                ],
+              ),
+            )),
       ),
     );
   }
@@ -1030,51 +1096,193 @@ class _SettingsScreenState extends State<SettingsScreen> {
       AlertDialog(
         title: Text('preferred_protocol'.tr),
         content: Obx(() => SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final protocol in served)
-                RadioListTile<String>(
-                  title: Text(protocol.toUpperCase()),
-                  value: protocol,
-                  groupValue: _settingsController.preferredProtocol.value,
-                  onChanged: (value) {
-                    if (value != null) {
-                      _settingsController.setPreferredProtocol(value);
-                    }
-                    Get.back();
-                  },
-                ),
-              if (blocked.isNotEmpty) ...[
-                const Divider(height: 24),
-                Padding(
-                  padding: const EdgeInsets.only(left: 16, bottom: 4),
-                  child: Text(
-                    'Not available in this build'.tr,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).hintColor,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final protocol in served)
+                    RadioListTile<String>(
+                      title: Text(protocol.toUpperCase()),
+                      value: protocol,
+                      groupValue: _settingsController.preferredProtocol.value,
+                      onChanged: (value) {
+                        if (value != null) {
+                          _settingsController.setPreferredProtocol(value);
+                        }
+                        Get.back();
+                      },
                     ),
-                  ),
-                ),
-                for (final protocol in blocked)
-                  ListTile(
-                    enabled: false,
-                    dense: true,
-                    title: Text(protocol.toUpperCase()),
-                    subtitle: Text('requires_singbox'.tr),
-                  ),
-              ],
-            ],
-          ),
-        )),
+                  if (blocked.isNotEmpty) ...[
+                    const Divider(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, bottom: 4),
+                      child: Text(
+                        'Not available in this build'.tr,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).hintColor,
+                        ),
+                      ),
+                    ),
+                    for (final protocol in blocked)
+                      ListTile(
+                        enabled: false,
+                        dense: true,
+                        title: Text(protocol.toUpperCase()),
+                        subtitle: Text('requires_singbox'.tr),
+                      ),
+                  ],
+                ],
+              ),
+            )),
         actions: [
           TextButton(onPressed: () => Get.back(), child: Text('close'.tr)),
         ],
       ),
     );
+  }
+
+  void _showScanBatchSizeDialog() {
+    final field = TextEditingController(
+      text: _settingsController.connectScanBatchSize.value.toString(),
+    );
+    Get.dialog(AlertDialog(
+      title: Text('Scan batch size'.tr),
+      content: TextField(
+        controller: field,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(labelText: 'Configs per batch (1–500)'.tr),
+      ),
+      actions: [
+        TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
+        ElevatedButton(
+          onPressed: () {
+            final value = int.tryParse(field.text.trim());
+            if (value != null)
+              _settingsController.setConnectScanBatchSize(value);
+            Get.back();
+          },
+          child: Text('save'.tr),
+        ),
+      ],
+    ));
+  }
+
+  void _showVerificationModeDialog() {
+    Get.dialog(AlertDialog(
+      title: Text('Candidate verification'.tr),
+      content: Obx(() => Column(mainAxisSize: MainAxisSize.min, children: [
+            for (final entry in [
+              ('shortlist', 'Try fastest candidate first'.tr),
+              ('hybrid', 'Try a configurable number per batch'.tr),
+              ('all', 'Connect and verify every candidate'.tr),
+            ])
+              RadioListTile<String>(
+                title: Text(entry.$2),
+                value: entry.$1,
+                groupValue:
+                    _settingsController.connectVerificationStrategy.value,
+                onChanged: (value) {
+                  if (value != null)
+                    _settingsController.setConnectVerificationMode(value);
+                  Get.back();
+                },
+              ),
+            if (_settingsController.connectVerificationStrategy.value ==
+                'hybrid')
+              ListTile(
+                title: Text('Hybrid candidates per batch'.tr),
+                subtitle: Text(
+                    '${_settingsController.connectHybridCandidateCount.value}'),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    onPressed: _settingsController
+                                .connectHybridCandidateCount.value >
+                            1
+                        ? () => _settingsController
+                            .setConnectHybridCandidateCount(_settingsController
+                                    .connectHybridCandidateCount.value -
+                                1)
+                        : null,
+                    icon: const Icon(Icons.remove),
+                  ),
+                  IconButton(
+                    onPressed: _settingsController
+                                .connectHybridCandidateCount.value <
+                            50
+                        ? () => _settingsController
+                            .setConnectHybridCandidateCount(_settingsController
+                                    .connectHybridCandidateCount.value +
+                                1)
+                        : null,
+                    icon: const Icon(Icons.add),
+                  ),
+                ]),
+              ),
+          ])),
+      actions: [TextButton(onPressed: Get.back, child: Text('close'.tr))],
+    ));
+  }
+
+  void _showWebsiteThresholdDialog() {
+    Get.dialog(AlertDialog(
+      title: Text('Website pass requirement'.tr),
+      content: Obx(() => Column(mainAxisSize: MainAxisSize.min, children: [
+            RadioListTile<int>(
+              title: Text('All configured websites must pass'.tr),
+              value: -1,
+              groupValue: _settingsController.connectWebsitePassThreshold.value,
+              onChanged: (value) {
+                if (value != null)
+                  _settingsController.setConnectWebsitePassThreshold(value);
+                Get.back();
+              },
+            ),
+            for (final count in [1, 2, 3, 4])
+              if (count <= _settingsController.siteCheckUrls.length)
+                RadioListTile<int>(
+                  title: Text(
+                      'At least @count websites'.trParams({'count': '$count'})),
+                  value: count,
+                  groupValue:
+                      _settingsController.connectWebsitePassThreshold.value,
+                  onChanged: (value) {
+                    if (value != null)
+                      _settingsController.setConnectWebsitePassThreshold(value);
+                    Get.back();
+                  },
+                ),
+          ])),
+    ));
+  }
+
+  void _showFailureScanPolicyDialog() {
+    Get.dialog(AlertDialog(
+      title: Text('After a tunnel failure'.tr),
+      content: Obx(() => Column(mainAxisSize: MainAxisSize.min, children: [
+            RadioListTile<String>(
+              title: Text('Continue from the next batch'.tr),
+              value: 'next_batch',
+              groupValue: _settingsController.connectFailureScanPolicy.value,
+              onChanged: (value) {
+                if (value != null)
+                  _settingsController.setConnectFailureScanPolicy(value);
+                Get.back();
+              },
+            ),
+            RadioListTile<String>(
+              title: Text('Restart scan from the first batch'.tr),
+              value: 'restart',
+              groupValue: _settingsController.connectFailureScanPolicy.value,
+              onChanged: (value) {
+                if (value != null)
+                  _settingsController.setConnectFailureScanPolicy(value);
+                Get.back();
+              },
+            ),
+          ])),
+    ));
   }
 
   /// Edit the site-check host list: one host per line (or comma separated).
@@ -1099,7 +1307,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               labelText: 'One host per line'.tr,
               hintText: 'google.com\nyoutube.com',
               helperText:
-                  'Checked through each candidate config. Defaults are restored if everything is removed.'.tr,
+'Checked through each candidate config. Defaults are restored if everything is removed.'.tr,
             ),
           ),
         ),
@@ -1157,7 +1365,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // so the advertised way to turn the feature off did nothing.
               final parsed = int.tryParse(controller.text.trim());
               if (parsed != null) {
-                _settingsController.setAutoTestInterval(parsed < 0 ? 0 : parsed);
+                _settingsController
+                    .setAutoTestInterval(parsed < 0 ? 0 : parsed);
               }
               Get.back();
             },
@@ -1173,8 +1382,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final cardColor = theme.cardColor;
     // One pass over the config box when the sheet opens, instead of the
     // previous per-rebuild scan.
-    final sourceCounts =
-        _configController.configService.countConfigsBySource();
+    final sourceCounts = _configController.configService.countConfigsBySource();
 
     Get.bottomSheet(
       Container(
@@ -1307,7 +1515,8 @@ class _UpdateSection extends StatefulWidget {
 
 class _UpdateSectionState extends State<_UpdateSection> {
   final UpdateService _service = UpdateService();
-  String _phase = 'idle'; // idle | checking | latest | available | downloading | ready | error
+  String _phase =
+      'idle'; // idle | checking | latest | available | downloading | ready | error
   String _currentVersion = '';
   AppUpdate? _update;
   String _error = '';
@@ -1453,14 +1662,14 @@ class _UpdateSectionState extends State<_UpdateSection> {
                   overflow: TextOverflow.ellipsis,
                 )
               : Text(
-            _phase == 'error'
-                ? _error
-                : (_currentVersion.isEmpty
-                    ? 'Tap to check for updates'.tr
-                    : 'Installed: $_currentVersion'),
-            maxLines: 5,
-            overflow: TextOverflow.ellipsis,
-          ),
+                  _phase == 'error'
+                      ? _error
+                      : (_currentVersion.isEmpty
+                          ? 'Tap to check for updates'.tr
+                          : 'Installed: $_currentVersion'),
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                ),
           trailing: switch (_phase) {
             'checking' || 'downloading' => const SizedBox(
                 width: 22,
@@ -1483,7 +1692,8 @@ class _UpdateSectionState extends State<_UpdateSection> {
                   // Recovery is manual (uninstall + fresh install); hand the
                   // user the release page instead of a Retry that cannot work.
                   await Clipboard.setData(const ClipboardData(
-                      text: 'https://github.com/kiacoder/blackout-kit-mobile/releases/latest'));
+                      text:
+                          'https://github.com/kiacoder/blackout-kit-mobile/releases/latest'));
                   Get.snackbar(
                     'Copied'.tr,
                     'Release link copied - open it in a browser'.tr,

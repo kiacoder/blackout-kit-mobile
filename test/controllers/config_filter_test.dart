@@ -79,6 +79,24 @@ void main() {
     expect(filtered.map((c) => c.displayName), ['One']);
   });
 
+  test('search matches name, address, protocol, and loaded source name', () async {
+    final config = vless('edge.example.com', 'Tokyo node');
+    await service.saveConfig(config, sourceId: 's1');
+    controller.allConfigs.value = [config, vless('other.example.com', 'Other')];
+    controller.sourceIdByHash[config.getHash()] = 's1';
+    controller.sourceIdsByHash[config.getHash()] = {'s1'};
+
+    for (final query in ['tokyo', 'edge.example', 'source one']) {
+      controller.searchQuery.value = query;
+      expect(controller.getFilteredConfigs().map((c) => c.displayName).toList(), ['Tokyo node']);
+    }
+    controller.searchQuery.value = 'vless';
+    expect(controller.getFilteredConfigs().length, 2);
+
+    controller.searchQuery.value = 'missing';
+    expect(controller.getFilteredConfigs(), isEmpty);
+  });
+
   test('recently added sorts newest first, unknown dates last', () async {
     final older = vless('old.example.com', 'Older');
     final newer = vless('new.example.com', 'Newer');

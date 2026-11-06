@@ -64,23 +64,81 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// True while the live session only changes DNS (no routes, no engine).
   final RxBool isDnsOnly = RxBool(false);
 
-  /// Batched full-scan: the candidate list is walked in groups of this size.
-  /// Each batch is TCP-probed, its survivors site-checked and connect-verified
-  /// in rank order, and only a fully exhausted batch advances to the next one.
-  static const int _probeBatchSize = 50;
+  /// Current scan presentation model. These observables drive the connect
+  /// screen's phase animation and detailed progress rather than a spinner.
+  final RxString scanPhase = RxString('idle');
+  final RxInt scanBatchIndex = RxInt(0);
+  final RxInt scanBatchCount = RxInt(0);
+  final RxInt scanItemsDone = RxInt(0);
+  final RxInt scanItemsTotal = RxInt(0);
+  final RxString scanCurrentConfig = RxString('');
+  final RxInt scanSitesDone = RxInt(0);
+  final RxInt scanSitesTotal = RxInt(0);
+
+  /// Retained scan worklist and cursor across accepted tunnel sessions, so a
+  /// later liveness failure resumes at the next untried config, not next batch.
+  List<Config> _resumeQueue = const [];
+  List<Config> _originalScanQueue = const [];
+  List<TestResult> _resumeResults = const [];
+  int _resumeCursor = 0;
+
+  /// Start at a particular candidate when recovery resumes a partially-tested
+  /// worklist; fresh scans always begin at zero.
+  int? _requestedResumeCursor;
+  bool _recoveryPromptPending = false;
+  bool _recoveryRequested = false;
+
+  /// Signals the UI that a connected session failed and needs a deliberate
+  /// recovery choice. The controller never starts a fresh scan silently.
+  final RxString recoveryReason = RxString('');
+  final RxBool recoveryAvailable = RxBool(false);
+
+  void _requestRecovery(String reason) {
+    if (_recoveryPromptPending) return;
+    _recoveryPromptPending = true;
+    recoveryReason.value = reason;
+    recoveryAvailable.value = true;
+    scanPhase.value = 'recovery';
+    state.value = ConnectionState.error;
+  }
+
+  /// Resume after a later tunnel failure. By default continue with the next
+  /// batch; Settings can deliberately reset the cursor to the beginning.
+  Future<bool> resumeScanAfterFailure({bool restart = false}) async {
+    if (!_recoveryPromptPending || _operationInFlight) return false;
+    final settings = Get.find<SettingsController>();
+    final shouldRestart =
+        restart || settings.connectFailureScanPolicy.value == 'restart';
+    _requestedResumeCursor = shouldRestart ? 0 : _resumeCursor;
+    if (shouldRestart) _resumeQueue = List<Config>.of(_originalScanQueue);
+    _recoveryPromptPending = false;
+    recoveryAvailable.value = false;
+    final candidates = List<Config>.of(_resumeQueue);
+    final results = List<TestResult>.of(_resumeResults);
+    if (candidates.isEmpty) {
+      state.value = ConnectionState.idle;
+      return false;
+    }
+    return connectFastest(candidates,
+        testResults: results.isEmpty ? null : results);
+  }
+
+  @visibleForTesting
+  void debugRequestRecoveryForTest() => _requestRecovery('test recovery');
+
+  void dismissRecovery() {
+    _recoveryPromptPending = false;
+    recoveryAvailable.value = false;
+    scanPhase.value = 'idle';
+    state.value = ConnectionState.idle;
+  }
+
+  /// Last config whose live tunnel passed the configured website gate.
+  final Rx<Config?> lastKnownWorkingConfig = Rx<Config?>(null);
 
   /// Incremented on every connect/disconnect so in-flight lookups can tell
   /// they belong to a session that no longer exists.
   int _sessionEpoch = 0;
-
-  /// How many of a batch's TCP-passing candidates get the (expensive)
-  /// headless site check. The rest keep their TCP rank.
-  static const int _siteCheckShortlistSize = 3;
-
-  /// Per-batch connect-attempt budget. Each attempt is a full connect plus a
-  /// live site fetch (~5-10 s), so 10 bounds a bad batch to a few minutes
-  /// while still walking every survivor of a healthy one.
-  static const int _maxConnectAttemptsPerBatch = 10;
 
   /// Pre-flight probe budget. The full TesterService defaults (3 attempts x
   /// 4s timeout at concurrency 6) mean 150 unreachable candidates take ~5
@@ -128,7 +186,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     super.onInit();
     // Translated here rather than in the field initialiser: `.tr` needs the
     // catalogue, which is registered by the time onInit runs.
-    if (statusMessage.value.isEmpty) statusMessage.value = LocalizationService.t('status_ready');
+    if (statusMessage.value.isEmpty)
+      statusMessage.value = LocalizationService.t('status_ready');
     _log.i('ConnectionController initialized');
     _initIpInfo();
     // Android may kill the Flutter process while the foreground VpnService
@@ -148,7 +207,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// already in flight (a scan connects and disconnects candidates, so
   /// adoption must stay out of its way).
   bool get _canAdopt =>
-      state.value == ConnectionState.idle || state.value == ConnectionState.error;
+      state.value == ConnectionState.idle ||
+      state.value == ConnectionState.error;
 
   /// Handles a status pushed by the native service.
   void _onNativeStatus(String status, String? error) {
@@ -160,8 +220,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         break;
       case 'disconnected':
         if (isConnected) {
+          final failedDuringScan = _recoveryRequested;
           state.value = ConnectionState.idle;
           statusMessage.value = LocalizationService.t('status_tunnel_ended');
+          if (!failedDuringScan && lastKnownWorkingConfig.value != null) {
+            _requestRecovery(LocalizationService.t('status_tunnel_ended'));
+          }
           selectedConfig.value = null;
           connectedIP.value = null;
           exitIpInfo.value = null;
@@ -178,9 +242,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         // uptime that would otherwise keep ticking over a dead tunnel.
         if (isConnected || state.value == ConnectionState.connecting) {
           state.value = ConnectionState.error;
-          statusMessage.value =
-              error ??
-              LocalizationService.t('The tunnel stopped unexpectedly. Reconnect to retry.');
+          statusMessage.value = error ??
+              LocalizationService.t(
+                  'The tunnel stopped unexpectedly. Reconnect to retry.');
+          if (!_recoveryRequested && lastKnownWorkingConfig.value != null) {
+            _requestRecovery(statusMessage.value);
+          }
           connectedIP.value = null;
           exitIpInfo.value = null;
           connectionUptime.value = 0;
@@ -244,6 +311,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       await _failTunnel(
         'The tunnel is up but nothing loads — reconnect to pick another server',
       );
+      _requestRecovery(statusMessage.value);
     });
   }
 
@@ -284,6 +352,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     await _failTunnel(
       'The tunnel is up but nothing loads — reconnect to pick another server',
     );
+    _requestRecovery(statusMessage.value);
   }
 
   /// Closes a tunnel that failed its liveness check and unwinds the session.
@@ -335,14 +404,19 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         }
 
         selectedConfig.value = config;
+        if (config != null && lastKnownWorkingConfig.value == null) {
+          lastKnownWorkingConfig.value = config;
+        }
         isDnsOnly.value = dnsOnlySession;
         state.value = ConnectionState.connected;
         statusMessage.value = dnsOnlySession
             ? LocalizationService.t('dns_only_started')
             : config != null
-                ? LocalizationService.t('Restored: @name (tunnel was already running)',
+                ? LocalizationService.t(
+                    'Restored: @name (tunnel was already running)',
                     {'name': config.displayName})
-                : LocalizationService.t('Restored connection (tunnel was already running)');
+                : LocalizationService.t(
+                    'Restored connection (tunnel was already running)');
 
         final startedAtMs = (status['connectedAtMs'] as num?)?.toInt() ?? 0;
         _connectionStartTime = startedAtMs > 0
@@ -434,11 +508,15 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     }
     _operationInFlight = true;
     _cancelRequested = false;
+    _recoveryRequested =
+        _requestedResumeCursor != null || _recoveryPromptPending;
     try {
-      return await _connectFastestImpl(availableConfigs, testResults: testResults);
+      return await _connectFastestImpl(availableConfigs,
+          testResults: testResults);
     } finally {
       _operationInFlight = false;
       _cancelRequested = false;
+      _recoveryRequested = false;
     }
   }
 
@@ -455,10 +533,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       // order behind them. With autoSelectFastest off the preference becomes
       // the primary order rather than latency, so "connect my vless first"
       // means something.
-      final preferredProtocol = Get.find<SettingsController>()
-          .preferredProtocol
-          .value
-          .toLowerCase();
+      final preferredProtocol =
+          Get.find<SettingsController>().preferredProtocol.value.toLowerCase();
       if (preferredProtocol.isNotEmpty && preferredProtocol != 'auto') {
         availableConfigs = List<Config>.of(availableConfigs)
           ..sort((a, b) {
@@ -476,7 +552,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         state.value = ConnectionState.error;
         statusMessage.value = availableConfigs.isEmpty
             ? LocalizationService.t('No configs available')
-            : LocalizationService.t('None of your configs use a protocol this build can serve');
+            : LocalizationService.t(
+                'None of your configs use a protocol this build can serve');
         return false;
       }
 
@@ -486,79 +563,90 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       // tap ran the full scan regardless of what the user chose.
       if (!Get.find<SettingsController>().autoSelectFastest.value) {
         final chosen = candidates.first;
-        statusMessage.value =
-            LocalizationService.t('status_connecting_to', {'name': chosen.displayName});
-        return _connectImpl(chosen);
+        statusMessage.value = LocalizationService.t(
+            'status_connecting_to', {'name': chosen.displayName});
+        final connected = await _connectImpl(chosen);
+        if (connected) lastKnownWorkingConfig.value = chosen;
+        return connected;
       }
 
-      final candidateHashes = candidates.map((c) => c.getHash()).toSet();
+      // Cached TCP failures only influence their position within a batch; they
+      // never suppress a real VPN attempt. A failed server-port probe cannot
+      // rule out UDP protocols, filtering artefacts, or transient network faults.
+      final cachedResults = {
+        for (final result in testResults ?? const <TestResult>[])
+          result.configHash: result,
+      };
 
-      // Results handed in by the library let us skip servers that already
-      // failed — re-probing thousands of them was dead air behind censorship.
-      // Only recent failures count. A probe that failed once - on a flaky
-      // network, before the tunnel warmed up, or an hour ago - used to exclude
-      // the config from auto-connect forever, so a library could end up with
-      // nothing left to try. Failures older than the window are re-probed.
-      final failureCutoff =
-          DateTime.now().subtract(const Duration(hours: 6));
-      final knownFailed = <String>{};
-      for (final r in testResults ?? const <TestResult>[]) {
-        // notTested is "the probe cannot judge this", not "it failed": the
-        // tester returns it for UDP-only protocols (WireGuard, Hysteria2,
-        // TUIC) it has no way to reach. Counting those as failures kept them
-        // out of auto-connect for six hours even though nothing was wrong.
-        if (r.isWorking ||
-            r.status == TestStatus.notTested ||
-            !candidateHashes.contains(r.configHash)) {
-          continue;
-        }
-        final testedAt = r.testedAt;
-        if (testedAt == null || testedAt.isAfter(failureCutoff)) {
-          knownFailed.add(r.configHash);
-        }
+      // Preserve config order and full eligibility across the scan. Recovery
+      // carries this exact queue and cursor forward rather than reconstructing
+      // the queue from current probe results or skipping a partially tested batch.
+      final settings = Get.find<SettingsController>();
+      final batchSize = settings.connectScanBatchSize.value;
+      final isResuming = _recoveryRequested && _requestedResumeCursor != null;
+      final toScan = isResuming
+          ? List<Config>.of(_resumeQueue)
+          : List<Config>.of(candidates);
+      if (!isResuming) {
+        _resumeQueue = List<Config>.of(toScan);
+        _originalScanQueue = List<Config>.of(toScan);
+        _resumeCursor = 0;
       }
-
-      // Batched full-scan. The list is walked in batches of 50: probe the
-      // batch, site-check and connect-verify its survivors in rank order,
-      // and only when the WHOLE batch is exhausted move to the next one.
-      // With 7,000 sources this scans everything eventually — slow, but it
-      // does not give up, and the status line always shows where it is.
-      final toScan = candidates
-          .where((c) => !knownFailed.contains(c.getHash()))
-          .toList();
-      final totalBatches = (toScan.length / _probeBatchSize).ceil();
+      final totalBatches = (toScan.length / batchSize).ceil();
+      scanBatchCount.value = totalBatches;
+      scanItemsTotal.value = toScan.length;
+      scanItemsDone.value = 0;
+      _resumeResults = List<TestResult>.of(testResults ?? const []);
+      final startCursor =
+          (_recoveryRequested ? (_requestedResumeCursor ?? _resumeCursor) : 0)
+              .clamp(0, toScan.length);
+      _resumeCursor = startCursor;
+      _requestedResumeCursor = null;
+      final startBatch = startCursor ~/ batchSize;
       _log.i('Batched scan: ${toScan.length} configs in $totalBatches '
-          'batch(es) of $_probeBatchSize');
+          'batch(es) of $batchSize, resuming at config ${startCursor + 1}');
       debugService.logAction('scan_started', {
         'configs': toScan.length,
         'batches': totalBatches,
       });
 
-      for (var batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      for (var batchIndex = startBatch;
+          batchIndex < totalBatches;
+          batchIndex++) {
+        scanBatchIndex.value = batchIndex + 1;
         if (_cancelRequested) {
-          _log.i('Scan cancelled by the user after ${batchIndex} batch(es)');
+          _log.i('Scan cancelled by the user after $batchIndex batch(es)');
           statusMessage.value = LocalizationService.t('status_scan_stopped');
           state.value = ConnectionState.idle;
           return false;
         }
-        final batch =
-            toScan.skip(batchIndex * _probeBatchSize).take(_probeBatchSize).toList();
+        final batchStart =
+            batchIndex == startBatch ? startCursor : batchIndex * batchSize;
+        final batch = toScan
+            .skip(batchStart)
+            .take(batchSize - (batchStart % batchSize))
+            .toList();
+        scanItemsDone.value = batchStart;
+        scanPhase.value = 'ping';
         final batchHashes = batch.map((c) => c.getHash()).toSet();
-        final batchLabel =
-            'batch ${batchIndex + 1}/$totalBatches';
+        final batchLabel = 'batch ${batchIndex + 1}/$totalBatches';
 
         state.value = ConnectionState.selecting;
-        statusMessage.value = LocalizationService.t(
-            'status_pinging', {'label': batchLabel, 'count': '${batch.length}'});
+        statusMessage.value = LocalizationService.t('status_pinging',
+            {'label': batchLabel, 'count': '${batch.length}'});
         var probed = 0;
         final progressToken = testerService.beginProgressRun((hash, status) {
           // onProgress fires a 'testing' event at probe start AND a terminal
           // event at the end — counting both reported double progress.
           if (status == TestStatus.testing) return;
           probed++;
+          scanItemsDone.value = batchIndex * batchSize + probed;
           statusMessage.value = LocalizationService.t(
-              'Pinging @label... @done/@total',
-              {'label': batchLabel, 'done': '$probed', 'total': '${batch.length}'});
+              'Pinging @label... @done/@total', {
+            'label': batchLabel,
+            'done': '$probed',
+            'total': '${batch.length}'
+          });
         });
         List<TestResult> probedResults;
         try {
@@ -572,195 +660,134 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           testerService.endProgressRun(progressToken);
         }
 
-        // Verified-by-probe results first, then the ones the probe cannot
-        // judge (UDP-only protocols come back notTested). Leaving those out
-        // meant hysteria2/TUIC/WireGuard were never candidates at all.
-        final working = <TestResult>[
-          ...testerService
-              .getWorkingConfigs(probedResults)
-              .where((r) => batchHashes.contains(r.configHash)),
-          ...probedResults.where((r) =>
-              r.status == TestStatus.notTested &&
-              batchHashes.contains(r.configHash)),
-        ]..sort((a, b) =>
-            (a.latencyMs ?? 1 << 30).compareTo(b.latencyMs ?? 1 << 30));
-
-        if (working.isEmpty) {
-          _log.i('$batchLabel: no server answered');
-          continue;
-        }
-
-        // Site check: the TCP probe proved the *path* to each server; the
-        // headless-core check proves the config can actually carry traffic.
-        // Only the batch's fastest few get this (expensive) treatment; the
-        // rest keep their TCP rank. Failures degrade to TCP order.
-        final check = siteCheckService;
-        var reports = const <String, SiteCheckReport>{};
-        if (check != null && check.enabled) {
-          statusMessage.value =
-              LocalizationService.t('Verifying websites, @label...', {'label': batchLabel});
-          final shortlist = working
-              .take(_siteCheckShortlistSize)
-              .map((r) => batch.firstWhereOrNull(
-                  (c) => c.getHash() == r.configHash))
-              .whereType<Config>()
-              .toList();
-          try {
-            reports = await check.checkConfigs(shortlist);
-          } catch (e) {
-            _log.w('Site check stage failed, falling back to TCP rank: $e');
-            reports = const {};
-          }
-        }
-
-        // Rank the batch: verified-usable first, then unknown, then the ones
-        // the site check proved unusable.
-        //
-        // The numbers were inverted (a FAILED check scored 0 and sorted first),
-        // so Fastest Connect spent its attempts on exactly the configs the
-        // expensive check had just ruled out.
-        int rank(TestResult r) {
-          final report = reports[r.configHash];
-          if (report == null || !report.supported) return 1;
-          if (!report.isUsable) return 2;
-          return 0;
-        }
-
-        working.sort((a, b) {
-          final byStage = rank(a).compareTo(rank(b));
-          if (byStage != 0) return byStage;
-          return (a.latencyMs ?? 1 << 30).compareTo(b.latencyMs ?? 1 << 30);
-        });
-
-        // Connect loop with live verification. A config can pass every
-        // pre-connect probe and still black-hole real traffic once the TUN
-        // interface is up — so after each successful connect, the tunnel
-        // itself is asked to fetch the check hosts through its own SOCKS
-        // inbound. A tunnel that cannot do that is disconnected and the
-        // next candidate in the batch gets its chance.
-        final verify = siteCheckService;
-        final liveVerifyEnabled =
-            verify != null && verify.enabled && verify.liveCheckHosts.isNotEmpty;
-                // Check if a specific protocol preference is prioritized
-        final settings = Get.find<SettingsController>();
-        final preferred = settings.preferredProtocol.value.toLowerCase();
-        final hasPreferredMatch = preferred.isNotEmpty &&
-            preferred != 'auto' &&
-            working.any((r) {
-              final c = batch.firstWhereOrNull((cfg) => cfg.getHash() == r.configHash);
-              return c != null && c.protocol.toLowerCase() == preferred;
-            });
-
-        // If a preferred protocol is requested and present, try it sequentially first
-        if (hasPreferredMatch) {
-          final preferredCandidate = working.firstWhereOrNull((r) {
-            final c = batch.firstWhereOrNull((cfg) => cfg.getHash() == r.configHash);
-            return c != null && c.protocol.toLowerCase() == preferred;
+        // A failed TCP probe is not a verdict on the VPN protocol: the port
+        // may be UDP-only, filtered, or temporarily unreachable while its
+        // actual outbound can still work. Keep every batch member as a real
+        // connect candidate, with successful probes ordered ahead of unknown,
+        // then failed probes.
+        final resultsByHash = {
+          for (final result in probedResults) result.configHash: result,
+        };
+        final working = batch
+            .map((config) =>
+                resultsByHash[config.getHash()] ??
+                TestResult(configHash: config.getHash()))
+            .toList()
+          ..sort((a, b) {
+            int probeRank(TestResult result) => switch (result.status) {
+                  TestStatus.success => 0,
+                  TestStatus.notTested => 1,
+                  TestStatus.timeout || TestStatus.failed => 2,
+                  TestStatus.testing => 3,
+                };
+            final rank = probeRank(a).compareTo(probeRank(b));
+            if (rank != 0) return rank;
+            final cachedA = cachedResults[a.configHash];
+            final cachedB = cachedResults[b.configHash];
+            return (a.latencyMs ?? cachedA?.latencyMs ?? 1 << 30)
+                .compareTo(b.latencyMs ?? cachedB?.latencyMs ?? 1 << 30);
           });
 
-          if (preferredCandidate != null) {
-            final cfg = batch.firstWhere((c) => c.getHash() == preferredCandidate.configHash);
-            final connected = await _connectImpl(cfg, testResult: preferredCandidate);
-            if (connected) {
-              if (!liveVerifyEnabled) return true;
-              final alive = await verify!.verifyLiveConnection();
-              if (alive) {
-                state.value = ConnectionState.connected;
-                return true;
-              }
-              await _disconnectImpl();
-            }
-          }
+        if (working.isEmpty) {
+          _log.i(
+              '$batchLabel: no probe results; trying configs in original order');
         }
 
-        // FLUX Racing Dispatcher: race pre-connect readiness if enabled and no preferred match took the line
-        if (settings.fluxEnabled.value && working.length > 1 && !hasPreferredMatch) {
-          final raceCount = settings.fluxConcurrency.value.clamp(1, working.length);
-          final candidatesToRace = <(Config, TestResult)>[];
-          for (var i = 0; i < raceCount; i++) {
-            final res = working[i];
-            final cfg = batch.firstWhereOrNull((c) => c.getHash() == res.configHash);
-            if (cfg != null) {
-              candidatesToRace.add((cfg, res));
-            }
-          }
+        final verify = siteCheckService;
+        final liveVerifyEnabled = verify != null &&
+            verify.enabled &&
+            settings.siteCheckUrls.isNotEmpty;
+        final mode = settings.connectVerificationStrategy.value;
+        final candidateLimit = switch (mode) {
+          'all' => working.length,
+          'hybrid' => settings.connectHybridCandidateCount.value,
+          _ => 3,
+        };
+        final attemptLimit = candidateLimit.clamp(1, working.length);
+        final preferred = settings.preferredProtocol.value.toLowerCase();
+        working.sort((a, b) {
+          int probeRank(TestResult result) => switch (result.status) {
+                TestStatus.success => 0,
+                TestStatus.notTested => 1,
+                TestStatus.timeout || TestStatus.failed => 2,
+                TestStatus.testing => 3,
+              };
+          final statusOrder = probeRank(a).compareTo(probeRank(b));
+          if (statusOrder != 0) return statusOrder;
+          final ca = batch.firstWhereOrNull((c) => c.getHash() == a.configHash);
+          final cb = batch.firstWhereOrNull((c) => c.getHash() == b.configHash);
+          final aPreferred = preferred.isNotEmpty &&
+              preferred != 'auto' &&
+              ca?.protocol.toLowerCase() == preferred;
+          final bPreferred = preferred.isNotEmpty &&
+              preferred != 'auto' &&
+              cb?.protocol.toLowerCase() == preferred;
+          if (aPreferred != bPreferred) return aPreferred ? -1 : 1;
+          final latencyOrder =
+              (a.latencyMs ?? 1 << 30).compareTo(b.latencyMs ?? 1 << 30);
+          if (latencyOrder != 0) return latencyOrder;
+          return (cachedResults[a.configHash]?.latencyMs ?? 1 << 30)
+              .compareTo(cachedResults[b.configHash]?.latencyMs ?? 1 << 30);
+        });
 
-          if (candidatesToRace.isNotEmpty) {
-            statusMessage.value = LocalizationService.t(
-                'FLUX racing top @count servers (@label)...',
-                {'count': '${candidatesToRace.length}', 'label': batchLabel});
-
-            // Race probe verification to select the fastest responder before connecting tunnel
-            final raceFutures = candidatesToRace.map((pair) async {
-              final ping = await testerService.testConfig(pair.$1);
-              if (!ping.isWorking) throw Exception('Probe failed');
-              return pair;
-            }).toList();
-
-            try {
-              final winner = await Future.any(raceFutures);
-              final ok = await _connectImpl(winner.$1, testResult: winner.$2);
-              if (ok) {
-                if (!liveVerifyEnabled) {
-                  state.value = ConnectionState.connected;
-                  statusMessage.value = LocalizationService.t(
-                      'Connected to @name — FLUX winner', {'name': winner.$1.displayName});
-                  _log.i('FLUX race won by ${winner.$1.displayName}');
-                  return true;
-                }
-                final alive = await verify!.verifyLiveConnection();
-                if (alive) {
-                  state.value = ConnectionState.connected;
-                  statusMessage.value = LocalizationService.t(
-                      'Connected to @name — FLUX winner', {'name': winner.$1.displayName});
-                  _log.i('FLUX race won by ${winner.$1.displayName}');
-                  return true;
-                }
-                await _disconnectImpl();
-              }
-            } catch (_) {
-              _log.w('FLUX race pool finished without a clean winner, falling back to sequential batch dial');
-            }
-          }
-        }
-
-        // Always try several candidates per batch.
-        final attemptLimit = working.length < _maxConnectAttemptsPerBatch
-            ? working.length
-            : _maxConnectAttemptsPerBatch;
-
+        // One VPN session at a time: each candidate is genuinely connected,
+        // traffic is checked through the established tunnel, then a rejected
+        // candidate is fully torn down before the next attempt.
         for (var attempt = 0; attempt < attemptLimit; attempt++) {
           if (_cancelRequested) {
-            _log.i('Scan cancelled during $batchLabel');
             statusMessage.value = LocalizationService.t('status_scan_stopped');
             state.value = ConnectionState.idle;
             return false;
           }
+          final absoluteIndex = batchStart + attempt;
+          _resumeCursor = absoluteIndex;
           final result = working[attempt];
-          final config = batch.firstWhereOrNull(
-            (c) => c.getHash() == result.configHash,
-          );
+          final config =
+              batch.firstWhereOrNull((c) => c.getHash() == result.configHash);
           if (config == null) continue;
-
+          scanCurrentConfig.value = config.displayName;
           statusMessage.value = LocalizationService.t(
               'Connecting (@label, config @n)...',
               {'label': batchLabel, 'n': '${attempt + 1}'});
-
+          scanPhase.value = 'connect';
           final connected = await _connectImpl(config, testResult: result);
           if (!connected) continue;
-          if (!liveVerifyEnabled) return true;
 
-          state.value = ConnectionState.testing;
-          statusMessage.value = LocalizationService.t(
-              'Checking websites through the tunnel (@label, config @n)...',
-              {'label': batchLabel, 'n': '${attempt + 1}'});
-          final alive = await verify.verifyLiveConnection();
-          if (alive) {
-            state.value = ConnectionState.connected;
+          var accepted = !liveVerifyEnabled;
+          if (liveVerifyEnabled) {
+            state.value = ConnectionState.testing;
+            scanPhase.value = 'websites';
+            scanSitesTotal.value = settings.siteCheckUrls.length;
             statusMessage.value = LocalizationService.t(
-                'Connected to @name — verified', {'name': config.displayName});
-            _log.i('Live verification passed for ${config.displayName} '
-                '($batchLabel)');
+                'Checking websites through the tunnel (@label, config @n)...',
+                {'label': batchLabel, 'n': '${attempt + 1}'});
+            final outcomes = await verify.checkLiveConnection();
+            scanSitesDone.value = outcomes.length;
+            final passed = outcomes.where((outcome) => outcome.ok).length;
+            final threshold = settings.connectWebsitePassThreshold.value;
+            accepted = outcomes.isNotEmpty &&
+                (threshold < 0
+                    ? passed == outcomes.length
+                    : passed >= threshold.clamp(1, outcomes.length));
+          }
+
+          if (accepted) {
+            state.value = ConnectionState.connected;
+            lastKnownWorkingConfig.value = config;
+            _resumeQueue = [
+              ...working.skip(attempt + 1).map((candidate) => batch
+                  .firstWhere((entry) => entry.getHash() == candidate.configHash)),
+              ...toScan.skip(batchStart + batch.length),
+            ];
+            // The retained queue now starts with the first untried config.
+            _resumeCursor = 0;
+            _resumeResults = List<TestResult>.of(testResults ?? const []);
+            scanPhase.value = 'connected';
+            statusMessage.value = LocalizationService.t(
+                liveVerifyEnabled
+                    ? 'status_connected_verified'
+                    : 'status_connected_to',
+                {'name': config.displayName});
             debugService.logAction('scan_verified', {
               'config': config.displayName,
               'attempt': attempt + 1,
@@ -770,21 +797,19 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             return true;
           }
 
-          _log.w('Tunnel came up but could not reach any check host '
-              '(${config.displayName}, $batchLabel) — trying the next '
-              'candidate');
+          _log.w('Website threshold not met for ${config.displayName} '
+              '($batchLabel: $scanSitesDone/@$scanSitesTotal passed)');
           await _disconnectImpl();
         }
-        // Whole batch exhausted — the outer loop advances to the next 50.
-        _log.i('$batchLabel exhausted: $attemptLimit connect attempt(s) '
-            'failed live verification');
+        _resumeCursor = batchStart + batch.length;
+        _log.i('$batchLabel exhausted: $attemptLimit candidate(s) tried');
       }
 
       state.value = ConnectionState.error;
+      scanPhase.value = 'failed';
       final check2 = siteCheckService;
-      final verificationOn = check2 != null &&
-          check2.enabled &&
-          check2.liveCheckHosts.isNotEmpty;
+      final verificationOn =
+          check2 != null && check2.enabled && settings.siteCheckUrls.isNotEmpty;
       statusMessage.value = verificationOn
           ? LocalizationService.t(
               'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.',
@@ -794,7 +819,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       return false;
     } catch (e) {
       state.value = ConnectionState.error;
-      statusMessage.value = LocalizationService.t('status_error', {'error': '$e'});
+      statusMessage.value =
+          LocalizationService.t('status_error', {'error': '$e'});
       _log.e('Error connecting to fastest: $e');
       return false;
     }
@@ -822,6 +848,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     statusMessage.value = LocalizationService.t('status_stopping');
     return true;
   }
+
   bool get operationInFlight => _operationInFlight;
 
   /// Connect to specific config
@@ -858,7 +885,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       if (refusal != null) {
         state.value = ConnectionState.error;
         statusMessage.value = refusal;
-        debugService.logError('Connect refused for ${config.protocol}: $refusal');
+        debugService
+            .logError('Connect refused for ${config.protocol}: $refusal');
         return false;
       }
 
@@ -866,8 +894,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       // A new session starts here: anything still in flight belongs to the
       // previous one and must not write over this one's state.
       _sessionEpoch++;
-      statusMessage.value =
-            LocalizationService.t('status_connecting_to', {'name': config.displayName});
+      statusMessage.value = LocalizationService.t(
+          'status_connecting_to', {'name': config.displayName});
       selectedConfig.value = config;
       selectedConfigResult.value = testResult;
 
@@ -877,7 +905,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final prepared = await vpnService.prepare();
       if (!prepared) {
         state.value = ConnectionState.error;
-        statusMessage.value = vpnService.lastError ?? LocalizationService.t('status_permission_denied');
+        statusMessage.value = vpnService.lastError ??
+            LocalizationService.t('status_permission_denied');
         return false;
       }
 
@@ -903,8 +932,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
       if (success) {
         state.value = ConnectionState.connected;
-        statusMessage.value =
-            LocalizationService.t('status_connected_to', {'name': config.displayName});
+        statusMessage.value = LocalizationService.t(
+            'status_connected_to', {'name': config.displayName});
         debugService.logAction('connected', {
           'config': config.displayName,
           'protocol': config.protocol,
@@ -920,6 +949,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           // ConfigController not registered yet (early boot) - not fatal.
         }
         _fetchConnectedIP();
+        lastKnownWorkingConfig.value = config;
 
         debugService.logInfo(
           'VPN connected to ${config.displayName} - '
@@ -951,7 +981,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
     } catch (e) {
       state.value = ConnectionState.error;
-      statusMessage.value = LocalizationService.t('status_connection_error', {'error': '$e'});
+      statusMessage.value =
+          LocalizationService.t('status_connection_error', {'error': '$e'});
       _log.e('Error connecting: $e');
       return false;
     }
@@ -1032,7 +1063,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     if (config is VlessConfig &&
         (config.security.isEmpty || config.security.toLowerCase() == 'none')) {
       final addr = config.address.trim();
-      final isIp = RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(addr) || addr.contains(':');
+      final isIp =
+          RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(addr) || addr.contains(':');
       final isPrivate = addr.startsWith('10.') ||
           addr.startsWith('192.168.') ||
           addr.startsWith('127.') ||
@@ -1068,8 +1100,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     if (availability.canConnect(config.protocol)) return null;
 
     final supported = availability.supportedProtocols;
-    final supportedLabel =
-        supported.isEmpty ? 'none' : supported.map((p) => p.toUpperCase()).join(', ');
+    final supportedLabel = supported.isEmpty
+        ? 'none'
+        : supported.map((p) => p.toUpperCase()).join(', ');
     return "'${config.protocol}' cannot be dialled by this build: no engine that "
         'serves it is bundled. Supported here: $supportedLabel.';
   }
@@ -1129,7 +1162,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
     } catch (e) {
       state.value = ConnectionState.error;
-      statusMessage.value = LocalizationService.t('status_disconnect_error', {'error': '$e'});
+      statusMessage.value =
+          LocalizationService.t('status_disconnect_error', {'error': '$e'});
       _log.e('Error disconnecting: $e');
       return false;
     }
@@ -1190,12 +1224,14 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         return true;
       } else {
         state.value = ConnectionState.error;
-        statusMessage.value = LocalizationService.t('status_connection_test_failed');
+        statusMessage.value =
+            LocalizationService.t('status_connection_test_failed');
         return false;
       }
     } catch (e) {
       state.value = ConnectionState.error;
-      statusMessage.value = LocalizationService.t('status_test_error', {'error': '$e'});
+      statusMessage.value =
+          LocalizationService.t('status_test_error', {'error': '$e'});
       return false;
     }
   }
@@ -1216,7 +1252,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         return false;
       }
 
-      debugService.logInfo('DNS leak prevention: ${dnsLeakPreventionService.describe()}');
+      debugService.logInfo(
+          'DNS leak prevention: ${dnsLeakPreventionService.describe()}');
       if (next && isConnected) {
         statusMessage.value = LocalizationService.t('status_dns_applies');
       }
@@ -1263,7 +1300,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       await splitTunnelingService.setEnabled(next);
       isSplitTunnelingEnabled.value = next;
 
-      debugService.logInfo('Split tunneling: ${splitTunnelingService.describe()}');
+      debugService
+          .logInfo('Split tunneling: ${splitTunnelingService.describe()}');
       if (next && isConnected) {
         statusMessage.value = LocalizationService.t('status_split_applies');
       }
@@ -1330,7 +1368,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     if (!prepared) {
       state.value = ConnectionState.error;
       isDnsOnly.value = false;
-      statusMessage.value = vpnService.lastError ?? LocalizationService.t('status_permission_denied');
+      statusMessage.value = vpnService.lastError ??
+          LocalizationService.t('status_permission_denied');
       return false;
     }
 
@@ -1338,7 +1377,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     if (!ok) {
       state.value = ConnectionState.error;
       isDnsOnly.value = false;
-      statusMessage.value = vpnService.lastError ?? LocalizationService.t('dns_only_needs_resolver');
+      statusMessage.value = vpnService.lastError ??
+          LocalizationService.t('dns_only_needs_resolver');
       return false;
     }
 

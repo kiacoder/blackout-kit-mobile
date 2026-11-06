@@ -142,8 +142,35 @@ class SiteCheckService {
   List<String> get liveCheckHosts =>
       _settings.siteCheckUrls.take(maxLiveCheckHosts).toList();
 
+  /// Fetches all configured hosts through the established system tunnel.
+  /// Unlike [verifyLiveConnection], this keeps one outcome per site so the
+  /// connection policy can apply an exact user-selected pass threshold.
+  Future<List<SiteCheckOutcome>> checkLiveConnection({
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final hosts = _settings.siteCheckUrls.toList();
+    if (hosts.isEmpty) return const [];
+    try {
+      final outcomes = await _vpnService.probeSites(
+        VPNService.defaultSocksPort,
+        hosts,
+        timeout: timeout,
+      );
+      return outcomes.map(SiteCheckOutcome.fromMap).toList();
+    } catch (e) {
+      _log.w('Live tunnel website checks failed: $e');
+      return [for (final host in hosts) SiteCheckOutcome(
+        host: host,
+        ok: false,
+        error: e.toString(),
+      )];
+    }
+  }
+
   /// Verifies the CURRENTLY CONNECTED tunnel by fetching [liveCheckHosts]
-  /// through its loopback SOCKS inbound (port 10808).
+  /// through its loopback SOCKS inbound (port 10808). Exit-location lookup is
+  /// deliberately separate: an unavailable geolocation provider does not mean
+  /// the VPN is down, so only these actual website checks determine liveness.
   ///
   /// This is the missing feedback loop: a config can pass every pre-connect
   /// probe and still black-hole real traffic once the TUN interface is up.
@@ -155,17 +182,16 @@ class SiteCheckService {
   Future<bool> verifyLiveConnection({
     Duration timeout = const Duration(seconds: 8),
   }) async {
-    final hosts = liveCheckHosts;
+    final hosts = _settings.siteCheckUrls.toList();
     if (hosts.isEmpty) return true;
     try {
-      final outcomes = await _vpnService.probeSites(
-        VPNService.defaultSocksPort,
-        hosts,
-        timeout: timeout,
-      );
-      final reachable = outcomes.where((o) => o['ok'] == true).length;
+      final outcomes = await checkLiveConnection(timeout: timeout);
+      final reachable = outcomes.where((outcome) => outcome.ok).length;
       _log.i('Live tunnel check: $reachable/${hosts.length} hosts reachable');
-      return reachable > 0;
+      final threshold = _settings.connectWebsitePassThreshold.value;
+      return threshold < 0
+          ? reachable == hosts.length
+          : reachable >= threshold.clamp(1, hosts.length);
     } catch (e) {
       // A failed verification probe must not itself break the connection
       // flow — but it also must not bless a dead tunnel. Treat the check as

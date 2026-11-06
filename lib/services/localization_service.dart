@@ -38,7 +38,16 @@ class LocalizationService extends GetxService implements Translations {
   /// Languages written right-to-left. Selecting one of these must flip the
   /// whole widget tree, not just the strings: without a Directionality the
   /// Material widgets stayed LTR while the text ran the other way.
-  static const Set<String> rtlLanguages = {'fa', 'ar', 'he', 'ur', 'ps', 'sd', 'ug', 'yi'};
+  static const Set<String> rtlLanguages = {
+    'fa',
+    'ar',
+    'he',
+    'ur',
+    'ps',
+    'sd',
+    'ug',
+    'yi'
+  };
 
   static bool isRtl(String languageCode) =>
       rtlLanguages.contains(languageCode.toLowerCase());
@@ -89,7 +98,8 @@ class LocalizationService extends GetxService implements Translations {
     String key, {
     String language = fallbackLanguageCode,
   }) {
-    final table = _translations[language] ?? _translations[fallbackLanguageCode];
+    final table =
+        _translations[language] ?? _translations[fallbackLanguageCode];
     // Returning the key itself on a miss is deliberate: a visible `foo_bar` in
     // the UI is easier to notice and fix than a silently blank string.
     return table?[key] ?? key;
@@ -129,7 +139,8 @@ class LocalizationService extends GetxService implements Translations {
       'kill_switch_desc': 'Block all traffic if VPN disconnects',
       'dns_leak_prevention': 'DNS leak prevention',
       'dns_leak_prevention_on': 'DNS queries are resolved inside the tunnel.',
-      'dns_leak_prevention_off': 'Off - your provider can see which domains you resolve.',
+      'dns_leak_prevention_off':
+          'Off - your provider can see which domains you resolve.',
       'split_tunneling': 'Split Tunneling',
       'split_tunneling_desc': 'Route selected apps outside VPN',
       'engine_hub': 'Blackout Engine Hub',
@@ -140,9 +151,11 @@ class LocalizationService extends GetxService implements Translations {
       // Settings — DNS
       'dns_resolver': 'DNS resolver',
       'dns_only_mode': 'Change DNS only',
-      'dns_only_mode_desc': 'Use the chosen resolver without a VPN. Your traffic still goes out directly.',
+      'dns_only_mode_desc':
+          'Use the chosen resolver without a VPN. Your traffic still goes out directly.',
       'check_resolvers': 'Check resolvers',
-      'check_resolvers_desc': 'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP - this is a hint, not a verdict.',
+      'check_resolvers_desc':
+          'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP - this is a hint, not a verdict.',
       'resolver_reachability': 'Resolver reachability',
       'resolver_tcp_ok': 'TCP 53 answered',
       'resolver_tcp_miss': 'No TCP 53 answer - it may still work over UDP',
@@ -161,7 +174,8 @@ class LocalizationService extends GetxService implements Translations {
       'show_speed_status_bar': 'Show Speed in Status Bar',
       'show_my_location': 'Show my location',
       'keep_screen_awake': 'Keep Screen Awake',
-      'keep_screen_awake_desc': 'Prevent screen from turning off during config testing or active VPN',
+      'keep_screen_awake_desc':
+          'Prevent screen from turning off during config testing or active VPN',
       'theme': 'Theme',
       'theme_system': 'System Default',
       'theme_light': 'Light',
@@ -173,13 +187,50 @@ class LocalizationService extends GetxService implements Translations {
       'analytics': 'Analytics',
       'analytics_desc': 'No data collection. Open source & transparent.',
       'debug_logs': 'Debug & Logs',
-      'debug_logs_desc': 'View, filter, copy, and export real-time application logs',
+      'debug_logs_desc':
+          'View, filter, copy, and export real-time application logs',
       'site_check': 'Site Check',
       'site_check_websites': 'Site Check Websites',
       'verbose_core_logs': 'Verbose core logs',
+      'Scan batch size': 'Scan batch size',
+      'Candidate verification': 'Candidate verification',
+      'Website pass requirement': 'Website pass requirement',
+      'After a tunnel failure': 'After a tunnel failure',
+      'Continue from the next batch': 'Continue from the next batch',
+      'Restart scan from the first batch': 'Restart scan from the first batch',
+      'Restart scan': 'Restart scan',
+      'Continue next batch': 'Continue next batch',
+      'Stay disconnected': 'Stay disconnected',
+      'Reconnect to last working location':
+          'Reconnect to last working location',
+      'Configs per batch (1–500)': 'Configs per batch (1–500)',
+      'Candidates per batch': 'Candidates per batch',
+      'Hybrid candidates per batch': 'Hybrid candidates per batch',
+      'Try fastest candidate first': 'Try fastest candidate first',
+      'Try a configurable number per batch':
+          'Try a configurable number per batch',
+      'Connect and verify every candidate':
+          'Connect and verify every candidate',
+      'Connect and verify every pingable or unknown config':
+          'Connect and verify every pingable or unknown config',
+      'All configured websites must pass': 'All configured websites must pass',
+      'At least @count websites': 'At least @count websites',
+      'Search configs, hosts, protocols, sources':
+          'Search configs, hosts, protocols, sources',
+      'Clear search': 'Clear search',
+      'No configs match your search': 'No configs match your search',
+      'Checking server reachability': 'Checking server reachability',
+      'Establishing secure tunnel': 'Establishing secure tunnel',
+      'Testing your websites': 'Testing your websites',
+      'Connection verified': 'Connection verified',
+      'Connection needs attention': 'Connection needs attention',
+      'No verified config found': 'No verified config found',
+      'The tunnel is up but nothing loads — reconnect to pick another server':
+          'The tunnel is up but nothing loads — reconnect to pick another server',
       'reset_to_defaults': 'Reset to Defaults',
       'reset_to_defaults_confirm': 'Reset to Defaults?',
-      'reset_to_defaults_desc': 'This clears every setting and cannot be undone.',
+      'reset_to_defaults_desc':
+          'This clears every setting and cannot be undone.',
       'update': 'Update',
       'github': 'GitHub',
 
@@ -222,7 +273,8 @@ class LocalizationService extends GetxService implements Translations {
       'system_logs': 'System Logs',
       'system_logs_inspector': 'System Logs & Inspector',
       'clear_logs': 'Clear Logs?',
-      'clear_logs_confirm': 'Are you sure you want to clear the in-memory log buffer?',
+      'clear_logs_confirm':
+          'Are you sure you want to clear the in-memory log buffer?',
       'export_logs': 'Export Logs',
       'export_all_logs': 'Export All Logs',
       'logs_cleared': 'Logs cleared',
@@ -259,43 +311,43 @@ class LocalizationService extends GetxService implements Translations {
       'guide_open': 'Open the guide',
       'guide_intro':
           'Blackout Kit hides what you do online by sending it through a server '
-          'somewhere else. You need one "config" - a small text code that tells '
-          'the app which server to use. That is the only thing you have to find.',
+              'somewhere else. You need one "config" - a small text code that tells '
+              'the app which server to use. That is the only thing you have to find.',
       'guide_step1_title': '1. Get a config',
       'guide_step1_body':
           'A config starts with letters like vless:// or ss:// or hy2://. You '
-          'can get one from a friend, a group, or a provider you trust. Copy the '
-          'whole line - it is long, do not cut it.',
+              'can get one from a friend, a group, or a provider you trust. Copy the '
+              'whole line - it is long, do not cut it.',
       'guide_step2_title': '2. Add it to the app',
       'guide_step2_body':
           'Open Library, press "Import VPN Config", and paste the line. If it '
-          'says "Valid Config Detected", it worked. If it says invalid, the line '
-          'was cut short - copy it again.',
+              'says "Valid Config Detected", it worked. If it says invalid, the line '
+              'was cut short - copy it again.',
       'guide_step3_title': '3. Connect',
       'guide_step3_body':
           'Go back to the first screen and press the big button. The first time, '
-          'Android asks "Allow VPN connection?". Press OK. That is Android, not '
-          'us, and it only asks once.',
+              'Android asks "Allow VPN connection?". Press OK. That is Android, not '
+              'us, and it only asks once.',
       'guide_step4_title': '4. Check it works',
       'guide_step4_body':
           'When the button says Connected, open a website. If it loads, you are '
-          'done. If nothing loads, try another config from the list - some '
-          'servers are dead.',
+              'done. If nothing loads, try another config from the list - some '
+              'servers are dead.',
       'guide_step5_title': '5. If a site is slow or asks for a captcha',
       'guide_step5_body':
           'That is usually the server, not the app. Go to Settings, DNS, and '
-          'pick a resolver that matches the country of your server. A German '
-          'server with an Iranian resolver confuses websites.',
+              'pick a resolver that matches the country of your server. A German '
+              'server with an Iranian resolver confuses websites.',
       'guide_step6_title': '6. If you only want a different DNS',
       'guide_step6_body':
           'You do not need a config for that. Turn on "Change DNS only" in '
-          'Settings, DNS, and press Connect. Your internet stays direct - only '
-          'the name lookups change. Use this when your provider blocks sites by '
-          'name.',
+              'Settings, DNS, and press Connect. Your internet stays direct - only '
+              'the name lookups change. Use this when your provider blocks sites by '
+              'name.',
       'guide_need_help': 'Still stuck?',
       'guide_need_help_body':
           'Open Settings, Debug & Logs, and press Export Logs. That text tells '
-          'exactly what failed.',
+              'exactly what failed.',
       'guide_got_it': 'Got it',
 
       // DNS-only notices
@@ -310,15 +362,18 @@ class LocalizationService extends GetxService implements Translations {
       'status_finding_fastest': 'Finding fastest config...',
       'status_connecting_to': 'Connecting to @name...',
       'status_connected_to': 'Connected to @name',
+      'status_connected_verified': 'Connected to @name — verified',
       'status_connected': 'Connected',
       'all': 'All',
       'sort_by': 'Sort by:',
       'Sort by:': 'Sort by:',
       'working': 'Working',
-      'vless_plaintext_public_ip_refusal': 'Plaintext VLESS (security: none) to a raw public IP is prohibited by Xray for security (leaks UUID in cleartext). Use a domain address or TLS.',
+      'vless_plaintext_public_ip_refusal':
+          'Plaintext VLESS (security: none) to a raw public IP is prohibited by Xray for security (leaks UUID in cleartext). Use a domain address or TLS.',
       'not_available_in_build': 'Not available in this build',
       'signer_mismatch_title': 'Different signing key',
-      'signer_mismatch_body': "The installed app and this update use different signing keys, so Android cannot update in place. Steps: 1) import your configs again after reinstalling (they are erased on uninstall). 2) Uninstall Blackout Kit. 3) Open the release link below (Copy button) in a browser and install the new APK. 4) Re-import your configs.",
+      'signer_mismatch_body':
+          "The installed app and this update use different signing keys, so Android cannot update in place. Steps: 1) import your configs again after reinstalling (they are erased on uninstall). 2) Uninstall Blackout Kit. 3) Open the release link below (Copy button) in a browser and install the new APK. 4) Re-import your configs.",
       'copy_release_link': 'Copy release link',
       'installer_failed': 'Could not start the installer: ',
       'status_disconnected': 'Disconnected',
@@ -344,33 +399,45 @@ class LocalizationService extends GetxService implements Translations {
       'split_desc_only': 'On - only @count app(s)',
       'split_desc_except': 'On - all except @count app(s)',
       'ks_desc_off': 'Off',
-      'ks_desc_full': 'On - blocks traffic if the tunnel drops, including after a reboot',
-      'ks_desc_always_on': 'On - blocks traffic while the app runs. Turn on "Block connections without VPN" in system settings for full protection',
-      'ks_desc_running': 'On - blocks traffic while the app runs. Set this app as always-on VPN in system settings to also cover reboots and force-stops',
+      'ks_desc_full':
+          'On - blocks traffic if the tunnel drops, including after a reboot',
+      'ks_desc_always_on':
+          'On - blocks traffic while the app runs. Turn on "Block connections without VPN" in system settings for full protection',
+      'ks_desc_running':
+          'On - blocks traffic while the app runs. Set this app as always-on VPN in system settings to also cover reboots and force-stops',
       'dns_desc_off': 'Off - the system resolver is used',
-      'dns_desc_on': 'On - queries resolved inside the tunnel via @name (@servers)',
+      'dns_desc_on':
+          'On - queries resolved inside the tunnel via @name (@servers)',
 
-      'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.': 'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.',
+      'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.':
+          'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.',
 
-      'dns_cat_sanctions': 'Sanctions — resolvers chosen to survive national filtering',
+      'dns_cat_sanctions':
+          'Sanctions — resolvers chosen to survive national filtering',
       'dns_cat_speed': 'Speed — high-performance public resolvers',
       'dns_cat_extra': 'Extra — filtering, privacy and domestic resolvers',
       '@ip (custom)': '@ip (custom)',
       '@ip, @secondary (custom)': '@ip, @secondary (custom)',
       'No configs available': 'No configs available',
-      'None of your configs use a protocol this build can serve': 'None of your configs use a protocol this build can serve',
-      'The tunnel stopped unexpectedly. Reconnect to retry.': 'The tunnel stopped unexpectedly. Reconnect to retry.',
+      'None of your configs use a protocol this build can serve':
+          'None of your configs use a protocol this build can serve',
+      'The tunnel stopped unexpectedly. Reconnect to retry.':
+          'The tunnel stopped unexpectedly. Reconnect to retry.',
       'Failed to connect': 'Failed to connect',
       'Connected (@ms ms to the server)': 'Connected (@ms ms to the server)',
       'Pinging @label... @done/@total': 'Pinging @label... @done/@total',
       'Verifying websites, @label...': 'Verifying websites, @label...',
       'Connecting (@label, config @n)...': 'Connecting (@label, config @n)...',
-      'Checking websites through the tunnel (@label, config @n)...': 'Checking websites through the tunnel (@label, config @n)...',
+      'Checking websites through the tunnel (@label, config @n)...':
+          'Checking websites through the tunnel (@label, config @n)...',
       'Connected to @name — verified': 'Connected to @name — verified',
-      'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.': 'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.',
+      'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.':
+          'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.',
       'No working configs found': 'No working configs found',
-      'Restored: @name (tunnel was already running)': 'Restored: @name (tunnel was already running)',
-      'Restored connection (tunnel was already running)': 'Restored connection (tunnel was already running)',
+      'Restored: @name (tunnel was already running)':
+          'Restored: @name (tunnel was already running)',
+      'Restored connection (tunnel was already running)':
+          'Restored connection (tunnel was already running)',
 
       'dns_name_shecan': 'Shecan',
       'dns_name_electro': 'Electro',
@@ -421,21 +488,25 @@ class LocalizationService extends GetxService implements Translations {
       'Add custom source': 'Add custom source',
       'Advanced & Diagnostics': 'Advanced & Diagnostics',
       'Already in Library': 'Already in Library',
-      'Another config in your library is identical - the original was left untouched': 'Another config in your library is identical - the original was left untouched',
+      'Another config in your library is identical - the original was left untouched':
+          'Another config in your library is identical - the original was left untouched',
       'App Information': 'App Information',
       'App is up to date': 'App is up to date',
       'App update': 'App update',
-      'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.': 'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.',
+      'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.':
+          'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.',
       'Benchmark Complete': 'Benchmark Complete',
       'Benchmark Failed': 'Benchmark Failed',
       'Blackout Kit': 'Blackout Kit',
       'Buffer Capacity': 'Buffer Capacity',
       'Bundled engines': 'Bundled engines',
       'Camera Unavailable': 'Camera Unavailable',
-      'Checked through each candidate config. Defaults are restored if everything is removed.': 'Checked through each candidate config. Defaults are restored if everything is removed.',
+      'Checked through each candidate config. Defaults are restored if everything is removed.':
+          'Checked through each candidate config. Defaults are restored if everything is removed.',
       'Checking bundled engines...': 'Checking bundled engines...',
       'Checking for updates...': 'Checking for updates...',
-      'Checking which engines are bundled in this build...': 'Checking which engines are bundled in this build...',
+      'Checking which engines are bundled in this build...':
+          'Checking which engines are bundled in this build...',
       'Clear logs': 'Clear logs',
       'Clipboard & Text': 'Clipboard & Text',
       'Config Saved': 'Config Saved',
@@ -449,15 +520,19 @@ class LocalizationService extends GetxService implements Translations {
       'Connection Failed': 'Connection Failed',
       'Copy all logs': 'Copy all logs',
       'Copy config text': 'Copy config text',
-      'Copy the text and share it instead': 'Copy the text and share it instead',
+      'Copy the text and share it instead':
+          'Copy the text and share it instead',
       'Core VPN': 'Core VPN',
-      'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel': 'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel',
+      'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel':
+          'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel',
       'Could Not Add Source': 'Could Not Add Source',
       'Could Not Save': 'Could Not Save',
       'Could not load apps': 'Could not load apps',
       'Could not load your configs': 'Could not load your configs',
-      'Could not parse a valid VPN config from file': 'Could not parse a valid VPN config from file',
-      'Could not parse configuration syntax': 'Could not parse configuration syntax',
+      'Could not parse a valid VPN config from file':
+          'Could not parse a valid VPN config from file',
+      'Could not parse configuration syntax':
+          'Could not parse configuration syntax',
       'Could not switch camera': 'Could not switch camera',
       'Custom (IP address)': 'Custom (IP address)',
       'DPI Obfuscation': 'DPI Obfuscation',
@@ -468,8 +543,10 @@ class LocalizationService extends GetxService implements Translations {
       'Empty Config': 'Empty Config',
       'Enable Split Tunneling': 'Enable Split Tunneling',
       'Engine information': 'Engine information',
-      'Engine support could not be determined on this platform': 'Engine support could not be determined on this platform',
-      'Engines without a bundled runtime are shown greyed out': 'Engines without a bundled runtime are shown greyed out',
+      'Engine support could not be determined on this platform':
+          'Engine support could not be determined on this platform',
+      'Engines without a bundled runtime are shown greyed out':
+          'Engines without a bundled runtime are shown greyed out',
       'Enter raw configuration text...': 'Enter raw configuration text...',
       'Error Notification': 'Error Notification',
       'Exception: ': 'Exception: ',
@@ -489,37 +566,49 @@ class LocalizationService extends GetxService implements Translations {
       'Incomplete Config': 'Incomplete Config',
       'Invalid Syntax': 'Invalid Syntax',
       'Log Statistics': 'Log Statistics',
-      'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.': 'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.',
+      'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.':
+          'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.',
       'Max Buffer Size': 'Max Buffer Size',
       'Name (A-Z)': 'Name (A-Z)',
       'No Configs': 'No Configs',
-      'No TCP 53 answer - it may still work over UDP': 'No TCP 53 answer - it may still work over UDP',
+      'No TCP 53 answer - it may still work over UDP':
+          'No TCP 53 answer - it may still work over UDP',
       'No configs found': 'No configs found',
-      'No data leaves your device - this only stores your preference': 'No data leaves your device - this only stores your preference',
-      'No launchable apps were found on this device.': 'No launchable apps were found on this device.',
+      'No data leaves your device - this only stores your preference':
+          'No data leaves your device - this only stores your preference',
+      'No launchable apps were found on this device.':
+          'No launchable apps were found on this device.',
       'No log entries recorded': 'No log entries recorded',
       'No logs yet': 'No logs yet',
       'No response': 'No response',
-      'No user tracking or data collection.': 'No user tracking or data collection.',
+      'No user tracking or data collection.':
+          'No user tracking or data collection.',
       'Not Tested': 'Not Tested',
       'Not available in this build': 'Not available in this build',
       'Not bundled': 'Not bundled',
-      'Not set - pick one to enable leak prevention': 'Not set - pick one to enable leak prevention',
+      'Not set - pick one to enable leak prevention':
+          'Not set - pick one to enable leak prevention',
       'Not tested': 'Not tested',
-      'Off - your provider can see which domains you resolve.': 'Off - your provider can see which domains you resolve.',
+      'Off - your provider can see which domains you resolve.':
+          'Off - your provider can see which domains you resolve.',
       'One host per line': 'One host per line',
-      'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.': 'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.',
+      'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.':
+          'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.',
       'Parses, but incomplete': 'Parses, but incomplete',
       'Paste Configuration Text or URI': 'Paste Configuration Text or URI',
-      'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...': 'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...',
+      'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...':
+          'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...',
       'Performance Tester': 'Performance Tester',
-      'Please import or fetch configs before running speed tests': 'Please import or fetch configs before running speed tests',
+      'Please import or fetch configs before running speed tests':
+          'Please import or fetch configs before running speed tests',
       'Privacy Policy': 'Privacy Policy',
       'Protocol & Engines': 'Protocol & Engines',
       'Proxy Core': 'Proxy Core',
-      'Ready to install - tap to open the installer': 'Ready to install - tap to open the installer',
+      'Ready to install - tap to open the installer':
+          'Ready to install - tap to open the installer',
       'Recently added': 'Recently added',
-      'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.': 'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.',
+      'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.':
+          'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.',
       'Reconnect to apply': 'Reconnect to apply',
       'Refresh all sources': 'Refresh all sources',
       'Relay / Mesh': 'Relay / Mesh',
@@ -527,18 +616,22 @@ class LocalizationService extends GetxService implements Translations {
       'Save Failed': 'Save Failed',
       'Save changes': 'Save changes',
       'Scan QR': 'Scan QR',
-      'Scan with Blackout Kit or any VPN app to import': 'Scan with Blackout Kit or any VPN app to import',
+      'Scan with Blackout Kit or any VPN app to import':
+          'Scan with Blackout Kit or any VPN app to import',
       'Scroll to bottom': 'Scroll to bottom',
       'Search installed apps...': 'Search installed apps...',
       'Search logs...': 'Search logs...',
-      'Settings have been reset to defaults': 'Settings have been reset to defaults',
+      'Settings have been reset to defaults':
+          'Settings have been reset to defaults',
       'Share QR Code': 'Share QR Code',
-      'Shows the latency of the selected config in the notification': 'Shows the latency of the selected config in the notification',
+      'Shows the latency of the selected config in the notification':
+          'Shows the latency of the selected config in the notification',
       'Source Added': 'Source Added',
       'Source Name': 'Source Name',
       'Speed (fastest first)': 'Speed (fastest first)',
       'Speed Benchmark': 'Speed Benchmark',
-      'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)': 'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)',
+      'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)':
+          'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)',
       'Syntax Error': 'Syntax Error',
       'System logs copied to clipboard': 'System logs copied to clipboard',
       'TCP 53 answered': 'TCP 53 answered',
@@ -546,15 +639,24 @@ class LocalizationService extends GetxService implements Translations {
       'Test All': 'Test All',
       'Test now': 'Test now',
       'Test single config': 'Test single config',
-      'The config could not be written to storage - try again': 'The config could not be written to storage - try again',
-      'The config could not be written to storage. The original was left untouched.': 'The config could not be written to storage. The original was left untouched.',
-      'The repository could not be saved - check the name and try again': 'The repository could not be saved - check the name and try again',
-      'This camera does not expose a torch': 'This camera does not expose a torch',
-      'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.': 'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.',
-      'This configuration already exists in your library': 'This configuration already exists in your library',
-      'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.': 'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.',
-      'This file is larger than 5 MB - paste the configs instead': 'This file is larger than 5 MB - paste the configs instead',
-      'This will reset all settings to their default values. Your saved configs will not be affected.': 'This will reset all settings to their default values. Your saved configs will not be affected.',
+      'The config could not be written to storage - try again':
+          'The config could not be written to storage - try again',
+      'The config could not be written to storage. The original was left untouched.':
+          'The config could not be written to storage. The original was left untouched.',
+      'The repository could not be saved - check the name and try again':
+          'The repository could not be saved - check the name and try again',
+      'This camera does not expose a torch':
+          'This camera does not expose a torch',
+      'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.':
+          'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.',
+      'This configuration already exists in your library':
+          'This configuration already exists in your library',
+      'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.':
+          'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.',
+      'This file is larger than 5 MB - paste the configs instead':
+          'This file is larger than 5 MB - paste the configs instead',
+      'This will reset all settings to their default values. Your saved configs will not be affected.':
+          'This will reset all settings to their default values. Your saved configs will not be affected.',
       'Too long for a QR code': 'Too long for a QR code',
       'Torch Unavailable': 'Torch Unavailable',
       'Total Entries': 'Total Entries',
@@ -562,15 +664,20 @@ class LocalizationService extends GetxService implements Translations {
       'Trustworthy Open-Source VPN': 'Trustworthy Open-Source VPN',
       'Update Complete': 'Update Complete',
       'Update failed': 'Update failed',
-      'Updating repositories & configs...': 'Updating repositories & configs...',
-      'Updating repositories and configs...': 'Updating repositories and configs...',
+      'Updating repositories & configs...':
+          'Updating repositories & configs...',
+      'Updating repositories and configs...':
+          'Updating repositories and configs...',
       'VPN Settings': 'VPN Settings',
       'Valid Config': 'Valid Config',
-      'Verify candidate configs by fetching real websites through them, not just pinging the server': 'Verify candidate configs by fetching real websites through them, not just pinging the server',
+      'Verify candidate configs by fetching real websites through them, not just pinging the server':
+          'Verify candidate configs by fetching real websites through them, not just pinging the server',
       'Your real IP: unavailable': 'Your real IP: unavailable',
-      'Your saved configs are not lost — the update failed. Check your connection and try again.': 'Your saved configs are not lost — the update failed. Check your connection and try again.',
+      'Your saved configs are not lost — the update failed. Check your connection and try again.':
+          'Your saved configs are not lost — the update failed. Check your connection and try again.',
       'blackout kit': 'blackout kit',
-      'disabled sources stay saved but are hidden and untested': 'disabled sources stay saved but are hidden and untested',
+      'disabled sources stay saved but are hidden and untested':
+          'disabled sources stay saved but are hidden and untested',
       'e.g., My Configs': 'e.g., My Configs',
       'e.g., main': 'e.g., main',
       'e.g., username': 'e.g., username',
@@ -614,7 +721,8 @@ class LocalizationService extends GetxService implements Translations {
       'kill_switch_desc': 'اگر VPN قطع شد، همه ترافیک مسدود شود',
       'dns_leak_prevention': 'جلوگیری از نشت DNS',
       'dns_leak_prevention_on': 'پرسش‌های DNS داخل تونل پاسخ داده می‌شوند.',
-      'dns_leak_prevention_off': 'خاموش - اپراتور می‌تواند ببیند کدام سایت‌ها را باز می‌کنید.',
+      'dns_leak_prevention_off':
+          'خاموش - اپراتور می‌تواند ببیند کدام سایت‌ها را باز می‌کنید.',
       'split_tunneling': 'تونل تفکیکی',
       'split_tunneling_desc': 'برنامه‌های انتخاب‌شده خارج از VPN بروند',
       'engine_hub': 'مرکز موتورها',
@@ -624,9 +732,11 @@ class LocalizationService extends GetxService implements Translations {
 
       'dns_resolver': 'سرور DNS',
       'dns_only_mode': 'فقط DNS را عوض کن',
-      'dns_only_mode_desc': 'از سرور DNS انتخابی بدون VPN استفاده کن. ترافیک شما مستقیم می‌رود.',
+      'dns_only_mode_desc':
+          'از سرور DNS انتخابی بدون VPN استفاده کن. ترافیک شما مستقیم می‌رود.',
       'check_resolvers': 'بررسی سرورهای DNS',
-      'check_resolvers_desc': 'به پورت 53 هر آدرس با TCP وصل می‌شود. اگر جواب نداد، ممکن است با UDP کار کند - این فقط یک نشانه است.',
+      'check_resolvers_desc':
+          'به پورت 53 هر آدرس با TCP وصل می‌شود. اگر جواب نداد، ممکن است با UDP کار کند - این فقط یک نشانه است.',
       'resolver_reachability': 'دسترسی‌پذیری سرور DNS',
       'resolver_tcp_ok': 'TCP 53 جواب داد',
       'resolver_tcp_miss': 'TCP 53 جواب نداد - ممکن است با UDP کار کند',
@@ -660,6 +770,40 @@ class LocalizationService extends GetxService implements Translations {
       'site_check': 'بررسی سایت',
       'site_check_websites': 'سایت‌های بررسی',
       'verbose_core_logs': 'گزارش کامل هسته',
+      'Scan batch size': 'تعداد کانفیگ در هر دسته اسکن',
+      'Candidate verification': 'روش بررسی کانفیگ‌ها',
+      'Website pass requirement': 'حداقل سایت‌های موفق',
+      'After a tunnel failure': 'پس از خرابی تونل',
+      'Continue from the next batch': 'ادامه از دسته بعدی',
+      'Restart scan from the first batch': 'شروع دوباره از دسته اول',
+      'Restart scan': 'شروع دوباره اسکن',
+      'Continue next batch': 'ادامه از دسته بعد',
+      'Stay disconnected': 'قطع بماند',
+      'Reconnect to last working location': 'اتصال دوباره به آخرین موقعیت سالم',
+      'Configs per batch (1–500)': 'کانفیگ در هر دسته (۱ تا ۵۰۰)',
+      'Candidates per batch': 'تعداد کانفیگ در هر دسته',
+      'Hybrid candidates per batch': 'تعداد ترکیبی در هر دسته',
+      'Try fastest candidate first': 'اول سریع‌ترین کانفیگ را امتحان کن',
+      'Try a configurable number per batch':
+          'تعداد دلخواهی را در هر دسته امتحان کن',
+      'Connect and verify every candidate': 'همه کانفیگ‌ها را وصل و بررسی کن',
+      'Connect and verify every pingable or unknown config':
+          'هر کانفیگ قابل پینگ یا نامشخص را وصل و بررسی کن',
+      'All configured websites must pass':
+          'همه سایت‌های انتخاب‌شده باید باز شوند',
+      'At least @count websites': 'حداقل @count سایت باید باز شود',
+      'Search configs, hosts, protocols, sources':
+          'جست‌وجوی کانفیگ، میزبان، پروتکل یا منبع',
+      'Clear search': 'پاک کردن جست‌وجو',
+      'No configs match your search': 'کانفیگی با این جست‌وجو پیدا نشد',
+      'Checking server reachability': 'بررسی دسترسی به سرور',
+      'Establishing secure tunnel': 'برقراری تونل امن',
+      'Testing your websites': 'آزمایش سایت‌های شما',
+      'Connection verified': 'اتصال تأیید شد',
+      'Connection needs attention': 'اتصال نیاز به بررسی دارد',
+      'No verified config found': 'کانفیگ تأییدشده‌ای پیدا نشد',
+      'The tunnel is up but nothing loads — reconnect to pick another server':
+          'تونل برقرار است اما سایتی باز نمی‌شود — برای انتخاب سرور دیگر دوباره وصل شوید',
       'reset_to_defaults': 'بازگشت به تنظیمات پیش‌فرض',
       'reset_to_defaults_confirm': 'به پیش‌فرض برگردد؟',
       'reset_to_defaults_desc': 'همه تنظیمات پاک می‌شود و قابل بازگشت نیست.',
@@ -736,41 +880,41 @@ class LocalizationService extends GetxService implements Translations {
       'guide_open': 'باز کردن راهنما',
       'guide_intro':
           'بلک‌اوت کیت کاری را که انجام می‌دهید از یک سرور در جای دیگر رد می‌کند تا '
-          'پنهان بماند. فقط به یک «کانفیگ» نیاز دارید؛ یک خط متن که می‌گوید از کدام '
-          'سرور استفاده شود. تنها چیزی که باید پیدا کنید همین است.',
+              'پنهان بماند. فقط به یک «کانفیگ» نیاز دارید؛ یک خط متن که می‌گوید از کدام '
+              'سرور استفاده شود. تنها چیزی که باید پیدا کنید همین است.',
       'guide_step1_title': '۱. یک کانفیگ بگیرید',
       'guide_step1_body':
           'کانفیگ با حروفی مثل vless:// یا ss:// یا hy2:// شروع می‌شود. از دوست، '
-          'گروه یا فروشنده‌ای که به آن اعتماد دارید بگیرید. کل خط را کپی کنید - '
-          'طولانی است، نصفه‌اش نکنید.',
+              'گروه یا فروشنده‌ای که به آن اعتماد دارید بگیرید. کل خط را کپی کنید - '
+              'طولانی است، نصفه‌اش نکنید.',
       'guide_step2_title': '۲. آن را به برنامه اضافه کنید',
       'guide_step2_body':
           'کتابخانه را باز کنید، «افزودن کانفیگ VPN» را بزنید و خط را بچسبانید. '
-          'اگر «کانفیگ معتبر است» آمد، درست بوده. اگر گفت نامعتبر، خط نصفه کپی '
-          'شده - دوباره کپی کنید.',
+              'اگر «کانفیگ معتبر است» آمد، درست بوده. اگر گفت نامعتبر، خط نصفه کپی '
+              'شده - دوباره کپی کنید.',
       'guide_step3_title': '۳. وصل شوید',
       'guide_step3_body':
           'به صفحه اول برگردید و دکمه بزرگ را بزنید. بار اول اندروید می‌پرسد '
-          '«اجازه اتصال VPN؟». OK را بزنید. این پیام از اندروید است، نه ما، و '
-          'فقط یک بار می‌آید.',
+              '«اجازه اتصال VPN؟». OK را بزنید. این پیام از اندروید است، نه ما، و '
+              'فقط یک بار می‌آید.',
       'guide_step4_title': '۴. مطمئن شوید کار می‌کند',
       'guide_step4_body':
           'وقتی دکمه «متصل» شد، یک سایت باز کنید. اگر باز شد، تمام است. اگر هیچ '
-          'چیزی باز نشد، کانفیگ دیگری را امتحان کنید - بعضی سرورها خراب‌اند.',
+              'چیزی باز نشد، کانفیگ دیگری را امتحان کنید - بعضی سرورها خراب‌اند.',
       'guide_step5_title': '۵. اگر سایتی کند بود یا کپچا خواست',
       'guide_step5_body':
           'معمولاً تقصیر سرور است نه برنامه. به تنظیمات، DNS بروید و سروری انتخاب '
-          'کنید که با کشور سرور شما هم‌خوان باشد. سرور آلمانی با DNS ایرانی، '
-          'سایت‌ها را گیج می‌کند.',
+              'کنید که با کشور سرور شما هم‌خوان باشد. سرور آلمانی با DNS ایرانی، '
+              'سایت‌ها را گیج می‌کند.',
       'guide_step6_title': '۶. اگر فقط DNS را می‌خواهید عوض کنید',
       'guide_step6_body':
           'برای این کار به کانفیگ نیازی نیست. در تنظیمات، DNS، «فقط DNS را عوض کن» '
-          'را روشن کنید و اتصال را بزنید. اینترنت شما مستقیم می‌ماند و فقط '
-          'تبدیل نام عوض می‌شود. وقتی اپراتور سایت‌ها را با نام می‌بندد به کار می‌آید.',
+              'را روشن کنید و اتصال را بزنید. اینترنت شما مستقیم می‌ماند و فقط '
+              'تبدیل نام عوض می‌شود. وقتی اپراتور سایت‌ها را با نام می‌بندد به کار می‌آید.',
       'guide_need_help': 'هنوز گیر کرده‌اید؟',
       'guide_need_help_body':
           'تنظیمات، اشکال‌زدایی و گزارش‌ها را باز کنید و «خروجی گزارش» را بزنید. '
-          'آن متن دقیقاً می‌گوید چه چیزی خراب شده.',
+              'آن متن دقیقاً می‌گوید چه چیزی خراب شده.',
       'guide_got_it': 'فهمیدم',
 
       'dns_only_started': 'فقط DNS - ترافیک همچنان مستقیم می‌رود',
@@ -782,15 +926,18 @@ class LocalizationService extends GetxService implements Translations {
       'status_finding_fastest': 'در حال یافتن سریع‌ترین کانفیگ...',
       'status_connecting_to': 'در حال اتصال به @name...',
       'status_connected_to': 'متصل به @name',
+      'status_connected_verified': 'اتصال به @name تأیید شد',
       'status_connected': 'متصل',
       'all': 'همه',
       'sort_by': 'مرتب‌سازی براساس:',
       'Sort by:': 'مرتب‌سازی براساس:',
       'working': 'سالم',
-      'vless_plaintext_public_ip_refusal': 'اتصال VLESS رمزنگاری‌نشده (بدون TLS) به یک IP عمومی توسط هسته برای امنیت رد می‌شود (UUID فاش می‌شود). از دامنه یا TLS استفاده کنید.',
+      'vless_plaintext_public_ip_refusal':
+          'اتصال VLESS رمزنگاری‌نشده (بدون TLS) به یک IP عمومی توسط هسته برای امنیت رد می‌شود (UUID فاش می‌شود). از دامنه یا TLS استفاده کنید.',
       'not_available_in_build': 'در این نسخه در دسترس نیست',
       'signer_mismatch_title': 'کلید امضای متفاوت',
-      'signer_mismatch_body': 'برنامه نصب‌شده و این به‌روزرسانی با کلیدهای متفاوتی امضا شده‌اند، بنابراین اندروید نمی‌تواند درجا به‌روزرسانی کند. مراحل: ۱) پس از نصب مجدد، پیکربندی‌های خود را دوباره وارد کنید (با حذف نصب پاک می‌شوند). ۲) Blackout Kit را حذف نصب کنید. ۳) لینک انتشار زیر (دکمه کپی) را در مرورگر باز کنید و فایل جدید را نصب کنید. ۴) پیکربندی‌ها را دوباره وارد کنید.',
+      'signer_mismatch_body':
+          'برنامه نصب‌شده و این به‌روزرسانی با کلیدهای متفاوتی امضا شده‌اند، بنابراین اندروید نمی‌تواند درجا به‌روزرسانی کند. مراحل: ۱) پس از نصب مجدد، پیکربندی‌های خود را دوباره وارد کنید (با حذف نصب پاک می‌شوند). ۲) Blackout Kit را حذف نصب کنید. ۳) لینک انتشار زیر (دکمه کپی) را در مرورگر باز کنید و فایل جدید را نصب کنید. ۴) پیکربندی‌ها را دوباره وارد کنید.',
       'copy_release_link': 'کپی لینک انتشار',
       'installer_failed': 'نصب‌کننده شروع نشد: ',
       'status_disconnected': 'قطع شد',
@@ -807,7 +954,8 @@ class LocalizationService extends GetxService implements Translations {
       'status_connection_test_failed': 'آزمایش اتصال ناموفق بود',
       'status_error': 'خطا: @error',
       'status_permission_denied': 'اجازه VPN داده نشد',
-      'status_dns_applies': 'جلوگیری از نشت DNS پس از اتصال دوباره اعمال می‌شود',
+      'status_dns_applies':
+          'جلوگیری از نشت DNS پس از اتصال دوباره اعمال می‌شود',
       'status_split_applies': 'تونل تفکیکی پس از اتصال دوباره اعمال می‌شود',
 
       'split_desc_off': 'خاموش',
@@ -815,33 +963,46 @@ class LocalizationService extends GetxService implements Translations {
       'split_desc_only': 'روشن - فقط @count برنامه',
       'split_desc_except': 'روشن - همه به‌جز @count برنامه',
       'ks_desc_off': 'خاموش',
-      'ks_desc_full': 'روشن - اگر تونل قطع شود ترافیک مسدود می‌شود، حتی پس از ری‌استارت',
-      'ks_desc_always_on': 'روشن - تا وقتی برنامه اجراست ترافیک مسدود می‌شود. برای محافظت کامل «مسدود کردن اتصال بدون VPN» را در تنظیمات سیستم روشن کنید',
-      'ks_desc_running': 'روشن - تا وقتی برنامه اجراست ترافیک مسدود می‌شود. این برنامه را در تنظیمات سیستم VPN همیشه‌روشن کنید تا ری‌استارت هم پوشش داده شود',
+      'ks_desc_full':
+          'روشن - اگر تونل قطع شود ترافیک مسدود می‌شود، حتی پس از ری‌استارت',
+      'ks_desc_always_on':
+          'روشن - تا وقتی برنامه اجراست ترافیک مسدود می‌شود. برای محافظت کامل «مسدود کردن اتصال بدون VPN» را در تنظیمات سیستم روشن کنید',
+      'ks_desc_running':
+          'روشن - تا وقتی برنامه اجراست ترافیک مسدود می‌شود. این برنامه را در تنظیمات سیستم VPN همیشه‌روشن کنید تا ری‌استارت هم پوشش داده شود',
       'dns_desc_off': 'خاموش - از سرور DNS سیستم استفاده می‌شود',
-      'dns_desc_on': 'روشن - پرسش‌ها داخل تونل با @name پاسخ داده می‌شوند (@servers)',
+      'dns_desc_on':
+          'روشن - پرسش‌ها داخل تونل با @name پاسخ داده می‌شوند (@servers)',
 
-      'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.': 'برای محافظت کامل، این برنامه را در تنظیمات سیستم VPN همیشه‌روشن کنید و «مسدود کردن اتصال بدون VPN» را روشن کنید.',
+      'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.':
+          'برای محافظت کامل، این برنامه را در تنظیمات سیستم VPN همیشه‌روشن کنید و «مسدود کردن اتصال بدون VPN» را روشن کنید.',
 
-      'dns_cat_sanctions': 'تحریم‌شکن — سرورهایی که برای عبور از فیلتر ملی انتخاب شده‌اند',
+      'dns_cat_sanctions':
+          'تحریم‌شکن — سرورهایی که برای عبور از فیلتر ملی انتخاب شده‌اند',
       'dns_cat_speed': 'سرعت — سرورهای عمومی پرسرعت',
       'dns_cat_extra': 'دیگر — سرورهای فیلترکن، حریم خصوصی و داخلی',
       '@ip (custom)': '@ip (دلخواه)',
       '@ip, @secondary (custom)': '@ip، @secondary (دلخواه)',
       'No configs available': 'کانفیگی موجود نیست',
-      'None of your configs use a protocol this build can serve': 'هیچ‌کدام از کانفیگ‌های شما از پروتکلی استفاده نمی‌کنند که این نسخه بتواند اجرا کند',
-      'The tunnel stopped unexpectedly. Reconnect to retry.': 'تونل به‌طور غیرمنتظره قطع شد. برای تلاش دوباره وصل شوید.',
+      'None of your configs use a protocol this build can serve':
+          'هیچ‌کدام از کانفیگ‌های شما از پروتکلی استفاده نمی‌کنند که این نسخه بتواند اجرا کند',
+      'The tunnel stopped unexpectedly. Reconnect to retry.':
+          'تونل به‌طور غیرمنتظره قطع شد. برای تلاش دوباره وصل شوید.',
       'Failed to connect': 'اتصال ناموفق بود',
       'Connected (@ms ms to the server)': 'متصل (@ms میلی‌ثانیه تا سرور)',
       'Pinging @label... @done/@total': 'پینگ @label... @done/@total',
       'Verifying websites, @label...': 'بررسی سایت‌ها، @label...',
-      'Connecting (@label, config @n)...': 'در حال اتصال (@label، کانفیگ @n)...',
-      'Checking websites through the tunnel (@label, config @n)...': 'بررسی سایت‌ها از داخل تونل (@label، کانفیگ @n)...',
+      'Connecting (@label, config @n)...':
+          'در حال اتصال (@label، کانفیگ @n)...',
+      'Checking websites through the tunnel (@label, config @n)...':
+          'بررسی سایت‌ها از داخل تونل (@label، کانفیگ @n)...',
       'Connected to @name — verified': 'متصل به @name — تأیید شد',
-      'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.': 'هر @count کانفیگ بررسی شد ولی هیچ‌کدام نتوانست سایتی باز کند. منابع را تازه کنید یا بررسی سایت را خاموش کنید تا اتصال انجام شود.',
+      'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.':
+          'هر @count کانفیگ بررسی شد ولی هیچ‌کدام نتوانست سایتی باز کند. منابع را تازه کنید یا بررسی سایت را خاموش کنید تا اتصال انجام شود.',
       'No working configs found': 'هیچ کانفیگ سالمی پیدا نشد',
-      'Restored: @name (tunnel was already running)': 'بازیابی شد: @name (تونل از قبل روشن بود)',
-      'Restored connection (tunnel was already running)': 'اتصال بازیابی شد (تونل از قبل روشن بود)',
+      'Restored: @name (tunnel was already running)':
+          'بازیابی شد: @name (تونل از قبل روشن بود)',
+      'Restored connection (tunnel was already running)':
+          'اتصال بازیابی شد (تونل از قبل روشن بود)',
 
       'dns_name_shecan': 'شکن',
       'dns_name_electro': 'الکترو',
@@ -893,21 +1054,25 @@ class LocalizationService extends GetxService implements Translations {
       'Add custom source': 'افزودن منبع دلخواه',
       'Advanced & Diagnostics': 'پیشرفته و عیب‌یابی',
       'Already in Library': 'از قبل در کتابخانه هست',
-      'Another config in your library is identical - the original was left untouched': 'کانفیگ دیگری در کتابخانه شما دقیقاً همین است - نسخه اصلی دست‌نخورده ماند',
+      'Another config in your library is identical - the original was left untouched':
+          'کانفیگ دیگری در کتابخانه شما دقیقاً همین است - نسخه اصلی دست‌نخورده ماند',
       'App Information': 'اطلاعات برنامه',
       'App is up to date': 'برنامه به‌روز است',
       'App update': 'به‌روزرسانی برنامه',
-      'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.': 'آی‌پی و کشور شما را از یک سرویس بیرونی می‌پرسد. به‌صورت پیش‌فرض خاموش است و تا خاموش باشد چیزی از دستگاه شما بیرون نمی‌رود.',
+      'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.':
+          'آی‌پی و کشور شما را از یک سرویس بیرونی می‌پرسد. به‌صورت پیش‌فرض خاموش است و تا خاموش باشد چیزی از دستگاه شما بیرون نمی‌رود.',
       'Benchmark Complete': 'آزمایش کامل شد',
       'Benchmark Failed': 'آزمایش ناموفق بود',
       'Blackout Kit': 'بلک‌اوت کیت',
       'Buffer Capacity': 'ظرفیت بافر',
       'Bundled engines': 'موتورهای همراه',
       'Camera Unavailable': 'دوربین در دسترس نیست',
-      'Checked through each candidate config. Defaults are restored if everything is removed.': 'از طریق هر کانفیگ کاندید بررسی می‌شود. اگر همه حذف شوند، مقادیر پیش‌فرض برمی‌گردند.',
+      'Checked through each candidate config. Defaults are restored if everything is removed.':
+          'از طریق هر کانفیگ کاندید بررسی می‌شود. اگر همه حذف شوند، مقادیر پیش‌فرض برمی‌گردند.',
       'Checking bundled engines...': 'بررسی موتورهای همراه...',
       'Checking for updates...': 'بررسی به‌روزرسانی...',
-      'Checking which engines are bundled in this build...': 'بررسی اینکه کدام موتورها در این نسخه هستند...',
+      'Checking which engines are bundled in this build...':
+          'بررسی اینکه کدام موتورها در این نسخه هستند...',
       'Clear logs': 'پاک کردن گزارش‌ها',
       'Clipboard & Text': 'کلیپ‌بورد و متن',
       'Config Saved': 'کانفیگ ذخیره شد',
@@ -923,12 +1088,14 @@ class LocalizationService extends GetxService implements Translations {
       'Copy config text': 'کپی متن کانفیگ',
       'Copy the text and share it instead': 'متن را کپی کنید و همان را بفرستید',
       'Core VPN': 'هسته VPN',
-      'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel': 'هسته هر تصمیم بسته را در logcat ثبت می‌کند — برای عیب‌یابی تونلی که وصل است ولی چیزی باز نمی‌کند',
+      'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel':
+          'هسته هر تصمیم بسته را در logcat ثبت می‌کند — برای عیب‌یابی تونلی که وصل است ولی چیزی باز نمی‌کند',
       'Could Not Add Source': 'منبع اضافه نشد',
       'Could Not Save': 'ذخیره نشد',
       'Could not load apps': 'بارگذاری برنامه‌ها ناموفق بود',
       'Could not load your configs': 'بارگذاری کانفیگ‌های شما ناموفق بود',
-      'Could not parse a valid VPN config from file': 'از فایل، کانفیگ معتبری خوانده نشد',
+      'Could not parse a valid VPN config from file':
+          'از فایل، کانفیگ معتبری خوانده نشد',
       'Could not parse configuration syntax': 'ساختار کانفیگ خوانده نشد',
       'Could not switch camera': 'تغییر دوربین ناموفق بود',
       'Custom (IP address)': 'دلخواه (آدرس IP)',
@@ -940,8 +1107,10 @@ class LocalizationService extends GetxService implements Translations {
       'Empty Config': 'کانفیگ خالی',
       'Enable Split Tunneling': 'روشن کردن تونل تفکیکی',
       'Engine information': 'اطلاعات موتورها',
-      'Engine support could not be determined on this platform': 'پشتیبانی موتورها روی این پلتفرم مشخص نشد',
-      'Engines without a bundled runtime are shown greyed out': 'موتورهایی که همراه برنامه نیستند خاکستری نشان داده می‌شوند',
+      'Engine support could not be determined on this platform':
+          'پشتیبانی موتورها روی این پلتفرم مشخص نشد',
+      'Engines without a bundled runtime are shown greyed out':
+          'موتورهایی که همراه برنامه نیستند خاکستری نشان داده می‌شوند',
       'Enter raw configuration text...': 'متن خام کانفیگ را وارد کنید...',
       'Error Notification': 'اعلان خطا',
       'Exception: ': 'خطا: ',
@@ -961,37 +1130,49 @@ class LocalizationService extends GetxService implements Translations {
       'Incomplete Config': 'کانفیگ ناقص',
       'Invalid Syntax': 'ساختار نامعتبر',
       'Log Statistics': 'آمار گزارش‌ها',
-      'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.': 'توسط اندروید مدیریت می‌شود. تنظیمات VPN سیستم را برای «VPN همیشه‌روشن» و «مسدود کردن اتصال بدون VPN» باز می‌کند.',
+      'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.':
+          'توسط اندروید مدیریت می‌شود. تنظیمات VPN سیستم را برای «VPN همیشه‌روشن» و «مسدود کردن اتصال بدون VPN» باز می‌کند.',
       'Max Buffer Size': 'بیشترین اندازه بافر',
       'Name (A-Z)': 'نام (الفبا)',
       'No Configs': 'کانفیگی نیست',
-      'No TCP 53 answer - it may still work over UDP': 'TCP 53 جواب نداد - ممکن است با UDP کار کند',
+      'No TCP 53 answer - it may still work over UDP':
+          'TCP 53 جواب نداد - ممکن است با UDP کار کند',
       'No configs found': 'کانفیگی پیدا نشد',
-      'No data leaves your device - this only stores your preference': 'هیچ داده‌ای از دستگاه شما بیرون نمی‌رود - این فقط ترجیح شما را ذخیره می‌کند',
-      'No launchable apps were found on this device.': 'هیچ برنامه قابل اجرایی روی این دستگاه پیدا نشد.',
+      'No data leaves your device - this only stores your preference':
+          'هیچ داده‌ای از دستگاه شما بیرون نمی‌رود - این فقط ترجیح شما را ذخیره می‌کند',
+      'No launchable apps were found on this device.':
+          'هیچ برنامه قابل اجرایی روی این دستگاه پیدا نشد.',
       'No log entries recorded': 'هیچ گزارشی ثبت نشده',
       'No logs yet': 'هنوز گزارشی نیست',
       'No response': 'بدون پاسخ',
-      'No user tracking or data collection.': 'هیچ ردیابی کاربر یا جمع‌آوری داده‌ای انجام نمی‌شود.',
+      'No user tracking or data collection.':
+          'هیچ ردیابی کاربر یا جمع‌آوری داده‌ای انجام نمی‌شود.',
       'Not Tested': 'آزمایش نشده',
       'Not available in this build': 'در این نسخه موجود نیست',
       'Not bundled': 'همراه نیست',
-      'Not set - pick one to enable leak prevention': 'انتخاب نشده - برای فعال شدن جلوگیری از نشت یکی را انتخاب کنید',
+      'Not set - pick one to enable leak prevention':
+          'انتخاب نشده - برای فعال شدن جلوگیری از نشت یکی را انتخاب کنید',
       'Not tested': 'آزمایش نشده',
-      'Off - your provider can see which domains you resolve.': 'خاموش - اپراتور می‌تواند ببیند کدام دامنه‌ها را باز می‌کنید.',
+      'Off - your provider can see which domains you resolve.':
+          'خاموش - اپراتور می‌تواند ببیند کدام دامنه‌ها را باز می‌کنید.',
       'One host per line': 'در هر خط یک میزبان',
-      'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.': 'به پورت 53 هر آدرس با TCP وصل می‌شود. سروری که اینجا جواب ندهد ممکن است با UDP کار کند — این فقط یک نشانه است، نه حکم قطعی.',
+      'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.':
+          'به پورت 53 هر آدرس با TCP وصل می‌شود. سروری که اینجا جواب ندهد ممکن است با UDP کار کند — این فقط یک نشانه است، نه حکم قطعی.',
       'Parses, but incomplete': 'خوانده می‌شود، ولی ناقص است',
       'Paste Configuration Text or URI': 'متن یا آدرس کانفیگ را بچسبانید',
-      'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...': 'محتوای ss:// یا WireGuard [Interface] یا OpenVPN .ovpn را اینجا بچسبانید...',
+      'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...':
+          'محتوای ss:// یا WireGuard [Interface] یا OpenVPN .ovpn را اینجا بچسبانید...',
       'Performance Tester': 'آزمایشگر کارایی',
-      'Please import or fetch configs before running speed tests': 'قبل از آزمایش سرعت، کانفیگ اضافه یا دریافت کنید',
+      'Please import or fetch configs before running speed tests':
+          'قبل از آزمایش سرعت، کانفیگ اضافه یا دریافت کنید',
       'Privacy Policy': 'سیاست حفظ حریم خصوصی',
       'Protocol & Engines': 'پروتکل و موتورها',
       'Proxy Core': 'هسته پروکسی',
-      'Ready to install - tap to open the installer': 'آماده نصب - برای باز کردن نصب‌کننده بزنید',
+      'Ready to install - tap to open the installer':
+          'آماده نصب - برای باز کردن نصب‌کننده بزنید',
       'Recently added': 'تازه اضافه‌شده',
-      'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.': 'برای اعمال این انتخاب دوباره وصل شوید. اندروید فهرست برنامه‌ها را هنگام باز شدن تونل ثابت می‌کند.',
+      'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.':
+          'برای اعمال این انتخاب دوباره وصل شوید. اندروید فهرست برنامه‌ها را هنگام باز شدن تونل ثابت می‌کند.',
       'Reconnect to apply': 'برای اعمال، دوباره وصل شوید',
       'Refresh all sources': 'تازه‌سازی همه منابع',
       'Relay / Mesh': 'رله / مش',
@@ -999,18 +1180,21 @@ class LocalizationService extends GetxService implements Translations {
       'Save Failed': 'ذخیره ناموفق بود',
       'Save changes': 'ذخیره تغییرات',
       'Scan QR': 'اسکن QR',
-      'Scan with Blackout Kit or any VPN app to import': 'با بلک‌اوت کیت یا هر برنامه VPN اسکن کنید تا اضافه شود',
+      'Scan with Blackout Kit or any VPN app to import':
+          'با بلک‌اوت کیت یا هر برنامه VPN اسکن کنید تا اضافه شود',
       'Scroll to bottom': 'رفتن به انتها',
       'Search installed apps...': 'جست‌وجوی برنامه‌های نصب‌شده...',
       'Search logs...': 'جست‌وجو در گزارش‌ها...',
       'Settings have been reset to defaults': 'تنظیمات به حالت پیش‌فرض برگشت',
       'Share QR Code': 'اشتراک کد QR',
-      'Shows the latency of the selected config in the notification': 'تأخیر کانفیگ انتخاب‌شده را در اعلان نشان می‌دهد',
+      'Shows the latency of the selected config in the notification':
+          'تأخیر کانفیگ انتخاب‌شده را در اعلان نشان می‌دهد',
       'Source Added': 'منبع اضافه شد',
       'Source Name': 'نام منبع',
       'Speed (fastest first)': 'سرعت (سریع‌ترین اول)',
       'Speed Benchmark': 'آزمایش سرعت',
-      'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)': 'پشتیبانی از WireGuard (.conf)، OpenVPN (.ovpn)، Shadowsocks (.json / .txt)',
+      'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)':
+          'پشتیبانی از WireGuard (.conf)، OpenVPN (.ovpn)، Shadowsocks (.json / .txt)',
       'Syntax Error': 'خطای ساختار',
       'System logs copied to clipboard': 'گزارش‌های سیستم در کلیپ‌بورد کپی شد',
       'TCP 53 answered': 'TCP 53 جواب داد',
@@ -1018,15 +1202,23 @@ class LocalizationService extends GetxService implements Translations {
       'Test All': 'آزمایش همه',
       'Test now': 'همین حالا آزمایش کن',
       'Test single config': 'آزمایش یک کانفیگ',
-      'The config could not be written to storage - try again': 'کانفیگ در حافظه نوشته نشد - دوباره تلاش کنید',
-      'The config could not be written to storage. The original was left untouched.': 'کانفیگ در حافظه نوشته نشد. نسخه اصلی دست‌نخورده ماند.',
-      'The repository could not be saved - check the name and try again': 'مخزن ذخیره نشد - نام را بررسی کنید و دوباره تلاش کنید',
+      'The config could not be written to storage - try again':
+          'کانفیگ در حافظه نوشته نشد - دوباره تلاش کنید',
+      'The config could not be written to storage. The original was left untouched.':
+          'کانفیگ در حافظه نوشته نشد. نسخه اصلی دست‌نخورده ماند.',
+      'The repository could not be saved - check the name and try again':
+          'مخزن ذخیره نشد - نام را بررسی کنید و دوباره تلاش کنید',
       'This camera does not expose a torch': 'این دوربین چراغ ندارد',
-      'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.': 'این کانفیگ خوانده می‌شود ولی فیلدهای لازم را ندارد - آدرس، پورت و اطلاعات ورود این پروتکل را بررسی کنید. چیزی ذخیره نشد.',
-      'This configuration already exists in your library': 'این کانفیگ از قبل در کتابخانه شما هست',
-      'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.': 'این موتور در این نسخه همراه برنامه نیست، پس نمی‌تواند وصل شود. کانفیگ‌ها همچنان فهرست می‌شوند تا بتوانید ببینیدشان.',
-      'This file is larger than 5 MB - paste the configs instead': 'این فایل بزرگ‌تر از ۵ مگابایت است - به‌جایش کانفیگ‌ها را بچسبانید',
-      'This will reset all settings to their default values. Your saved configs will not be affected.': 'همه تنظیمات به حالت پیش‌فرض برمی‌گردد. کانفیگ‌های ذخیره‌شده شما تغییری نمی‌کنند.',
+      'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.':
+          'این کانفیگ خوانده می‌شود ولی فیلدهای لازم را ندارد - آدرس، پورت و اطلاعات ورود این پروتکل را بررسی کنید. چیزی ذخیره نشد.',
+      'This configuration already exists in your library':
+          'این کانفیگ از قبل در کتابخانه شما هست',
+      'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.':
+          'این موتور در این نسخه همراه برنامه نیست، پس نمی‌تواند وصل شود. کانفیگ‌ها همچنان فهرست می‌شوند تا بتوانید ببینیدشان.',
+      'This file is larger than 5 MB - paste the configs instead':
+          'این فایل بزرگ‌تر از ۵ مگابایت است - به‌جایش کانفیگ‌ها را بچسبانید',
+      'This will reset all settings to their default values. Your saved configs will not be affected.':
+          'همه تنظیمات به حالت پیش‌فرض برمی‌گردد. کانفیگ‌های ذخیره‌شده شما تغییری نمی‌کنند.',
       'Too long for a QR code': 'برای کد QR بیش از حد طولانی است',
       'Torch Unavailable': 'چراغ در دسترس نیست',
       'Total Entries': 'کل ورودی‌ها',
@@ -1035,14 +1227,18 @@ class LocalizationService extends GetxService implements Translations {
       'Update Complete': 'به‌روزرسانی کامل شد',
       'Update failed': 'به‌روزرسانی ناموفق بود',
       'Updating repositories & configs...': 'به‌روزرسانی مخازن و کانفیگ‌ها...',
-      'Updating repositories and configs...': 'به‌روزرسانی مخازن و کانفیگ‌ها...',
+      'Updating repositories and configs...':
+          'به‌روزرسانی مخازن و کانفیگ‌ها...',
       'VPN Settings': 'تنظیمات VPN',
       'Valid Config': 'کانفیگ معتبر',
-      'Verify candidate configs by fetching real websites through them, not just pinging the server': 'کانفیگ‌ها را با باز کردن سایت واقعی از طریق آن‌ها بررسی کن، نه فقط پینگ سرور',
+      'Verify candidate configs by fetching real websites through them, not just pinging the server':
+          'کانفیگ‌ها را با باز کردن سایت واقعی از طریق آن‌ها بررسی کن، نه فقط پینگ سرور',
       'Your real IP: unavailable': 'آی‌پی واقعی شما: در دسترس نیست',
-      'Your saved configs are not lost — the update failed. Check your connection and try again.': 'کانفیگ‌های ذخیره‌شده از بین نرفته‌اند — به‌روزرسانی ناموفق بود. اتصال را بررسی کنید و دوباره تلاش کنید.',
+      'Your saved configs are not lost — the update failed. Check your connection and try again.':
+          'کانفیگ‌های ذخیره‌شده از بین نرفته‌اند — به‌روزرسانی ناموفق بود. اتصال را بررسی کنید و دوباره تلاش کنید.',
       'blackout kit': 'بلک‌اوت کیت',
-      'disabled sources stay saved but are hidden and untested': 'منابع غیرفعال ذخیره می‌مانند ولی پنهان و آزمایش‌نشده‌اند',
+      'disabled sources stay saved but are hidden and untested':
+          'منابع غیرفعال ذخیره می‌مانند ولی پنهان و آزمایش‌نشده‌اند',
       'e.g., My Configs': 'مثلاً کانفیگ‌های من',
       'e.g., main': 'مثلاً main',
       'e.g., username': 'مثلاً نام کاربری',
@@ -1060,7 +1256,6 @@ class LocalizationService extends GetxService implements Translations {
     'zh': {
       'app_title': 'Blackout Kit',
       'app_subtitle': '值得信赖的 VPN',
-
       'connected': '已连接',
       'disconnected': '已断开',
       'not_connected': '未连接',
@@ -1072,7 +1267,6 @@ class LocalizationService extends GetxService implements Translations {
       'connect': '连接',
       'disconnect': '断开',
       'dns_only_connected': '仅 DNS',
-
       'settings': '设置',
       'library': '配置库',
       'configs': '配置',
@@ -1081,7 +1275,6 @@ class LocalizationService extends GetxService implements Translations {
       'reliability': '稳定性',
       'protocol': '协议',
       'guide': '使用指南',
-
       'kill_switch': '断网保护',
       'kill_switch_desc': 'VPN 断开时阻断全部流量',
       'dns_leak_prevention': '防止 DNS 泄漏',
@@ -1093,19 +1286,18 @@ class LocalizationService extends GetxService implements Translations {
       'preferred_protocol': '首选协议',
       'language': '语言',
       'about': '关于',
-
       'dns_resolver': 'DNS 服务器',
       'dns_only_mode': '只修改 DNS',
       'dns_only_mode_desc': '使用选定的 DNS 而不建立 VPN，流量仍然直连。',
       'check_resolvers': '检测 DNS 服务器',
-      'check_resolvers_desc': '对每个地址的 53 端口发起 TCP 连接。失败不代表不能用，很多服务器只支持 UDP - 仅供参考。',
+      'check_resolvers_desc':
+          '对每个地址的 53 端口发起 TCP 连接。失败不代表不能用，很多服务器只支持 UDP - 仅供参考。',
       'resolver_reachability': 'DNS 可达性',
       'resolver_tcp_ok': 'TCP 53 有响应',
       'resolver_tcp_miss': 'TCP 53 无响应 - 可能仍支持 UDP',
       'no_resolver_selected': '尚未选择 DNS 服务器。',
       'use_global': '改用通用服务器',
       'resolver_mismatch_title': 'DNS 与出口国家不匹配',
-
       'auto_connect': '启动时自动连接',
       'auto_connect_desc': '打开应用时自动连接 VPN',
       'block_non_vpn': '阻断非 VPN 流量',
@@ -1132,12 +1324,42 @@ class LocalizationService extends GetxService implements Translations {
       'site_check': '站点检测',
       'site_check_websites': '检测站点',
       'verbose_core_logs': '内核详细日志',
+      'Scan batch size': '每批扫描配置数',
+      'Candidate verification': '候选配置验证方式',
+      'Website pass requirement': '网站通过条件',
+      'After a tunnel failure': '隧道故障后',
+      'Continue from the next batch': '从下一批继续',
+      'Restart scan from the first batch': '从第一批重新扫描',
+      'Restart scan': '重新扫描',
+      'Continue next batch': '继续下一批',
+      'Stay disconnected': '保持断开',
+      'Reconnect to last working location': '重新连接到上次可用位置',
+      'Configs per batch (1–500)': '每批配置数（1–500）',
+      'Candidates per batch': '每批候选数',
+      'Hybrid candidates per batch': '每批混合模式候选数量',
+      'Try fastest candidate first': '先尝试最快的候选配置',
+      'Try a configurable number per batch': '每批尝试可配置数量的候选配置',
+      'Connect and verify every candidate': '连接并验证所有候选配置',
+      'Connect and verify every pingable or unknown config':
+          '连接并验证所有可 Ping 或状态未知的配置',
+      'All configured websites must pass': '所有配置的网站都必须通过',
+      'At least @count websites': '至少 @count 个网站通过',
+      'Search configs, hosts, protocols, sources': '搜索配置、主机、协议或来源',
+      'Clear search': '清除搜索',
+      'No configs match your search': '没有匹配的配置',
+      'Checking server reachability': '正在检查服务器连通性',
+      'Establishing secure tunnel': '正在建立安全隧道',
+      'Testing your websites': '正在测试网站',
+      'Connection verified': '连接已验证',
+      'Connection needs attention': '连接需要处理',
+      'No verified config found': '未找到已验证的配置',
+      'The tunnel is up but nothing loads — reconnect to pick another server':
+          '隧道已连接但网站无法打开 — 重新连接以选择其他服务器',
       'reset_to_defaults': '恢复默认设置',
       'reset_to_defaults_confirm': '恢复默认设置？',
       'reset_to_defaults_desc': '所有设置将被清除，且无法撤销。',
       'update': '更新',
       'github': 'GitHub',
-
       'config_library': '配置库',
       'configs_found': '个配置',
       'import_vpn_config': '导入 VPN 配置',
@@ -1163,14 +1385,12 @@ class LocalizationService extends GetxService implements Translations {
       'test_all': '全部测试',
       'no_configs_benchmark': '没有可测试的配置',
       'rescan': '重新扫描',
-
       'split_tunneling_apps': '分流应用',
       'select_apps': '选择应用',
       'split_mode_whitelist': '白名单（仅这些走 VPN）',
       'split_mode_bypass': '绕过（这些不走 VPN）',
       'apps_selected': '个应用已选择',
       'mode_label': '模式：',
-
       'system_logs': '系统日志',
       'system_logs_inspector': '日志与检查器',
       'clear_logs': '清除日志？',
@@ -1179,12 +1399,10 @@ class LocalizationService extends GetxService implements Translations {
       'export_all_logs': '导出全部日志',
       'logs_cleared': '日志已清除',
       'logs_exported': '日志已复制到剪贴板',
-
       'engine_hub_desc': '查看此版本可以运行哪些引擎',
       'requirements': '要求：',
       'supported_protocols': '支持的协议：',
       'requires_singbox': '需要 sing-box 内核',
-
       'close': '关闭',
       'cancel': '取消',
       'save': '保存',
@@ -1202,60 +1420,52 @@ class LocalizationService extends GetxService implements Translations {
       'success': '成功',
       'loading': '加载中...',
       'reconnect_to_apply': '重新连接后生效',
-
       'guide_title': '如何使用 Blackout Kit',
       'guide_subtitle': '六个步骤，没有技术术语。',
       'guide_open': '打开使用指南',
-      'guide_intro':
-          'Blackout Kit 会把你的上网内容先送到另一台服务器，从而隐藏你的真实位置。'
+      'guide_intro': 'Blackout Kit 会把你的上网内容先送到另一台服务器，从而隐藏你的真实位置。'
           '你只需要一份“配置”——一段文本，告诉应用用哪台服务器。这是你唯一要找的东西。',
       'guide_step1_title': '1. 获取配置',
-      'guide_step1_body':
-          '配置以 vless:// 或 ss:// 或 hy2:// 开头。可以从朋友、群组或你信任的服务商获取。'
+      'guide_step1_body': '配置以 vless:// 或 ss:// 或 hy2:// 开头。可以从朋友、群组或你信任的服务商获取。'
           '请复制整行——它很长，不要只复制一半。',
       'guide_step2_title': '2. 添加到应用',
-      'guide_step2_body':
-          '打开配置库，点“导入 VPN 配置”，粘贴那一行。如果显示“配置有效”，就成功了。'
+      'guide_step2_body': '打开配置库，点“导入 VPN 配置”，粘贴那一行。如果显示“配置有效”，就成功了。'
           '如果提示无效，说明复制不完整，请重新复制。',
       'guide_step3_title': '3. 连接',
-      'guide_step3_body':
-          '回到首页，按那个大按钮。第一次 Android 会问“允许 VPN 连接？”，点确定。'
+      'guide_step3_body': '回到首页，按那个大按钮。第一次 Android 会问“允许 VPN 连接？”，点确定。'
           '这是 Android 在问，不是我们，而且只问一次。',
       'guide_step4_title': '4. 确认能用',
-      'guide_step4_body':
-          '按钮显示“已连接”后，打开一个网站。能打开就完成了。如果一个都打不开，'
+      'guide_step4_body': '按钮显示“已连接”后，打开一个网站。能打开就完成了。如果一个都打不开，'
           '换列表里的另一个配置——有些服务器已经失效。',
       'guide_step5_title': '5. 如果网站很慢或一直要验证码',
-      'guide_step5_body':
-          '通常是服务器的问题，不是应用。进入设置 → DNS，选一个和你服务器国家一致的 DNS。'
+      'guide_step5_body': '通常是服务器的问题，不是应用。进入设置 → DNS，选一个和你服务器国家一致的 DNS。'
           '德国服务器配伊朗 DNS 会让网站搞不清你从哪来。',
       'guide_step6_title': '6. 如果你只想换 DNS',
-      'guide_step6_body':
-          '这种情况不需要配置。在设置 → DNS 打开“只修改 DNS”，然后按连接。'
+      'guide_step6_body': '这种情况不需要配置。在设置 → DNS 打开“只修改 DNS”，然后按连接。'
           '网络仍然直连，只是域名解析换了。当运营商用域名封锁网站时很有用。',
       'guide_need_help': '还是不行？',
-      'guide_need_help_body':
-          '打开设置 → 调试与日志，点“导出日志”。那段文字会说明到底哪里失败了。',
+      'guide_need_help_body': '打开设置 → 调试与日志，点“导出日志”。那段文字会说明到底哪里失败了。',
       'guide_got_it': '明白了',
-
       'dns_only_started': '仅 DNS - 流量仍然直连',
       'dns_only_needs_resolver': '请先选择一个 DNS 服务器（设置 → DNS）。',
       'dns_only_no_config_needed': '仅 DNS 不需要配置。',
-
       'status_ready': '就绪',
       'status_tunnel_ended': '隧道已结束',
       'status_finding_fastest': '正在寻找最快的配置...',
       'status_connecting_to': '正在连接到 @name...',
       'status_connected_to': '已连接到 @name',
+      'status_connected_verified': '已验证连接到 @name',
       'status_connected': '已连接',
       'all': '全部',
       'sort_by': '排序方式：',
       'Sort by:': '排序方式：',
       'working': '可用',
-      'vless_plaintext_public_ip_refusal': '出于安全原因，Xray 禁止使用明文 VLESS（无 TLS）连接原生公共 IP（会泄漏明文 UUID）。请使用域名或启用 TLS。',
+      'vless_plaintext_public_ip_refusal':
+          '出于安全原因，Xray 禁止使用明文 VLESS（无 TLS）连接原生公共 IP（会泄漏明文 UUID）。请使用域名或启用 TLS。',
       'not_available_in_build': '此版本不可用',
       'signer_mismatch_title': '签名密钥不同',
-      'signer_mismatch_body': '已安装的应用与此更新使用不同的签名密钥，Android 无法就地更新。步骤：1) 重新安装后重新导入配置（卸载会清除配置）。2) 卸载 Blackout Kit。3) 在浏览器中打开下方的发布链接（复制按钮）并安装新的 APK。4) 重新导入配置。',
+      'signer_mismatch_body':
+          '已安装的应用与此更新使用不同的签名密钥，Android 无法就地更新。步骤：1) 重新安装后重新导入配置（卸载会清除配置）。2) 卸载 Blackout Kit。3) 在浏览器中打开下方的发布链接（复制按钮）并安装新的 APK。4) 重新导入配置。',
       'copy_release_link': '复制发布链接',
       'installer_failed': '无法启动安装程序：',
       'status_disconnected': '已断开',
@@ -1274,7 +1484,6 @@ class LocalizationService extends GetxService implements Translations {
       'status_permission_denied': 'VPN 权限被拒绝',
       'status_dns_applies': '防止 DNS 泄漏将在重新连接后生效',
       'status_split_applies': '分流将在重新连接后生效',
-
       'split_desc_off': '关闭',
       'split_desc_no_apps': '已开启，但未选择应用',
       'split_desc_only': '已开启 - 仅 @count 个应用',
@@ -1285,29 +1494,31 @@ class LocalizationService extends GetxService implements Translations {
       'ks_desc_running': '已开启 - 应用运行时阻断流量。请在系统设置中将本应用设为始终开启的 VPN，以覆盖重启和强制停止',
       'dns_desc_off': '关闭 - 使用系统 DNS',
       'dns_desc_on': '已开启 - 查询在隧道内由 @name 解析（@servers）',
-
-      'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.': '要获得完整保护，请在系统设置中将本应用设为始终开启的 VPN，并开启“无 VPN 时阻止连接”。',
-
+      'For full protection, set this app as always-on VPN and enable "Block connections without VPN" in system settings.':
+          '要获得完整保护，请在系统设置中将本应用设为始终开启的 VPN，并开启“无 VPN 时阻止连接”。',
       'dns_cat_sanctions': '反制裁 —— 为穿透国家级过滤而选择的服务器',
       'dns_cat_speed': '速度 —— 高性能公共 DNS',
       'dns_cat_extra': '其他 —— 过滤、隐私与本地 DNS',
       '@ip (custom)': '@ip（自定义）',
       '@ip, @secondary (custom)': '@ip、@secondary（自定义）',
       'No configs available': '没有可用配置',
-      'None of your configs use a protocol this build can serve': '你的配置中没有此版本可运行的协议',
-      'The tunnel stopped unexpectedly. Reconnect to retry.': '隧道意外中断。请重新连接后重试。',
+      'None of your configs use a protocol this build can serve':
+          '你的配置中没有此版本可运行的协议',
+      'The tunnel stopped unexpectedly. Reconnect to retry.':
+          '隧道意外中断。请重新连接后重试。',
       'Failed to connect': '连接失败',
       'Connected (@ms ms to the server)': '已连接（到服务器 @ms 毫秒）',
       'Pinging @label... @done/@total': '正在测试 @label... @done/@total',
       'Verifying websites, @label...': '正在验证网站，@label...',
       'Connecting (@label, config @n)...': '正在连接（@label，配置 @n）...',
-      'Checking websites through the tunnel (@label, config @n)...': '正在通过隧道验证网站（@label，配置 @n）...',
+      'Checking websites through the tunnel (@label, config @n)...':
+          '正在通过隧道验证网站（@label，配置 @n）...',
       'Connected to @name — verified': '已连接到 @name —— 已验证',
-      'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.': '已扫描全部 @count 个配置，但没有一个能打开网站。请刷新来源，或关闭站点检测以便直接连接。',
+      'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.':
+          '已扫描全部 @count 个配置，但没有一个能打开网站。请刷新来源，或关闭站点检测以便直接连接。',
       'No working configs found': '没有找到可用配置',
       'Restored: @name (tunnel was already running)': '已恢复：@name（隧道此前已在运行）',
       'Restored connection (tunnel was already running)': '已恢复连接（隧道此前已在运行）',
-
       'dns_name_shecan': 'shecan',
       'dns_name_electro': 'electro',
       'dns_name_begzar': 'begzar',
@@ -1353,22 +1564,24 @@ class LocalizationService extends GetxService implements Translations {
       'engine_warp': 'warp',
       'engine_psiphon': 'psiphon',
       'engine_mhrv': 'mhrv',
-
       'Add custom source': '添加自定义来源',
       'Advanced & Diagnostics': '高级与诊断',
       'Already in Library': '已在配置库中',
-      'Another config in your library is identical - the original was left untouched': '配置库中已有完全相同的配置，原文件未改动',
+      'Another config in your library is identical - the original was left untouched':
+          '配置库中已有完全相同的配置，原文件未改动',
       'App Information': '应用信息',
       'App is up to date': '已是最新版本',
       'App update': '应用更新',
-      'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.': '向第三方服务查询你的 IP 和国家。默认关闭，关闭时不会有任何数据离开设备。',
+      'Asks a third-party service for your IP and country. Off by default - nothing leaves your device while it is off.':
+          '向第三方服务查询你的 IP 和国家。默认关闭，关闭时不会有任何数据离开设备。',
       'Benchmark Complete': '测试完成',
       'Benchmark Failed': '测试失败',
       'Blackout Kit': 'Blackout Kit',
       'Buffer Capacity': '缓冲区容量',
       'Bundled engines': '内置引擎',
       'Camera Unavailable': '相机不可用',
-      'Checked through each candidate config. Defaults are restored if everything is removed.': '通过每个候选配置进行检查。若全部移除，将恢复默认值。',
+      'Checked through each candidate config. Defaults are restored if everything is removed.':
+          '通过每个候选配置进行检查。若全部移除，将恢复默认值。',
       'Checking bundled engines...': '正在检查内置引擎...',
       'Checking for updates...': '正在检查更新...',
       'Checking which engines are bundled in this build...': '正在检查此版本包含哪些引擎...',
@@ -1387,7 +1600,8 @@ class LocalizationService extends GetxService implements Translations {
       'Copy config text': '复制配置文本',
       'Copy the text and share it instead': '请复制文本后发送',
       'Core VPN': '核心 VPN',
-      'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel': '内核会把每个数据包决策写入 logcat —— 用于诊断“已连接但打不开网页”的隧道',
+      'Core reports every packet decision to logcat — for diagnosing a connected-but-nothing-loads tunnel':
+          '内核会把每个数据包决策写入 logcat —— 用于诊断“已连接但打不开网页”的隧道',
       'Could Not Add Source': '无法添加来源',
       'Could Not Save': '无法保存',
       'Could not load apps': '无法加载应用列表',
@@ -1404,8 +1618,10 @@ class LocalizationService extends GetxService implements Translations {
       'Empty Config': '空配置',
       'Enable Split Tunneling': '启用分流',
       'Engine information': '引擎信息',
-      'Engine support could not be determined on this platform': '无法在此平台上确定引擎支持情况',
-      'Engines without a bundled runtime are shown greyed out': '未内置运行时的引擎会显示为灰色',
+      'Engine support could not be determined on this platform':
+          '无法在此平台上确定引擎支持情况',
+      'Engines without a bundled runtime are shown greyed out':
+          '未内置运行时的引擎会显示为灰色',
       'Enter raw configuration text...': '输入原始配置文本...',
       'Error Notification': '错误通知',
       'Exception: ': '异常：',
@@ -1425,13 +1641,16 @@ class LocalizationService extends GetxService implements Translations {
       'Incomplete Config': '配置不完整',
       'Invalid Syntax': '格式无效',
       'Log Statistics': '日志统计',
-      'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.': '由 Android 管理。打开系统 VPN 设置以启用“始终开启的 VPN”和“无 VPN 时阻止连接”。',
+      'Managed by Android. Opens system VPN settings for Always-on VPN and “Block connections without VPN”.':
+          '由 Android 管理。打开系统 VPN 设置以启用“始终开启的 VPN”和“无 VPN 时阻止连接”。',
       'Max Buffer Size': '最大缓冲区',
       'Name (A-Z)': '名称（A-Z）',
       'No Configs': '没有配置',
-      'No TCP 53 answer - it may still work over UDP': 'TCP 53 无响应 —— 可能仍支持 UDP',
+      'No TCP 53 answer - it may still work over UDP':
+          'TCP 53 无响应 —— 可能仍支持 UDP',
       'No configs found': '未找到配置',
-      'No data leaves your device - this only stores your preference': '不会有数据离开设备 —— 这里只保存你的偏好',
+      'No data leaves your device - this only stores your preference':
+          '不会有数据离开设备 —— 这里只保存你的偏好',
       'No launchable apps were found on this device.': '此设备上没有找到可启动的应用。',
       'No log entries recorded': '没有记录任何日志',
       'No logs yet': '暂无日志',
@@ -1442,20 +1661,25 @@ class LocalizationService extends GetxService implements Translations {
       'Not bundled': '未内置',
       'Not set - pick one to enable leak prevention': '未选择 —— 选择一个以启用防泄漏',
       'Not tested': '未测试',
-      'Off - your provider can see which domains you resolve.': '关闭 —— 运营商可以看到你解析了哪些域名。',
+      'Off - your provider can see which domains you resolve.':
+          '关闭 —— 运营商可以看到你解析了哪些域名。',
       'One host per line': '每行一个主机',
-      'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.': '对每个地址的 53 端口发起 TCP 连接。失败不代表不能用，很多服务器只支持 UDP —— 仅供参考。',
+      'Opens a TCP connection to port 53 on each address. A resolver that fails here can still work over UDP — this is a reachability hint, not a verdict.':
+          '对每个地址的 53 端口发起 TCP 连接。失败不代表不能用，很多服务器只支持 UDP —— 仅供参考。',
       'Parses, but incomplete': '可解析，但不完整',
       'Paste Configuration Text or URI': '粘贴配置文本或链接',
-      'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...': '在此粘贴 ss://、WireGuard [Interface] 或 OpenVPN .ovpn 内容...',
+      'Paste ss://, WireGuard [Interface] config, or OpenVPN .ovpn content here...':
+          '在此粘贴 ss://、WireGuard [Interface] 或 OpenVPN .ovpn 内容...',
       'Performance Tester': '性能测试',
-      'Please import or fetch configs before running speed tests': '请先导入或获取配置，再进行速度测试',
+      'Please import or fetch configs before running speed tests':
+          '请先导入或获取配置，再进行速度测试',
       'Privacy Policy': '隐私政策',
       'Protocol & Engines': '协议与引擎',
       'Proxy Core': '代理内核',
       'Ready to install - tap to open the installer': '可以安装 —— 点击打开安装程序',
       'Recently added': '最近添加',
-      'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.': '重新连接后此选择才会生效。隧道打开时 Android 会固定应用列表。',
+      'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.':
+          '重新连接后此选择才会生效。隧道打开时 Android 会固定应用列表。',
       'Reconnect to apply': '重新连接后生效',
       'Refresh all sources': '刷新全部来源',
       'Relay / Mesh': '中继 / 组网',
@@ -1463,18 +1687,21 @@ class LocalizationService extends GetxService implements Translations {
       'Save Failed': '保存失败',
       'Save changes': '保存更改',
       'Scan QR': '扫描二维码',
-      'Scan with Blackout Kit or any VPN app to import': '用 Blackout Kit 或任意 VPN 应用扫描以导入',
+      'Scan with Blackout Kit or any VPN app to import':
+          '用 Blackout Kit 或任意 VPN 应用扫描以导入',
       'Scroll to bottom': '滚动到底部',
       'Search installed apps...': '搜索已安装应用...',
       'Search logs...': '搜索日志...',
       'Settings have been reset to defaults': '设置已恢复默认',
       'Share QR Code': '分享二维码',
-      'Shows the latency of the selected config in the notification': '在通知中显示所选配置的延迟',
+      'Shows the latency of the selected config in the notification':
+          '在通知中显示所选配置的延迟',
       'Source Added': '来源已添加',
       'Source Name': '来源名称',
       'Speed (fastest first)': '速度（最快优先）',
       'Speed Benchmark': '速度测试',
-      'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)': '支持 WireGuard (.conf)、OpenVPN (.ovpn)、Shadowsocks (.json / .txt)',
+      'Supports WireGuard (.conf), OpenVPN (.ovpn), Shadowsocks (.json / .txt)':
+          '支持 WireGuard (.conf)、OpenVPN (.ovpn)、Shadowsocks (.json / .txt)',
       'Syntax Error': '格式错误',
       'System logs copied to clipboard': '系统日志已复制到剪贴板',
       'TCP 53 answered': 'TCP 53 有响应',
@@ -1482,15 +1709,22 @@ class LocalizationService extends GetxService implements Translations {
       'Test All': '全部测试',
       'Test now': '立即测试',
       'Test single config': '测试单个配置',
-      'The config could not be written to storage - try again': '配置无法写入存储 —— 请重试',
-      'The config could not be written to storage. The original was left untouched.': '配置无法写入存储，原文件未改动。',
-      'The repository could not be saved - check the name and try again': '仓库无法保存 —— 请检查名称后重试',
+      'The config could not be written to storage - try again':
+          '配置无法写入存储 —— 请重试',
+      'The config could not be written to storage. The original was left untouched.':
+          '配置无法写入存储，原文件未改动。',
+      'The repository could not be saved - check the name and try again':
+          '仓库无法保存 —— 请检查名称后重试',
       'This camera does not expose a torch': '此相机没有闪光灯',
-      'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.': '此配置可以解析，但缺少必需字段 —— 请检查该协议的地址、端口和凭据。未保存任何内容。',
+      'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.':
+          '此配置可以解析，但缺少必需字段 —— 请检查该协议的地址、端口和凭据。未保存任何内容。',
       'This configuration already exists in your library': '配置库中已存在此配置',
-      'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.': '此版本未内置该引擎，因此无法连接。配置仍会列出，方便你查看。',
-      'This file is larger than 5 MB - paste the configs instead': '文件超过 5 MB —— 请改为粘贴配置',
-      'This will reset all settings to their default values. Your saved configs will not be affected.': '这会把所有设置恢复为默认值。已保存的配置不受影响。',
+      'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.':
+          '此版本未内置该引擎，因此无法连接。配置仍会列出，方便你查看。',
+      'This file is larger than 5 MB - paste the configs instead':
+          '文件超过 5 MB —— 请改为粘贴配置',
+      'This will reset all settings to their default values. Your saved configs will not be affected.':
+          '这会把所有设置恢复为默认值。已保存的配置不受影响。',
       'Too long for a QR code': '内容过长，无法生成二维码',
       'Torch Unavailable': '闪光灯不可用',
       'Total Entries': '条目总数',
@@ -1502,11 +1736,14 @@ class LocalizationService extends GetxService implements Translations {
       'Updating repositories and configs...': '正在更新仓库和配置...',
       'VPN Settings': 'VPN 设置',
       'Valid Config': '配置有效',
-      'Verify candidate configs by fetching real websites through them, not just pinging the server': '通过真实访问网站来验证候选配置，而不只是 ping 服务器',
+      'Verify candidate configs by fetching real websites through them, not just pinging the server':
+          '通过真实访问网站来验证候选配置，而不只是 ping 服务器',
       'Your real IP: unavailable': '你的真实 IP：不可用',
-      'Your saved configs are not lost — the update failed. Check your connection and try again.': '已保存的配置没有丢失 —— 是更新失败了。请检查网络后重试。',
+      'Your saved configs are not lost — the update failed. Check your connection and try again.':
+          '已保存的配置没有丢失 —— 是更新失败了。请检查网络后重试。',
       'blackout kit': 'Blackout Kit',
-      'disabled sources stay saved but are hidden and untested': '已停用的来源仍会保存，但会被隐藏且不测试',
+      'disabled sources stay saved but are hidden and untested':
+          '已停用的来源仍会保存，但会被隐藏且不测试',
       'e.g., My Configs': '例如：我的配置',
       'e.g., main': '例如：main',
       'e.g., username': '例如：用户名',

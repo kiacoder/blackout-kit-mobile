@@ -60,6 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Embedded libbox Engine (`libcores.aar`)**: Integrated sing-box 1.11.4 core in-process on Android.
 - **Endpoint-Gated Relay Profiles**: Native parsing and storage models for SNI and MHRV relay profiles.
 
+## [1.19.1] - 2026-11-06
+
+### Added
+- **Configurable live-tunnel scanning and recovery**: scan configs in configurable batches, retain TCP-failed/unknown candidates for real VPN attempts, verify candidates through the live tunnel using the configured website threshold, and resume recovery at the next untried config.
+- **Library search** across config names, server hosts, protocols, and source names, with animated scan progress and a reconnect-to-last-working-config action.
+
+### Fixed
+- Preserve preferred-protocol ranking after reachability probes and do not treat unresolved exit geolocation as a failed VPN connection.
+
 ## [Unreleased]
 
 ### Added

@@ -104,16 +104,14 @@ void main() {
     });
   });
 
-  group('BKM-005 notTested is not a failure', () {
-    test('the auto-connect filter skips only real failures', () {
+  group('BKM-005 TCP failures do not exclude VPN attempts', () {
+    test('every eligible config remains in the real-connect scan queue', () {
       final src = _source('lib/controllers/connection_controller.dart');
-      final filter = src.indexOf('final knownFailed = <String>{};');
-      expect(filter, greaterThan(-1));
-      final window = src.substring(filter, filter + 900);
+      expect(src.contains('final knownFailed = <String>{};'), isFalse);
       expect(
-        window.contains('TestStatus.notTested'),
+        src.contains('never suppress a real VPN attempt'),
         isTrue,
-        reason: 'UDP-only protocols were blacklisted for six hours',
+        reason: 'TCP reachability does not establish protocol viability',
       );
     });
   });

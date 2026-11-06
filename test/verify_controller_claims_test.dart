@@ -84,16 +84,17 @@ void main() {
     });
   });
 
-  // ── BK-009: only recent failures exclude a config ───────────────────────
-  group('auto-connect candidate selection (BK-009)', () {
-    test('a failure older than six hours does not exclude the config',
-        () async {
+  // A failed TCP reachability probe must never exclude a real VPN attempt.
+  group('auto-connect candidate selection', () {
+    test('a failure older than six hours remains eligible', () async {
       final vpn = _RecordingVpnService();
       final controller = _controller(vpn);
       final config = vless('c.example.com', 'C');
       // The stale-failure rule is applied to the results handed to
       // connectFastest, which is what the app does on auto-connect.
-      await controller.connectFastest([config], testResults: [
+      await controller.connectFastest([
+        config
+      ], testResults: [
         TestResult(
           configHash: config.getHash(),
           status: TestStatus.failed,
@@ -106,12 +107,14 @@ void main() {
           reason: 'a 30-hour-old failure must not blacklist the config');
     });
 
-    test('a recent failure still excludes the config', () async {
+    test('a recent failure remains eligible for real connection', () async {
       final vpn = _RecordingVpnService();
       final controller = _controller(vpn);
       final config = vless('d.example.com', 'D');
 
-      await controller.connectFastest([config], testResults: [
+      await controller.connectFastest([
+        config
+      ], testResults: [
         TestResult(
           configHash: config.getHash(),
           status: TestStatus.failed,
@@ -120,8 +123,8 @@ void main() {
         ),
       ]);
 
-      expect(vpn.connectCalls, 0,
-          reason: 'a fresh failure is still honoured as a skip');
+      expect(vpn.connectCalls, greaterThanOrEqualTo(1),
+          reason: 'a fresh TCP failure cannot replace a real tunnel attempt');
     });
   });
 
@@ -182,7 +185,8 @@ void main() {
       final secondSeen = <String>[];
 
       tester.beginProgressRun((hash, status) => firstSeen.add(hash));
-      final secondToken = tester.beginProgressRun((hash, status) => secondSeen.add(hash));
+      final secondToken =
+          tester.beginProgressRun((hash, status) => secondSeen.add(hash));
 
       // The first run's callback must no longer receive anything.
       tester.onProgress?.call('hash-1', TestStatus.success);
@@ -258,17 +262,76 @@ void main() {
       expect(settings.showMyLocation.value, isFalse);
       expect(settings.killSwitchEnabled.value, isFalse);
       expect(settings.theme.value, 'system');
+      expect(settings.connectScanBatchSize.value, 50);
+      expect(settings.connectVerificationStrategy.value, 'shortlist');
+      expect(settings.connectWebsitePassThreshold.value, -1);
+      expect(settings.connectFailureScanPolicy.value, 'next_batch');
     });
 
     test('a save persists the values as they are now (BK-030)', () async {
       settings.preferredProtocol.value = 'trojan';
       settings.autoTestIntervalMinutes.value = 15;
+      settings.connectScanBatchSize.value = 37;
+      settings.connectVerificationStrategy.value = 'all';
+      settings.connectWebsitePassThreshold.value = 2;
+      settings.connectFailureScanPolicy.value = 'restart';
       await settings.saveSettings();
 
       final reloaded = SettingsController();
       await reloaded.initialize();
       expect(reloaded.preferredProtocol.value, 'trojan');
       expect(reloaded.autoTestIntervalMinutes.value, 15);
+      expect(reloaded.connectScanBatchSize.value, 37);
+      expect(reloaded.connectVerificationStrategy.value, 'all');
+      expect(reloaded.connectWebsitePassThreshold.value, 2);
+      expect(reloaded.connectFailureScanPolicy.value, 'restart');
+    });
+  });
+
+  group('scan candidate controls', () {
+    test('shortlist mode attempts its configured candidate count', () async {
+      final vpn = _RecordingVpnService()..failedConnectCount = 2;
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = false;
+      settings.connectVerificationStrategy.value = 'shortlist';
+      settings.connectScanBatchSize.value = 5;
+      final controller = _controller(vpn);
+      final configs = [
+        vless('short-1.example.com', 'Short 1'),
+        vless('short-2.example.com', 'Short 2'),
+        vless('short-3.example.com', 'Short 3'),
+        vless('short-4.example.com', 'Short 4'),
+        vless('short-5.example.com', 'Short 5'),
+      ];
+
+      final connected = await controller.connectFastest(configs);
+
+      expect(connected, isTrue);
+      expect(vpn.connectCalls, 3);
+    });
+
+    test('recovery cursor resumes the remaining config in the same batch',
+        () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = false;
+      settings.connectVerificationStrategy.value = 'shortlist';
+      settings.connectScanBatchSize.value = 3;
+      final controller = _controller(vpn);
+      final configs = [
+        vless('cursor-1.example.com', 'Cursor 1'),
+        vless('cursor-2.example.com', 'Cursor 2'),
+        vless('cursor-3.example.com', 'Cursor 3'),
+      ];
+      expect(await controller.connectFastest(configs), isTrue);
+      expect(vpn.lastConnectedAddress, 'cursor-1.example.com');
+      vpn.onConnect = (_) => false;
+      controller.debugRequestRecoveryForTest();
+
+      expect(await controller.resumeScanAfterFailure(), isFalse);
+      expect(vpn.connectedAddresses[1], 'cursor-2.example.com');
+      expect(controller.scanItemsTotal.value, 2);
+      expect(controller.scanBatchCount.value, 1);
     });
   });
 
@@ -310,12 +373,22 @@ class _RecordingVpnService extends VPNService {
   int connectCalls = 0;
   int disconnectCalls = 0;
   String? lastConnectedProtocol;
+  String? lastConnectedAddress;
+  final List<String> connectedAddresses = [];
+  int failedConnectCount = 0;
+  bool Function(Config config)? onConnect;
 
   @override
   Future<bool> connect(Config config, {VpnSessionOptions? options}) async {
     connectCalls += 1;
     lastConnectedProtocol = config.protocol;
-    return true;
+    lastConnectedAddress = config.address;
+    connectedAddresses.add(config.address);
+    if (failedConnectCount > 0) {
+      failedConnectCount--;
+      return false;
+    }
+    return onConnect?.call(config) ?? true;
   }
 
   @override

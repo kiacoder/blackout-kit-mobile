@@ -20,7 +20,8 @@ class SettingsController extends GetxController {
   // FLUX / Quick Failover settings
   final RxBool fluxEnabled = RxBool(true);
   final RxInt fluxConcurrency = RxInt(3);
-  final RxString fluxProbeTarget = RxString('http://cp.cloudflare.com/generate_204');
+  final RxString fluxProbeTarget =
+      RxString('http://cp.cloudflare.com/generate_204');
   final RxInt fluxProbeIntervalSeconds = RxInt(10);
   final RxInt fluxFailureThreshold = RxInt(3);
   final RxInt fluxHysteresisMs = RxInt(40);
@@ -80,9 +81,11 @@ class SettingsController extends GetxController {
   final RxBool analyticsEnabled = RxBool(false);
 
   // VPN-specific settings
-  final RxString preferredProtocol = RxString('wireguard'); // wireguard, openvpn, shadowsocks
+  final RxString preferredProtocol =
+      RxString('wireguard'); // wireguard, openvpn, shadowsocks
   final RxBool autoSelectFastest = RxBool(true);
-  final RxInt autoTestIntervalMinutes = RxInt(60); // Re-test configs every N minutes
+  final RxInt autoTestIntervalMinutes =
+      RxInt(60); // Re-test configs every N minutes
   final RxBool logLocalConnection = RxBool(false);
 
   /// Site check: after the TCP latency probe, qualifying candidates are
@@ -90,6 +93,20 @@ class SettingsController extends GetxController {
   /// *through* them, so a config is judged by real reachability and not just
   /// by a TCP handshake to its server.
   final RxBool siteCheckEnabled = RxBool(true);
+
+  /// Connect scan policy. `shortlist` checks a few candidates, `hybrid` checks
+  /// a bounded count, and `all` establishes a real VPN session for every
+  /// reachable/unknown candidate in the batch.
+  final RxInt connectScanBatchSize = RxInt(50);
+  final RxInt connectHybridCandidateCount = RxInt(10);
+
+  /// Minimum successful website checks required to accept a candidate.
+  /// A value of -1 means every configured check host must pass.
+  final RxInt connectWebsitePassThreshold = RxInt(-1);
+
+  /// After a later tunnel failure, offer resume from next batch or restart.
+  final RxString connectFailureScanPolicy = RxString('next_batch');
+  final RxString connectVerificationStrategy = RxString('shortlist');
 
   /// Hosts fetched through the probe tunnel. Stored as plain hostnames;
   /// [sanitizeSiteCheckUrls] normalises whatever the user typed.
@@ -201,9 +218,12 @@ class SettingsController extends GetxController {
   void _loadSettings() {
     try {
       autoConnect.value = _settingsBox.get('autoConnect', defaultValue: false);
-      killSwitchEnabled.value = _settingsBox.get('killSwitchEnabled', defaultValue: false);
-      blockNonVPNTraffic.value = _settingsBox.get('blockNonVPNTraffic', defaultValue: false);
-      splitTunnelingEnabled.value = _settingsBox.get('splitTunnelingEnabled', defaultValue: false);
+      killSwitchEnabled.value =
+          _settingsBox.get('killSwitchEnabled', defaultValue: false);
+      blockNonVPNTraffic.value =
+          _settingsBox.get('blockNonVPNTraffic', defaultValue: false);
+      splitTunnelingEnabled.value =
+          _settingsBox.get('splitTunnelingEnabled', defaultValue: false);
 
       final savedApps = _settingsBox.get('splitTunnelingApps');
       if (savedApps is List) {
@@ -222,36 +242,73 @@ class SettingsController extends GetxController {
       dnsOnlyMode.value = _settingsBox.get('dnsOnlyMode', defaultValue: false);
 
       theme.value = _settingsBox.get('theme', defaultValue: 'system');
-      showSpeedInTray.value = _settingsBox.get('showSpeedInTray', defaultValue: true);
-      showNotifications.value = _settingsBox.get('showNotifications', defaultValue: true);
-      keepScreenAwake.value = _settingsBox.get('keepScreenAwake', defaultValue: false);
-      selectedLanguage.value = _settingsBox.get('selectedLanguage', defaultValue: 'en');
-      analyticsEnabled.value = _settingsBox.get('analyticsEnabled', defaultValue: false);
+      showSpeedInTray.value =
+          _settingsBox.get('showSpeedInTray', defaultValue: true);
+      showNotifications.value =
+          _settingsBox.get('showNotifications', defaultValue: true);
+      keepScreenAwake.value =
+          _settingsBox.get('keepScreenAwake', defaultValue: false);
+      selectedLanguage.value =
+          _settingsBox.get('selectedLanguage', defaultValue: 'en');
+      analyticsEnabled.value =
+          _settingsBox.get('analyticsEnabled', defaultValue: false);
 
-      preferredProtocol.value = _settingsBox.get('preferredProtocol', defaultValue: 'wireguard');
-      autoSelectFastest.value = _settingsBox.get('autoSelectFastest', defaultValue: true);
-      autoTestIntervalMinutes.value = _settingsBox.get('autoTestIntervalMinutes', defaultValue: 60);
-      logLocalConnection.value = _settingsBox.get('logLocalConnection', defaultValue: false);
+      preferredProtocol.value =
+          _settingsBox.get('preferredProtocol', defaultValue: 'wireguard');
+      autoSelectFastest.value =
+          _settingsBox.get('autoSelectFastest', defaultValue: true);
+      autoTestIntervalMinutes.value =
+          _settingsBox.get('autoTestIntervalMinutes', defaultValue: 60);
+      logLocalConnection.value =
+          _settingsBox.get('logLocalConnection', defaultValue: false);
       // This key was written on every save and never read back, so every cold
       // start silently returned the user to "off" and disabled all IP lookups
       // even though they had opted in.
-      showMyLocation.value = _settingsBox.get('showMyLocation', defaultValue: false);
+      showMyLocation.value =
+          _settingsBox.get('showMyLocation', defaultValue: false);
 
-      siteCheckEnabled.value = _settingsBox.get('siteCheckEnabled', defaultValue: true);
+      siteCheckEnabled.value =
+          _settingsBox.get('siteCheckEnabled', defaultValue: true);
+      connectScanBatchSize.value =
+          (_settingsBox.get('connectScanBatchSize', defaultValue: 50) as int)
+              .clamp(1, 500);
+      final verificationMode = _settingsBox.get('connectVerificationMode',
+          defaultValue: 'shortlist') as String;
+      connectVerificationStrategy.value =
+          const {'shortlist', 'hybrid', 'all'}.contains(verificationMode)
+              ? verificationMode
+              : 'shortlist';
+      connectHybridCandidateCount.value = (_settingsBox
+              .get('connectHybridCandidateCount', defaultValue: 10) as int)
+          .clamp(1, 50);
+      connectWebsitePassThreshold.value = (_settingsBox
+              .get('connectWebsitePassThreshold', defaultValue: -1) as int)
+          .clamp(-1, 100);
+      final failurePolicy = _settingsBox.get('connectFailureScanPolicy',
+          defaultValue: 'next_batch') as String;
+      connectFailureScanPolicy.value =
+          failurePolicy == 'restart' ? 'restart' : 'next_batch';
       final savedUrls = _settingsBox.get('siteCheckUrls');
       siteCheckUrls.value = savedUrls is List && savedUrls.isNotEmpty
           ? sanitizeSiteCheckUrls(savedUrls.cast<String>())
           : List<String>.from(defaultSiteCheckUrls);
 
-      coreDebugLogs.value = _settingsBox.get('coreDebugLogs', defaultValue: false);
-      XrayConfigBuilder.coreLogLevel = coreDebugLogs.value ? 'debug' : 'warning';
+      coreDebugLogs.value =
+          _settingsBox.get('coreDebugLogs', defaultValue: false);
+      XrayConfigBuilder.coreLogLevel =
+          coreDebugLogs.value ? 'debug' : 'warning';
 
       fluxEnabled.value = _settingsBox.get('fluxEnabled', defaultValue: true);
-      fluxConcurrency.value = _settingsBox.get('fluxConcurrency', defaultValue: 3);
-      fluxProbeTarget.value = _settingsBox.get('fluxProbeTarget', defaultValue: 'http://cp.cloudflare.com/generate_204');
-      fluxProbeIntervalSeconds.value = _settingsBox.get('fluxProbeIntervalSeconds', defaultValue: 10);
-      fluxFailureThreshold.value = _settingsBox.get('fluxFailureThreshold', defaultValue: 3);
-      fluxHysteresisMs.value = _settingsBox.get('fluxHysteresisMs', defaultValue: 40);
+      fluxConcurrency.value =
+          _settingsBox.get('fluxConcurrency', defaultValue: 3);
+      fluxProbeTarget.value = _settingsBox.get('fluxProbeTarget',
+          defaultValue: 'http://cp.cloudflare.com/generate_204');
+      fluxProbeIntervalSeconds.value =
+          _settingsBox.get('fluxProbeIntervalSeconds', defaultValue: 10);
+      fluxFailureThreshold.value =
+          _settingsBox.get('fluxFailureThreshold', defaultValue: 3);
+      fluxHysteresisMs.value =
+          _settingsBox.get('fluxHysteresisMs', defaultValue: 40);
 
       // Apply initial theme mode & wakelock
       _applyTheme(theme.value);
@@ -293,6 +350,11 @@ class SettingsController extends GetxController {
       'autoTestIntervalMinutes': autoTestIntervalMinutes.value,
       'logLocalConnection': logLocalConnection.value,
       'siteCheckEnabled': siteCheckEnabled.value,
+      'connectScanBatchSize': connectScanBatchSize.value,
+      'connectVerificationMode': connectVerificationStrategy.value,
+      'connectHybridCandidateCount': connectHybridCandidateCount.value,
+      'connectWebsitePassThreshold': connectWebsitePassThreshold.value,
+      'connectFailureScanPolicy': connectFailureScanPolicy.value,
       'siteCheckUrls': siteCheckUrls.toList(),
       'coreDebugLogs': coreDebugLogs.value,
       'fluxEnabled': fluxEnabled.value,
@@ -453,6 +515,36 @@ class SettingsController extends GetxController {
     autoTestIntervalMinutes.value = minutes;
     saveSettings();
     _log.i('Auto-test interval set to: $minutes minutes');
+  }
+
+  /// Set the number of configs considered in each sequential scan batch.
+  void setConnectScanBatchSize(int value) {
+    connectScanBatchSize.value = value.clamp(1, 500);
+    saveSettings();
+  }
+
+  void setConnectVerificationMode(String value) {
+    if (!const {'shortlist', 'hybrid', 'all'}.contains(value)) return;
+    connectVerificationStrategy.value = value;
+    saveSettings();
+  }
+
+  void setConnectHybridCandidateCount(int value) {
+    connectHybridCandidateCount.value = value.clamp(1, 50);
+    saveSettings();
+  }
+
+  /// -1 requires all check hosts; non-negative values require at least that
+  /// many successful sites, clamped to the current configured list size.
+  void setConnectWebsitePassThreshold(int value) {
+    connectWebsitePassThreshold.value = value < 0 ? -1 : value.clamp(1, 100);
+    saveSettings();
+  }
+
+  void setConnectFailureScanPolicy(String value) {
+    if (value != 'next_batch' && value != 'restart') return;
+    connectFailureScanPolicy.value = value;
+    saveSettings();
   }
 
   /// Toggle the site check stage.
@@ -626,6 +718,11 @@ class SettingsController extends GetxController {
     dnsOnlyMode.value = false;
     showMyLocation.value = false;
     siteCheckEnabled.value = true;
+    connectScanBatchSize.value = 50;
+    connectVerificationStrategy.value = 'shortlist';
+    connectHybridCandidateCount.value = 10;
+    connectWebsitePassThreshold.value = -1;
+    connectFailureScanPolicy.value = 'next_batch';
     siteCheckUrls.value = List<String>.from(defaultSiteCheckUrls);
     coreDebugLogs.value = false;
     fluxEnabled.value = true;

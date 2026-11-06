@@ -10,7 +10,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('FLUX & AmneziaWG Configuration', () {
-    test('AmneziaWGConfig serializes full S1-S2 and H1-H4 obfuscation block', () {
+    test('AmneziaWGConfig parses full S1-S2 and H1-H4 obfuscation block', () {
       final awgText = '''[Interface]
 PrivateKey = aaaaaa=
 Address = 10.0.0.2/32
@@ -42,26 +42,6 @@ AllowedIPs = 0.0.0.0/0
       expect(awg.h2, 654321);
       expect(awg.h3, 999999);
       expect(awg.h4, 888888);
-
-      final builder = SingboxConfigBuilder(
-        socksPort: 10808,
-        dnsServers: ['1.1.1.1'],
-        libboxMode: true,
-      );
-      final json = builder.build(awg);
-      final endpoints = json['endpoints'] as List;
-      final awgEndpoint = endpoints.firstWhere((e) => e['tag'] == 'proxy');
-      final amneziaBlock = awgEndpoint['amnezia'] as Map;
-
-      expect(amneziaBlock['jc'], 8);
-      expect(amneziaBlock['jmin'], 50);
-      expect(amneziaBlock['jmax'], 100);
-      expect(amneziaBlock['s1'], 64);
-      expect(amneziaBlock['s2'], 96);
-      expect(amneziaBlock['h1'], 123456);
-      expect(amneziaBlock['h2'], 654321);
-      expect(amneziaBlock['h3'], 999999);
-      expect(amneziaBlock['h4'], 888888);
     });
 
     test('SettingsController defaults for FLUX are sane and configurable', () {

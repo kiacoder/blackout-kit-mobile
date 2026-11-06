@@ -192,6 +192,7 @@ private class LibboxPlatform(
         }
     }
 
+    @Suppress("DEPRECATION")
     override fun getInterfaces(): NetworkInterfaceIterator {
         val list = mutableListOf<NetworkInterface>()
         try {
@@ -247,6 +248,7 @@ private class LibboxPlatform(
     override fun packageNameByUid(uid: Int): String =
         vpnService.packageManager.getNameForUid(uid) ?: ""
 
+    @Suppress("DEPRECATION")
     override fun uidByPackageName(packageName: String): Int = try {
         vpnService.packageManager.getPackageUid(packageName, 0)
     } catch (e: Exception) {

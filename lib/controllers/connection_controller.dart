@@ -641,9 +641,40 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         final verify = siteCheckService;
         final liveVerifyEnabled =
             verify != null && verify.enabled && verify.liveCheckHosts.isNotEmpty;
-        // FLUX Racing Dispatcher: if enabled, race the top candidates in parallel
+                // Check if a specific protocol preference is prioritized
         final settings = Get.find<SettingsController>();
-        if (settings.fluxEnabled.value && working.length > 1) {
+        final preferred = settings.preferredProtocol.value.toLowerCase();
+        final hasPreferredMatch = preferred.isNotEmpty &&
+            preferred != 'auto' &&
+            working.any((r) {
+              final c = batch.firstWhereOrNull((cfg) => cfg.getHash() == r.configHash);
+              return c != null && c.protocol.toLowerCase() == preferred;
+            });
+
+        // If a preferred protocol is requested and present, try it sequentially first
+        if (hasPreferredMatch) {
+          final preferredCandidate = working.firstWhereOrNull((r) {
+            final c = batch.firstWhereOrNull((cfg) => cfg.getHash() == r.configHash);
+            return c != null && c.protocol.toLowerCase() == preferred;
+          });
+
+          if (preferredCandidate != null) {
+            final cfg = batch.firstWhere((c) => c.getHash() == preferredCandidate.configHash);
+            final connected = await _connectImpl(cfg, testResult: preferredCandidate);
+            if (connected) {
+              if (!liveVerifyEnabled) return true;
+              final alive = await verify!.verifyLiveConnection();
+              if (alive) {
+                state.value = ConnectionState.connected;
+                return true;
+              }
+              await _disconnectImpl();
+            }
+          }
+        }
+
+        // FLUX Racing Dispatcher: race pre-connect readiness if enabled and no preferred match took the line
+        if (settings.fluxEnabled.value && working.length > 1 && !hasPreferredMatch) {
           final raceCount = settings.fluxConcurrency.value.clamp(1, working.length);
           final candidatesToRace = <(Config, TestResult)>[];
           for (var i = 0; i < raceCount; i++) {
@@ -659,37 +690,41 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
                 'FLUX racing top @count servers (@label)...',
                 {'count': '${candidatesToRace.length}', 'label': batchLabel});
 
-            // Race candidate connections concurrently
+            // Race probe verification to select the fastest responder before connecting tunnel
             final raceFutures = candidatesToRace.map((pair) async {
-              final ok = await _connectImpl(pair.$1, testResult: pair.$2);
-              if (!ok) throw Exception('connect failed');
-              if (liveVerifyEnabled) {
-                final alive = await verify!.verifyLiveConnection();
-                if (!alive) {
-                  await _disconnectImpl();
-                  throw Exception('live verify failed');
-                }
-              }
-              return pair.$1;
+              final ping = await testerService.testConfig(pair.$1);
+              if (!ping.isWorking) throw Exception('Probe failed');
+              return pair;
             }).toList();
 
             try {
               final winner = await Future.any(raceFutures);
-              state.value = ConnectionState.connected;
-              statusMessage.value = LocalizationService.t(
-                  'Connected to @name — FLUX winner', {'name': winner.displayName});
-              _log.i('FLUX race won by ${winner.displayName}');
-              return true;
+              final ok = await _connectImpl(winner.$1, testResult: winner.$2);
+              if (ok) {
+                if (!liveVerifyEnabled) {
+                  state.value = ConnectionState.connected;
+                  statusMessage.value = LocalizationService.t(
+                      'Connected to @name — FLUX winner', {'name': winner.$1.displayName});
+                  _log.i('FLUX race won by ${winner.$1.displayName}');
+                  return true;
+                }
+                final alive = await verify!.verifyLiveConnection();
+                if (alive) {
+                  state.value = ConnectionState.connected;
+                  statusMessage.value = LocalizationService.t(
+                      'Connected to @name — FLUX winner', {'name': winner.$1.displayName});
+                  _log.i('FLUX race won by ${winner.$1.displayName}');
+                  return true;
+                }
+                await _disconnectImpl();
+              }
             } catch (_) {
               _log.w('FLUX race pool finished without a clean winner, falling back to sequential batch dial');
             }
           }
         }
 
-        // Always try several candidates per batch. The old code allowed a
-        // single attempt when site checking was off, so one config that
-        // accepted the probe but failed to connect threw away the whole
-        // 50-config batch and the scan crawled forward one batch at a time.
+        // Always try several candidates per batch.
         final attemptLimit = working.length < _maxConnectAttemptsPerBatch
             ? working.length
             : _maxConnectAttemptsPerBatch;

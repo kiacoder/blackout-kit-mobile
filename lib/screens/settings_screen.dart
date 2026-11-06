@@ -364,16 +364,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _showTestIntervalDialog,
                 )),
                 Obx(() => SwitchListTile(
-                  title: const Text('FLUX Quick Failover & Racing'),
-                  subtitle: const Text(
-                    'Race top candidate servers concurrently and fail over without hanging',
-                  ),
+                  title: Text('flux_racing'.tr),
+                  subtitle: Text('flux_racing_desc'.tr),
                   value: _settingsController.fluxEnabled.value,
                   onChanged: _settingsController.toggleFlux,
                 )),
                 Obx(() => _settingsController.fluxEnabled.value
                     ? ListTile(
-                        title: const Text('FLUX Concurrency'),
+                        title: Text('flux_concurrency'.tr),
                         subtitle: Text(
                           '${_settingsController.fluxConcurrency.value} simultaneous dials',
                         ),

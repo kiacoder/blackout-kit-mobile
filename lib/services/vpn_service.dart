@@ -174,7 +174,8 @@ class VPNService {
   /// afterwards — `Builder.establish()` freezes them into the tunnel.
   Future<bool> connect(Config config, {VpnSessionOptions? options}) async {
     try {
-      final session = options ?? VpnSessionOptions(dnsServers: dnsServersForConfig(config));
+      final session =
+          options ?? VpnSessionOptions(dnsServers: dnsServersForConfig(config));
 
       final configProblem = session.validationError;
       if (configProblem != null) {
@@ -184,6 +185,7 @@ class VPNService {
         return false;
       }
 
+      _lastError = null;
       _status = VPNStatus.connecting;
       _log.i('Connecting to ${config.displayName} ($session)');
 
@@ -245,7 +247,8 @@ class VPNService {
             libboxMode: true,
           ).buildJson(config);
         } on ArgumentError catch (e) {
-          _log.w('libbox-mode config refused for ${config.protocol}: ${e.message}');
+          _log.w(
+              'libbox-mode config refused for ${config.protocol}: ${e.message}');
         }
       }
 
@@ -255,14 +258,14 @@ class VPNService {
       // connect request it will serve from a stale config file.
       if (xrayJson == null && singboxJson == null) {
         _status = VPNStatus.error;
-        _lastError =
-            'This build cannot dial "${config.protocol}" configs. '
+        _lastError = 'This build cannot dial "${config.protocol}" configs. '
             'Use a VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC or AnyTLS '
             'config, or update the app.';
         _log.e('Refusing to connect: $_lastError');
         return false;
       }
 
+      _lastError = null;
       final result = await platform.invokeMethod('connect', {
         'protocol': config.protocol,
         'displayName': config.displayName,
@@ -456,9 +459,7 @@ class VPNService {
         'timeoutMs': timeout.inMilliseconds,
       });
       if (result == null) return const [];
-      return result
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
+      return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     } on PlatformException catch (e) {
       _log.w('Site check failed: ${e.message}');
       return const [];
@@ -507,7 +508,8 @@ class VPNService {
   }
 
   void _handleStatusChange(String? status, {String? error}) {
-    switch (status) {      case 'connected':
+    switch (status) {
+      case 'connected':
         _status = VPNStatus.connected;
         _log.i('VPN status changed: connected');
         break;
@@ -636,7 +638,8 @@ class EngineAvailability {
 
   /// Human-readable summary, e.g. for a settings or about screen.
   String get summary {
-    if (!isKnown) return 'Engine support could not be determined on this platform.';
+    if (!isKnown)
+      return 'Engine support could not be determined on this platform.';
     if (supportedProtocols.isEmpty) {
       return 'No engine is bundled in this build.';
     }

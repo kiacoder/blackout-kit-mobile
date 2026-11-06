@@ -69,6 +69,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Preserve preferred-protocol ranking after reachability probes and do not treat unresolved exit geolocation as a failed VPN connection.
 
+## [1.19.2] - 2026-11-06
+
+### Fixed
+- **Candidate rejection no longer contaminates a live session**: Xray/core startup failures remain attached to the candidate while scanning advances. Only verified website failures or native loss of an established tunnel can request session recovery; the last-known-good config is updated only after the configured website gate passes.
+- **Fresh connection errors replace stale errors**: a later candidate no longer displays an earlier config’s Xray rejection when its own startup fails without a new diagnostic.
+- **Connection and recovery status stay consistent**: the home screen identifies the active candidate during scanning and the last-known-good config during recovery. An unresolved exit-location lookup alone does not mark the VPN failed.
+
 ## [Unreleased]
 
 ### Added

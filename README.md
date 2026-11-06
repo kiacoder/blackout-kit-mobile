@@ -89,7 +89,15 @@ checked independently; this statement refers specifically to that failed CI run.
 A successful service/engine startup or local SOCKS5 readiness handshake is not
 proof of end-to-end Internet traffic. Only the Xray path has the hardware evidence
 recorded above; other protocol paths must be treated according to the current
-phase/test notes, not inferred from their config parsers or module names.
+phase/test notes, not inferred from their config parsers or module names. The
+Connect scan distinguishes candidate startup rejection from failure of an already
+established tunnel: candidate diagnostics are shown while the scan tries the next
+config, and a config is remembered as verified only after it passes the configured
+website checks. Candidate errors no longer trigger recovery for a previously working
+tunnel, and a stale engine error from one config is not reused for the next. Plaintext
+VLESS to a public IP without a domain host remains refused for credential safety;
+use TLS/REALITY or a domain-based endpoint. Exit geolocation is informational; a
+missing location alone does not imply that the tunnel is broken.
 
 **iOS:** the repository does not yet have a verified Rust XCFramework and
 PacketTunnelProvider integration. Do not treat iOS platform labeling or older

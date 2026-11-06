@@ -87,11 +87,20 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   int? _requestedResumeCursor;
   bool _recoveryPromptPending = false;
   bool _recoveryRequested = false;
+  bool _candidateAttemptInFlight = false;
 
   /// Signals the UI that a connected session failed and needs a deliberate
   /// recovery choice. The controller never starts a fresh scan silently.
   final RxString recoveryReason = RxString('');
   final RxBool recoveryAvailable = RxBool(false);
+  final RxBool candidateAttemptFailed = RxBool(false);
+
+  void _clearRecoveryState() {
+    _recoveryPromptPending = false;
+    recoveryReason.value = '';
+    recoveryAvailable.value = false;
+    candidateAttemptFailed.value = false;
+  }
 
   void _requestRecovery(String reason) {
     if (_recoveryPromptPending) return;
@@ -126,6 +135,13 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   @visibleForTesting
   void debugRequestRecoveryForTest() => _requestRecovery('test recovery');
 
+  @visibleForTesting
+  void debugSetConnectedForTest(Config config) {
+    selectedConfig.value = config;
+    lastKnownWorkingConfig.value = config;
+    state.value = ConnectionState.connected;
+  }
+
   void dismissRecovery() {
     _recoveryPromptPending = false;
     recoveryAvailable.value = false;
@@ -135,6 +151,11 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   /// Last config whose live tunnel passed the configured website gate.
   final Rx<Config?> lastKnownWorkingConfig = Rx<Config?>(null);
+
+  /// The candidate currently being evaluated; distinct from a previously
+  /// accepted live config so failed attempts cannot masquerade as that session.
+  final Rx<Config?> candidateConfig = Rx<Config?>(null);
+  final RxString candidateError = RxString('');
 
   /// Incremented on every connect/disconnect so in-flight lookups can tell
   /// they belong to a session that no longer exists.
@@ -186,8 +207,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     super.onInit();
     // Translated here rather than in the field initialiser: `.tr` needs the
     // catalogue, which is registered by the time onInit runs.
-    if (statusMessage.value.isEmpty)
+    if (statusMessage.value.isEmpty) {
       statusMessage.value = LocalizationService.t('status_ready');
+    }
     _log.i('ConnectionController initialized');
     _initIpInfo();
     // Android may kill the Flutter process while the foreground VpnService
@@ -209,6 +231,10 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   bool get _canAdopt =>
       state.value == ConnectionState.idle ||
       state.value == ConnectionState.error;
+
+  @visibleForTesting
+  void debugHandleNativeStatusForTest(String status, String? error) =>
+      _onNativeStatus(status, error);
 
   /// Handles a status pushed by the native service.
   void _onNativeStatus(String status, String? error) {
@@ -237,6 +263,18 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         break;
       case 'error':
       case 'blocked':
+        // While scanning, this status belongs to the active candidate only.
+        // Do not let a native start rejection create recovery for an older
+        // working session; _connectImpl returns that candidate's diagnostic
+        // and the scan loop will continue to the next config.
+        if (state.value == ConnectionState.connecting &&
+            _candidateAttemptInFlight) {
+          if (error != null && error.isNotEmpty) {
+            statusMessage.value = error;
+            candidateError.value = error;
+          }
+          break;
+        }
         // The engine died (with or without the kill switch holding the
         // interface open) or the tunnel was torn down. Say so, and stop the
         // uptime that would otherwise keep ticking over a dead tunnel.
@@ -245,7 +283,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           statusMessage.value = error ??
               LocalizationService.t(
                   'The tunnel stopped unexpectedly. Reconnect to retry.');
-          if (!_recoveryRequested && lastKnownWorkingConfig.value != null) {
+          if (!_candidateAttemptInFlight &&
+              !_recoveryRequested &&
+              lastKnownWorkingConfig.value != null) {
             _requestRecovery(statusMessage.value);
           }
           connectedIP.value = null;
@@ -339,6 +379,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   }
 
   /// Asks the live tunnel to load a check host and reports failure honestly.
+  @visibleForTesting
+  Future<void> debugVerifyTunnelAliveForTest() => _verifyTunnelAlive();
+
   Future<void> _verifyTunnelAlive() async {
     if (!isConnected) return;
     final verify = siteCheckService;
@@ -510,6 +553,11 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     _cancelRequested = false;
     _recoveryRequested =
         _requestedResumeCursor != null || _recoveryPromptPending;
+    if (!_recoveryRequested) {
+      _clearRecoveryState();
+      candidateError.value = '';
+      candidateAttemptFailed.value = false;
+    }
     try {
       return await _connectFastestImpl(availableConfigs,
           testResults: testResults);
@@ -628,7 +676,6 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             .toList();
         scanItemsDone.value = batchStart;
         scanPhase.value = 'ping';
-        final batchHashes = batch.map((c) => c.getHash()).toSet();
         final batchLabel = 'batch ${batchIndex + 1}/$totalBatches';
 
         state.value = ConnectionState.selecting;
@@ -745,14 +792,43 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           final config =
               batch.firstWhereOrNull((c) => c.getHash() == result.configHash);
           if (config == null) continue;
+          _clearRecoveryState();
+          candidateConfig.value = config;
+          candidateError.value = '';
+          selectedConfig.value = config;
+          selectedConfigResult.value = result;
+          _candidateAttemptInFlight = true;
           scanCurrentConfig.value = config.displayName;
           statusMessage.value = LocalizationService.t(
               'Connecting (@label, config @n)...',
               {'label': batchLabel, 'n': '${attempt + 1}'});
           scanPhase.value = 'connect';
-          final connected = await _connectImpl(config, testResult: result);
-          if (!connected) continue;
+          final connected = await _connectImpl(
+            config,
+            testResult: result,
+            markAsWorking: !liveVerifyEnabled,
+          );
+          if (!connected) {
+            _candidateAttemptInFlight = false;
+            final diagnostic = candidateError.value.isNotEmpty
+                ? candidateError.value
+                : statusMessage.value;
+            candidateConfig.value = null;
+            candidateError.value = diagnostic;
+            candidateAttemptFailed.value = true;
+            selectedConfig.value = null;
+            selectedConfigResult.value = null;
+            if (vpnService.isConnected ||
+                vpnService.status == VPNStatus.connecting) {
+              await _disconnectImpl();
+            }
+            state.value = ConnectionState.selecting;
+            scanPhase.value = 'connect';
+            statusMessage.value = diagnostic;
+            continue;
+          }
 
+          _candidateAttemptInFlight = false;
           var accepted = !liveVerifyEnabled;
           if (liveVerifyEnabled) {
             state.value = ConnectionState.testing;
@@ -772,11 +848,19 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           }
 
           if (accepted) {
+            candidateConfig.value = null;
+            candidateError.value = '';
+            candidateAttemptFailed.value = false;
+            try {
+              Get.find<ConfigController>().markConnected(config);
+            } catch (_) {
+              // The controller can be absent in early startup/tests.
+            }
             state.value = ConnectionState.connected;
             lastKnownWorkingConfig.value = config;
             _resumeQueue = [
-              ...working.skip(attempt + 1).map((candidate) => batch
-                  .firstWhere((entry) => entry.getHash() == candidate.configHash)),
+              ...working.skip(attempt + 1).map((candidate) => batch.firstWhere(
+                  (entry) => entry.getHash() == candidate.configHash)),
               ...toScan.skip(batchStart + batch.length),
             ];
             // The retained queue now starts with the first untried config.
@@ -797,15 +881,20 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             return true;
           }
 
+          candidateConfig.value = null;
+          await _disconnectImpl();
+          state.value = ConnectionState.selecting;
+          scanPhase.value = 'connect';
           _log.w('Website threshold not met for ${config.displayName} '
               '($batchLabel: $scanSitesDone/@$scanSitesTotal passed)');
-          await _disconnectImpl();
         }
         _resumeCursor = batchStart + batch.length;
         _log.i('$batchLabel exhausted: $attemptLimit candidate(s) tried');
       }
 
       state.value = ConnectionState.error;
+      candidateConfig.value = null;
+      candidateError.value = '';
       scanPhase.value = 'failed';
       final check2 = siteCheckService;
       final verificationOn =
@@ -871,11 +960,15 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   Future<bool> _connectImpl(
     Config config, {
     TestResult? testResult,
+    bool markAsWorking = true,
   }) async {
     try {
       if (!config.validate()) {
         state.value = ConnectionState.error;
         statusMessage.value = LocalizationService.t('status_invalid_config');
+        if (_candidateAttemptInFlight) {
+          candidateError.value = statusMessage.value;
+        }
         return false;
       }
 
@@ -885,6 +978,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       if (refusal != null) {
         state.value = ConnectionState.error;
         statusMessage.value = refusal;
+        if (_candidateAttemptInFlight) {
+          candidateError.value = refusal;
+        }
         debugService
             .logError('Connect refused for ${config.protocol}: $refusal');
         return false;
@@ -907,6 +1003,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         state.value = ConnectionState.error;
         statusMessage.value = vpnService.lastError ??
             LocalizationService.t('status_permission_denied');
+        if (_candidateAttemptInFlight) {
+          candidateError.value = statusMessage.value;
+        }
         return false;
       }
 
@@ -924,6 +1023,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       if (optionProblem != null) {
         state.value = ConnectionState.error;
         statusMessage.value = optionProblem;
+        if (_candidateAttemptInFlight) {
+          candidateError.value = optionProblem;
+        }
         debugService.logError('Session options rejected: $optionProblem');
         return false;
       }
@@ -943,13 +1045,15 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         // The tunnel is live, so this config is working by definition. Without
         // this the library badge kept whatever a failed probe had stored and
         // read "Failed" under an active tunnel.
-        try {
-          Get.find<ConfigController>().markConnected(config);
-        } catch (_) {
-          // ConfigController not registered yet (early boot) - not fatal.
+        if (markAsWorking) {
+          try {
+            Get.find<ConfigController>().markConnected(config);
+          } catch (_) {
+            // ConfigController not registered yet (early boot) - not fatal.
+          }
+          lastKnownWorkingConfig.value = config;
         }
         _fetchConnectedIP();
-        lastKnownWorkingConfig.value = config;
 
         debugService.logInfo(
           'VPN connected to ${config.displayName} - '
@@ -973,6 +1077,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         state.value = ConnectionState.error;
         statusMessage.value =
             vpnService.lastError ?? LocalizationService.t('Failed to connect');
+        if (_candidateAttemptInFlight && candidateError.value.isEmpty) {
+          candidateError.value = statusMessage.value;
+        }
         debugService.logAction('connect_failed', {
           'config': config.displayName,
           'reason': vpnService.lastError ?? 'unknown',
@@ -983,6 +1090,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       state.value = ConnectionState.error;
       statusMessage.value =
           LocalizationService.t('status_connection_error', {'error': '$e'});
+      if (_candidateAttemptInFlight && candidateError.value.isEmpty) {
+        candidateError.value = statusMessage.value;
+      }
       _log.e('Error connecting: $e');
       return false;
     }

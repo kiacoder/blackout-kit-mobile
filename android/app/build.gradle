@@ -190,7 +190,7 @@ dependencies {
 
     // IntentCompat.getParcelableExtra — the non-deprecated EXTRA_STREAM read
     // used by the share/Open-with import path (CodeQL #21).
-    implementation "androidx.core:core-ktx:1.13.1"
+    implementation "androidx.core:core-ktx:1.19.1"
 
     // Xray core as an Android library (2dust/AndroidLibXrayLite, LGPL-3.0).
     // The AAR ships libgojni.so for all four ABIs plus the geoip/geosite

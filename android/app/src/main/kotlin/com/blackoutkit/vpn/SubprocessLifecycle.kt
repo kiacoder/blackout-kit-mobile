@@ -28,10 +28,28 @@ internal class SubprocessLifecycle(
 
     fun exitedProcess(processes: List<Process>): Process? = processes.firstOrNull { !isAlive(it) }
 
-    fun stop(processes: List<Process>) {
-        for (process in processes.asReversed()) {
+    /** Bounded TERM -> KILL cleanup; never discard a live process after TERM. */
+    fun stop(processes: List<Process>, graceMs: Long = 500) {
+        val children = processes.asReversed().distinct()
+        var interrupted = false
+        // Signal every child first so their grace periods can overlap.
+        for (process in children) {
             if (isAlive(process)) process.destroy()
         }
+        for (process in children) {
+            try {
+                if (isAlive(process) && !waitFor(process, graceMs)) {
+                    process.destroyForcibly()
+                    waitFor(process, graceMs)
+                }
+            } catch (_: InterruptedException) {
+                // A monitor interrupt must not leave a core holding a SOCKS
+                // port. Continue cleanup, then restore the caller's flag.
+                interrupted = true
+                if (isAlive(process)) process.destroyForcibly()
+            }
+        }
+        if (interrupted) Thread.currentThread().interrupt()
     }
 
     fun waitForExit(process: Process, timeoutMs: Long): Boolean = waitFor(process, timeoutMs)

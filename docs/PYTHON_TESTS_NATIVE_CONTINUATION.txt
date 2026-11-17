@@ -1,0 +1,38 @@
+test_api24_metadata_accepted (test_android_artifact.AndroidArtifactTests.test_api24_metadata_accepted) ... ok
+test_api34_rejected_for_min24 (test_android_artifact.AndroidArtifactTests.test_api34_rejected_for_min24) ... ok
+test_malformed_or_missing_metadata_rejected (test_android_artifact.AndroidArtifactTests.test_malformed_or_missing_metadata_rejected) ... ok
+test_wrong_abi_rejected (test_android_artifact.AndroidArtifactTests.test_wrong_abi_rejected) ... ok
+test_app_full_document_batch_roundtrip (test_config_factory.FactoryTests.test_app_full_document_batch_roundtrip) ... ok
+test_awg_header_ranges_preserved (test_config_factory.FactoryTests.test_awg_header_ranges_preserved) ... ok
+test_base64_subscription (test_config_factory.FactoryTests.test_base64_subscription) ... ok
+test_batch_nesting_bounded (test_config_factory.FactoryTests.test_batch_nesting_bounded) ... ok
+test_cli_does_not_echo_secret_errors (test_config_factory.FactoryTests.test_cli_does_not_echo_secret_errors) ... ok
+test_cli_roundtrip (test_config_factory.FactoryTests.test_cli_roundtrip) ... ok
+test_empty_inputs (test_config_factory.FactoryTests.test_empty_inputs) ... ok
+test_explicit_hint_cannot_silently_change_engine (test_config_factory.FactoryTests.test_explicit_hint_cannot_silently_change_engine) ... ok
+test_failed_write_removes_only_new_package (test_config_factory.FactoryTests.test_failed_write_removes_only_new_package) ... ok
+test_hysteria1_rejected (test_config_factory.FactoryTests.test_hysteria1_rejected) ... ok
+test_input_limit (test_config_factory.FactoryTests.test_input_limit) ... ok
+test_invalid_uri_ports (test_config_factory.FactoryTests.test_invalid_uri_ports) ... ok
+test_invalid_wg (test_config_factory.FactoryTests.test_invalid_wg) ... ok
+test_json_ambiguous_and_duplicate_rejected (test_config_factory.FactoryTests.test_json_ambiguous_and_duplicate_rejected) ... ok
+test_json_engine_detection (test_config_factory.FactoryTests.test_json_engine_detection) ... ok
+test_json_formatting_duplicates (test_config_factory.FactoryTests.test_json_formatting_duplicates) ... ok
+test_json_uri_array (test_config_factory.FactoryTests.test_json_uri_array) ... ok
+test_manifest_dedup_separation_and_permissions (test_config_factory.FactoryTests.test_manifest_dedup_separation_and_permissions) ... ok
+test_mihomo_json_document_preserved (test_config_factory.FactoryTests.test_mihomo_json_document_preserved) ... ok
+test_mixed_engine_json_rejected (test_config_factory.FactoryTests.test_mixed_engine_json_rejected) ... ok
+test_multi_peer_lossless (test_config_factory.FactoryTests.test_multi_peer_lossless) ... ok
+test_new_awg_fields_never_downgrade (test_config_factory.FactoryTests.test_new_awg_fields_never_downgrade) ... ok
+test_new_protocols_companion_only (test_config_factory.FactoryTests.test_new_protocols_companion_only) ... ok
+test_openvpn_preserves_hooks_without_executing (test_config_factory.FactoryTests.test_openvpn_preserves_hooks_without_executing) ... ok
+test_profile_count_limit (test_config_factory.FactoryTests.test_profile_count_limit) ... ok
+test_standard_wireguard (test_config_factory.FactoryTests.test_standard_wireguard) ... ok
+test_symlink_destination_refused (test_config_factory.FactoryTests.test_symlink_destination_refused) ... ok
+test_yaml_lossless_rules_and_groups (test_config_factory.FactoryTests.test_yaml_lossless_rules_and_groups) ... ok
+test_yaml_unsafe_rejected (test_config_factory.FactoryTests.test_yaml_unsafe_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 33 tests in 0.077s
+
+OK

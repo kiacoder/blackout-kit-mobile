@@ -1,0 +1,198 @@
+{
+  "overallPercent": 26,
+  "scope": "Linux native FD ownership; Android JNI/device still unexecuted",
+  "artifacts": [
+    {
+      "engine": "awg",
+      "abi": "arm64-v8a",
+      "bytes": 5083208,
+      "sha256": "478bcc19c16fe9c85716703b507291aeb4f20fdcc679a08189315bac0d65c6a8",
+      "path": ".cache/awg-fd-build/arm64-v8a/libblackout-awg.so"
+    },
+    {
+      "engine": "awg",
+      "abi": "armeabi-v7a",
+      "bytes": 4860560,
+      "sha256": "3b1449341dfe7bedd83725fd6c39c1c1838359a31094fc46d4a8c7d667e79858",
+      "path": ".cache/awg-fd-build/armeabi-v7a/libblackout-awg.so"
+    },
+    {
+      "engine": "wireguard",
+      "abi": "arm64-v8a",
+      "bytes": 4874344,
+      "sha256": "27a4b8c40a5c6daff943e3113ec576beaa6d2c927e1e9db134f20831d250c3c4",
+      "path": ".cache/wireguard-fd-build/arm64-v8a/libblackout-wireguard.so"
+    },
+    {
+      "engine": "wireguard",
+      "abi": "armeabi-v7a",
+      "bytes": 4669648,
+      "sha256": "d49492d788910a9992371a13494d34f436249e5405c8738700dacae16aadd05a",
+      "path": ".cache/wireguard-fd-build/armeabi-v7a/libblackout-wireguard.so"
+    }
+  ],
+  "coreByPackage": {
+    "awg": {
+      "github.com/amnezia-vpn/amneziawg-go/v3/conn": {
+        "pass": 7
+      },
+      "github.com/amnezia-vpn/amneziawg-go/v3/replay": {
+        "pass": 1
+      },
+      "github.com/amnezia-vpn/amneziawg-go/v3/tun": {
+        "pass": 9
+      },
+      "github.com/amnezia-vpn/amneziawg-go/v3/device": {
+        "pass": 18,
+        "skip": 2
+      }
+    },
+    "wireguard": {
+      "golang.zx2c4.com/wireguard/conn": {
+        "pass": 7
+      },
+      "golang.zx2c4.com/wireguard/replay": {
+        "pass": 1
+      },
+      "golang.zx2c4.com/wireguard/device": {
+        "pass": 13,
+        "skip": 1
+      },
+      "golang.zx2c4.com/wireguard/tun": {
+        "pass": 9
+      }
+    }
+  },
+  "logs": [
+    {
+      "path": ".buildlog/native-fd-stage.txt",
+      "sha256": "0dd6315f893fcbc62c58294314f243397708a2ea40f30229e27b8787ca1ebc9c"
+    },
+    {
+      "path": ".buildlog/native-fd-stage-rejection.txt",
+      "sha256": "791683eb7b88bcf1b6b0fcb403ab99abd9d6e0920abe413b81d1eae1d2633e53"
+    },
+    {
+      "path": ".buildlog/awg-fd-before.txt",
+      "sha256": "5b76f47a96f58a097496e754b6f8b024462d1053d067965a9b53ab0feec2a9f9"
+    },
+    {
+      "path": ".buildlog/awg-legacy-fd-before.txt",
+      "sha256": "52348de43de15c9100ccedbedc7b6928707552afa85204d10ee91bf4e1235083"
+    },
+    {
+      "path": ".buildlog/awg-fd-fixed-stress.jsonl",
+      "sha256": "eea9e8f4021ec04a91e616d1bcd997b1f9056f3da312e65382d17f2d48b2e1e8"
+    },
+    {
+      "path": ".buildlog/awg-fd-build.txt",
+      "sha256": "6dc95e37537954ddc6fcbd97c56d4dc2f4b6d59f0726bbcc20ef20f07a2f6a3b"
+    },
+    {
+      "path": ".buildlog/awg-fd-core.txt",
+      "sha256": "38ca4c0f935a23bcfc69cb71f01c7fd4d60b5254c06d639d5042b42243339f6f"
+    },
+    {
+      "path": ".buildlog/awg-patched-core-rerun.jsonl",
+      "sha256": "27fa55b06266577343a1d45d25aa2d374e97474c63e5bfd6c992c0db332eb465"
+    },
+    {
+      "path": ".buildlog/wireguard-fd-before.txt",
+      "sha256": "3bf782e57e4a3f2d5eeee670d0611e00990bc181ab8f3f3b95f15ae7332f83e8"
+    },
+    {
+      "path": ".buildlog/wireguard-legacy-fd-before.txt",
+      "sha256": "05952433e6fe0eb24a7b5bcd1d20d788f623da9a1663f5b899f937184b668724"
+    },
+    {
+      "path": ".buildlog/wireguard-fd-fixed-stress.jsonl",
+      "sha256": "f6c8e29bb6bb7abe2749251d3ccb32647a77132fd17a2b7eb68a6f2ebe8b68c1"
+    },
+    {
+      "path": ".buildlog/wireguard-fd-build.txt",
+      "sha256": "525a80dd9345577065788f173998b00f8528909088e659f0df470a8ea94ae8d8"
+    },
+    {
+      "path": ".buildlog/wireguard-fd-core.txt",
+      "sha256": "b2968d923624dd51433af22315c0a6c2bc33591fde8f741e3f2024cbcea7ab55"
+    },
+    {
+      "path": ".buildlog/wireguard-patched-core-rerun.jsonl",
+      "sha256": "b786fc596ccd870f8478aea1f089040315b89890c4f1ec2eedf7d0287b1d7a00"
+    },
+    {
+      "path": ".buildlog/awg-patched-stress-rerun.jsonl",
+      "sha256": "a0d43e599545a56db8f570acc753f3e5e94039fb4359a3fea80e5ed4f1c93990"
+    }
+  ],
+  "kernel": {
+    "awg": {
+      "engine": "awg",
+      "scope": "Linux isolated kernel TUN; NOT Android",
+      "passed": true,
+      "checks": [
+        "cycle-1: TCP through kernel TUN",
+        "cycle-1: UDP DNS through kernel TUN",
+        "outer link outage blocks traffic; recovery forwards again",
+        "cycle-1: both kernel TUNs removed on shutdown",
+        "cycle-2: TCP through kernel TUN",
+        "cycle-2: UDP DNS through kernel TUN",
+        "cycle-2: both kernel TUNs removed on shutdown",
+        "cycle-3: TCP through kernel TUN",
+        "cycle-3: UDP DNS through kernel TUN",
+        "cycle-3: both kernel TUNs removed on shutdown"
+      ],
+      "tunCounters": [
+        {
+          "cycle": 1,
+          "rxBytes": 521,
+          "txBytes": 502
+        },
+        {
+          "cycle": 2,
+          "rxBytes": 481,
+          "txBytes": 442
+        },
+        {
+          "cycle": 3,
+          "rxBytes": 481,
+          "txBytes": 442
+        }
+      ]
+    },
+    "wireguard": {
+      "engine": "wireguard",
+      "scope": "Linux isolated kernel TUN; NOT Android",
+      "passed": true,
+      "checks": [
+        "cycle-1: TCP through kernel TUN",
+        "cycle-1: UDP DNS through kernel TUN",
+        "outer link outage blocks traffic; recovery forwards again",
+        "cycle-1: both kernel TUNs removed on shutdown",
+        "cycle-2: TCP through kernel TUN",
+        "cycle-2: UDP DNS through kernel TUN",
+        "cycle-2: both kernel TUNs removed on shutdown",
+        "cycle-3: TCP through kernel TUN",
+        "cycle-3: UDP DNS through kernel TUN",
+        "cycle-3: both kernel TUNs removed on shutdown"
+      ],
+      "tunCounters": [
+        {
+          "cycle": 1,
+          "rxBytes": 561,
+          "txBytes": 562
+        },
+        {
+          "cycle": 2,
+          "rxBytes": 481,
+          "txBytes": 442
+        },
+        {
+          "cycle": 3,
+          "rxBytes": 481,
+          "txBytes": 442
+        }
+      ]
+    }
+  }
+}

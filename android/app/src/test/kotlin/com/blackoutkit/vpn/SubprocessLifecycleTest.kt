@@ -68,14 +68,39 @@ class SubprocessLifecycleTest {
         assertNotNull(lifecycle.exitedProcess(listOf(engine, bridge)))
     }
 
-    private class FakeProcess(var alive: Boolean, private val code: Int = 0) : Process() {
+    @Test
+    fun stopEscalatesWhenChildIgnoresTerminate() {
+        val child = FakeProcess(alive = true, ignoreTerminate = true)
+        val lifecycle = SubprocessLifecycle(waitFor = { process, _ -> !process.isAlive })
+        lifecycle.stop(listOf(child), graceMs = 1)
+        assertEquals(true, child.forced)
+        assertEquals(false, child.isAlive)
+    }
+
+    @Test
+    fun stopCleansUpWhenWaitIsInterrupted() {
+        val child = FakeProcess(alive = true, ignoreTerminate = true)
+        val lifecycle = SubprocessLifecycle(waitFor = { _, _ -> throw InterruptedException() })
+        try {
+            lifecycle.stop(listOf(child))
+            assertEquals(true, child.forced)
+            assertEquals(true, Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    private class FakeProcess(var alive: Boolean, private val code: Int = 0,
+                              private val ignoreTerminate: Boolean = false) : Process() {
         override fun getOutputStream(): OutputStream = ByteArrayOutputStream()
         override fun getInputStream(): InputStream = ByteArrayInputStream(byteArrayOf())
         override fun getErrorStream(): InputStream = ByteArrayInputStream(byteArrayOf())
         override fun waitFor(): Int { alive = false; return code }
         override fun waitFor(timeout: Long, unit: TimeUnit): Boolean { alive = false; return true }
         override fun exitValue(): Int = if (alive) throw IllegalThreadStateException() else code
-        override fun destroy() { alive = false }
+        var forced = false
+        override fun destroy() { if (!ignoreTerminate) alive = false }
+        override fun destroyForcibly(): Process { forced = true; alive = false; return this }
         override fun isAlive(): Boolean = alive
     }
 }

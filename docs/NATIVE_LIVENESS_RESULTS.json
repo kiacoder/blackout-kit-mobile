@@ -1,0 +1,216 @@
+{
+  "overallPercent": 26,
+  "scope": "native compile, Linux/JVM only; Android liveness unverified",
+  "artifacts": [
+    {
+      "engine": "awg",
+      "abi": "arm64-v8a",
+      "path": ".cache/awg-health-build/arm64-v8a/libblackout-awg.so",
+      "sha256": "203dc5d112f19b27d019e92496fbab5071178c82989d898cee470764c3a52a8b",
+      "bytes": 5082880,
+      "jniExports": [
+        "Java_org_amnezia_awg_GoBackend_awgGetConfig",
+        "Java_org_amnezia_awg_GoBackend_awgGetSocketV4",
+        "Java_org_amnezia_awg_GoBackend_awgGetSocketV6",
+        "Java_org_amnezia_awg_GoBackend_awgIsClosed",
+        "Java_org_amnezia_awg_GoBackend_awgTurnOff",
+        "Java_org_amnezia_awg_GoBackend_awgTurnOn",
+        "Java_org_amnezia_awg_GoBackend_awgVersion"
+      ]
+    },
+    {
+      "engine": "awg",
+      "abi": "armeabi-v7a",
+      "path": ".cache/awg-health-build/armeabi-v7a/libblackout-awg.so",
+      "sha256": "908a37075ec9646b7dc57be9ffad200b68ade4ae0596b4d3fe34d6dbd9dc7330",
+      "bytes": 4860232,
+      "jniExports": [
+        "Java_org_amnezia_awg_GoBackend_awgGetConfig",
+        "Java_org_amnezia_awg_GoBackend_awgGetSocketV4",
+        "Java_org_amnezia_awg_GoBackend_awgGetSocketV6",
+        "Java_org_amnezia_awg_GoBackend_awgIsClosed",
+        "Java_org_amnezia_awg_GoBackend_awgTurnOff",
+        "Java_org_amnezia_awg_GoBackend_awgTurnOn",
+        "Java_org_amnezia_awg_GoBackend_awgVersion"
+      ]
+    },
+    {
+      "engine": "wireguard",
+      "abi": "arm64-v8a",
+      "path": ".cache/wireguard-health-build/arm64-v8a/libblackout-wireguard.so",
+      "sha256": "036cff3e2e9d9c0964fa5dc655b9d72755a4379f70ce3b2ca300229fd49b54af",
+      "bytes": 4874256,
+      "jniExports": [
+        "Java_com_wireguard_android_backend_GoBackend_wgGetConfig",
+        "Java_com_wireguard_android_backend_GoBackend_wgGetSocketV4",
+        "Java_com_wireguard_android_backend_GoBackend_wgGetSocketV6",
+        "Java_com_wireguard_android_backend_GoBackend_wgIsClosed",
+        "Java_com_wireguard_android_backend_GoBackend_wgTurnOff",
+        "Java_com_wireguard_android_backend_GoBackend_wgTurnOn",
+        "Java_com_wireguard_android_backend_GoBackend_wgVersion"
+      ]
+    },
+    {
+      "engine": "wireguard",
+      "abi": "armeabi-v7a",
+      "path": ".cache/wireguard-health-build/armeabi-v7a/libblackout-wireguard.so",
+      "sha256": "d600420f9c80dbc4868bf8fad15de3370b9ff9fa445eb1a336516d3870f87f40",
+      "bytes": 4669016,
+      "jniExports": [
+        "Java_com_wireguard_android_backend_GoBackend_wgGetConfig",
+        "Java_com_wireguard_android_backend_GoBackend_wgGetSocketV4",
+        "Java_com_wireguard_android_backend_GoBackend_wgGetSocketV6",
+        "Java_com_wireguard_android_backend_GoBackend_wgIsClosed",
+        "Java_com_wireguard_android_backend_GoBackend_wgTurnOff",
+        "Java_com_wireguard_android_backend_GoBackend_wgTurnOn",
+        "Java_com_wireguard_android_backend_GoBackend_wgVersion"
+      ]
+    }
+  ],
+  "logs": [
+    {
+      "path": ".buildlog/gradle-recovery.txt",
+      "sha256": "9dc4304af143c52b9bf86171c69c7d39196ba8e7ef0d597faec63cf678a87ce0"
+    },
+    {
+      "path": ".buildlog/native-health-lifecycle.txt",
+      "sha256": "38bba5f1f7a7cfa8cf90b065aa2f98a514e71ea1685093550f7aee9a3a8a39dc"
+    },
+    {
+      "path": ".buildlog/native-health-api.txt",
+      "sha256": "40e330595533d3a15fb01f5adc11cf7780656ecff5d1fb4ffe3562f0ba067952"
+    },
+    {
+      "path": ".buildlog/native-health-junit.txt",
+      "sha256": "b23b126dad6d8c62a63c585f9c2ea5e57d0ddbeb69e1acaeb07e02c2a14d53b1"
+    },
+    {
+      "path": ".buildlog/native-health-host.txt",
+      "sha256": "725e95b7e415c3aca368c386008e695d4e2ea96cdb17d9bae44593b491646d03"
+    },
+    {
+      "path": ".buildlog/native-health-parser.txt",
+      "sha256": "6c488872baee048d70e9e268079155a3323f43a3306f4d0854f1c005e984dc8e"
+    },
+    {
+      "path": ".buildlog/native-health-python.txt",
+      "sha256": "fc845ebfc22c73ce9566408631c2a0b36598c83414aacd904d2b46910e9c79f1"
+    },
+    {
+      "path": ".buildlog/native-health-stage.txt",
+      "sha256": "0dd6315f893fcbc62c58294314f243397708a2ea40f30229e27b8787ca1ebc9c"
+    },
+    {
+      "path": ".buildlog/native-health-stage-rejection.txt",
+      "sha256": "a59f4785259ce8277ee41ff1af61ce8ecddf039d6e32efb5d63a524140a8e7f6"
+    },
+    {
+      "path": ".buildlog/awg-health-build.txt",
+      "sha256": "97d1c79963c83712af58b7481784ea64635265dd6b598e60efce97c7535236b1"
+    },
+    {
+      "path": ".buildlog/wireguard-health-build.txt",
+      "sha256": "d7cf5b10744092fc82a2d6afb96889ef6be49c2d68a24377da40c62393d4bbd6"
+    },
+    {
+      "path": ".buildlog/awg-health-core.txt",
+      "sha256": "1c9bd95ae26b6c8204492b8b599b4f0ce86604f1d67316181d3bb389575a13fe"
+    },
+    {
+      "path": ".buildlog/wireguard-health-core.txt",
+      "sha256": "87366d6bdc7dd4d6fbf9db4ff962cf1c20c5e1ed848592a4861fcc3bd96559d1"
+    },
+    {
+      "path": ".buildlog/awg-patched-core-rerun.jsonl",
+      "sha256": "ad353b22784fa8741b8f8d095e80f9435f169d951f1261b409198964dffffeeb"
+    },
+    {
+      "path": ".buildlog/wireguard-patched-core-rerun.jsonl",
+      "sha256": "a391df0a554db98ff85fbe237decc0cd684cf8606ffe1ce3d2c2b9b00c210a32"
+    },
+    {
+      "path": ".buildlog/awg-patched-stress-rerun.jsonl",
+      "sha256": "7ddcc258728cabb5bb3ff3e98d5329748c9a11a03fd084e40e1b440dd6eb383f"
+    }
+  ],
+  "core": {
+    "awg": {
+      "pass": 26,
+      "skip": 2
+    },
+    "wireguard": {
+      "pass": 21,
+      "skip": 1
+    }
+  },
+  "kernel": {
+    "awg": {
+      "engine": "awg",
+      "scope": "Linux isolated kernel TUN; NOT Android",
+      "passed": true,
+      "checks": [
+        "cycle-1: TCP through kernel TUN",
+        "cycle-1: UDP DNS through kernel TUN",
+        "outer link outage blocks traffic; recovery forwards again",
+        "cycle-1: both kernel TUNs removed on shutdown",
+        "cycle-2: TCP through kernel TUN",
+        "cycle-2: UDP DNS through kernel TUN",
+        "cycle-2: both kernel TUNs removed on shutdown",
+        "cycle-3: TCP through kernel TUN",
+        "cycle-3: UDP DNS through kernel TUN",
+        "cycle-3: both kernel TUNs removed on shutdown"
+      ],
+      "tunCounters": [
+        {
+          "cycle": 1,
+          "rxBytes": 521,
+          "txBytes": 502
+        },
+        {
+          "cycle": 2,
+          "rxBytes": 533,
+          "txBytes": 494
+        },
+        {
+          "cycle": 3,
+          "rxBytes": 481,
+          "txBytes": 442
+        }
+      ]
+    },
+    "wireguard": {
+      "engine": "wireguard",
+      "scope": "Linux isolated kernel TUN; NOT Android",
+      "passed": true,
+      "checks": [
+        "cycle-1: TCP through kernel TUN",
+        "cycle-1: UDP DNS through kernel TUN",
+        "outer link outage blocks traffic; recovery forwards again",
+        "cycle-1: both kernel TUNs removed on shutdown",
+        "cycle-2: TCP through kernel TUN",
+        "cycle-2: UDP DNS through kernel TUN",
+        "cycle-2: both kernel TUNs removed on shutdown",
+        "cycle-3: TCP through kernel TUN",
+        "cycle-3: UDP DNS through kernel TUN",
+        "cycle-3: both kernel TUNs removed on shutdown"
+      ],
+      "tunCounters": [
+        {
+          "cycle": 1,
+          "rxBytes": 561,
+          "txBytes": 562
+        },
+        {
+          "cycle": 2,
+          "rxBytes": 481,
+          "txBytes": 442
+        },
+        {
+          "cycle": 3,
+          "rxBytes": 481,
+          "txBytes": 442
+        }
+      ]
+    }
+  }
+}

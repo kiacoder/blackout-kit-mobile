@@ -1,0 +1,34 @@
+{
+  "engine": "wireguard",
+  "scope": "Linux isolated kernel TUN; NOT Android",
+  "passed": true,
+  "checks": [
+    "cycle-1: TCP through kernel TUN",
+    "cycle-1: UDP DNS through kernel TUN",
+    "outer link outage blocks traffic; recovery forwards again",
+    "cycle-1: both kernel TUNs removed on shutdown",
+    "cycle-2: TCP through kernel TUN",
+    "cycle-2: UDP DNS through kernel TUN",
+    "cycle-2: both kernel TUNs removed on shutdown",
+    "cycle-3: TCP through kernel TUN",
+    "cycle-3: UDP DNS through kernel TUN",
+    "cycle-3: both kernel TUNs removed on shutdown"
+  ],
+  "tunCounters": [
+    {
+      "cycle": 1,
+      "rxBytes": 521,
+      "txBytes": 502
+    },
+    {
+      "cycle": 2,
+      "rxBytes": 481,
+      "txBytes": 442
+    },
+    {
+      "cycle": 3,
+      "rxBytes": 481,
+      "txBytes": 442
+    }
+  ]
+}

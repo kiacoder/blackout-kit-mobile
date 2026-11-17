@@ -1,0 +1,43 @@
+{
+  "accessDecision": "local-only; no external environment available",
+  "overallPercent": 26,
+  "apkBuilt": false,
+  "androidRuntimeTested": false,
+  "checks": {
+    "parser": 24,
+    "standaloneJUnit": 17,
+    "ownership": 13,
+    "host": 30,
+    "python": 33
+  },
+  "logs": [
+    {
+      "path": ".buildlog/native-parser-hardened.txt",
+      "sha256": "6c6f4f45001fa7545214336283a54d0cc2b57af5ffcc0c3653fd17dcb486499d"
+    },
+    {
+      "path": ".buildlog/native-parser-hardened-fixed.txt",
+      "sha256": "b062fdc3791d06d8275380198edfe1bbe5ac68b79b8d899584f72c91b62ac4ab"
+    },
+    {
+      "path": ".buildlog/native-parser-hardened-api.txt",
+      "sha256": "40e330595533d3a15fb01f5adc11cf7780656ecff5d1fb4ffe3562f0ba067952"
+    },
+    {
+      "path": ".buildlog/local-only-junit.txt",
+      "sha256": "b8a2c62754b5a48d4040b8415931a7bedd7da237587baba70e3d27de75ef023a"
+    },
+    {
+      "path": ".buildlog/local-only-lifecycle.txt",
+      "sha256": "38bba5f1f7a7cfa8cf90b065aa2f98a514e71ea1685093550f7aee9a3a8a39dc"
+    },
+    {
+      "path": ".buildlog/local-only-host.txt",
+      "sha256": "725e95b7e415c3aca368c386008e695d4e2ea96cdb17d9bae44593b491646d03"
+    },
+    {
+      "path": ".buildlog/local-only-python.txt",
+      "sha256": "314177070f35481a6931cd82a75b81d709d44493b2d4487a6191477fd5fdd069"
+    }
+  ]
+}

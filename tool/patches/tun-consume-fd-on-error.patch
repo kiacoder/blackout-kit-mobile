@@ -1,0 +1,28 @@
+--- a/tun/tun_linux.go
++++ b/tun/tun_linux.go
+@@ -634,9 +634,12 @@
+ 
+ // CreateUnmonitoredTUNFromFD creates a Device from the provided file
+ // descriptor.
++// CreateUnmonitoredTUNFromFD consumes fd on both success and failure.
++// Callers must never close the raw number after this function returns an error.
+ func CreateUnmonitoredTUNFromFD(fd int) (Device, string, error) {
+ 	err := unix.SetNonblock(fd, true)
+ 	if err != nil {
++		unix.Close(fd)
+ 		return nil, "", err
+ 	}
+ 	file := os.NewFile(uintptr(fd), "/dev/tun")
+@@ -650,10 +653,12 @@
+ 	}
+ 	name, err := tun.Name()
+ 	if err != nil {
++		file.Close() // disarm the os.File finalizer, not only the raw FD
+ 		return nil, "", err
+ 	}
+ 	err = tun.initFromFlags(name)
+ 	if err != nil {
++		file.Close()
+ 		return nil, "", err
+ 	}
+ 	return tun, name, err

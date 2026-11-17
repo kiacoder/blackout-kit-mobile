@@ -1,0 +1,2 @@
+# Offline configuration factory only; not an Android application dependency.
+PyYAML==6.0.2

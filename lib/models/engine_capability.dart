@@ -1,7 +1,7 @@
 import '../services/localization_service.dart';
 
 /// Engine capability model.
-/// Mirrors Blackout Kit CLI's EngineCapability catalogue: ten engines, with the
+/// Extends Blackout Kit CLI's engine catalogue with runtime-gated adapters and the
 /// protocols and platform each one claims to support.
 ///
 /// IMPORTANT: this catalogue describes what the *family* of Blackout Kit
@@ -21,6 +21,7 @@ enum EngineType {
   shadowsocks,
   xray,
   singbox_proxy,
+  mihomo,
   amneziawg,
   sni,
   warp,
@@ -122,14 +123,24 @@ class EngineRegistry {
       requirements: ['Android 7.0+', 'iOS 14.0+'],
       category: 'Proxy Core',
     ),
+    'mihomo': const EngineCapability(
+      engine: EngineType.mihomo,
+      key: 'mihomo',
+      displayName: 'Mihomo (experimental)',
+      description: 'Full-document SOCKS bridge adapter; disabled in standard builds',
+      platformSupport: PlatformSupport.android,
+      compatibleProtocols: ['mihomo'],
+      requirements: ['Reviewed native binary', 'Opt-in development build', 'Device verification pending'],
+      category: 'Proxy Core',
+    ),
     'amneziawg': const EngineCapability(
       engine: EngineType.amneziawg,
       key: 'amneziawg',
       displayName: 'AmneziaWG',
       description: 'WireGuard variant with junk-packet header obfuscation against DPI',
       platformSupport: PlatformSupport.all,
-      compatibleProtocols: ['amneziawg', 'wireguard'],
-      requirements: ['Android 6.0+', 'sing-box runtime'],
+      compatibleProtocols: ['amneziawg'],
+      requirements: ['Official compatible AmneziaWG backend (not bundled)'],
       category: 'DPI Obfuscation',
     ),
     'wireguard': const EngineCapability(

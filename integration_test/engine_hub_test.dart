@@ -6,15 +6,16 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Blackout Kit 10-Engine Integration Tests', () {
-    test('All 10 Blackout CLI engines are registered in EngineRegistry', () {
+  group('Blackout engine catalogue tests', () {
+    test('Existing catalogue entries and experimental Mihomo are registered', () {
       final engines = EngineRegistry.getAll();
-      expect(engines.length, equals(10));
+      expect(engines.map((e) => e.key).toSet().length, engines.length);
 
       final keys = engines.map((e) => e.key).toSet();
       expect(keys, containsAll([
         'xray',
         'singbox_proxy',
+        'mihomo',
         'amneziawg',
         'wireguard',
         'openvpn',

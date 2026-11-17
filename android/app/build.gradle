@@ -71,6 +71,13 @@ android {
 
     defaultConfig {
         applicationId "com.blackoutkit.vpn"
+        // Opt-in development adapter, NOT a shipped/verified engine. No binary
+        // is downloaded at runtime. Supply reviewed GPL-compliant artifacts.
+        buildConfigField "boolean", "ENABLE_EXPERIMENTAL_MIHOMO",
+                (project.findProperty("enableMihomo") == "true").toString()
+        // Private integration only: disabled until Android acceptance tests pass.
+        buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS",
+                (project.findProperty("enableNativeTunnels") == "true").toString()
         // Raised from 21: libv2ray.aar declares minSdkVersion 24, and the
         // manifest merger hard-fails when the app asks for a lower one.
         minSdkVersion 24
@@ -112,8 +119,22 @@ android {
         }
     }
 
+    // Development artifacts live outside tracked jniLibs and only enter debug.
+    if (project.findProperty("enableNativeTunnels") == "true") {
+        def nativeDir = rootProject.file("../.cache/native-tunnel-jni")
+        ["arm64-v8a", "armeabi-v7a"].each { abi ->
+            ["awg", "wireguard"].each { engine ->
+                if (!new File(nativeDir, "${abi}/libblackout-${engine}.so").isFile()) {
+                    throw new GradleException("Missing staged native tunnel library; run tool/stage_native_tunnels.py")
+                }
+            }
+        }
+        sourceSets.debug.jniLibs.srcDir nativeDir
+    }
     buildTypes {
         release {
+            // Never enable an unverified tunnel in a distribution build.
+            buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"
             signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources true

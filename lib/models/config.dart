@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
+import 'package:yaml/yaml.dart';
 
 /// Canonical RFC 4122 UUID shape: 8-4-4-4-12 hex digits.
 ///
@@ -1031,7 +1032,7 @@ class Hysteria2Config extends Config {
   static Hysteria2Config? fromUri(String uri, {String? customName}) {
     try {
       uri = ConfigParser.normalizeScheme(uri.trim());
-      if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://') && !uri.startsWith('hysteria://')) return null;
+      if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://')) return null;
       // The official Hysteria 2 syntax allows a comma-separated port LIST or
       // a RANGE in the authority (`:443,8443`, `:20000-30000`). Uri parsing
       // can't make an int of that — tryParseUri throws FormatException and
@@ -1730,13 +1731,16 @@ class ConfigParser {
       // community config lists do — used to be dropped silently. Only the
       // scheme is touched; credentials and base64 payloads stay byte-identical.
       final trimmed = ConfigParser.normalizeScheme(text.trim());
+      if (MihomoConfig.looksLikeDocument(trimmed)) {
+        return MihomoConfig.fromDocument(trimmed, customName: customName);
+      }
       // URI-based single-line protocols
       if (trimmed.startsWith('sni://'))         return SniRelayConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('mhrv://'))        return MhrvRelayConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vless://'))       return VlessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vmess://'))       return VmessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('trojan://'))      return TrojanConfig.fromUri(trimmed, customName: customName);
-      if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://') || trimmed.startsWith('hysteria://'))
+      if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://'))
                                                 return Hysteria2Config.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('tuic://'))        return TuicConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('anytls://'))      return AnyTlsConfig.fromUri(trimmed, customName: customName);
@@ -1799,7 +1803,10 @@ class ConfigParser {
   static bool _looksLikeAmnezia(String content) {
     final lower = content.toLowerCase();
     if (lower.contains('junk_count')) return true;
-    for (final key in const ['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4']) {
+    for (final key in const [
+      'jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4',
+      'h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5',
+    ]) {
       // Match `key = value` at the start of a line, ignoring leading spaces.
       if (RegExp('^\\s*${key}\\s*=', multiLine: true, caseSensitive: false)
           .hasMatch(content)) {
@@ -1824,6 +1831,12 @@ class ConfigParser {
     if (text.trim().isEmpty) return [];
 
     var rawText = text.trim();
+    // Preserve a full engine document as one profile; never extract incidental
+    // share links from proxy-provider URLs/comments or split its YAML lines.
+    if (MihomoConfig.looksLikeDocument(rawText)) {
+      final profile = MihomoConfig.fromDocument(rawText);
+      return profile == null ? [] : [profile];
+    }
 
     // 0. Subscriptions wrapped by a client: sub://BASE64 / subscription://BASE64.
     //    These contain `://` after de-framing, so the whole-payload base64
@@ -1920,7 +1933,7 @@ class ConfigParser {
       // character class keeps `]` so a bracketed IPv6 authority
       // (`vless://id@[2001:db8::1]:443`) is not truncated at the bracket.
       final uriRegex = RegExp(
-        r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg|anytls|shadowtls|sni|mhrv)://[^\s<>"|]+',
+        r'(vless|vmess|trojan|ss|hy2|hysteria2|tuic|awg|amneziawg|anytls|shadowtls|sni|mhrv)://[^\s<>"|]+',
         caseSensitive: false,
       );
       final matches = uriRegex.allMatches(trimmed);
@@ -1960,5 +1973,96 @@ class ConfigParser {
     }
 
     return list;
+  }
+}
+
+
+/// Full Mihomo document; runtime availability is separate from import support.
+/// Kept verbatim in the encrypted profile vault. Native checker is authoritative.
+class MihomoConfig extends Config {
+  @override final String rawUri;
+  @override final String displayName;
+  final Map<String, dynamic> document;
+  MihomoConfig._(this.rawUri, this.displayName, this.document);
+  @override String get protocol => 'mihomo';
+  // A rule/group profile has no single network endpoint to latency-probe.
+  @override String get address => '';
+  @override int get port => 0;
+  @override bool validate() => document.isNotEmpty;
+  @override Future<bool> connect() async => false;
+  @override Future<void> disconnect() async {}
+  @override Future<bool> isRunning() async => false;
+
+  static bool looksLikeDocument(String text) =>
+      RegExp(r'^(proxies|proxy-providers|proxy-groups)\s*:', multiLine: true).hasMatch(text) ||
+      (text.startsWith('{') && RegExp(r'"(?:proxies|proxy-providers|proxy-groups)"\s*:').hasMatch(text));
+
+  static MihomoConfig? fromDocument(String text, {String? customName}) {
+    if (utf8.encode(text).length > 1024 * 1024) return null;
+    try {
+      // Convert YAML maps/lists into JSON-compatible data with a depth bound.
+      // The YAML package rejects duplicate mapping keys. Cyclic aliases hit
+      // the depth bound rather than overflowing the stack.
+      var nodes = 0;
+      dynamic plain(dynamic value, int depth) {
+        if (++nodes > 20000) throw const FormatException('Document expansion limit');
+        if (depth > 32) throw const FormatException('Document nesting limit');
+        if (value is Map) return value.map((k, v) {
+          if (k is! String) throw const FormatException('String keys required');
+          return MapEntry(k, plain(v, depth + 1));
+        });
+        if (value is List) return value.map((v) => plain(v, depth + 1)).toList();
+        if (value == null || value is String || value is num || value is bool) return value;
+        throw const FormatException('Invalid document value');
+      }
+      // YAML is also a JSON superset; use one duplicate-key-aware parser.
+      final value = plain(loadYaml(text), 0);
+      if (value is! Map || (value['proxies'] is! List && value['proxy-providers'] is! Map)) return null;
+      return MihomoConfig._(text, customName ?? 'Mihomo profile', Map<String, dynamic>.from(value));
+    } catch (_) {
+      return null; // Never echo credentials from parser exceptions.
+    }
+  }
+
+  /// SOCKS-bridge mode only. Keep proxy groups/rules intact, but the Android
+  /// service, not arbitrary imported listeners, owns the tunnel and ports.
+  String buildRuntimeJson({int socksPort = 10808}) {
+    if (socksPort < 1 || socksPort > 65535) throw ArgumentError('Invalid SOCKS port');
+    final data = Map<String, dynamic>.from(jsonDecode(jsonEncode(document)) as Map);
+    if (data['listeners'] != null || data['script'] != null || data['tunnels'] != null) {
+      throw ArgumentError('Custom listeners, tunnels and scripts are not supported by the Android bridge.');
+    }
+    for (final key in ['proxy-providers', 'rule-providers']) {
+      final providers = data[key];
+      if (providers is! Map) continue;
+      for (final entry in providers.entries) {
+        final value = entry.value;
+        if (value is! Map || value['type'] != 'http' ||
+            Uri.tryParse(value['url']?.toString() ?? '')?.scheme != 'https') {
+          throw ArgumentError('Only HTTPS providers are supported; local file providers are refused.');
+        }
+        final identity = sha256.convert(utf8.encode('$key:${entry.key}:${value['url']}'));
+        value['path'] = 'providers/$identity.yaml';
+      }
+    }
+    for (final key in ['external-controller', 'external-controller-tls',
+      'external-controller-unix', 'external-controller-pipe', 'external-ui',
+      'external-ui-url', 'external-ui-name', 'interface-name', 'routing-mark']) {
+      data.remove(key);
+    }
+    data.addAll({
+      'socks-port': socksPort, 'port': 0, 'mixed-port': 0,
+      'redir-port': 0, 'tproxy-port': 0, 'allow-lan': false,
+      'bind-address': '127.0.0.1', 'tun': {'enable': false},
+      'authentication': <String>[], 'log-level': 'warning',
+    });
+    final dns = data['dns'];
+    if (dns is Map) {
+      dns.remove('listen'); // No extra listening socket outside the VPN owner.
+      if (dns['enhanced-mode'] == 'fake-ip') {
+        throw ArgumentError('Fake-IP DNS requires a native TUN integration; use redir-host for the SOCKS bridge.');
+      }
+    }
+    return jsonEncode(data);
   }
 }

@@ -1,0 +1,402 @@
+{
+  "base": "9c4213dc51b7c2c7c21bc34fb53f5ff760dcbb62",
+  "scope": "Changed tracked and nonignored untracked files; checkpoint inventory excludes itself. Not a security certification.",
+  "files": [
+    {
+      "path": ".github/workflows/config-factory.yml",
+      "sha256": "43bf723f0a99e7a7540fb222b45edcac1ae3eb20c2b15a5b5cacb747dc99a316",
+      "bytes": 653,
+      "lines": 18
+    },
+    {
+      "path": ".github/workflows/engine-host.yml",
+      "sha256": "11b82960ed460b601b1aba37bf0f68b1e8d1b73dcd20f77f05e6380432fd30e6",
+      "bytes": 1635,
+      "lines": 31
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "1bf73ecec77da7b52417eab82f714cb829716e8b891223394f204be1169e67d0",
+      "bytes": 1993,
+      "lines": 105
+    },
+    {
+      "path": "ANDROID_INTEGRATION.md",
+      "sha256": "2ebcc8f2d753776f2711f4769439d35032428b13531033f8b7a164d307800bd3",
+      "bytes": 4512,
+      "lines": 70
+    },
+    {
+      "path": "CONFIGURATION_FORMATS.md",
+      "sha256": "75947a6419d833dc3dd12922971177369743d58b71ad231b405e7d33baba3141",
+      "bytes": 5772,
+      "lines": 87
+    },
+    {
+      "path": "CURRENT_STATUS.md",
+      "sha256": "4cf6c49bbca135de063081ec05c60d193914a89f72145388f618727ca9e504fd",
+      "bytes": 3172,
+      "lines": 49
+    },
+    {
+      "path": "ENGINE_SUPPORT.md",
+      "sha256": "d16a62beb41b5636b703f6e481afc327f2d02327d9540b6a369c179ef7424e5b",
+      "bytes": 2637,
+      "lines": 31
+    },
+    {
+      "path": "HANDOFF.md",
+      "sha256": "74367845b509563d58a3ef34a950265fd1e0beefa3a76bd130dc5d6f57e6d2c5",
+      "bytes": 3239,
+      "lines": 51
+    },
+    {
+      "path": "PERFORMANCE.md",
+      "sha256": "a866d4dcc7fbb5fe0e7365847a7cb46a0d0fad91aaf83e0c42ad86f092da7d2f",
+      "bytes": 2225,
+      "lines": 32
+    },
+    {
+      "path": "PROTOCOL_SUPPORT.md",
+      "sha256": "92d72235db01b77f70fc048f1c7193df2cd09d67a5902d663853a88496887951",
+      "bytes": 2382,
+      "lines": 35
+    },
+    {
+      "path": "README.md",
+      "sha256": "7268952287a35b3873ea90742f08f36a42ed3b484d6697e3de8f8fcd162cacfa",
+      "bytes": 28585,
+      "lines": 597
+    },
+    {
+      "path": "ROADMAP.md",
+      "sha256": "9afa6fe1479e6501aadf0c69dcbedb184537a95accfddb01c967bb14ea3a4ee4",
+      "bytes": 1695,
+      "lines": 22
+    },
+    {
+      "path": "SECURITY.md",
+      "sha256": "c7cb7c72f8b9a387942108194e32f25c41194b4e4ccb06dd4c8ba43ac063cc1e",
+      "bytes": 8855,
+      "lines": 222
+    },
+    {
+      "path": "SERVER_DEPLOYMENT.md",
+      "sha256": "8e6c6256053b565abc55d3c6acd0f70c528bebe8c8618e9290e6f0d75760bc97",
+      "bytes": 3239,
+      "lines": 47
+    },
+    {
+      "path": "TESTING.md",
+      "sha256": "2d24426279a8ad126c3abd057f2fd250970541f472423fcfae86b25c4443e0d1",
+      "bytes": 5331,
+      "lines": 80
+    },
+    {
+      "path": "android/app/build.gradle",
+      "sha256": "b262c7c26124822e06631f52c5a24d89f0ae8bc02f91a526ab03ba759b87b316",
+      "bytes": 9032,
+      "lines": 204
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt",
+      "sha256": "d4a0af084d291a98d63bd4a786017dc622d043fe383d0d4f7f4b99f5cdc65350",
+      "bytes": 33593,
+      "lines": 788
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCommands.kt",
+      "sha256": "6862374c056470ae3a3174c60e30bb503eed3c3570a9eeb31fb5ddcd1d85f05b",
+      "bytes": 4594,
+      "lines": 93
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt",
+      "sha256": "0a0160092c1d9cc0f1da7014863e0fb940ba88505100825bbbbf35965a81cbe4",
+      "bytes": 16166,
+      "lines": 366
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/NativeChildStop.kt",
+      "sha256": "e2b6b7b5912c048acf6a9d04bd486795cb0f7a730279269bceafb8f759d39d40",
+      "bytes": 1433,
+      "lines": 35
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/SubprocessLifecycle.kt",
+      "sha256": "594c4ca744b226aad9efb7f7ab57563856b464cde3d77227bd809bb6a9f0d9d8",
+      "bytes": 2515,
+      "lines": 56
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt",
+      "sha256": "e8bb261e0f4de14bfc1cbce0304886dfb9fd17812ff618b06061f621c3d82f87",
+      "bytes": 44763,
+      "lines": 1015
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/VpnSessionExecutor.kt",
+      "sha256": "1021256fdac0863304cf3867e5003b6d5c5a8c1204d7b26c5c002e9042ce9fc6",
+      "bytes": 3439,
+      "lines": 82
+    },
+    {
+      "path": "android/app/src/test/kotlin/com/blackoutkit/vpn/SubprocessLifecycleTest.kt",
+      "sha256": "b8959ba76779a75c0fa693382ab4b03372442170dfe4c0bf1a70bb94d246d63d",
+      "bytes": 4198,
+      "lines": 106
+    },
+    {
+      "path": "docs/ANDROID_API_CHECK_RESULTS.txt",
+      "sha256": "9b3198d263d37ecd7b7e249256cfbae9d12e4f24485bc54053007e4d479eb10c",
+      "bytes": 760,
+      "lines": 8
+    },
+    {
+      "path": "docs/CONFIG_FACTORY_TEST_RESULTS.txt",
+      "sha256": "624123613e3c689026eca4ddefab07a6c3633f2efac907d8ce6091aaa170ff4b",
+      "bytes": 3565,
+      "lines": 38
+    },
+    {
+      "path": "docs/CONTINUATION_REVIEW.md",
+      "sha256": "f0d5695250d330032415ec8a33456c80bd3c938043dd780191e225fcf8a83029",
+      "bytes": 7227,
+      "lines": 110
+    },
+    {
+      "path": "docs/ENGINE_HOST_TEST_RESULTS.txt",
+      "sha256": "725e95b7e415c3aca368c386008e695d4e2ea96cdb17d9bae44593b491646d03",
+      "bytes": 1439,
+      "lines": 31
+    },
+    {
+      "path": "docs/EXPANSION_AUDIT.md",
+      "sha256": "e65ec33faa78504b2f51515b7a93bdcac672fe81d0434a786da487569b6bb11d",
+      "bytes": 10211,
+      "lines": 147
+    },
+    {
+      "path": "docs/MIHOMO_ANDROID_COMPATIBILITY_RESULTS.txt",
+      "sha256": "2cb4138d75fbe104601b628829a8cc0d73c40b3e0aff0b9a87c98ee14d7420f3",
+      "bytes": 55,
+      "lines": 1
+    },
+    {
+      "path": "docs/MIHOMO_ANDROID_INTEGRITY_RESULTS.txt",
+      "sha256": "921ab4dfe9fa3778fb48c01b57dedc3fdc8c99cc07fee7b588691491f9819aeb",
+      "bytes": 307,
+      "lines": 4
+    },
+    {
+      "path": "docs/MIHOMO_CORE_PROGRESS.md",
+      "sha256": "98c9190f128aec435ce1f998b280fa1aca9202f4404fb5f24f44a7234f7f6cb9",
+      "bytes": 5171,
+      "lines": 85
+    },
+    {
+      "path": "docs/MIHOMO_CORE_RESULTS.json",
+      "sha256": "a68e20b83955909a62376c34e6c05f067c2a5a1c1d70c9ff6aff54208ad0913b",
+      "bytes": 1613,
+      "lines": 63
+    },
+    {
+      "path": "docs/MIHOMO_CORE_TEST_RESULTS.txt",
+      "sha256": "22c25990286a12e912bed1c2fa00edd8384a545c1763e3e3981364c1ed544923",
+      "bytes": 1273,
+      "lines": 16
+    },
+    {
+      "path": "docs/MIHOMO_LINUX_INTEGRITY_RESULTS.txt",
+      "sha256": "38f39a58668c337a8427cab7c3772ca01e0cb4e4eb43e12c120926715b7f477c",
+      "bytes": 307,
+      "lines": 4
+    },
+    {
+      "path": "docs/NATIVE_ARTIFACTS.md",
+      "sha256": "549abaf078f07d9c237e7cb13b472fa55200e8e0a0e9f0364ce84f80b9ae5966",
+      "bytes": 2180,
+      "lines": 56
+    },
+    {
+      "path": "docs/PRIVATE_BUILD_PREFLIGHT.txt",
+      "sha256": "329b92fb6f37e6880204738ebcd7ed00e3885cae9bd86464a810241c4560c398",
+      "bytes": 261,
+      "lines": 11
+    },
+    {
+      "path": "docs/TOOLCHAIN_PROGRESS.md",
+      "sha256": "c8123fd9c4a73af80897f8f57857be9c792174715f90a7c85b42ffba71cb0098",
+      "bytes": 5276,
+      "lines": 77
+    },
+    {
+      "path": "integration_test/engine_hub_test.dart",
+      "sha256": "d78621c8b9d56f5ff02881f1379c91e4c5381bcfc317f289f09710c2e3d9a0d0",
+      "bytes": 3470,
+      "lines": 100
+    },
+    {
+      "path": "lib/models/config.dart",
+      "sha256": "c042c1331c4a6ec4ea62b9da9a45e64c22273b2e4fc61f05bf9de39e755ca4da",
+      "bytes": 85890,
+      "lines": 2068
+    },
+    {
+      "path": "lib/models/engine_capability.dart",
+      "sha256": "63d5abb59999f08928d86f4e9f429d94aaf4ae21181f949ff835237bb65a0043",
+      "bytes": 10576,
+      "lines": 284
+    },
+    {
+      "path": "lib/screens/config_editor_screen.dart",
+      "sha256": "7b98c600ba7909d89d47ad1b44e783b33a3136dba4e0978e44e9ff2491ca9749",
+      "bytes": 20345,
+      "lines": 516
+    },
+    {
+      "path": "lib/screens/library_screen.dart",
+      "sha256": "56a25f82e66e4aed199e419a52faef327bb6d56d55cfce25203661491924ddf8",
+      "bytes": 35209,
+      "lines": 911
+    },
+    {
+      "path": "lib/screens/profile_export_screen.dart",
+      "sha256": "07bf1d6b71cb05ad74ce6a9cea1fefb5904a257248d0af71171c2eb8bcad5279",
+      "bytes": 3754,
+      "lines": 104
+    },
+    {
+      "path": "lib/services/profile_export_service.dart",
+      "sha256": "7d989eea9debeb6c26d4de50a55be8a37e3d3130b2260f6817682dd6c638c3d9",
+      "bytes": 1442,
+      "lines": 40
+    },
+    {
+      "path": "lib/services/singbox_config.dart",
+      "sha256": "0613ec7fdf478b4f27c09f3b5243abc43236cb0ec45cdfc9c7ab8c1cdb1f6223",
+      "bytes": 26281,
+      "lines": 703
+    },
+    {
+      "path": "lib/services/vpn_service.dart",
+      "sha256": "b03615bd91c820b9319bd9fd9728ef5c49ad240e3447d55215c0da2d1509e519",
+      "bytes": 26169,
+      "lines": 707
+    },
+    {
+      "path": "pubspec.lock",
+      "sha256": "7d5fd5a4c0adbf734da2f60f02f7966c7f868dfe13043e83412832c7c813b5c2",
+      "bytes": 31097,
+      "lines": 1059
+    },
+    {
+      "path": "pubspec.yaml",
+      "sha256": "ca00c67e012ed38709461e0f5ac9ed04ee9b030562174a0bdced33d4d2a78c0b",
+      "bytes": 2126,
+      "lines": 81
+    },
+    {
+      "path": "test/mihomo_profile_test.dart",
+      "sha256": "ff95a6e278a74b1b29bc1d51064a0298b5ea8fdf9af3532fdc1ef3d6c2d563e0",
+      "bytes": 3580,
+      "lines": 86
+    },
+    {
+      "path": "test/profile_export_test.dart",
+      "sha256": "9c4182b27d1de07c5c2019fd5d1a563706e8db62c984876bf09d3ef43e0ff103",
+      "bytes": 1362,
+      "lines": 38
+    },
+    {
+      "path": "test/protocol_identity_test.dart",
+      "sha256": "88ace99c350391ed99485914b4a7b708841046158ee57af09f0b1ea395ba6c66",
+      "bytes": 1166,
+      "lines": 33
+    },
+    {
+      "path": "test/screens/profile_export_screen_test.dart",
+      "sha256": "2ac8e9851542e042646639d374d54bc6ed99abb68b724ebde4731c106b1aff54",
+      "bytes": 1824,
+      "lines": 39
+    },
+    {
+      "path": "tool/build_mihomo_android.sh",
+      "sha256": "934cd96a61df198ea43bf6f43c2b360451febc81336ed247d2d0321021d6d1cd",
+      "bytes": 2635,
+      "lines": 50
+    },
+    {
+      "path": "tool/check_android_artifact.py",
+      "sha256": "bcd3430a2ef548ecc73f452b5b7f23869c472fdeb15f89e48d659b0c0858aae0",
+      "bytes": 3699,
+      "lines": 82
+    },
+    {
+      "path": "tool/check_android_engine_sources.sh",
+      "sha256": "eb653c9d2c5a3f1f8f3a45731320ae13dddd93f591b44b7c279102f207edcd07",
+      "bytes": 1926,
+      "lines": 35
+    },
+    {
+      "path": "tool/config_factory.py",
+      "sha256": "4a967926c5debe827ddf915e0dd8a7d85636e64d1a117f99cacff67640812781",
+      "bytes": 17436,
+      "lines": 361
+    },
+    {
+      "path": "tool/fetch_flutter_compile_api.py",
+      "sha256": "cc8b8743117c0fc43dd478b4cb43b230eff5d60d5329c02f51e552439ba5eee7",
+      "bytes": 2018,
+      "lines": 44
+    },
+    {
+      "path": "tool/kotlin/EngineHostTests.kt",
+      "sha256": "686f9ffe97faaf8a986eda8ec408f4fccdf701fc213d1c3be4babc71a677c975",
+      "bytes": 11010,
+      "lines": 225
+    },
+    {
+      "path": "tool/private_android_build.sh",
+      "sha256": "89a42ed23b8c630552c687e30ecc30eda2d9fa24e661ff385683607a46abc3c0",
+      "bytes": 2809,
+      "lines": 53
+    },
+    {
+      "path": "tool/requirements-config.txt",
+      "sha256": "ea012783c02ba2282ebefcc6e361db9d46e3233a84e8751aeec62c0200e6a337",
+      "bytes": 91,
+      "lines": 2
+    },
+    {
+      "path": "tool/test_engine_host.sh",
+      "sha256": "393a2ea7c2d1fff0490c9960e87e6db88d1e8ae15b4fe66c27cb41b16bbdd573",
+      "bytes": 829,
+      "lines": 16
+    },
+    {
+      "path": "tool/test_mihomo_core.py",
+      "sha256": "3c27344681f4fd94546232339c428959f427786b6eccdb5259d6915ad9ff231b",
+      "bytes": 14949,
+      "lines": 362
+    },
+    {
+      "path": "tool/tests/test_android_artifact.py",
+      "sha256": "f06ee1de8c4c1b9fa2e485fe7bbc23db39aa6b83ffca50219c45d1151601ddcd",
+      "bytes": 1404,
+      "lines": 40
+    },
+    {
+      "path": "tool/tests/test_config_factory.py",
+      "sha256": "a2809135932fa52789b0192783f4330f613ae209f677393bf882f2249213e4f8",
+      "bytes": 9540,
+      "lines": 219
+    },
+    {
+      "path": "tool/verify_mihomo_release.py",
+      "sha256": "acc1ab88578b33bc57d6043cd91c8f52f1cd91836e127639f9b20e1be5d8ae65",
+      "bytes": 2280,
+      "lines": 54
+    }
+  ]
+}

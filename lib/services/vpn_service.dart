@@ -110,6 +110,34 @@ class VPNService {
     }
   }
 
+  /// Runs the installed engine checker, not merely the document parser.
+  /// Does not start a VPN or claim that any server is reachable.
+  Future<Map<String, dynamic>> validateNativeConfiguration(Config config) async {
+    String engine;
+    String document;
+    if (config is MihomoConfig) {
+      engine = 'mihomo';
+      document = config.buildRuntimeJson();
+    } else if (isSingboxProtocol(config.protocol)) {
+      engine = 'sing-box';
+      document = const SingboxConfigBuilder().buildJson(config);
+    } else {
+      return {'valid': false, 'code': 'CHECK_UNAVAILABLE',
+        'message': 'No standalone native checker is exposed for this profile.'};
+    }
+    try {
+      final value = await platform.invokeMethod<Map>('validateEngineConfig',
+          {'engine': engine, 'config': document});
+      return value == null
+          ? {'valid': false, 'message': 'Native checker returned no result.'}
+          : Map<String, dynamic>.from(value);
+    } on PlatformException {
+      return {'valid': false, 'message': 'Native checker is busy or unavailable.'};
+    } on MissingPluginException {
+      return {'valid': false, 'message': 'Native checker is unavailable on this platform.'};
+    }
+  }
+
   /// Start a DNS-only session: change the resolver, route nothing.
   ///
   /// No config is needed and no core is started — the native side creates a
@@ -191,8 +219,41 @@ class VPNService {
 
       // Xray-family protocols are carried by the in-process core, which needs a
       // complete config document rather than loose credentials.
+      String? nativeTunnelConfig;
+      if (Platform.isAndroid &&
+          (config is WireGuardConfig || config is AmneziaWGConfig)) {
+        final engines = await getEngineInfo();
+        final nativeAvailable = config is AmneziaWGConfig
+            ? engines.nativeAmneziawgAvailable
+            : engines.nativeWireguardAvailable;
+        if (nativeAvailable) {
+          // Preserve all peers and modern AWG fields from the original profile.
+          // Native parsing rejects unsupported directives rather than dropping them.
+          nativeTunnelConfig = config.rawUri;
+        } else if (config is AmneziaWGConfig) {
+          _status = VPNStatus.error;
+          _lastError = 'AmneziaWG requires an enabled private native-tunnel build.';
+          return false;
+        }
+      }
+      String? mihomoJson;
+      if (config is MihomoConfig) {
+        final availability = await getEngineInfo();
+        if (!Platform.isAndroid || !availability.mihomoAvailable) {
+          _status = VPNStatus.error;
+          _lastError = 'Mihomo requires an experimental Android build with a verified native artifact.';
+          return false;
+        }
+        try {
+          mihomoJson = config.buildRuntimeJson(socksPort: defaultSocksPort);
+        } on ArgumentError catch (e) {
+          _status = VPNStatus.error;
+          _lastError = e.message.toString();
+          return false;
+        }
+      }
       String? xrayJson;
-      if (isXrayProtocol(config.protocol)) {
+      if (nativeTunnelConfig == null && isXrayProtocol(config.protocol)) {
         try {
           xrayJson = XrayConfigBuilder(
             socksPort: defaultSocksPort,
@@ -217,7 +278,7 @@ class VPNService {
       // document built in libbox mode; on Android nothing changes.
       String? singboxJson;
       final wantLibbox = Platform.isIOS;
-      if (wantLibbox || isSingboxProtocol(config.protocol)) {
+      if (nativeTunnelConfig == null && (wantLibbox || isSingboxProtocol(config.protocol))) {
         try {
           singboxJson = SingboxConfigBuilder(
             socksPort: defaultSocksPort,
@@ -238,7 +299,7 @@ class VPNService {
       // runner. The subprocess config above stays as the last-resort
       // fallback, so an old core that cannot serve a document still works.
       String? libboxJson;
-      if (Platform.isAndroid && kSingboxProtocols.contains(config.protocol)) {
+      if (nativeTunnelConfig == null && Platform.isAndroid && kSingboxProtocols.contains(config.protocol)) {
         try {
           libboxJson = SingboxConfigBuilder(
             socksPort: defaultSocksPort,
@@ -256,7 +317,7 @@ class VPNService {
       // config document built here. A protocol that produces neither is one
       // this build cannot dial - say so instead of handing the native layer a
       // connect request it will serve from a stale config file.
-      if (xrayJson == null && singboxJson == null) {
+      if (nativeTunnelConfig == null && xrayJson == null && singboxJson == null && mihomoJson == null) {
         _status = VPNStatus.error;
         _lastError = 'This build cannot dial "${config.protocol}" configs. '
             'Use a VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC or AnyTLS '
@@ -278,6 +339,8 @@ class VPNService {
         if (xrayJson != null) 'xrayConfig': xrayJson,
         if (singboxJson != null) 'singboxConfig': singboxJson,
         if (libboxJson != null) 'libboxConfig': libboxJson,
+        if (mihomoJson != null) 'mihomoConfig': mihomoJson,
+        if (nativeTunnelConfig != null) 'nativeTunnelConfig': nativeTunnelConfig,
       });
 
       if (result == true) {
@@ -317,6 +380,7 @@ class VPNService {
   static List<String> dnsServersForConfig(Config config) {
     final dns = switch (config) {
       WireGuardConfig c when c.dns.isNotEmpty => c.dns,
+      AmneziaWGConfig c when c.dns != null && c.dns!.isNotEmpty => c.dns!,
       _ => '',
     };
     if (dns.isEmpty) return const ['1.1.1.1', '8.8.8.8'];
@@ -573,6 +637,9 @@ class EngineAvailability {
   final List<String> xrayProtocols;
   final bool singboxAvailable;
   final String? singboxVersion;
+  final bool mihomoAvailable;
+  final bool nativeWireguardAvailable;
+  final bool nativeAmneziawgAvailable;
   final List<String> singboxProtocols;
 
   /// Protocols the native layer has explicitly declared unusable.
@@ -592,6 +659,9 @@ class EngineAvailability {
     required this.xrayProtocols,
     required this.singboxAvailable,
     this.singboxVersion,
+    this.mihomoAvailable = false,
+    this.nativeWireguardAvailable = false,
+    this.nativeAmneziawgAvailable = false,
     required this.singboxProtocols,
     required this.unavailableProtocols,
     this.configurableProtocols = const [],
@@ -604,6 +674,9 @@ class EngineAvailability {
         xrayVersion = null,
         xrayProtocols = const [],
         singboxAvailable = false,
+        mihomoAvailable = false,
+        nativeWireguardAvailable = false,
+        nativeAmneziawgAvailable = false,
         singboxVersion = null,
         singboxProtocols = const [],
         unavailableProtocols = const [],
@@ -620,6 +693,9 @@ class EngineAvailability {
       xrayProtocols: strings('xrayProtocols'),
       singboxAvailable: map['singboxAvailable'] == true,
       singboxVersion: map['singboxVersion'] as String?,
+      mihomoAvailable: map['mihomoAvailable'] == true,
+      nativeWireguardAvailable: map['nativeWireguardAvailable'] == true,
+      nativeAmneziawgAvailable: map['nativeAmneziawgAvailable'] == true,
       singboxProtocols: strings('singboxProtocols'),
       unavailableProtocols: strings('unavailableProtocols'),
       configurableProtocols: strings('configurableProtocols'),
@@ -631,6 +707,9 @@ class EngineAvailability {
   List<String> get supportedProtocols => [
         if (xrayAvailable) ...xrayProtocols,
         if (singboxAvailable) ...singboxProtocols,
+        if (mihomoAvailable) 'mihomo',
+        if (nativeWireguardAvailable) 'wireguard',
+        if (nativeAmneziawgAvailable) 'amneziawg',
       ];
 
   bool canConnect(String protocol) =>
@@ -644,6 +723,9 @@ class EngineAvailability {
       return 'No engine is bundled in this build.';
     }
     final bundled = <String>[
+      if (mihomoAvailable) 'Mihomo (experimental)',
+      if (nativeWireguardAvailable) 'WireGuard native (experimental)',
+      if (nativeAmneziawgAvailable) 'AmneziaWG native (experimental)',
       if (xrayAvailable) 'Xray ${xrayVersion ?? ""}'.trim(),
       if (singboxAvailable) 'sing-box ${singboxVersion ?? ""}'.trim(),
     ];

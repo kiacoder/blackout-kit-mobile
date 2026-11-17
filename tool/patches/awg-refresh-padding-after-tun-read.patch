@@ -1,0 +1,26 @@
+--- a/device/send.go
++++ b/device/send.go
+@@ -338,13 +338,21 @@
+ 
+ 		// read packets
+ 		count, readErr = device.tun.device.Read(bufs, sizes, offset)
++		// Read can block across initial UAPI configuration. Its offset belongs
++		// to the old S4 value, not necessarily to the active wire format.
++		padding = device.paddings.transport.Load()
++		packetOffset := MessageTransportHeaderSize + int(padding)
+ 		for i := 0; i < count; i++ {
+-			if sizes[i] < 1 {
++			if sizes[i] < 1 || sizes[i] > len(bufs[i])-offset || sizes[i] > len(bufs[i])-packetOffset {
+ 				continue
+ 			}
++			if packetOffset != offset {
++				// copy handles overlapping source/destination in either direction.
++				copy(bufs[i][packetOffset:packetOffset+sizes[i]], bufs[i][offset:offset+sizes[i]])
++			}
+ 
+ 			elem := elems[i]
+-			elem.packet = bufs[i][offset : offset+sizes[i]]
++			elem.packet = bufs[i][packetOffset : packetOffset+sizes[i]]
+ 			elem.padding = padding
+ 
+ 			// lookup peer

@@ -5,9 +5,10 @@
 > execution and kill-switch verification remain outstanding. Counts below are
 > the earlier integration checkpoint, not the latest liveness run.
 
-**Overall: 26%. Source-integrated and narrow-compiled, not APK-built or
-Android-runtime verified.** This supersedes the earlier statement that no native
-service/Flutter wiring exists. It does not supersede the APK/device acceptance gates.
+**Current checkpoint: source-integrated, freshly rebuilt, and packaged into an
+opt-in DEBUG APK; Android-runtime behavior is still unverified.** The four WG/AWG
+libraries are present in the APK only when the explicit debug Gradle property is used.
+No physical-device connection, leak, handover, or kill-switch claim is made.
 
 ## Implemented
 
@@ -50,24 +51,29 @@ After rebuilding both engines with `tool/build_android_go_backend.sh`:
 
 ```sh
 python3 tool/stage_native_tunnels.py .cache/awg-integration-build .cache/wireguard-integration-build
-# On a complete private Flutter/Gradle development host:
-export ORG_GRADLE_PROJECT_enableNativeTunnels=true
-flutter build apk --debug --target-platform android-arm,android-arm64
+# Canonical debug packaging path; passes the Gradle property explicitly:
+cd android
+./gradlew :app:assembleDebug -PenableNativeTunnels=true
 ```
+
+On Windows, `tool/build_native_debug_windows.ps1` performs the same build and also
+verifies the generated debug BuildConfig flag plus all four APK entries. A plain
+`flutter build apk` did not reliably propagate `ORG_GRADLE_PROJECT_enableNativeTunnels`
+on the tested Windows Flutter host, so it is not the canonical opt-in command.
 
 Staging checks hashes from each build manifest and the API/ABI metadata gates,
 requires both engines/both ABIs, and refuses to replace existing staging. It is
 not independent authenticity verification, license clearance or device approval.
-The opt-in APK command above has **not** been run successfully here.
+The opt-in DEBUG APK build now succeeds and packages AWG/WG for both ARM64 and ARMv7.
 
 ## Executed checks
 
 * Four native libraries rebuilt: AWG + WG, ARM64 + ARM32, API24 metadata gates,
   six upstream JNI symbols each. Distinct SONAMEs inspected with llvm-readelf.
 * Kotlin JNI declarations inspected using javap: expected static native methods.
-* Full service/plugin source API check passed against both the previously pinned
-  API jar and the newly recovered AOSP API34 jar. Flutter Java declarations are
-  source-only; this is **not** Flutter Java/Dart compilation, Gradle or an APK.
+* The earlier service/plugin source API check passed against both the pinned API
+  jar and recovered AOSP API34 jar. That narrow evidence is now superseded by the
+  successful Flutter analysis/tests, app-module Gradle tests, and debug APK builds.
 * Native ownership coordinator: **10 passing JVM checks with a fake backend**.
   These cover handoff, failure, protection, restart and retained failed cleanup;
   they do not execute JNI or Android FDs.
@@ -79,8 +85,9 @@ The opt-in APK command above has **not** been run successfully here.
   passed**. WG full core race suite: **20 passed, 1 skipped**.
 * Both engines: **10 isolated Linux kernel-TUN checks passed each**, including
   TCP/UDP-DNS, outage/recovery and repeated teardown. Not Android networking.
-* Added four Flutter availability regression tests. **Not run:** Flutter/Dart
-  remain unavailable. Existing Flutter tests are likewise not claimed passing.
+* Flutter is now available on the tested Windows host. The full suite passes
+  **545/545**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
+  exits 0, and `:app:testDebugUnitTest` passes for the Blackout app module.
 
 `NATIVE_ANDROID_INTEGRATION_RESULTS.json` records artifact/log hashes and counts.
 Private raw logs remain ignored in `.buildlog`.
@@ -111,18 +118,19 @@ SDK Manager installation**: adb/platform-tools, emulator, accepted release
 licenses and Gradle-requested build-tool compatibility/dependencies remain
 unverified. Do not label it an official SDK distribution. No minSdk change.
 
-Latest build preflight exits **2**: Flutter and Dart missing. No APK attempted.
-Java, API34 platform, build-tools, API24 NDK compilers, CMake and Ninja are found.
-AGP7.4.2/Gradle7.6.6 resolution and compatibility with reconstructed tools still
-require a real build. The SDK recovery is not evidence that Gradle will succeed.
+The current Windows host has Flutter 3.24, Java 17, Android API34/build-tools,
+and the API24 NDK compiler path needed for these development artifacts. A normal
+debug APK and the opt-in native-enabled debug APK both build successfully. The
+native-enabled APK is 168,934,503 bytes in the recorded run and contains all four
+`libblackout-awg.so` / `libblackout-wireguard.so` entries. Release BuildConfig was
+separately generated with the opt-in property present and still forces the native
+flag to `false`.
 
 ## Remaining acceptance gates
 
-1. Complete Flutter/Dart and Gradle dependency recovery; run Dart analysis,
-   Flutter tests, Gradle unit tests and opt-in debug APK packaging. Verify no
-   native libraries enter release artifacts.
-2. Real Android JNI error/FD tests, protection and UID-routing behavior,
-   WG/AWG connection/handshake, TCP/UDP/DNS and no leaks.
+1. Real Android JNI error/FD tests, protection and UID-routing behavior,
+   including loading both packaged Go runtimes on an Android device.
+2. Real WG/AWG connection/handshake, TCP/UDP/DNS and no-leak tests.
 3. Network change/reconnect, background/suspend, repeated start-stop,
    simultaneous loaded Go runtimes and resource cleanup on physical devices.
 4. Native fatal-error monitoring is not implemented. A retained service TUN

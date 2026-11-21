@@ -1,15 +1,17 @@
 # Native build and real kernel-TUN progress
 
 > **Latest source integration:** [NATIVE_ANDROID_INTEGRATION.md](NATIVE_ANDROID_INTEGRATION.md).
-> WG/AWG now have gated service/channel wiring and distinct debug libraries.
-> APK and Android runtime gates remain unmet; overall remains 26%.
+> WG/AWG now have gated service/channel wiring, freshly rebuilt distinct debug
+> libraries, and a verified opt-in debug APK packaging path. Android runtime and
+> physical-device acceptance gates remain unmet.
 
 > **Superseding AWG timeout evidence:** see [AWG_TIMEOUT_FIX.md](AWG_TIMEOUT_FIX.md).
 > The initial-read defect is reproduced and patched in the build/test path;
 > Android service integration and device verification remain outstanding.
 
-**Overall: 26%. No complete APK, new Android VPN engine, physical-device test,
-server deployment, push or publication is claimed.**
+**Current checkpoint: native-enabled DEBUG APK packaging is proven; no
+physical-device VPN execution, server deployment, release publication, or
+production-readiness claim is made.**
 
 The accepted 66-file inventory is preserved byte-for-byte:
 `docs/CHANGE_REVIEW_INVENTORY.json` SHA-256
@@ -43,15 +45,12 @@ Full JDK enabled compilation of official JUnit source, tag r4.13.2/revision
 string says 4.13.2-SNAPSHOT; this is a source build at that release tag, not a claimed
 Maven binary. This run is real JUnit but **not Gradle test execution**.
 
-Still unavailable: executable Flutter/Dart SDK, complete Android SDK/build-tools
-installation, Gradle dependency resolution, emulator/physical Android device.
-Searches found SDK managers/wrappers and an obsolete third-party Dart2.12.3 cache,
-not a verified usable Flutter3.24/Dart3.5 distribution; that cache was not executed.
-AOSP build-tool ingredients were inspected but not mislabelled an installed SDK.
-The Android API jar remains a narrow-check input. Private runner enumeration still
-returns 403. No private runner endpoint was discovered or remote job dispatched.
-See BUILD_PREFLIGHT_NATIVE_RECOVERY.txt. Complete APK and Flutter/Gradle regressions
-remain blocked; no minSdk increase was made.
+A later Windows-host continuation recovered the missing app-build side: Flutter
+3.24/Dart, Java 17, Android API34/build-tools, platform-tools and Gradle dependency
+resolution are now usable. The full Flutter suite passes 545/545, CI-style analyze
+exits 0, the Blackout app-module Android unit tests pass, and both normal and
+native-enabled debug APKs build. No Android emulator or physical Android device is
+connected, so runtime VPN/JNI acceptance is still blocked. No minSdk increase was made.
 
 ## B. Mihomo
 No compatible Mihomo Android artifact was obtained. The already verified upstream
@@ -193,11 +192,19 @@ bash tool/test_native_go_backends.sh awg .cache/references/amneziawg-android --k
 ```
 AWG's aggregate script may stop at the documented intermittent race failure. This
 must remain visible. Kernel fixtures require passwordless sudo, ip, nsenter and
-unshare; do not run them on a production host. For the complete app, provision
-Flutter3.24/Dart3.5+, full SDK/build-tools/Gradle access, then use
-`tool/private_android_build.sh --build`. This full build has NOT succeeded here.
+unshare; do not run them on a production host.
 
-Next gates: resolve the AWG return-packet failure; fix/test JNI ownership/error
-paths and distinct library loading; obtain the full private Flutter/Android build
-and physical device; resolve exact Mihomo dependencies and build API24; then
-finish VPNService integration. OpenVPN3 JNI remains unimplemented.
+For native DEBUG packaging after staging the four libraries, use the explicit
+Gradle property rather than relying on Flutter to forward an environment property:
+```
+cd android
+./gradlew :app:assembleDebug -PenableNativeTunnels=true
+```
+On Windows, `tool/build_native_debug_windows.ps1` additionally verifies the debug
+BuildConfig flag and all four packaged APK entries. Release BuildConfig still forces
+the native flag false even when the property is supplied.
+
+Next gates: Android device/JNI execution, real WG/AWG handshakes and leak tests,
+network handover/background/repeated-start-stop testing, then distribution-license
+review. Mihomo API24 source-build work and OpenVPN3 JNI remain separate unfinished
+tracks.

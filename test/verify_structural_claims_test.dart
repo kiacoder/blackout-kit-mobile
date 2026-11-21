@@ -170,4 +170,14 @@ void main() {
       expect(commands.contains('process.destroyForcibly()'), isTrue);
     });
   });
+
+  group('native tunnel packaging gate', () {
+    test('staged WG/AWG libraries are debug-only and release stays disabled', () {
+      final gradle = source('android/app/build.gradle');
+      expect(gradle.contains('sourceSets.debug.jniLibs.srcDir nativeDir'), isTrue);
+      expect(
+          gradle.contains('buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"'),
+          isTrue);
+    });
+  });
 }

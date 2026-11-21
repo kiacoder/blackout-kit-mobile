@@ -82,23 +82,26 @@ void main() {
           'ABI, or Seq.setContext/initCoreEnv failed.',
     );
     expect(info.xrayProtocols, contains('vless'));
-    expect(info.singboxAvailable, isFalse,
-        reason: 'this build bundles no sing-box runtime');
     expect(info.canConnect('vless'), isTrue);
-    expect(info.canConnect('hysteria2'), isFalse);
+    if (info.singboxAvailable) {
+      expect(info.canConnect('hysteria2'), isTrue);
+    } else {
+      expect(info.canConnect('hysteria2'), isFalse);
+    }
   });
 
-  testWidgets('native WG/AWG JNI probes load on this device', (tester) async {
-    final info = await vpn.getEngineInfo();
-
-    expect(info.nativeWireguardAvailable, isTrue,
-        reason: 'WireGuard JNI did not load/probe. The native availability path '
-            'loads libblackout-wireguard.so, calls wgVersion(), and checks '
-            'wgIsClosed(-1).');
-    expect(info.nativeAmneziawgAvailable, isTrue,
-        reason: 'AmneziaWG JNI did not load/probe. The native availability path '
-            'loads libblackout-awg.so, calls awgVersion(), and checks '
-            'awgIsClosed(-1).');
+  testWidgets('native WG/AWG JNI probes remain stable on this device', (tester) async {
+    // The original dual-library design crashed asynchronously after both Go
+    // c-shared runtimes were loaded. Repeated capability reads keep this test
+    // alive long enough to catch that class of coexistence regression.
+    for (var i = 0; i < 20; i++) {
+      final info = await vpn.getEngineInfo();
+      expect(info.nativeWireguardAvailable, isTrue,
+          reason: 'WireGuard JNI failed combined-runtime probe at iteration $i.');
+      expect(info.nativeAmneziawgAvailable, isTrue,
+          reason: 'AmneziaWG JNI failed combined-runtime probe at iteration $i.');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
   }, skip: !nativeAcceptance);
 
   testWidgets('VpnService.prepare() succeeds', (tester) async {
@@ -157,24 +160,23 @@ void main() {
         reason: 'disconnect() reported success but the tunnel is still running');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
-  testWidgets('an unbundled protocol is refused, not black-holed', (tester) async {
-    // hysteria2 needs a sing-box runtime that this build does not bundle. The
-    // service must refuse rather than install a default route it cannot serve —
-    // a tunnel that comes up with no working engine black-holes all traffic.
-    final config = ConfigParser.parse(
-      'hysteria2://password@127.0.0.1:1?sni=example.com#UnbundledProbe',
-    );
+  testWidgets('an unavailable protocol is refused, not black-holed', (tester) async {
+    // OpenVPN is explicitly reported unavailable by the Android engine-info
+    // layer. The service must refuse it rather than install a default route it
+    // cannot serve; a tunnel with no working engine would black-hole traffic.
+    final config = ConfigParser.parse('''
+client
+dev tun
+proto udp
+remote 127.0.0.1 1
+''');
 
-    if (config == null) {
-      // The parser may not produce a Hysteria2Config; nothing to assert.
-      return;
-    }
-
+    expect(config, isNotNull, reason: 'OpenVPN probe profile did not parse');
     expect(await vpn.prepare(), isTrue);
-    final connected = await vpn.connect(config);
+    final connected = await vpn.connect(config!);
 
     expect(connected, isFalse,
-        reason: 'a protocol with no bundled engine must not report success');
+        reason: 'an explicitly unavailable protocol must not report success');
     expect(await vpn.isRunning(), isFalse,
         reason: 'a refused connection must not leave a tunnel up');
   }, timeout: const Timeout(Duration(minutes: 2)));

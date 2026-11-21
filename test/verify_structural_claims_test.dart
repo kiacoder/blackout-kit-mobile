@@ -172,9 +172,17 @@ void main() {
   });
 
   group('native tunnel packaging gate', () {
-    test('staged WG/AWG libraries are debug-only and release stays disabled', () {
+    test('combined WG/AWG runtime is debug-only and release stays disabled', () {
       final gradle = source('android/app/build.gradle');
+      final engine = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/NativeTunnelEngine.kt');
+      expect(gradle.contains('libblackout-tunnels.so'), isTrue);
+      expect(gradle.contains('Refusing stale dual-Go-runtime native tunnel staging'),
+          isTrue);
       expect(gradle.contains('sourceSets.debug.jniLibs.srcDir nativeDir'), isTrue);
+      expect(engine.contains('System.loadLibrary("blackout-tunnels")'), isTrue);
+      expect(engine.contains('System.loadLibrary("blackout-awg")'), isFalse);
+      expect(engine.contains('System.loadLibrary("blackout-wireguard")'), isFalse);
       expect(
           gradle.contains('buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"'),
           isTrue);

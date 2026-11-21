@@ -18,10 +18,8 @@ if ($Abi -notmatch '^arm64-v8a$|^armeabi-v7a$') {
 
 $Staging = Join-Path $Root '.cache\native-tunnel-jni'
 foreach ($Relative in @(
-  'arm64-v8a\libblackout-awg.so',
-  'arm64-v8a\libblackout-wireguard.so',
-  'armeabi-v7a\libblackout-awg.so',
-  'armeabi-v7a\libblackout-wireguard.so'
+  'arm64-v8a\libblackout-tunnels.so',
+  'armeabi-v7a\libblackout-tunnels.so'
 )) {
   if (-not (Test-Path (Join-Path $Staging $Relative) -PathType Leaf)) {
     throw "Missing staged native tunnel library: $Relative"
@@ -32,7 +30,7 @@ Push-Location $Root
 try {
   $OldGradleOpts = $env:GRADLE_OPTS
   $env:GRADLE_OPTS = '-Dorg.gradle.project.enableNativeTunnels=true'
-  flutter test integration_test/native_tunnel_test.dart -d $DeviceId --dart-define=BLACKOUT_NATIVE_ACCEPTANCE=true
+  flutter drive -d $DeviceId --driver test_driver/integration_test.dart --target integration_test/native_tunnel_test.dart --dart-define=BLACKOUT_NATIVE_ACCEPTANCE=true
   if ($LASTEXITCODE -ne 0) { throw "Native Android acceptance failed with exit code $LASTEXITCODE." }
 }
 finally {

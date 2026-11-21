@@ -1,17 +1,17 @@
 # Native build and real kernel-TUN progress
 
 > **Latest source integration:** [NATIVE_ANDROID_INTEGRATION.md](NATIVE_ANDROID_INTEGRATION.md).
-> WG/AWG now have gated service/channel wiring, freshly rebuilt distinct debug
-> libraries, and a verified opt-in debug APK packaging path. Android runtime and
-> physical-device acceptance gates remain unmet.
+> WG/AWG now have gated service/channel wiring and a combined one-Go-runtime
+> `libblackout-tunnels.so` for both ARM64 and ARMv7. The native-enabled debug APK
+> and the current physical ARM64 Android acceptance suite pass.
 
 > **Superseding AWG timeout evidence:** see [AWG_TIMEOUT_FIX.md](AWG_TIMEOUT_FIX.md).
 > The initial-read defect is reproduced and patched in the build/test path;
 > Android service integration and device verification remain outstanding.
 
-**Current checkpoint: native-enabled DEBUG APK packaging is proven; no
-physical-device VPN execution, server deployment, release publication, or
-production-readiness claim is made.**
+**Current checkpoint: native-enabled DEBUG APK packaging and JNI/coexistence on a
+physical ARM64 Android device are proven. Real native WG/AWG tunnel handshakes,
+traffic/leak testing, release publication and production readiness are not.**
 
 The accepted 66-file inventory is preserved byte-for-byte:
 `docs/CHANGE_REVIEW_INVENTORY.json` SHA-256
@@ -47,10 +47,11 @@ Maven binary. This run is real JUnit but **not Gradle test execution**.
 
 A later Windows-host continuation recovered the missing app-build side: Flutter
 3.24/Dart, Java 17, Android API34/build-tools, platform-tools and Gradle dependency
-resolution are now usable. The full Flutter suite passes 545/545, CI-style analyze
+resolution are now usable. The full Flutter suite passes 546/546, CI-style analyze
 exits 0, the Blackout app-module Android unit tests pass, and both normal and
-native-enabled debug APKs build. No Android emulator or physical Android device is
-connected, so runtime VPN/JNI acceptance is still blocked. No minSdk increase was made.
+native-enabled debug APKs build. A Redmi 13 (arm64-v8a, Android 16/API36) is now
+used for physical-device acceptance; JNI loading and repeated WG/AWG availability
+probes pass with the combined runtime. No minSdk increase was made.
 
 ## B. Mihomo
 No compatible Mihomo Android artifact was obtained. The already verified upstream
@@ -203,12 +204,14 @@ cd android
 ./gradlew :app:assembleDebug -PenableNativeTunnels=true
 ```
 On Windows, `tool/build_native_debug_windows.ps1` additionally verifies the debug
-BuildConfig flag and all four packaged APK entries. Release BuildConfig still forces
-the native flag false even when the property is supplied. With one connected ARM
-Android device, `tool/run_native_android_acceptance_windows.ps1` runs the real
-Flutter→MethodChannel→JNI acceptance suite and enables the WG/AWG availability probe.
+BuildConfig flag and both combined-runtime APK entries. Release BuildConfig still
+forces the native flag false even when the property is supplied. With one connected
+ARM Android device, `tool/run_native_android_acceptance_windows.ps1` uses
+`flutter drive` to run the real Flutter→MethodChannel→JNI acceptance suite.
 
-Next gates: Android device/JNI execution, real WG/AWG handshakes and leak tests,
-network handover/background/repeated-start-stop testing, then distribution-license
-review. Mihomo API24 source-build work and OpenVPN3 JNI remain separate unfinished
-tracks.
+A first dual-library device run loaded both engines but reproduced a Go runtime
+fatal (`addspecial on invalid pointer`). WG and AWG were therefore rebuilt into one
+`libblackout-tunnels.so`; the same Redmi acceptance suite then passed 7/7 without the
+fatal. Next gates are native WG/AWG start/stop + FD/socket ownership, real handshakes
+and leak tests, then handover/background/repeated-start-stop and license review.
+Mihomo API24 source-build work and OpenVPN3 JNI remain separate unfinished tracks.

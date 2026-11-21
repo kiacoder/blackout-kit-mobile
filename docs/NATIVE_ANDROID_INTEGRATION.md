@@ -5,10 +5,11 @@
 > execution and kill-switch verification remain outstanding. Counts below are
 > the earlier integration checkpoint, not the latest liveness run.
 
-**Current checkpoint: source-integrated, freshly rebuilt, and packaged into an
-opt-in DEBUG APK; Android-runtime behavior is still unverified.** The four WG/AWG
-libraries are present in the APK only when the explicit debug Gradle property is used.
-No physical-device connection, leak, handover, or kill-switch claim is made.
+**Current checkpoint: source-integrated, freshly rebuilt, packaged, and JNI-tested
+on a physical ARM64 Android device.** A dual-library design reproduced a Go runtime
+fatal (`addspecial on invalid pointer`) on a Redmi 13, so WG and AWG now share one
+`libblackout-tunnels.so` / one Go runtime. The physical-device acceptance suite passes;
+real WG/AWG handshake, traffic, leak, handover and kill-switch acceptance remain open.
 
 ## Implemented
 
@@ -36,9 +37,9 @@ No physical-device connection, leak, handover, or kill-switch claim is made.
 * Native tunnels have no SOCKS listener. Exit-IP lookup returns unavailable
   instead of probing a stale listener or making a direct request from the
   excluded app UID and falsely reporting its address as the tunnel exit.
-* WG/AWG use distinct `libblackout-wireguard.so` / `libblackout-awg.so` filenames
-  and SONAMEs. JNI declarations retain upstream class/method names; R8 keep
-  rules protect those names. `GetConfig` is deliberately not exposed to Kotlin.
+* WG/AWG share one `libblackout-tunnels.so` so Android loads only one Go c-shared
+  runtime. Both original JNI class/method names remain exported; R8 keep rules
+  protect those names. `GetConfig` is deliberately not exposed to Kotlin.
 
 ## Private debug packaging
 
@@ -47,34 +48,35 @@ property `enableNativeTunnels=true`. Release builds explicitly force it false.
 Libraries are sourced only from a debug source set under ignored `.cache`;
 no binary is downloaded at runtime or committed to tracked jniLibs.
 
-After rebuilding both engines with `tool/build_android_go_backend.sh`:
+After rebuilding the combined runtime with `tool/build_android_combined_tunnels.sh`:
 
 ```sh
-python3 tool/stage_native_tunnels.py .cache/awg-integration-build .cache/wireguard-integration-build
+python3 tool/stage_native_tunnels.py .cache/combined-tunnels-build
 # Canonical debug packaging path; passes the Gradle property explicitly:
 cd android
 ./gradlew :app:assembleDebug -PenableNativeTunnels=true
 ```
 
 On Windows, `tool/build_native_debug_windows.ps1` performs the same build and also
-verifies the generated debug BuildConfig flag plus all four APK entries. A plain
+verifies the generated debug BuildConfig flag plus the combined library for both APK ABIs. A plain
 `flutter build apk` did not reliably propagate `ORG_GRADLE_PROJECT_enableNativeTunnels`
 on the tested Windows Flutter host, so it is not the canonical opt-in command.
 For a connected ARM device, `tool/run_native_android_acceptance_windows.ps1` runs
 the physical-device integration suite with the native Gradle property and the
 `BLACKOUT_NATIVE_ACCEPTANCE` Dart gate enabled.
 
-Staging checks hashes from each build manifest, the API/ABI metadata gates, and
-all seven required JNI exports directly from each ELF dynamic symbol table. It no
-longer trusts `JNI_SYMBOLS.txt` as evidence of the binary's exported lifecycle ABI.
-It requires both engines/both ABIs and refuses to replace existing staging. This is
-not independent authenticity verification, license clearance or device approval.
-The opt-in DEBUG APK build now succeeds and packages AWG/WG for both ARM64 and ARMv7.
+Staging checks the build manifest hashes, API/ABI metadata gates, and all fourteen
+required WG+AWG JNI exports directly from each ELF dynamic symbol table. It does not
+trust a sidecar symbol list as evidence of the binary's exported lifecycle ABI.
+It requires both engine JNI surfaces in the same ELF for both ABIs and refuses to
+replace existing staging. Gradle also rejects stale separate WG/AWG libraries to
+prevent the dual-Go-runtime crash from returning. This is not license clearance or
+production approval. The opt-in DEBUG APK packages the combined runtime for ARM64 and ARMv7.
 
 ## Executed checks
 
-* Four native libraries rebuilt: AWG + WG, ARM64 + ARM32, API24 metadata gates,
-  seven upstream JNI symbols each. Distinct SONAMEs inspected with llvm-readelf.
+* The combined native runtime was rebuilt for ARM64 + ARM32 with API24 metadata
+  gates and all fourteen WG+AWG JNI exports verified directly from each ELF.
 * Kotlin JNI declarations inspected using javap: expected static native methods.
 * The earlier service/plugin source API check passed against both the pinned API
   jar and recovered AOSP API34 jar. That narrow evidence is now superseded by the
@@ -91,7 +93,7 @@ The opt-in DEBUG APK build now succeeds and packages AWG/WG for both ARM64 and A
 * Both engines: **10 isolated Linux kernel-TUN checks passed each**, including
   TCP/UDP-DNS, outage/recovery and repeated teardown. Not Android networking.
 * Flutter is now available on the tested Windows host. The full suite passes
-  **545/545**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
+  **546/546**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
   exits 0, and `:app:testDebugUnitTest` passes for the Blackout app module.
 
 `NATIVE_ANDROID_INTEGRATION_RESULTS.json` records artifact/log hashes and counts.
@@ -126,22 +128,21 @@ unverified. Do not label it an official SDK distribution. No minSdk change.
 The current Windows host has Flutter 3.24, Java 17, Android API34/build-tools,
 and the API24 NDK compiler path needed for these development artifacts. A normal
 debug APK and the opt-in native-enabled debug APK both build successfully. The
-native-enabled APK is 168,934,503 bytes in the recorded run and contains all four
-`libblackout-awg.so` / `libblackout-wireguard.so` entries. Release BuildConfig was
+current native-enabled APK contains `libblackout-tunnels.so` for ARM64 and ARMv7 and
+contains no separate `libblackout-awg.so` / `libblackout-wireguard.so` entries. Release BuildConfig was
 separately generated with the opt-in property present and still forces the native
 flag to `false`.
 
 ## Remaining acceptance gates
 
-1. Real Android JNI error/FD tests, protection and UID-routing behavior,
-   including loading both packaged Go runtimes on an Android device.
+1. Real native WG/AWG start/stop, FD-ownership, socket-protection and error-path tests.
 2. Real WG/AWG connection/handshake, TCP/UDP/DNS and no-leak tests.
-3. Network change/reconnect, background/suspend, repeated start-stop,
-   simultaneous loaded Go runtimes and resource cleanup on physical devices.
+3. Network change/reconnect, background/suspend, repeated start-stop and
+   combined-runtime resource cleanup on physical devices.
 4. Native fatal-error monitoring is not implemented. A retained service TUN
    should block traffic if its engine fails, but status/kill-switch behavior
    has not been proven on Android. No production reliability claim.
 5. Hot endpoint/padding changes and secret-memory/distribution-license review.
 
-Mihomo remains disabled. No authorized server was contacted, nothing was
-published, and the accepted 66-file inventory remains byte-for-byte unchanged.
+Mihomo remains disabled. No WG/AWG server handshake was attempted in this device
+acceptance run, and no release artifact was published.

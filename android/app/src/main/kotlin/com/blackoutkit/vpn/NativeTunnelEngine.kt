@@ -11,18 +11,19 @@ import org.amnezia.awg.GoBackend as AWG
  */
 internal object NativeTunnelEngine {
     private val lifecycle = NativeTunnelLifecycle()
-    private val loaded = mutableSetOf<String>()
+    private var combinedLibraryLoaded = false
+    private val verified = mutableSetOf<String>()
     @Volatile var lastError: String? = null
         private set
 
     @Synchronized fun available(protocol: String): Boolean {
         if (!BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS) return false
         if (protocol !in setOf("wireguard", "amneziawg")) return false
+        if (protocol in verified) return true
         return try {
-            if (loaded.add(protocol)) {
-                try { System.loadLibrary(if (protocol == "amneziawg") "blackout-awg" else "blackout-wireguard") }
-                catch (e: LinkageError) { loaded.remove(protocol); throw e }
-                catch (e: SecurityException) { loaded.remove(protocol); throw e }
+            if (!combinedLibraryLoaded) {
+                System.loadLibrary("blackout-tunnels")
+                combinedLibraryLoaded = true
             }
             // Probe the extended ABI before transferring any descriptor. Older
             // libraries cannot silently start without lifecycle monitoring.
@@ -33,6 +34,7 @@ internal object NativeTunnelEngine {
                 WG.wgVersion()
                 check(WG.wgIsClosed(-1) == 1)
             }
+            verified.add(protocol)
             true
         } catch (_: LinkageError) { false } catch (_: Exception) { false }
     }

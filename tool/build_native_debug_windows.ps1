@@ -5,10 +5,8 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Staging = Join-Path $Root '.cache\native-tunnel-jni'
 $Expected = @(
-  'arm64-v8a\libblackout-awg.so',
-  'arm64-v8a\libblackout-wireguard.so',
-  'armeabi-v7a\libblackout-awg.so',
-  'armeabi-v7a\libblackout-wireguard.so'
+  'arm64-v8a\libblackout-tunnels.so',
+  'armeabi-v7a\libblackout-tunnels.so'
 )
 
 foreach ($Relative in $Expected) {

@@ -123,9 +123,12 @@ android {
     if (project.findProperty("enableNativeTunnels") == "true") {
         def nativeDir = rootProject.file("../.cache/native-tunnel-jni")
         ["arm64-v8a", "armeabi-v7a"].each { abi ->
-            ["awg", "wireguard"].each { engine ->
-                if (!new File(nativeDir, "${abi}/libblackout-${engine}.so").isFile()) {
-                    throw new GradleException("Missing staged native tunnel library; run tool/stage_native_tunnels.py")
+            if (!new File(nativeDir, "${abi}/libblackout-tunnels.so").isFile()) {
+                throw new GradleException("Missing staged combined native tunnel library; run tool/stage_native_tunnels.py")
+            }
+            ["awg", "wireguard"].each { legacy ->
+                if (new File(nativeDir, "${abi}/libblackout-${legacy}.so").exists()) {
+                    throw new GradleException("Refusing stale dual-Go-runtime native tunnel staging")
                 }
             }
         }

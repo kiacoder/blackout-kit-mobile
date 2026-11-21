@@ -1,8 +1,8 @@
 # Native device liveness and build-recovery continuation
 
-**Current checkpoint: native-enabled DEBUG APK packaging is proven; Android
-connection/runtime behavior and production readiness are not.** This extends the
-gated WG/AWG source integration in
+**Current checkpoint: native-enabled DEBUG APK packaging plus JNI/coexistence on a
+physical ARM64 Android device are proven; real WG/AWG tunnel traffic and production
+readiness are not.** This extends the gated WG/AWG source integration in
 [NATIVE_ANDROID_INTEGRATION.md](NATIVE_ANDROID_INTEGRATION.md).
 
 ## Build recovery: actual outcome
@@ -15,9 +15,11 @@ signed download URL redacted.
 
 That earlier build-recovery blocker is now superseded on the Windows development
 host: Flutter 3.24/Dart, Java 17, Android API34/build-tools/platform-tools and
-Gradle dependency resolution are usable. The full Flutter suite passes 545/545,
-CI-style analyze exits 0, and native-enabled debug APK packaging succeeds. No ARM
-Android device is connected, so the runtime acceptance statements below remain open.
+Gradle dependency resolution are usable. The full Flutter suite passes 546/546,
+CI-style analyze exits 0, and native-enabled debug APK packaging succeeds. A Redmi
+13 (arm64-v8a, Android 16/API36) now runs the physical acceptance suite. Separate
+WG/AWG Go shared libraries reproduced `fatal error: addspecial on invalid pointer`;
+a combined single-Go-runtime library removed that failure and the suite passed 7/7.
 
 ## Implemented liveness path
 
@@ -44,8 +46,10 @@ Android device is connected, so the runtime acceptance statements below remain o
 
 ## Executed checks
 
-* Four native libraries rebuilt (WG/AWG × ARM64/ARM32), API24 metadata gates and
-  **seven JNI exports per library**, including the new liveness entry point.
+* The combined `libblackout-tunnels.so` runtime was rebuilt for ARM64/ARM32,
+  passed API24 metadata gates, and exports all **fourteen WG+AWG JNI methods**,
+  including both liveness entry points. Earlier separate libraries remain
+  historical evidence but are no longer staged.
 * The earlier narrow Android service/plugin API compilation passed and is now
   superseded by successful Flutter analysis/tests, Gradle app-module tests, and
   normal plus native-enabled debug APK builds.
@@ -65,9 +69,10 @@ Android device is connected, so the runtime acceptance statements below remain o
 * AWG stress: 20 deterministic first-read tests + 20 upstream packet tests pass,
   with no packet retries or weaker assertions.
 * Both engines: **ten isolated Linux kernel-TUN checks each pass** again.
-* Negative staging test: older JNI ABI rejected. Four rebuilt libraries staged
-  successfully. Previous staged artifacts preserved at
-  `.cache/native-tunnel-jni-prehealth`; original build outputs retained.
+* Staging validates all fourteen JNI exports directly from the combined ELF and
+  Gradle rejects stale separate WG/AWG libraries. The dual-runtime crash artifacts
+  are preserved only as ignored local evidence; the active staging contains one
+  combined runtime per ABI.
 
 Exact artifact and private-log hashes are in `NATIVE_LIVENESS_RESULTS.json`.
 Raw test logs remain in ignored `.buildlog`; no server/private configuration was
@@ -78,9 +83,11 @@ used. All added test keys/peers are synthetic upstream fixtures.
 * Android tests of actual FD ownership, native closure injection, stale callbacks,
   kill-switch routing, protection failures and error delivery. Source compilation
   and host mocks do not validate these behaviors on Android.
-* Physical WG/AWG connections, TCP/UDP/DNS, network switching, reconnect,
-  background/suspend and repeated start/stop/resource cleanup.
-* Further license/security and simultaneous Go-runtime review before distribution.
+* Physical JNI load/coexistence and repeated availability probes pass on the Redmi.
+  Native WG/AWG start/stop, FD/socket ownership, real handshakes, TCP/UDP/DNS,
+  network switching, reconnect, background/suspend and repeated start/stop remain.
+* Further license/security review is required before distribution. The rejected
+  simultaneous-Go-runtime design is guarded against by staging and Gradle checks.
 
 Default-off debug gate and forced-off release behavior are unchanged. Mihomo is
 still disabled. minSdk24 is unchanged. The accepted 66-file inventory remains

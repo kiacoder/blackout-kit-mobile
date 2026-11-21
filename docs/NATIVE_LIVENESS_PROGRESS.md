@@ -1,7 +1,8 @@
 # Native device liveness and build-recovery continuation
 
-**Overall remains 26%. No APK, Android connection or production verification.**
-This extends the gated WG/AWG source integration in
+**Current checkpoint: native-enabled DEBUG APK packaging is proven; Android
+connection/runtime behavior and production readiness are not.** This extends the
+gated WG/AWG source integration in
 [NATIVE_ANDROID_INTEGRATION.md](NATIVE_ANDROID_INTEGRATION.md).
 
 ## Build recovery: actual outcome
@@ -12,11 +13,11 @@ to `release-assets.githubusercontent.com`, outside this workspace's permitted
 hosts. No Gradle archive was accepted or executed. The diagnostic log has its
 signed download URL redacted.
 
-GitHub code/repository and npm registry searches did not establish a trustworthy,
-compatible Flutter/Dart binary SDK. Old/incompatible SDKs and unrelated packages
-are not substitutes. No unknown SDK binary was executed. Flutter/Dart remain
-missing; Gradle dependency resolution, Flutter tests and debug APK remain unrun.
-The previously recovered development API34/build-tools layout remains available.
+That earlier build-recovery blocker is now superseded on the Windows development
+host: Flutter 3.24/Dart, Java 17, Android API34/build-tools/platform-tools and
+Gradle dependency resolution are usable. The full Flutter suite passes 545/545,
+CI-style analyze exits 0, and native-enabled debug APK packaging succeeds. No ARM
+Android device is connected, so the runtime acceptance statements below remain open.
 
 ## Implemented liveness path
 
@@ -45,12 +46,18 @@ The previously recovered development API34/build-tools layout remains available.
 
 * Four native libraries rebuilt (WG/AWG × ARM64/ARM32), API24 metadata gates and
   **seven JNI exports per library**, including the new liveness entry point.
-* Narrow Android service/plugin API compilation passed. This is not Flutter
-  Java/Dart compilation, Gradle resource processing, or an APK.
+* The earlier narrow Android service/plugin API compilation passed and is now
+  superseded by successful Flutter analysis/tests, Gradle app-module tests, and
+  normal plus native-enabled debug APK builds.
 * **13** standalone JVM ownership/liveness checks passed with fake native calls.
-* **12** real JUnit tests passed without Gradle (previous seven plus five new
-  `NativeTunnelLifecycleTest` cases in the app's actual `src/test` tree).
-* Existing **30 host**, **15 parser**, and **33 Python** checks passed again.
+* The actual Gradle app-module unit suite now passes **19/19** with zero failures,
+  errors or skips. Two added `VpnSessionExecutorTest` cases verify nested
+  `forCurrent()` callbacks complete and stale tickets cannot run after a newer
+  generation starts.
+* Earlier Linux evidence includes **30 host**, **15 parser**, and **33 Python**
+  checks passing. The current Windows all-tool Python run is not counted because
+  that interpreter lacks PyYAML and NTFS does not expose the POSIX `0700` mode
+  expected by the security-permission test; those tests remain unchanged.
 * AWG full race suite: **26 top-level passed, two upstream skips**. WG full race
   suite: **21 passed, one upstream skip**. Both now include a real upstream
   device test verifying Wait remains open across down/up and closes after
@@ -68,9 +75,6 @@ used. All added test keys/peers are synthetic upstream fixtures.
 
 ## Still required
 
-* Obtain the pinned Flutter/Dart/Gradle development environment through an
-  authorized private source; resolve dependencies, run Flutter/Gradle suites,
-  and build the opt-in debug APK. No public publication or remote runner invoked.
 * Android tests of actual FD ownership, native closure injection, stale callbacks,
   kill-switch routing, protection failures and error delivery. Source compilation
   and host mocks do not validate these behaviors on Android.
@@ -80,4 +84,5 @@ used. All added test keys/peers are synthetic upstream fixtures.
 
 Default-off debug gate and forced-off release behavior are unchanged. Mihomo is
 still disabled. minSdk24 is unchanged. The accepted 66-file inventory remains
-byte-for-byte unchanged, and nothing was pushed or published.
+byte-for-byte unchanged. Development commits are pushed only to the draft PR;
+no release artifact or public distribution has been published.

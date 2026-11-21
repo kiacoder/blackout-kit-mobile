@@ -75,7 +75,9 @@ Pinned official Android sources:
 
 Recovered **9/9 AWG** and **8/8 WG** module archives. Go's own x/mod module ZIP
 implementation verifies both module ZIP and go.mod h1 against pinned go.sum before
-publishing to a local proxy. The wintun source mapping initially failed; an exact
+publishing to a local proxy. The later staging gate also parses each ELF dynamic
+symbol table directly and requires all seven JNI exports for the selected engine;
+`JNI_SYMBOLS.txt` is no longer trusted as staging evidence. The wintun source mapping initially failed; an exact
 commit mirror in nbdy/wintun-go matched upstream checksums. It was not replaced by
 a different Windows implementation. No sum verification was disabled.
 

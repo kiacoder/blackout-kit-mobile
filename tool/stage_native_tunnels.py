@@ -44,13 +44,16 @@ def main():
             binary = source / name
             if hashlib.sha256(binary.read_bytes()).hexdigest() != hashes.get(name):
                 raise SystemExit('Artifact hash mismatch')
-            subprocess.run([sys.executable, str(ROOT / 'tool/check_android_artifact.py'),
-                            '--binary', str(binary), '--abi', abi, '--min-sdk', '24'], check=True)
             prefix = ('Java_org_amnezia_awg_GoBackend_awg' if engine == 'awg'
                       else 'Java_com_wireguard_android_backend_GoBackend_wg')
-            symbols = (source / abi / 'JNI_SYMBOLS.txt').read_text().splitlines()
-            if prefix + 'IsClosed' not in symbols:
-                raise SystemExit('Artifact predates required native lifecycle ABI')
+            required_symbols = [prefix + method for method in
+                                ('TurnOn', 'TurnOff', 'GetSocketV4', 'GetSocketV6',
+                                 'GetConfig', 'Version', 'IsClosed')]
+            command = [sys.executable, str(ROOT / 'tool/check_android_artifact.py'),
+                       '--binary', str(binary), '--abi', abi, '--min-sdk', '24']
+            for symbol in required_symbols:
+                command += ['--require-symbol', symbol]
+            subprocess.run(command, check=True)
             artifacts.append((binary, out / name))
     # Nothing is staged until all four gates pass. Inputs stay untouched.
     for source, target in artifacts:

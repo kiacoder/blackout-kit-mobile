@@ -64,15 +64,17 @@ For a connected ARM device, `tool/run_native_android_acceptance_windows.ps1` run
 the physical-device integration suite with the native Gradle property and the
 `BLACKOUT_NATIVE_ACCEPTANCE` Dart gate enabled.
 
-Staging checks hashes from each build manifest and the API/ABI metadata gates,
-requires both engines/both ABIs, and refuses to replace existing staging. It is
+Staging checks hashes from each build manifest, the API/ABI metadata gates, and
+all seven required JNI exports directly from each ELF dynamic symbol table. It no
+longer trusts `JNI_SYMBOLS.txt` as evidence of the binary's exported lifecycle ABI.
+It requires both engines/both ABIs and refuses to replace existing staging. This is
 not independent authenticity verification, license clearance or device approval.
 The opt-in DEBUG APK build now succeeds and packages AWG/WG for both ARM64 and ARMv7.
 
 ## Executed checks
 
 * Four native libraries rebuilt: AWG + WG, ARM64 + ARM32, API24 metadata gates,
-  six upstream JNI symbols each. Distinct SONAMEs inspected with llvm-readelf.
+  seven upstream JNI symbols each. Distinct SONAMEs inspected with llvm-readelf.
 * Kotlin JNI declarations inspected using javap: expected static native methods.
 * The earlier service/plugin source API check passed against both the pinned API
   jar and recovered AOSP API34 jar. That narrow evidence is now superseded by the

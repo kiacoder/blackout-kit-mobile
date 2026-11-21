@@ -14,6 +14,7 @@ import '../widgets/config_tile.dart';
 import 'config_import_screen.dart';
 import 'speed_test_screen.dart';
 import 'config_editor_screen.dart';
+import 'profile_export_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({Key? key}) : super(key: key);
@@ -94,6 +95,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
             icon: const Icon(Icons.add, size: 22),
             onPressed: _showAddCustomSourceDialog,
             tooltip: 'Add custom source'.tr,
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Library actions'.tr,
+            onSelected: (_) => Get.to(() => ProfileExportScreen(
+              profiles: List<Config>.of(_configController.allConfigs),
+            )),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'export', child: Text('Batch export all profiles'.tr)),
+            ],
           ),
           const SizedBox(width: 4),
         ],
@@ -347,7 +357,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Text(
-                    'Your saved configs are not lost — the update failed. Check your connection and try again.'.tr,
+                    'library_update_failed_preserved'.tr,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -886,7 +896,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               } else {
                 Get.snackbar(
                   'Could Not Add Source'.tr,
-                  'The repository could not be saved - check the name and try again'.tr,
+                  'repository_save_failed_detail'.tr,
                   backgroundColor: Colors.orange,
                   colorText: Colors.white,
                 );

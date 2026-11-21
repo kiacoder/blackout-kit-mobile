@@ -163,9 +163,20 @@ void main() {
 
   group('BK-022 sing-box checker timeout', () {
     test('the checker has a hard timeout', () {
-      final runner =
-          source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt');
-      expect(runner.contains('waitFor(20, java.util.concurrent.TimeUnit.SECONDS'),
+      final commands =
+          source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCommands.kt');
+      expect(commands.contains('timeoutMs: Long = 20_000'), isTrue);
+      expect(commands.contains('process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)'), isTrue);
+      expect(commands.contains('process.destroyForcibly()'), isTrue);
+    });
+  });
+
+  group('native tunnel packaging gate', () {
+    test('staged WG/AWG libraries are debug-only and release stays disabled', () {
+      final gradle = source('android/app/build.gradle');
+      expect(gradle.contains('sourceSets.debug.jniLibs.srcDir nativeDir'), isTrue);
+      expect(
+          gradle.contains('buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"'),
           isTrue);
     });
   });

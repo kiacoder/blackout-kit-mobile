@@ -1,0 +1,247 @@
+{
+  "scope": "Linux host tests of pinned upstream cores; NOT Android JNI/device tests",
+  "attempts": {
+    "awg-core-tests": {
+      "topLevel": {
+        "pass": 8
+      },
+      "includingSubtests": {
+        "pass": 29
+      },
+      "packages": [
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/device",
+          "result": "fail"
+        },
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/conn",
+          "result": "pass"
+        },
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/replay",
+          "result": "pass"
+        }
+      ],
+      "skippedTests": [],
+      "failedTests": [],
+      "privateLogSha256": "cb58d1df9ca72aba4c08913a0870e183b8322e7a9e04ce551972a6aef5fdcad7"
+    },
+    "awg-core-tests-recovered": {
+      "topLevel": {
+        "pass": 21,
+        "skip": 2
+      },
+      "includingSubtests": {
+        "pass": 49,
+        "skip": 2
+      },
+      "packages": [
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/conn",
+          "result": "pass"
+        },
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/replay",
+          "result": "pass"
+        },
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/device",
+          "result": "pass"
+        }
+      ],
+      "skippedTests": [
+        "TestAWGHandshakeDevicePing",
+        "TestWaitPool"
+      ],
+      "failedTests": [],
+      "privateLogSha256": "58eae8e2081f9d401b914305dce333e6f717a4d1eaed31f97e31669719ceced8"
+    },
+    "wg-core-tests": {
+      "topLevel": {
+        "pass": 20,
+        "skip": 1
+      },
+      "includingSubtests": {
+        "pass": 46,
+        "skip": 1
+      },
+      "packages": [
+        {
+          "package": "golang.zx2c4.com/wireguard/conn",
+          "result": "pass"
+        },
+        {
+          "package": "golang.zx2c4.com/wireguard/replay",
+          "result": "pass"
+        },
+        {
+          "package": "golang.zx2c4.com/wireguard/device",
+          "result": "pass"
+        }
+      ],
+      "skippedTests": [
+        "TestWaitPool"
+      ],
+      "failedTests": [],
+      "privateLogSha256": "759f5712476628f34dbbaa8330069ae5a132bb6d47c1530e93bc1c22fe822c85"
+    },
+    "awg-race-tests": {
+      "topLevel": {
+        "pass": 4,
+        "skip": 1
+      },
+      "includingSubtests": {
+        "pass": 11,
+        "skip": 1
+      },
+      "packages": [
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/device",
+          "result": "pass"
+        }
+      ],
+      "skippedTests": [
+        "TestAWGHandshakeDevicePing"
+      ],
+      "failedTests": [],
+      "privateLogSha256": "cbaa3ef443b11646b397dfa1d2729eac83a9f592f86e1429faade49cab170f41"
+    },
+    "awg-core-rerun": {
+      "topLevel": {
+        "pass": 21,
+        "skip": 2
+      },
+      "includingSubtests": {
+        "pass": 49,
+        "skip": 2
+      },
+      "packages": [
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/conn",
+          "result": "pass"
+        },
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/replay",
+          "result": "pass"
+        },
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/device",
+          "result": "pass"
+        }
+      ],
+      "skippedTests": [
+        "TestAWGHandshakeDevicePing",
+        "TestWaitPool"
+      ],
+      "failedTests": [],
+      "privateLogSha256": "aca18464b5736187c9b9a5b3cb530ae1c9f85897c780982c6f1b0d62759e8445"
+    },
+    "awg-race-rerun": {
+      "topLevel": {
+        "pass": 3,
+        "fail": 1,
+        "skip": 1
+      },
+      "includingSubtests": {
+        "pass": 9,
+        "fail": 2,
+        "skip": 1
+      },
+      "packages": [
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/device",
+          "result": "fail"
+        }
+      ],
+      "skippedTests": [
+        "TestAWGHandshakeDevicePing"
+      ],
+      "failedTests": [
+        "TestAWGDevicePing/ping_1.0.0.2",
+        "TestAWGDevicePing"
+      ],
+      "privateLogSha256": "55c5aa835ebbe7c412af442ec2715d74ed0e21b0839672b2be11694594081401"
+    },
+    "awg-race-packet-repeat": {
+      "topLevel": {
+        "pass": 4,
+        "fail": 1
+      },
+      "includingSubtests": {
+        "pass": 13,
+        "fail": 2
+      },
+      "packages": [
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/device",
+          "result": "fail"
+        }
+      ],
+      "skippedTests": [],
+      "failedTests": [
+        "TestAWGDevicePing/ping_1.0.0.2",
+        "TestAWGDevicePing"
+      ],
+      "privateLogSha256": "e4f65e65c9d466bf78969f1ec109c9a5d43674e31f2e1ee57b554f6a28252303"
+    },
+    "awg-added-tests": {
+      "topLevel": {},
+      "includingSubtests": {},
+      "packages": [
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/device",
+          "result": "fail"
+        }
+      ],
+      "skippedTests": [],
+      "failedTests": [],
+      "privateLogSha256": "3eaa25968d3403d88a6650ba953925d7f7c21487436f1dccbf7e44ee51463c1a"
+    },
+    "awg-added-tests-fixed": {
+      "topLevel": {
+        "pass": 2
+      },
+      "includingSubtests": {
+        "pass": 2
+      },
+      "packages": [
+        {
+          "package": "github.com/amnezia-vpn/amneziawg-go/v3/device",
+          "result": "pass"
+        }
+      ],
+      "skippedTests": [],
+      "failedTests": [],
+      "privateLogSha256": "dceb17d5ad8907f7a8e21c422b0ccc44344a009e9bb56702e76ff8356ddae68c"
+    },
+    "wireguard-core-rerun": {
+      "topLevel": {
+        "pass": 20,
+        "skip": 1
+      },
+      "includingSubtests": {
+        "pass": 46,
+        "skip": 1
+      },
+      "packages": [
+        {
+          "package": "golang.zx2c4.com/wireguard/conn",
+          "result": "pass"
+        },
+        {
+          "package": "golang.zx2c4.com/wireguard/replay",
+          "result": "pass"
+        },
+        {
+          "package": "golang.zx2c4.com/wireguard/device",
+          "result": "pass"
+        }
+      ],
+      "skippedTests": [
+        "TestWaitPool"
+      ],
+      "failedTests": [],
+      "privateLogSha256": "ed01079d2be74027f8b73d80e855178f9e9c860d17653d2576cbe70728b9d0d5"
+    }
+  }
+}

@@ -196,3 +196,35 @@ Security review checklist for dependencies:
 **Last Updated**: 2026-10-16  
 **Maintained By**: Blackout Kit Security Team  
 **Contact**: security@blackout-kit.dev
+
+## Multi-engine expansion safety (2026-11-16)
+
+Batch exports and QR/clipboard data are plaintext credentials. The new application
+batch export requests explicit clipboard consent; clipboard history cannot reliably
+be erased by the app. The offline factory creates a new 0700 directory and 0600 files
+on POSIX, refuses existing destinations and never prints profile contents. Keep exports
+outside Git on encrypted storage. `private-exports/` is ignored for this reason.
+
+Factory YAML uses a safe loader and rejects aliases/duplicate keys; JSON rejects duplicate
+properties. It never fetches remote providers, runs OpenVPN scripts, reads referenced
+keys, or connects to endpoints. These are structural checks only: engine execution may
+still be unsafe for untrusted full profiles. Require trusted provenance and native checks.
+No server credentials were requested in chat or invented. No server access occurred.
+Native library licensing/provenance and existing raw engine log tails remain release
+review items; see docs/EXPANSION_AUDIT.md. Root MIT does not relicense dependencies.
+
+Milestone 2: native checker output is redirected to /dev/null, not captured or echoed.
+EngineRunner no longer exposes raw engine log tails in user errors. Existing native
+log files and other engine wrappers still require a separate complete logging review.
+Mihomo is opt-in and binary-gated; its profile normalizer removes exposed controller
+bindings, forces loopback-only proxy access, rejects extra listeners/scripts/fake-IP,
+and maps HTTPS providers to identity-derived private cache paths. Native config checks
+may initialize engine resources; importing a profile alone performs no such fetch.
+
+### Native-build continuation
+EngineRunner and the sing-box probe now discard raw native process output rather
+than persisting it or returning log tails. The probe uses the bounded shared checker.
+Historical log files are not automatically deleted. This does not silence all native
+library/logcat output: AWG/WG JNI and existing in-process wrappers remain review gates.
+Kernel test fixtures use isolated namespaces, ephemeral keys and private temporary
+configs; they must not be run on production hosts. See docs/NATIVE_BUILD_PROGRESS.md.

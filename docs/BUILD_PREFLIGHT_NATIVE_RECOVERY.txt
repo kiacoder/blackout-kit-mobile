@@ -1,0 +1,11 @@
+MISSING flutter
+MISSING dart
+FOUND java
+FOUND javac
+FOUND python3
+MISSING Android SDK platform android-34
+MISSING Android build-tools
+FOUND Linux Android NDK compiler for API 24
+FOUND cmake
+FOUND ninja
+BLOCKED: preflight incomplete; no build attempted.

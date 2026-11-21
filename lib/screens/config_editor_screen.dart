@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../controllers/config_controller.dart';
 import '../models/config.dart';
+import '../services/vpn_service.dart';
 
 class ConfigEditorScreen extends StatefulWidget {
   final Config config;
@@ -23,6 +24,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
   late final TextEditingController _textController;
 
   bool _isValid = true;
+  bool _checkingNative = false;
   // Parsing and validating are different questions. `_isValid` used to mean
   // "the text parses", so a config missing its password still showed a green
   // "Syntax Valid" tick and was only rejected later, with the wrong reason.
@@ -51,6 +53,26 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
       _parses = parsed != null;
       _isValid = parsed != null && parsed.validate();
     });
+  }
+
+  Future<void> _checkNative() async {
+    final text = _textController.text;
+    final profile = ConfigParser.parse(text);
+    if (profile == null || _checkingNative) return;
+    setState(() => _checkingNative = true);
+    String message;
+    try {
+      final result = await Get.find<VPNService>().validateNativeConfiguration(profile);
+      message = result['message']?.toString() ?? 'No validation result.'.tr;
+    } catch (_) {
+      message = 'Cannot validate this profile with the installed checker.'.tr;
+    }
+    if (!mounted) return;
+    setState(() => _checkingNative = false);
+    if (_textController.text != text) {
+      message = 'native_validation_profile_changed'.tr;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _saveChanges() async {
@@ -82,7 +104,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     if (!parsed.validate()) {
       Get.snackbar(
         'Incomplete Config'.tr,
-        'This config parses but is missing required fields - check the address, the port, and the credentials for this protocol. Nothing was saved.'.tr,
+        'config_incomplete_detail'.tr,
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -116,8 +138,8 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
       Get.snackbar(
         isDuplicate ? 'Duplicate Config'.tr : 'Could Not Save'.tr,
         isDuplicate
-            ? 'Another config in your library is identical - the original was left untouched'.tr
-            : 'The config could not be written to storage. The original was left untouched.'.tr,
+            ? 'config_duplicate_original_preserved'.tr
+            : 'config_storage_original_preserved'.tr,
         backgroundColor: Colors.orange,
         colorText: Colors.white,
       );
@@ -361,6 +383,11 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
         title: Text('${'edit_config'.tr}: ${widget.config.displayName}'),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.fact_check),
+            tooltip: 'Validate with installed engine (not a connection test)'.tr,
+            onPressed: _checkingNative || !_isValid ? null : _checkNative,
+          ),
           if (widget.config is AmneziaWGConfig || _textController.text.contains('[Interface]'))
             IconButton(
               icon: const Icon(Icons.security),
@@ -413,18 +440,19 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
                   size: 18,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  _isValid
-                      ? 'Valid Config'.tr
-                      : (_parses ? 'Parses, but incomplete'.tr : 'Syntax Error'.tr),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: _isValid
-                        ? Colors.green
-                        : (_parses ? Colors.orange : Colors.red),
+                Expanded(
+                  child: Text(
+                    _isValid
+                        ? (widget.config is MihomoConfig ? 'Document parsed; native check required'.tr : 'Valid Config'.tr)
+                        : (_parses ? 'Parses, but incomplete'.tr : 'Syntax Error'.tr),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _isValid
+                          ? Colors.green
+                          : (_parses ? Colors.orange : Colors.red),
+                    ),
                   ),
                 ),
-                const Spacer(),
                 Chip(
                   label: Text(widget.config.protocol.toUpperCase(), style: const TextStyle(fontSize: 10)),
                   visualDensity: VisualDensity.compact,

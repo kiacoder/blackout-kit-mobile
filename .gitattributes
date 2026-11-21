@@ -11,3 +11,6 @@
 *.so binary
 *.aar binary
 *.keystore binary
+
+# Unified patches require leading context spaces, including before source tabs.
+tool/patches/*.patch -whitespace

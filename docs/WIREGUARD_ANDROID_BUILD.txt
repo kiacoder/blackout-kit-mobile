@@ -1,0 +1,8 @@
+/home/user/blackout-kit-mobile/.cache/references/wireguard-android/tunnel/tools/libwg-go/goruntime-boottime-over-monotonic.diff: OK
+go version go1.26.6 linux/amd64
+PASS metadata gate: API 24, 64-bit ELF DYN
+Device execution, dependent symbols, page-size compatibility and VPN forwarding NOT tested.
+PASS metadata gate: API 24, 32-bit ELF DYN
+Device execution, dependent symbols, page-size compatibility and VPN forwarding NOT tested.
+Native builds finished. Both backends use libwg-go.so: do NOT co-package under the same name.
+JNI/TUN ownership, invalid-config cleanup, log redaction, licenses and device tests remain gates.

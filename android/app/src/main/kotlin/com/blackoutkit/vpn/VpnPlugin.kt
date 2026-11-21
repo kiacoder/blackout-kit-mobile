@@ -32,9 +32,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private var appContext: Context? = null
     private var activity: Activity? = null
 
+    private val validationBusy = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private var pendingPrepare: MethodChannel.Result? = null
     private var pendingNotificationPermission: MethodChannel.Result? = null
     private var pendingConnect: MethodChannel.Result? = null
+    private var disconnectInFlight = false
 
     /**
      * The timeout watchdog of the connect currently in flight. Kept so
@@ -134,6 +137,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             // demand rather than passively leaking browsing DNS.
             "getConnectedIP" -> handleGetConnectedIP(result)
             "getEngineInfo" -> result.success(engineInfoMap())
+            "validateEngineConfig" -> handleValidateEngineConfig(call, result)
             "tunnelFetch" -> handleTunnelFetch(call, result)
             "probeStart" -> handleProbeStart(call, result)
             "probeStop" -> handleProbeStop(result)
@@ -160,6 +164,43 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
      * [WarpConfig] itself has no registration flow and cannot mint the key
      * pair WARP requires.
      */
+    private fun handleValidateEngineConfig(call: MethodCall, result: MethodChannel.Result) {
+        val context = appContext ?: run {
+            result.error("NO_CONTEXT", "Plugin is detached", null)
+            return
+        }
+        val spec = when (call.argument<String>("engine")) {
+            "sing-box" -> EngineCommands.SING_BOX
+            "mihomo" -> EngineCommands.MIHOMO
+            else -> null
+        }
+        val text = call.argument<String>("config")
+        if (spec == null || text.isNullOrBlank() || text.toByteArray(Charsets.UTF_8).size > 1024 * 1024) {
+            result.error("BAD_ARGS", "Choose a supported checker and a configuration under 1 MiB", null)
+            return
+        }
+        if (!validationBusy.compareAndSet(false, true)) {
+            result.error("BUSY", "A configuration check is already running", null)
+            return
+        }
+        Thread({
+            var file: File? = null
+            val outcome = try {
+                file = File.createTempFile("native-check-", ".json", context.cacheDir)
+                file!!.writeText(text)
+                NativeConfigValidator().validate(spec,
+                    File(context.applicationInfo.nativeLibraryDir, spec.binary), file!!)
+            } catch (_: Exception) {
+                NativeValidation(false, "CHECK_FAILED", "Native validation could not complete; raw diagnostics are withheld.")
+            } finally {
+                file?.delete()
+                validationBusy.set(false)
+            }
+            main.post { result.success(mapOf("valid" to outcome.valid, "code" to outcome.code,
+                "message" to outcome.message, "connectionTested" to false)) }
+        }, "blackout-config-check").start()
+    }
+
     private fun engineInfoMap(): Map<String, Any?> {
         val xrayVersion = XrayEngine.version()
         // sing-box runs as a subprocess engine, which needs its .so inside the
@@ -178,6 +219,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         val cleanLibboxVer = libboxVer ?: if (singboxSoExists) "subprocess bundled" else null
         Log.i(TAG, "engineInfoMap: nativeDir=${appContext?.applicationInfo?.nativeLibraryDir}, singboxSoExists=$singboxSoExists, libboxAvailable=$libboxAvailable, libboxVer=${cleanLibboxVer ?: "unavailable"}, xrayVer=$xrayVersion")
         return mapOf(
+            "nativeWireguardAvailable" to NativeTunnelEngine.available("wireguard"),
+            "nativeAmneziawgAvailable" to NativeTunnelEngine.available("amneziawg"),
+            "mihomoAvailable" to (BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO &&
+                listOf("libmihomo.so", "libtun2socks.so", "libfdlauncher.so").all {
+                    File(appContext?.applicationInfo?.nativeLibraryDir ?: "", it).canExecute()
+                }),
             "xrayAvailable" to (xrayVersion != null),
             "xrayVersion" to xrayVersion,
             "xrayProtocols" to
@@ -206,7 +253,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                     listOf("hysteria2", "tuic", "anytls")
                 else emptyList<String>(),
             "unavailableProtocols" to
-                (listOf("openvpn", "psiphon", "amneziawg", "shadowtls", "warp", "sni", "mhrv") +
+                (listOf("openvpn", "psiphon", "shadowtls", "warp", "sni", "mhrv") +
+                    (if (NativeTunnelEngine.available("amneziawg")) emptyList() else listOf("amneziawg")) +
                     if (singboxAvailable) emptyList()
                     else listOf("hysteria2", "tuic", "anytls")),
             // These are accepted as editable configuration profiles, not
@@ -301,8 +349,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             result.error("NOT_PREPARED", "VPN consent has not been granted - call prepare() first", null)
             return
         }
-        if (pendingConnect != null) {
-            result.error("BUSY", "A connect attempt is already in flight", null)
+        if (pendingConnect != null || disconnectInFlight) {
+            result.error("BUSY", "A VPN lifecycle operation is already in flight", null)
             return
         }
 
@@ -352,6 +400,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 BlackoutVpnService.EXTRA_DISALLOWED_APPS,
                 ArrayList(call.argument<List<String>>("disallowedApps") ?: emptyList())
             )
+            putExtra(BlackoutVpnService.EXTRA_NATIVE_TUNNEL_CONFIG, call.argument<String>("nativeTunnelConfig"))
+            putExtra(BlackoutVpnService.EXTRA_MIHOMO_CONFIG, call.argument<String>("mihomoConfig"))
             putExtra(BlackoutVpnService.EXTRA_DNS_ONLY, dnsOnly)
         }
 
@@ -419,41 +469,42 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             result.error("NO_CONTEXT", "Plugin is not attached to a Flutter engine", null)
             return
         }
-        try {
-            // Acknowledge only after teardown. Returning true immediately told
-            // Dart the tunnel was gone while the interface was still up, so the
-            // UI showed "disconnected" while traffic was still routed.
-            var settled = false
-            BlackoutVpnService.onTeardownComplete = {
-                if (!settled) {
-                    settled = true
-                    // Drop the callback once it has fired. It used to stay
-                    // assigned, so the NEXT teardown invoked it again and
-                    // replied to a result that was already completed -
-                    // IllegalStateException on the main thread.
-                    BlackoutVpnService.onTeardownComplete = null
-                    result.success(true)
-                }
+        if (disconnectInFlight) {
+            result.error("BUSY", "A disconnect is already in flight", null)
+            return
+        }
+        disconnectInFlight = true
+        var settled = false
+        var timeout: Runnable? = null
+        lateinit var callback: (Boolean) -> Unit
+        fun settle(cleaned: Boolean, code: String? = null, message: String? = null) {
+            if (settled) return
+            settled = true
+            disconnectInFlight = false
+            timeout?.let { main.removeCallbacks(it) }
+            // Never clear a callback belonging to a different plugin/request.
+            if (BlackoutVpnService.onTeardownComplete === callback) {
+                BlackoutVpnService.onTeardownComplete = null
             }
+            if (cleaned) result.success(true)
+            else result.error(code ?: "DISCONNECT_FAILED",
+                message ?: "Native cleanup did not complete cleanly", null)
+        }
+        callback = { cleaned -> settle(cleaned) }
+        timeout = Runnable {
+            settle(false, "DISCONNECT_TIMEOUT", "The tunnel did not close in time")
+        }
+        try {
+            if (pendingConnect != null) resolveConnect(false, "Connection cancelled by disconnect")
+            BlackoutVpnService.onTeardownComplete = callback
             ctx.startService(
                 Intent(ctx, BlackoutVpnService::class.java).apply {
                     action = BlackoutVpnService.ACTION_DISCONNECT
                 }
             )
-            // Fail loudly rather than leaving the Dart Future hanging forever
-            // if the service never reports back.
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                if (!settled) {
-                    settled = true
-                    // Same leak from the other side: a teardown that finishes
-                    // after this timeout would call the stale callback and
-                    // throw. Clear it before reporting the timeout.
-                    BlackoutVpnService.onTeardownComplete = null
-                    result.error("DISCONNECT_TIMEOUT", "The tunnel did not close in time", null)
-                }
-            }, 8000)
-        } catch (e: Exception) {
-            result.error("DISCONNECT_FAILED", e.message, null)
+            main.postDelayed(timeout, 8000)
+        } catch (_: Exception) {
+            settle(false, "DISCONNECT_FAILED", "Could not request VPN shutdown")
         }
     }
 
@@ -471,6 +522,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private fun handleGetConnectedIP(result: MethodChannel.Result) {
         if (!BlackoutVpnService.isRunning) {
             // Nothing to ask — the tunnel is not up.
+            result.success(null)
+            return
+        }
+        if (BlackoutVpnService.activeNativeTunnel) {
+            // This IP tunnel has no SOCKS listener. Our excluded UID cannot
+            // measure its exit IP with a direct request without bypassing it.
             result.success(null)
             return
         }
@@ -521,14 +578,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             }
             val code = conn.responseCode
             if (code !in 200..299) {
-                Log.w(TAG, "Tunnel fetch returned HTTP $code for $urlStr")
+                Log.w(TAG, "Tunnel fetch returned HTTP $code")
                 return null
             }
             conn.inputStream.bufferedReader().use { it.readText() }
         } catch (e: Exception) {
             // A failed probe must never surface as an error to the UI: the
             // status row simply stays hidden, which is the honest degradation.
-            Log.w(TAG, "Tunnel fetch failed: ${e.javaClass.simpleName}: ${e.message}")
+            Log.w(TAG, "Tunnel fetch failed: ${e.javaClass.simpleName}")
             null
         } finally {
             conn?.disconnect()
@@ -571,7 +628,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
 
     /** The headless sing-box instance started by [handleProbeStart], if any. */
     private var probeProcess: Process? = null
-    private var probeLog: File? = null
 
     /**
      * Runs a sing-box config with no TUN, for the site check.
@@ -603,45 +659,20 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             return "Could not write the probe config: ${e.message}"
         }
 
-        // Validate first: sing-box names the offending field, which is far more
-        // useful than a readiness timeout.
-        try {
-            val check = ProcessBuilder(
-                listOf(enginePath.absolutePath, "check", "-c", configFile.absolutePath)
-            ).redirectErrorStream(true).start()
-            // Same shape as EngineRunner.start: the output is drained on a
-            // side thread so a wedged checker cannot hang this read past the
-            // process deadline below.
-            val outputFuture = java.util.concurrent.CompletableFuture.supplyAsync {
-                try {
-                    check.inputStream.bufferedReader().use { it.readText() }
-                } catch (_: Exception) {
-                    ""
-                }
-            }
-            if (!check.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)) {
-                check.destroyForcibly()
-                return "sing-box check timed out after 20s"
-            }
-            val output = try {
-                outputFuture.get(2, java.util.concurrent.TimeUnit.SECONDS)
-            } catch (_: Exception) {
-                ""
-            }
-            if (check.exitValue() != 0) {
-                return "sing-box rejected the probe config: " + output.takeLast(300)
-            }
-        } catch (e: Exception) {
-            return "Could not run sing-box check: ${e.message}"
+        // Share the bounded checker with the VPN path. Its output is discarded:
+        // native parse errors can echo passwords or complete configuration lines.
+        val validation = try {
+            NativeConfigValidator().validate(EngineCommands.SING_BOX, enginePath, configFile)
+        } catch (_: Exception) {
+            return "Could not validate the probe configuration"
         }
+        if (!validation.valid) return validation.message
 
-        val log = File(dir, "singbox-probe.log")
-        probeLog = log
         val process = try {
             ProcessBuilder(
                 listOf(enginePath.absolutePath, "run", "-c", configFile.absolutePath)
             ).redirectErrorStream(true)
-                .redirectOutput(ProcessBuilder.Redirect.appendTo(log))
+                .redirectOutput(ProcessBuilder.Redirect.to(File("/dev/null")))
                 .start()
         } catch (e: Exception) {
             return "Could not start sing-box: ${e.message}"
@@ -653,15 +684,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         if (!ready) {
             val died = !process.isAlive
             stopSingboxProbe()
-            val tail = try {
-                log.readText().takeLast(300)
-            } catch (_: Exception) {
-                ""
-            }
             return if (died) {
-                "sing-box exited during startup. $tail"
+                "sing-box exited during startup. Native diagnostics are withheld."
             } else {
-                "sing-box did not open 127.0.0.1:$socksPort within 8s. $tail"
+                "sing-box did not open the local SOCKS listener within 8s."
             }
         }
         return null

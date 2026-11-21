@@ -1,0 +1,188 @@
+{
+  "overallPercent": 26,
+  "status": "source integration and narrow compile; no APK/Android runtime",
+  "artifacts": [
+    {
+      "engine": "awg",
+      "abi": "arm64-v8a",
+      "path": ".cache/awg-integration-build/arm64-v8a/libblackout-awg.so",
+      "sha256": "0dfc5f5d86bce4559e2a2e40e3eb58e3e1e2d39a25100b7126f3f6221c85ec1d",
+      "bytes": 5080512
+    },
+    {
+      "engine": "awg",
+      "abi": "armeabi-v7a",
+      "path": ".cache/awg-integration-build/armeabi-v7a/libblackout-awg.so",
+      "sha256": "51c1e0f8a7b98cfbf183c5dbaf84c17abd649c7fabc8da4333b7494350a17674",
+      "bytes": 4858520
+    },
+    {
+      "engine": "wireguard",
+      "abi": "arm64-v8a",
+      "path": ".cache/wireguard-integration-build/arm64-v8a/libblackout-wireguard.so",
+      "sha256": "45fb898a3ffa0febe40cbc782627b0c7fa53ca1aeaf7851b2f07aa421809073c",
+      "bytes": 4871992
+    },
+    {
+      "engine": "wireguard",
+      "abi": "armeabi-v7a",
+      "path": ".cache/wireguard-integration-build/armeabi-v7a/libblackout-wireguard.so",
+      "sha256": "04db9bda4d3f85aea445d731d3a7e11acbdd2c151338a406441ad0a249bece40",
+      "bytes": 4667004
+    }
+  ],
+  "logs": [
+    {
+      "path": ".buildlog/native-lifecycle.txt",
+      "sha256": "83bc9d743c76656d558012463fe41749cafc9c3a44257866f8815eddf450e5dd"
+    },
+    {
+      "path": ".buildlog/native-config-current.txt",
+      "sha256": "6c488872baee048d70e9e268079155a3323f43a3306f4d0854f1c005e984dc8e"
+    },
+    {
+      "path": ".buildlog/engine-host-integration.txt",
+      "sha256": "725e95b7e415c3aca368c386008e695d4e2ea96cdb17d9bae44593b491646d03"
+    },
+    {
+      "path": ".buildlog/python-integration.txt",
+      "sha256": "b00e80495996cf20a95c720f821beec290589fe1966fd8fdf589cc32ef888ba7"
+    },
+    {
+      "path": ".buildlog/junit-integration.txt",
+      "sha256": "3997178a51307fa76dd808d381206ca721add9b602a3972be0cb2b178d79c867"
+    },
+    {
+      "path": ".buildlog/native-integration-aosp-api.txt",
+      "sha256": "40e330595533d3a15fb01f5adc11cf7780656ecff5d1fb4ffe3562f0ba067952"
+    },
+    {
+      "path": ".buildlog/native-jni-declarations.txt",
+      "sha256": "905a59bf9b937337f48de5cbf1ec43ea921e5ece5112776e57e39743d0496b3b"
+    },
+    {
+      "path": ".buildlog/native-staging.txt",
+      "sha256": "0dd6315f893fcbc62c58294314f243397708a2ea40f30229e27b8787ca1ebc9c"
+    },
+    {
+      "path": ".buildlog/awg-integration-build.txt",
+      "sha256": "dc8fdd53c463944ef15d9cb51e68ac8ffe8ef519d5afc7eb24fc54173c08f4f3"
+    },
+    {
+      "path": ".buildlog/awg-integration-build-fixed.txt",
+      "sha256": "97d1c79963c83712af58b7481784ea64635265dd6b598e60efce97c7535236b1"
+    },
+    {
+      "path": ".buildlog/wireguard-integration-build-fixed.txt",
+      "sha256": "d7cf5b10744092fc82a2d6afb96889ef6be49c2d68a24377da40c62393d4bbd6"
+    },
+    {
+      "path": ".buildlog/awg-patched-core-rerun.jsonl",
+      "sha256": "94f19c9862fdaed55f52f8bca5259e1bb34008093efe7080ee6bff41b47dd771"
+    },
+    {
+      "path": ".buildlog/awg-patched-stress-rerun.jsonl",
+      "sha256": "80b44c812c407cffe051e0ea2eb433fe55c29215f1037f40c561b116a8b32210"
+    },
+    {
+      "path": ".buildlog/wireguard-patched-core-rerun.jsonl",
+      "sha256": "c299985ac4974c782bc86970bee2a2bcab5e648e40de074a71b04bbcf6e1655e"
+    },
+    {
+      "path": ".buildlog/sdk-assembly.txt",
+      "sha256": "d4ff38a677065caaff6d153a0a7596b49a5d32b9598a0f9a61dbafb5f66ff168"
+    },
+    {
+      "path": ".buildlog/sdk-assembly-fixed.txt",
+      "sha256": "5677a3fec9a40b5250b473f3d64c5f61a950bc7e55a75c04904155f02fb06dfd"
+    },
+    {
+      "path": ".buildlog/sdk-assembly-passed.txt",
+      "sha256": "9306f0da2dc0ca5e14c4032bebcf018095b7cb3e30db3563d8d874d8b2a344e1"
+    },
+    {
+      "path": ".buildlog/native-integration-preflight-final.txt",
+      "sha256": "c46d6d14e8b7f804d9ce72974753b4ccea724bfd509e87fc59e2ba9284055342"
+    }
+  ],
+  "core": {
+    "awg": {
+      "pass": 25,
+      "skip": 2
+    },
+    "wireguard": {
+      "pass": 20,
+      "skip": 1
+    }
+  },
+  "kernel": {
+    "awg": {
+      "engine": "awg",
+      "scope": "Linux isolated kernel TUN; NOT Android",
+      "passed": true,
+      "checks": [
+        "cycle-1: TCP through kernel TUN",
+        "cycle-1: UDP DNS through kernel TUN",
+        "outer link outage blocks traffic; recovery forwards again",
+        "cycle-1: both kernel TUNs removed on shutdown",
+        "cycle-2: TCP through kernel TUN",
+        "cycle-2: UDP DNS through kernel TUN",
+        "cycle-2: both kernel TUNs removed on shutdown",
+        "cycle-3: TCP through kernel TUN",
+        "cycle-3: UDP DNS through kernel TUN",
+        "cycle-3: both kernel TUNs removed on shutdown"
+      ],
+      "tunCounters": [
+        {
+          "cycle": 1,
+          "rxBytes": 521,
+          "txBytes": 502
+        },
+        {
+          "cycle": 2,
+          "rxBytes": 481,
+          "txBytes": 442
+        },
+        {
+          "cycle": 3,
+          "rxBytes": 481,
+          "txBytes": 442
+        }
+      ]
+    },
+    "wireguard": {
+      "engine": "wireguard",
+      "scope": "Linux isolated kernel TUN; NOT Android",
+      "passed": true,
+      "checks": [
+        "cycle-1: TCP through kernel TUN",
+        "cycle-1: UDP DNS through kernel TUN",
+        "outer link outage blocks traffic; recovery forwards again",
+        "cycle-1: both kernel TUNs removed on shutdown",
+        "cycle-2: TCP through kernel TUN",
+        "cycle-2: UDP DNS through kernel TUN",
+        "cycle-2: both kernel TUNs removed on shutdown",
+        "cycle-3: TCP through kernel TUN",
+        "cycle-3: UDP DNS through kernel TUN",
+        "cycle-3: both kernel TUNs removed on shutdown"
+      ],
+      "tunCounters": [
+        {
+          "cycle": 1,
+          "rxBytes": 561,
+          "txBytes": 562
+        },
+        {
+          "cycle": 2,
+          "rxBytes": 481,
+          "txBytes": 442
+        },
+        {
+          "cycle": 3,
+          "rxBytes": 481,
+          "txBytes": 442
+        }
+      ]
+    }
+  }
+}

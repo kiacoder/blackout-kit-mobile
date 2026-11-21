@@ -23,6 +23,8 @@ dependencies:
   http: ^1.1.0
   dio: ^5.3.0
 
+  yaml: 3.1.4 # Already locked transitively; full Mihomo document import
+
   # Config Parsing (future: add specific packages for WG/OpenVPN/SS)
   # For now: pure Dart parsing
 
@@ -69,7 +71,7 @@ dev_dependencies:
 dependency_overrides:
   shared_preferences_android: 2.3.4
   package_info_plus: 5.0.1
-  flutter_plugin_android_lifecycle: 2.0.17
+  flutter_plugin_android_lifecycle: 2.0.20
 
 flutter:
   uses-material-design: true

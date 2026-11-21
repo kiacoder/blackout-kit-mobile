@@ -1,0 +1,8 @@
+Verified seven official Flutter Java declarations. NOT an installed Flutter SDK.
+android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt:192:86: warning: unnecessary non-null assertion (!!) on a non-null receiver of type File
+                    File(context.applicationInfo.nativeLibraryDir, spec.binary), file!!)
+                                                                                     ^
+android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt:894:22: warning: 'IP_ADDRESS: Pattern!' is deprecated. Deprecated in Java
+        if (Patterns.IP_ADDRESS.matcher(value).matches()) return true
+                     ^
+Android source API check passed (plugin declarations: true). NOT an APK build, Flutter Java/Dart compilation or device test.

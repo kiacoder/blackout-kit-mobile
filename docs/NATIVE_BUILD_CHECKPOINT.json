@@ -1,0 +1,206 @@
+{
+  "acceptedInventorySha256": "d50b371b134d61a1c2cbd1c04ca82e7b5cfe673d8204129d6a6f73e75bbda42a",
+  "acceptedInventoryUnchanged": true,
+  "acceptedFilesMissing": [],
+  "scope": "Supplement; original 66-file inventory is untouched. Excludes itself.",
+  "changesSinceAcceptedCheckpoint": [
+    {
+      "path": "ANDROID_INTEGRATION.md",
+      "status": "updated",
+      "sha256": "28d0a7ed3efefbe6c18bacc2ea6a08245d5cab9223218f9984608176d152aacd",
+      "bytes": 5009
+    },
+    {
+      "path": "CURRENT_STATUS.md",
+      "status": "updated",
+      "sha256": "cbf122f91fc50859c89d30939566ff5c7042b6f58b6db07a95c864304d8520a8",
+      "bytes": 3669
+    },
+    {
+      "path": "HANDOFF.md",
+      "status": "updated",
+      "sha256": "cf1fe1875c449ebd906385824c0f0fdd38f94382a3ad75c585068b0bf6ad0a38",
+      "bytes": 3736
+    },
+    {
+      "path": "SECURITY.md",
+      "status": "updated",
+      "sha256": "d23c16cf6626b5a47ad6ab362a54934ba2569344897df4abdfc9910ded64afa9",
+      "bytes": 9395
+    },
+    {
+      "path": "TESTING.md",
+      "status": "updated",
+      "sha256": "46a6c25626016e978e8747bef28cabc4d0c9f5d5a7eeaaca52b08fa3029c5414",
+      "bytes": 5828
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt",
+      "status": "updated",
+      "sha256": "204f4d4f1421986edb60d996d5cb237abdb55ae887bc8e105b46aa4a32b48965",
+      "bytes": 16149
+    },
+    {
+      "path": "android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt",
+      "status": "updated",
+      "sha256": "19fb4723b18a8f06675fe46588ae3bb14f94184f91f148069c4271ade32e45ec",
+      "bytes": 43592
+    },
+    {
+      "path": "docs/ANDROID_API_NATIVE_CONTINUATION.txt",
+      "status": "added",
+      "sha256": "072e8703a2c277d95714f9999f5792f01dabbca89799b00219594533873f8d52",
+      "bytes": 760
+    },
+    {
+      "path": "docs/AWG_ANDROID_BUILD.txt",
+      "status": "added",
+      "sha256": "39a692fcdc7558ffc33ad08984915988bfb157424a25105a944581bf5b7a1de2",
+      "bytes": 626
+    },
+    {
+      "path": "docs/AWG_DEPENDENCY_RESULTS.txt",
+      "status": "added",
+      "sha256": "8aaf1bbb1bfc26b405f400000354260195dfe685d9d119e492e8f9e436a21186",
+      "bytes": 436
+    },
+    {
+      "path": "docs/AWG_KERNEL_TUN_RESULTS.json",
+      "status": "added",
+      "sha256": "7cc2c8ca4e9f3e6489f6eb7b209a235f48e3de170643b2248a934ceaa9e51d2d",
+      "bytes": 826
+    },
+    {
+      "path": "docs/BUILD_PREFLIGHT_NATIVE_RECOVERY.txt",
+      "status": "added",
+      "sha256": "c91193c24910227fce4b2f0bce90cd000a287d8cf90396e3f9d8fc4fbc0747ed",
+      "bytes": 253
+    },
+    {
+      "path": "docs/FDLAUNCHER_ARM32_BUILD.txt",
+      "status": "added",
+      "sha256": "9c8f8f2efedfaa9daf7179f4b0732c909b50f13c97511f83fa3c44b0604e530f",
+      "bytes": 964
+    },
+    {
+      "path": "docs/FDLAUNCHER_ARM64_BUILD.txt",
+      "status": "added",
+      "sha256": "d73ed7132b6e0afbe3ec00908710ecd3a749c2a2bd4ae5d053fa970acded6868",
+      "bytes": 962
+    },
+    {
+      "path": "docs/HOST_TESTS_NATIVE_CONTINUATION.txt",
+      "status": "added",
+      "sha256": "725e95b7e415c3aca368c386008e695d4e2ea96cdb17d9bae44593b491646d03",
+      "bytes": 1439
+    },
+    {
+      "path": "docs/KOTLIN_JUNIT_RESULTS.txt",
+      "status": "added",
+      "sha256": "61e6afc1c0182769f98727bbd109e53240f6ff5c78a7a6a8fe418a6f7cace3d7",
+      "bytes": 899
+    },
+    {
+      "path": "docs/NATIVE_BUILD_PROGRESS.md",
+      "status": "added",
+      "sha256": "5b7378c85e7326ec243feb2c41fda7934cb78bd952ef4d84beaadbb0a38653a6",
+      "bytes": 12422
+    },
+    {
+      "path": "docs/NATIVE_COMPILE_RESULTS.json",
+      "status": "added",
+      "sha256": "db4230fced360f05d5b5619481299a0a58ad71604d7ff9f0a3686d708a8b5dd5",
+      "bytes": 4391
+    },
+    {
+      "path": "docs/NATIVE_CORE_TEST_RESULTS.json",
+      "status": "added",
+      "sha256": "ce5f369dfc7d12e5fd0875c1929f53674365256536a97810d9226162bdd2ddf0",
+      "bytes": 6181
+    },
+    {
+      "path": "docs/PYTHON_TESTS_NATIVE_CONTINUATION.txt",
+      "status": "added",
+      "sha256": "81ccfd4782329e428a3ed7672da4a70e527853a4933b730eb49bb484d4202a7b",
+      "bytes": 3565
+    },
+    {
+      "path": "docs/WIREGUARD_ANDROID_BUILD.txt",
+      "status": "added",
+      "sha256": "9f0cc771ef203c002195b6a47942d88a9456246b3d9979be79d66f70afb22ce5",
+      "bytes": 626
+    },
+    {
+      "path": "docs/WIREGUARD_DEPENDENCY_RESULTS.txt",
+      "status": "added",
+      "sha256": "1383f890ad8286f506e777b818e6f04a8e4085b97894ecb0a19c793fa7f3fbd2",
+      "bytes": 409
+    },
+    {
+      "path": "docs/WIREGUARD_KERNEL_TUN_RESULTS.json",
+      "status": "added",
+      "sha256": "07c4aa6cf291680571d718b391ede181c29b8332c0fd6d9ef1c2c0374c84cbb0",
+      "bytes": 832
+    },
+    {
+      "path": "tool/build_android_go_backend.sh",
+      "status": "added",
+      "sha256": "5ab4a1c05d3a0a3056571133794f142baae8289e9c5888032aef62a19c8b33cd",
+      "bytes": 3378
+    },
+    {
+      "path": "tool/check_android_artifact.py",
+      "status": "updated",
+      "sha256": "9470bea98b355a850375fae918753b38d18c6f5d4ab33f37fd29a93e20240c46",
+      "bytes": 3787
+    },
+    {
+      "path": "tool/go_backend_tests/blackout_awg_test.go",
+      "status": "added",
+      "sha256": "49803bab9a297494871e197913d85074e9e5280245a5222dc24f65ebe5cbd55f",
+      "bytes": 1376
+    },
+    {
+      "path": "tool/go_backend_tests/kernel_peer.go",
+      "status": "added",
+      "sha256": "eb53783a80dd4e1bc094ec3c07a8a7a2ae38211041e20700dad89d68d928cede",
+      "bytes": 1339
+    },
+    {
+      "path": "tool/go_module_proxy/main.go",
+      "status": "added",
+      "sha256": "39820176d6886095ce1482ed849afffed279a40b93dbadc4f6c6e96299921dea",
+      "bytes": 2208
+    },
+    {
+      "path": "tool/recover_awg_modules.py",
+      "status": "added",
+      "sha256": "c991cd82c6eb7680148194eec7bdbf7fbc8d0872eac1367687bad63768f18de3",
+      "bytes": 5522
+    },
+    {
+      "path": "tool/recover_native_toolchain.sh",
+      "status": "added",
+      "sha256": "d5bf2f77d383e30ed243d850b1e120f3e9714e304a63e17721ed1b18c9a31e54",
+      "bytes": 1945
+    },
+    {
+      "path": "tool/test_kernel_tunnel.py",
+      "status": "added",
+      "sha256": "2da48ed7c44f6d486d0d76c6248b4a46331a9dabce91da5624cc968318b1bb19",
+      "bytes": 10706
+    },
+    {
+      "path": "tool/test_kotlin_junit_local.sh",
+      "status": "added",
+      "sha256": "427075a0f0dadabed019fd17515119e1b7d7cbc689d8482bf8382c49c56b0de4",
+      "bytes": 1661
+    },
+    {
+      "path": "tool/test_native_go_backends.sh",
+      "status": "added",
+      "sha256": "57f231d7ba178e687c7eb45c6c7a71324b1bfcb6a24df7a68bb72ee046262734",
+      "bytes": 3031
+    }
+  ]
+}

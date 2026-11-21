@@ -90,14 +90,7 @@ object EngineRunner {
      * refused with "no engine is bundled"; the bundled core in fact contains
      * `xray.proxy.wireguard`, and [XrayEngine] now serves it directly.
      */
-    private val ENGINE_FOR_PROTOCOL = mapOf(
-        "hysteria2" to "libsingbox.so",
-        "tuic" to "libsingbox.so",
-        "anytls" to "libsingbox.so",
-        "shadowtls" to "libsingbox.so",
-        "amneziawg" to "libsingbox.so",
-        "warp" to "libsingbox.so",
-    )
+
 
     @Volatile
     var lastError: String? = null
@@ -128,12 +121,8 @@ object EngineRunner {
     }
     internal var lifecycle = SubprocessLifecycle()
 
-    private fun engineLogTail(log: File): String = try {
-        val tail = log.readText().takeLast(600)
-        if (tail.isBlank()) "" else "\nengine log: $tail"
-    } catch (_: Exception) {
-        ""
-    }
+    private fun engineLogTail(@Suppress("UNUSED_PARAMETER") log: File): String =
+        " Native log content is withheld because it may contain credentials."
 
     fun start(context: Context, tunFd: Int, socksPort: Int, protocol: String): Boolean {
         lastError = null
@@ -144,7 +133,8 @@ object EngineRunner {
         // its own set lookup: the map keys are lowercase, and a caller that
         // ever passes "Hysteria2" would otherwise get a misleading "no engine
         // is mapped" refusal.
-        val engineName = ENGINE_FOR_PROTOCOL[protocol.lowercase()]
+        val engineSpec = EngineCommands.forProtocol(protocol)
+        val engineName = engineSpec?.binary
 
         if (engineName == null) {
             lastError = "No engine is mapped for protocol '$protocol'."
@@ -167,9 +157,9 @@ object EngineRunner {
             return false
         }
 
-        val configFile = File(configDir(context), "singbox.json")
+        val configFile = File(configDir(context), engineSpec.configName)
         if (!configFile.exists()) {
-            lastError = "No sing-box config has been written yet."
+            lastError = "No configuration has been written for the selected engine."
             Log.w(TAG, lastError!!)
             return false
         }
@@ -177,56 +167,20 @@ object EngineRunner {
         return try {
             intentionalStop.set(false)
 
-            // Validate the config with sing-box's own checker BEFORE launching.
-            // A config the engine cannot parse (unknown fields, bad TLS material)
-            // used to surface as a generic readiness timeout; the checker names
-            // the exact offending field instead.
-            val check = ProcessBuilder(
-                listOf(enginePath.absolutePath, "check", "-c", configFile.absolutePath)
-            ).redirectErrorStream(true).start()
-            // Drain the checker's output on a side thread. Reading it inline
-            // (readText before waitFor) hung the connect path FOREVER when a
-            // wedged `sing-box check` produced no output and never exited:
-            // the 20s deadline below was unreachable because the read never
-            // returned. The deadline is now measured on the process, and the
-            // drained output is collected with a short grace afterwards (the
-            // stream closes once the process is gone).
-            val outputFuture = java.util.concurrent.CompletableFuture.supplyAsync {
-                try {
-                    check.inputStream.bufferedReader().use { it.readText() }
-                } catch (_: Exception) {
-                    ""
-                }
-            }
-            val checkDone = check.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)
-            if (!checkDone) {
-                check.destroyForcibly()
-                lastError = "sing-box check timed out after 20s - the engine may be damaged"
-                Log.e(TAG, lastError!!)
-                return false
-            }
-            val checkOutput = try {
-                outputFuture.get(2, java.util.concurrent.TimeUnit.SECONDS)
-            } catch (_: Exception) {
-                ""
-            }
-            if (check.exitValue() != 0) {
-                lastError = "sing-box rejected the configuration: " + checkOutput.takeLast(500) +
-                    (if (checkOutput.contains("amnezia", ignoreCase = true))
-                        " [this build does not support the AmneziaWG junk-packet block]"
-                    else "")
-                Log.e(TAG, lastError!!)
+            val validation = NativeConfigValidator().validate(engineSpec, enginePath, configFile)
+            if (!validation.valid) {
+                lastError = validation.message
                 return false
             }
 
-            // Engine + tun2socks output goes to a file, not a pipe: unread pipes
-            // fill up and deadlock the engine mid-run, and the file gives the
-            // failure paths below something concrete to report.
-            val engineLog = File(configDir(context), "engine.log")
-            val logRedirect = ProcessBuilder.Redirect.appendTo(engineLog)
+            // Native output may contain full profiles/private keys. Discard it
+            // rather than persisting plaintext or filling an unread pipe.
+            // Status, exit codes and readiness remain available as diagnostics.
+            val engineLog = File("/dev/null")
+            val logRedirect = ProcessBuilder.Redirect.to(engineLog)
 
             engineProcess = ProcessBuilder(
-                listOf(enginePath.absolutePath, "run", "-c", configFile.absolutePath)
+                engineSpec.run(enginePath, configFile)
             ).redirectErrorStream(true).redirectOutput(logRedirect).start()
 
             // tun2socks needs the TUN descriptor itself. ProcessBuilder cannot
@@ -289,9 +243,10 @@ object EngineRunner {
                 stop()
                 return false
             }
-            val readinessPort = readinessPortProvider(context, configFile.readText())
+            val readinessPort = if (engineSpec == EngineCommands.MIHOMO) socksPort
+                else readinessPortProvider(context, configFile.readText())
             if (readinessPort !in 1..65535 || !readinessProbe("127.0.0.1", readinessPort, 2000)) {
-                lastError = "sing-box did not accept a local SOCKS5 readiness handshake." + engineLogTail(engineLog)
+                lastError = "The selected engine did not accept a local SOCKS5 readiness handshake." + engineLogTail(engineLog)
                 stop()
                 return false
             }
@@ -348,36 +303,53 @@ object EngineRunner {
         intentionalStop.set(true)
         monitorThread?.interrupt()
         monitorThread = null
-        lifecycle.stop(listOfNotNull(tun2socksProcess, engineProcess))
-        tun2socksProcess = null
-        engineProcess = null
-        // tun2socks runs as a launcher-started child: terminate it, then reap
-        // it so it cannot linger as a zombie holding the tunnel down.
+        var failed = false
+        try {
+            lifecycle.stop(listOfNotNull(tun2socksProcess, engineProcess))
+            if (tun2socksProcess?.isAlive == true || engineProcess?.isAlive == true) failed = true
+            else {
+                tun2socksProcess = null
+                engineProcess = null
+            }
+        } catch (_: Exception) { failed = true }
+        // Poll reaps with WNOHANG. Never call blocking nativeWaitPid here:
+        // a failed signal used to wedge the sole VPN lifecycle worker forever.
         if (nativeLoaded && tun2socksPid > 0) {
             val pid = tun2socksPid
-            tun2socksPid = -1
-            try {
-                nativeKillPid(pid, android.system.OsConstants.SIGTERM)
-                var waited = 0
-                while (nativePollPid(pid) == -1 && waited < 500) {
-                    Thread.sleep(25)
-                    waited += 25
-                }
-                if (nativePollPid(pid) == -1) {
-                    nativeKillPid(pid, android.system.OsConstants.SIGKILL)
-                }
-                nativeWaitPid(pid)
-            } catch (e: Throwable) {
-                Log.w(TAG, "could not stop tun2socks pid $pid: ${e.message}")
-            }
+            val stopped = try {
+                NativeChildStop(
+                    poll = ::nativePollPid,
+                    terminate = { nativeKillPid(it, android.system.OsConstants.SIGTERM); Unit },
+                    kill = { nativeKillPid(it, android.system.OsConstants.SIGKILL); Unit },
+                ).stop(pid)
+            } catch (_: Exception) { false } catch (_: LinkageError) { false }
+            if (stopped) tun2socksPid = -1 else failed = true
+        }
+        if (failed) {
+            // Retain unresolved process/PID handles for the next cleanup attempt.
+            lastError = "Native child cleanup did not complete within its deadline."
+            throw IllegalStateException(lastError)
         }
     }
 
     /** Called by Dart before connect() for a subprocess-backed engine. */
-    fun writeConfig(context: Context, json: String): Boolean {
+    fun writeConfig(context: Context, json: String, protocol: String = "hysteria2"): Boolean {
+        lastError = null
         return try {
             val dir = configDir(context)
-            File(dir, "singbox.json").writeText(json)
+            val spec = EngineCommands.forProtocol(protocol) ?: return false
+            if (json.toByteArray(Charsets.UTF_8).size > 8 * 1024 * 1024) {
+                lastError = "Configuration exceeds the 8 MiB engine limit."
+                return false
+            }
+            val file = File(dir, spec.configName)
+            val temporary = File.createTempFile("engine-", ".tmp", dir)
+            try {
+                temporary.writeText(json)
+                if (!temporary.renameTo(file)) throw java.io.IOException("Config replacement failed")
+            } finally {
+                temporary.delete()
+            }
             true
         } catch (e: Exception) {
             lastError = "Could not write engine config: ${e.message}"

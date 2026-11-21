@@ -98,3 +98,8 @@ android/app/.cxx/
 
 # Rust build artifacts (in-house native core)
 native/blackout-core/target/
+
+# Local research and private generated configurations
+.cache/
+private-exports/
+.venv/

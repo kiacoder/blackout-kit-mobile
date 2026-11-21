@@ -54,3 +54,7 @@
 # This app does not use them, so the classes are absent by design and R8's
 # missing-class warnings are noise. Flutter's own template ships these too.
 -dontwarn com.google.android.play.core.**
+
+# Official WG/AWG JNI symbol names must survive shrinking.
+-keep class com.wireguard.android.backend.GoBackend { *; }
+-keep class org.amnezia.awg.GoBackend { *; }

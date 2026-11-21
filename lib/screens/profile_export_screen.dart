@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import '../models/config.dart';
 import '../services/profile_export_service.dart';
 
@@ -39,12 +40,11 @@ class _ProfileExportScreenState extends State<ProfileExportScreen> {
     final consent = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Copy private configurations?'),
-        content: const Text('This includes passwords and private keys. Clipboard history '
-            'and other apps may retain them. Only paste into a trusted destination.'),
+        title: Text('Copy private configurations?'.tr),
+        content: Text('export_secret_warning'.tr),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Copy plaintext')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel'.tr)),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('Copy plaintext'.tr)),
         ],
       ),
     );
@@ -53,30 +53,29 @@ class _ProfileExportScreenState extends State<ProfileExportScreen> {
       await Clipboard.setData(ClipboardData(text: export.content));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Copied. Clear clipboard history after importing.')),
+        SnackBar(content: Text('Copied. Clear clipboard history after importing.'.tr)),
       );
     } on PlatformException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Clipboard export failed.')),
+        SnackBar(content: Text('Clipboard export failed.'.tr)),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Batch export')),
+    appBar: AppBar(title: Text('Batch export'.tr)),
     body: ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Exports contain secrets. Nothing is copied until you confirm. '
-            'This exports profiles, not connection test results or subscription metadata.'),
+        Text('export_scope_warning'.tr),
         const SizedBox(height: 16),
         DropdownButtonFormField<bool>(
           value: _v2rayN,
-          items: const [
-            DropdownMenuItem(value: false, child: Text('Blackout JSON profile list')),
-            DropdownMenuItem(value: true, child: Text('v2rayN share-link list')),
+          items: [
+            DropdownMenuItem(value: false, child: Text('Blackout JSON profile list'.tr)),
+            DropdownMenuItem(value: true, child: Text('v2rayN share-link list'.tr)),
           ],
           onChanged: (value) => setState(() {
             _v2rayN = value ?? false;
@@ -85,10 +84,7 @@ class _ProfileExportScreenState extends State<ProfileExportScreen> {
         ),
         const SizedBox(height: 16),
         if (_v2rayN)
-          const Text('Includes VLESS, VMess, Trojan and Shadowsocks links only. '
-              'Your v2rayN/core version must support the transport and cipher. '
-              'Use the JSON list or offline factory for omitted profiles; '
-              'WireGuard, AmneziaWG and OpenVPN are not converted to proxy links.'),
+          Text('export_v2rayn_limitations'.tr),
         if (_error != null) Text(_error!),
         if (_export != null)
           Text('${_export!.included} unique profiles included; ${_export!.omitted} omitted.'),
@@ -96,7 +92,7 @@ class _ProfileExportScreenState extends State<ProfileExportScreen> {
         FilledButton.icon(
           onPressed: _export != null && _export!.included > 0 ? _copy : null,
           icon: const Icon(Icons.copy),
-          label: const Text('Copy export…'),
+          label: Text('Copy export…'.tr),
         ),
       ],
     ),

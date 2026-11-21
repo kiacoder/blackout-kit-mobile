@@ -163,10 +163,11 @@ void main() {
 
   group('BK-022 sing-box checker timeout', () {
     test('the checker has a hard timeout', () {
-      final runner =
-          source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt');
-      expect(runner.contains('waitFor(20, java.util.concurrent.TimeUnit.SECONDS'),
-          isTrue);
+      final commands =
+          source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCommands.kt');
+      expect(commands.contains('timeoutMs: Long = 20_000'), isTrue);
+      expect(commands.contains('process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)'), isTrue);
+      expect(commands.contains('process.destroyForcibly()'), isTrue);
     });
   });
 }

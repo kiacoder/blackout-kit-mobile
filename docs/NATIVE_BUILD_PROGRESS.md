@@ -7,7 +7,8 @@
 
 > **Superseding AWG timeout evidence:** see [AWG_TIMEOUT_FIX.md](AWG_TIMEOUT_FIX.md).
 > The initial-read defect is reproduced and patched in the build/test path;
-> Android service integration and device verification remain outstanding.
+> Android JNI/service acceptance now passes on a physical ARM64 device, while real
+> WG/AWG handshakes and traffic validation remain outstanding.
 
 **Current checkpoint: native-enabled DEBUG APK packaging and JNI/coexistence on a
 physical ARM64 Android device are proven. Real native WG/AWG tunnel handshakes,
@@ -90,13 +91,14 @@ Makefile succeeds unchanged. Patch SHA-256:
 `149ab7d9a1c20dad61fe279a837e0e0c81c6b2f5584614ac4d4cde67008755f0`.
 The same patch is present in both pinned Android sources.
 
-The reproducible script sets the correct module-specific IPC socketDirectory under
-this app's private cache (AWG requires the `/v3` import path), checks all six expected
-JNI exports, and runs the ELF ABI/API gate for both ABIs. Artifacts remain in ignored
-cache only. Both upstream backends use the same `libwg-go.so` SONAME: **do not
-co-package them under that name**. Distinct library loading/naming must be designed
-and tested before app integration. ET_DYN metadata denotes a shared library or PIE,
-not proof of executable or device compatibility. The gate wording now reflects that.
+The separate-backend builder verifies all seven JNI exports per engine and runs the
+ELF ABI/API gate for both ABIs. For app integration, the combined builder imports
+both pinned cores into one Go `c-shared` library, applies the same FD/AWG patches,
+and verifies all **14** WG+AWG JNI exports from `libblackout-tunnels.so`. Artifacts
+remain in ignored cache only. The upstream backends both use the same `libwg-go.so`
+SONAME and must never be co-packaged directly; the first renamed dual-runtime device
+attempt also crashed with `addspecial on invalid pointer`, so Gradle/staging now
+reject that topology. ET_DYN metadata alone is still not proof of runtime behavior.
 
 Build evidence: AWG_ANDROID_BUILD.txt, WIREGUARD_ANDROID_BUILD.txt,
 AWG_DEPENDENCY_RESULTS.txt, WIREGUARD_DEPENDENCY_RESULTS.txt and
@@ -197,8 +199,9 @@ AWG's aggregate script may stop at the documented intermittent race failure. Thi
 must remain visible. Kernel fixtures require passwordless sudo, ip, nsenter and
 unshare; do not run them on a production host.
 
-For native DEBUG packaging after staging the four libraries, use the explicit
-Gradle property rather than relying on Flutter to forward an environment property:
+For native DEBUG packaging after staging the combined library for both ARM ABIs,
+use the explicit Gradle property rather than relying on Flutter to forward an
+environment property:
 ```
 cd android
 ./gradlew :app:assembleDebug -PenableNativeTunnels=true

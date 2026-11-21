@@ -104,6 +104,61 @@ void main() {
     }
   }, skip: !nativeAcceptance);
 
+  testWidgets('native WireGuard starts and tears down without a peer handshake',
+      (tester) async {
+    final config = ConfigParser.parse('''
+[Interface]
+PrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+Address = 10.88.0.2/32
+DNS = 1.1.1.1
+MTU = 1420
+
+[Peer]
+PublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
+AllowedIPs = 0.0.0.0/0
+Endpoint = 127.0.0.1:9
+PersistentKeepalive = 1
+''');
+
+    expect(config, isA<WireGuardConfig>());
+    expect(await vpn.prepare(), isTrue);
+    expect(await vpn.connect(config!), isTrue,
+        reason: 'native WireGuard local device/socket startup failed');
+    expect(await vpn.isRunning(), isTrue);
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(await vpn.disconnect(), isTrue);
+    expect(await vpn.isRunning(), isFalse);
+  }, skip: !nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('native AmneziaWG starts and tears down without a peer handshake',
+      (tester) async {
+    final config = ConfigParser.parse('''
+[Interface]
+PrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+Address = 10.89.0.2/32
+DNS = 1.1.1.1
+MTU = 1420
+Jc = 4
+Jmin = 40
+Jmax = 70
+
+[Peer]
+PublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
+AllowedIPs = 0.0.0.0/0
+Endpoint = 127.0.0.1:9
+PersistentKeepalive = 1
+''');
+
+    expect(config, isA<AmneziaWGConfig>());
+    expect(await vpn.prepare(), isTrue);
+    expect(await vpn.connect(config!), isTrue,
+        reason: 'native AmneziaWG local device/socket startup failed');
+    expect(await vpn.isRunning(), isTrue);
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(await vpn.disconnect(), isTrue);
+    expect(await vpn.isRunning(), isFalse);
+  }, skip: !nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('VpnService.prepare() succeeds', (tester) async {
     final prepared = await vpn.prepare();
 

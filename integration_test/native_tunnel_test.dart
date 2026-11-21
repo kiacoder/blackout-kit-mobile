@@ -12,10 +12,15 @@
 /// # Plug in a device with USB debugging on, then:
 /// adb devices                                     # confirm it is listed
 /// adb shell appops set com.blackoutkit.vpn ACTIVATE_VPN allow   # skip the consent dialog
+/// # Standard Xray/VpnService acceptance:
 /// flutter test integration_test/native_tunnel_test.dart -d <device-id>
+/// # WG/AWG JNI acceptance (requires staged native libraries):
+/// GRADLE_OPTS="-Dorg.gradle.project.enableNativeTunnels=true" \
+///   flutter test integration_test/native_tunnel_test.dart -d <device-id> \
+///   --dart-define=BLACKOUT_NATIVE_ACCEPTANCE=true
 /// ```
 ///
-/// While the third test holds the tunnel open for 20 seconds, confirm the
+/// While the fourth test holds the tunnel open for 20 seconds, confirm the
 /// interface from another shell:
 ///
 /// ```bash
@@ -36,6 +41,8 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  const nativeAcceptance =
+      bool.fromEnvironment('BLACKOUT_NATIVE_ACCEPTANCE', defaultValue: false);
   final vpn = VPNService();
 
   /// A structurally valid VLESS config.
@@ -80,6 +87,19 @@ void main() {
     expect(info.canConnect('vless'), isTrue);
     expect(info.canConnect('hysteria2'), isFalse);
   });
+
+  testWidgets('native WG/AWG JNI probes load on this device', (tester) async {
+    final info = await vpn.getEngineInfo();
+
+    expect(info.nativeWireguardAvailable, isTrue,
+        reason: 'WireGuard JNI did not load/probe. The native availability path '
+            'loads libblackout-wireguard.so, calls wgVersion(), and checks '
+            'wgIsClosed(-1).');
+    expect(info.nativeAmneziawgAvailable, isTrue,
+        reason: 'AmneziaWG JNI did not load/probe. The native availability path '
+            'loads libblackout-awg.so, calls awgVersion(), and checks '
+            'awgIsClosed(-1).');
+  }, skip: !nativeAcceptance);
 
   testWidgets('VpnService.prepare() succeeds', (tester) async {
     final prepared = await vpn.prepare();

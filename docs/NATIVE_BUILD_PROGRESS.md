@@ -202,7 +202,9 @@ cd android
 ```
 On Windows, `tool/build_native_debug_windows.ps1` additionally verifies the debug
 BuildConfig flag and all four packaged APK entries. Release BuildConfig still forces
-the native flag false even when the property is supplied.
+the native flag false even when the property is supplied. With one connected ARM
+Android device, `tool/run_native_android_acceptance_windows.ps1` runs the real
+Flutter→MethodChannel→JNI acceptance suite and enables the WG/AWG availability probe.
 
 Next gates: Android device/JNI execution, real WG/AWG handshakes and leak tests,
 network handover/background/repeated-start-stop testing, then distribution-license

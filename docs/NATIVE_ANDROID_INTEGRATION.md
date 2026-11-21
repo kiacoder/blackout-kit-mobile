@@ -60,6 +60,9 @@ On Windows, `tool/build_native_debug_windows.ps1` performs the same build and al
 verifies the generated debug BuildConfig flag plus all four APK entries. A plain
 `flutter build apk` did not reliably propagate `ORG_GRADLE_PROJECT_enableNativeTunnels`
 on the tested Windows Flutter host, so it is not the canonical opt-in command.
+For a connected ARM device, `tool/run_native_android_acceptance_windows.ps1` runs
+the physical-device integration suite with the native Gradle property and the
+`BLACKOUT_NATIVE_ACCEPTANCE` Dart gate enabled.
 
 Staging checks hashes from each build manifest and the API/ABI metadata gates,
 requires both engines/both ABIs, and refuses to replace existing staging. It is

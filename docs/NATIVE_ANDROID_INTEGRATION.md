@@ -33,7 +33,9 @@ real WG/AWG handshake, traffic, leak, handover and kill-switch acceptance remain
   native WG gate is off, existing Xray WG routing remains unchanged.
 * Native errors use fixed safe messages. Endpoint resolver exceptions are
   normalized at the config/UAPI boundary so resolver diagnostics cannot echo
-  a user-supplied hostname. No profile files or raw native logs are added. The
+  a user-supplied hostname. VPN revocation atomically takes the one-shot connect
+  callback and dispatches it on Android's main looper because onRevoke() is not
+  guaranteed to run there. No profile files or raw native logs are added. The
   native profile extra is removed from the received Intent. JVM/Go strings
   cannot be reliably zeroized; no zeroization guarantee is made.
 * Native tunnels have no SOCKS listener. Exit-IP lookup returns unavailable
@@ -97,11 +99,13 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
   TCP/UDP-DNS, outage/recovery and repeated teardown. Not Android networking.
 * Flutter is now available on the tested Windows host. The full suite passes
   **546/546**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
-  exits 0, and `:app:testDebugUnitTest` passes **31/31** for the Blackout app
+  exits 0, and `:app:testDebugUnitTest` passes **33/33** for the Blackout app
   module. The added app-module cases exercise native lifecycle serialization,
   stale-ticket suppression, start/stop cancellation ordering, FD/socket failure
   paths, endpoint resolver redaction, AWG/WG field separation, IPv6 endpoint
-  formatting and unsafe profile syntax.
+  formatting, unsafe profile syntax, and atomic one-shot callback replacement.
+  The structural regression suite passes **19/19**, including an explicit check
+  that VPN revocation takes the callback atomically and posts delivery to main.
 
 `NATIVE_ANDROID_INTEGRATION_RESULTS.json` records artifact/log hashes and counts.
 Private raw logs remain ignored in `.buildlog`.

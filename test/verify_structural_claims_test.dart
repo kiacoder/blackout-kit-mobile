@@ -187,5 +187,13 @@ void main() {
           gradle.contains('buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"'),
           isTrue);
     });
+
+    test('VPN revoke callback is atomically taken and dispatched on main', () {
+      final service = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
+      expect(service.contains('val completion = takeConnectResultCallback()'), isTrue);
+      expect(service.contains('mainHandler.post { completion(false) }'), isTrue);
+      expect(service.contains('clearConnectResultCallback(completion)'), isTrue);
+    });
   });
 }

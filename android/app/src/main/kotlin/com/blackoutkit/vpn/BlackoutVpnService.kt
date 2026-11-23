@@ -155,9 +155,21 @@ class BlackoutVpnService : VpnService() {
         /**
          * One-shot hook the plugin uses to resolve its MethodChannel call only
          * after establish() has actually succeeded or failed.
+         *
+         * Android may invoke onRevoke() off the main thread, so capture/clear
+         * operations use an atomic slot rather than a racy read-then-write.
          */
-        @Volatile
-        var connectResultCallback: ((Boolean) -> Unit)? = null
+        private val connectResultSlot = OneShotCallbackSlot<Boolean>()
+        var connectResultCallback: ((Boolean) -> Unit)?
+            get() = connectResultSlot.value
+            set(value) { connectResultSlot.value = value }
+
+        private fun takeConnectResultCallback(): ((Boolean) -> Unit)? =
+            connectResultSlot.take()
+
+        private fun clearConnectResultCallback(expected: ((Boolean) -> Unit)?) {
+            connectResultSlot.clear(expected)
+        }
 
         /** Pushes status strings to Dart over the plugin's channel. */
         @Volatile
@@ -344,7 +356,7 @@ class BlackoutVpnService : VpnService() {
                 )
             }
         }, complete = { ok ->
-            if (connectResultCallback === completion) connectResultCallback = null
+            clearConnectResultCallback(completion)
             completion?.invoke(ok)
             if (!ok) finishService(startId)
         })
@@ -758,9 +770,11 @@ class BlackoutVpnService : VpnService() {
     /** The system revoked our tunnel (another VPN took over, or the user disabled it). */
     override fun onRevoke() {
         lastError = "VPN was revoked by the system"
-        val completion = connectResultCallback
-        connectResultCallback = null
-        completion?.invoke(false)
+        val completion = takeConnectResultCallback()
+        if (completion != null) {
+            // Android does not guarantee onRevoke() runs on the main thread.
+            mainHandler.post { completion(false) }
+        }
         sessions.stop(cleanup = ::teardown, complete = { current, cleaned ->
             if (current) {
                 notifyStatus(if (cleaned) "disconnected" else "error")

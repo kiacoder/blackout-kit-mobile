@@ -159,6 +159,15 @@ void main() {
           source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
       expect(plugin.contains('CONSENT_SUPERSEDED'), isTrue);
     });
+
+    test('engine death holds the TUN only for an active kill-switch request', () {
+      final svc = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
+      expect(svc.contains('if (holdTunnelOnFailure && tun != null)'), isTrue);
+      expect(svc.contains('.putBoolean(KEY_HELD_BLOCKING, true).apply()'), isTrue);
+      expect(svc.contains('ticket.publish { notifyStatus("blocked") }'), isTrue);
+      expect(svc.contains('isRunning = false'), isTrue);
+    });
   });
 
   group('BK-022 sing-box checker timeout', () {
@@ -201,6 +210,17 @@ void main() {
       final release = source('.github/workflows/build.yml');
       expect(ci.contains(':app:testDebugUnitTest'), isTrue);
       expect(release.contains(':app:testDebugUnitTest'), isTrue);
+    });
+
+    test('native test APK can use a side-by-side package without changing release', () {
+      final gradle = source('android/app/build.gradle');
+      final builder = source('tool/build_native_debug_windows.ps1');
+      expect(gradle.contains('applicationIdSuffix ".nativetest"'), isTrue);
+      expect(gradle.contains('project.findProperty("nativeTestPackage") == "true"'),
+          isTrue);
+      expect(builder.contains(r'[switch]$SideBySide'), isTrue);
+      expect(builder.contains('-PnativeTestPackage=true'), isTrue);
+      expect(builder.contains('com.blackoutkit.vpn.nativetest'), isTrue);
     });
   });
 }

@@ -62,12 +62,16 @@ cd android
 ```
 
 On Windows, `tool/build_native_debug_windows.ps1` performs the same build and also
-verifies the generated debug BuildConfig flag plus the combined library for both APK ABIs. A plain
-`flutter build apk` did not reliably propagate `ORG_GRADLE_PROJECT_enableNativeTunnels`
-on the tested Windows Flutter host, so it is not the canonical opt-in command.
-For a connected ARM device, `tool/run_native_android_acceptance_windows.ps1` runs
-the physical-device integration suite with the native Gradle property and the
-`BLACKOUT_NATIVE_ACCEPTANCE` Dart gate enabled.
+verifies the generated debug BuildConfig flag plus the combined library for both APK ABIs.
+Passing `-SideBySide` additionally sets the debug-only application ID to
+`com.blackoutkit.vpn.nativetest` and verifies it from the finished APK, allowing
+the experimental test build to install beside the production app. Release builds
+remain `com.blackoutkit.vpn` with native tunnels forced off. A plain `flutter build apk`
+did not reliably propagate `ORG_GRADLE_PROJECT_enableNativeTunnels` on the tested
+Windows Flutter host, so it is not the canonical opt-in command. For a connected
+ARM device, `tool/run_native_android_acceptance_windows.ps1` runs the physical-device
+integration suite with the native Gradle property and the `BLACKOUT_NATIVE_ACCEPTANCE`
+Dart gate enabled.
 
 Staging checks the build manifest hashes, binds each required source/patch
 digest to its expected provenance path, enforces API/ABI metadata gates, and verifies
@@ -109,9 +113,11 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
   stale-ticket suppression, start/stop cancellation ordering, FD/socket failure
   paths, endpoint resolver redaction, AWG/WG field separation, IPv6 endpoint
   formatting, unsafe profile syntax, and atomic one-shot callback replacement.
-  The structural regression suite passes **20/20**, including explicit checks
+  The structural regression suite passes **22/22**, including explicit checks
   that VPN revocation takes the callback atomically and posts delivery to main,
-  and that the Android JVM suite remains a hard PR and release gate.
+  kill-switch engine death retains the live TUN only for an active hold request,
+  the Android JVM suite remains a hard PR/release gate, and the native test APK's
+  side-by-side application ID stays opt-in/debug-only.
 
 `NATIVE_ANDROID_INTEGRATION_RESULTS.json` records artifact/log hashes and counts.
 Private raw logs remain ignored in `.buildlog`.

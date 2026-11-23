@@ -1,3 +1,7 @@
+param(
+  [switch]$SideBySide
+)
+
 $ErrorActionPreference = 'Stop'
 
 # Build a DEBUG APK with the locally staged WG/AWG JNI libraries.
@@ -18,7 +22,9 @@ foreach ($Relative in $Expected) {
 
 Push-Location (Join-Path $Root 'android')
 try {
-  & .\gradlew.bat :app:assembleDebug -PenableNativeTunnels=true --console=plain
+  $GradleArgs = @(':app:assembleDebug', '-PenableNativeTunnels=true', '--console=plain')
+  if ($SideBySide) { $GradleArgs += '-PnativeTestPackage=true' }
+  & .\gradlew.bat @GradleArgs
   if ($LASTEXITCODE -ne 0) { throw "Gradle debug build failed with exit code $LASTEXITCODE." }
 }
 finally {
@@ -33,6 +39,17 @@ if (-not (Select-String -Path $BuildConfig -SimpleMatch 'ENABLE_EXPERIMENTAL_NAT
 $Apk = Join-Path $Root 'build\app\outputs\flutter-apk\app-debug.apk'
 if (-not (Test-Path $Apk -PathType Leaf)) { throw 'Debug APK was not produced.' }
 
+if ($SideBySide) {
+  $BuildTools = Join-Path $env:LOCALAPPDATA 'Android\Sdk\build-tools'
+  $Aapt = Get-ChildItem $BuildTools -Recurse -File -Filter 'aapt.exe' |
+    Sort-Object FullName -Descending | Select-Object -First 1
+  if ($null -eq $Aapt) { throw 'aapt.exe is required to verify the side-by-side test package.' }
+  $Badging = & $Aapt.FullName dump badging $Apk | Select-Object -First 1
+  if ($Badging -notmatch "package: name='com\.blackoutkit\.vpn\.nativetest'") {
+    throw "Unexpected side-by-side APK package: $Badging"
+  }
+}
+
 $Entries = & jar tf $Apk
 foreach ($Relative in $Expected) {
   $Entry = 'lib/' + ($Relative -replace '\\','/')
@@ -44,4 +61,7 @@ foreach ($Relative in $Expected) {
 $Hash = (Get-FileHash -Algorithm SHA256 $Apk).Hash.ToLowerInvariant()
 Write-Host "PASS native-enabled debug APK: $Apk"
 Write-Host "SHA256 $Hash"
+if ($SideBySide) {
+  Write-Host 'Side-by-side test package requested: com.blackoutkit.vpn.nativetest'
+}
 Write-Host 'Release builds still force ENABLE_EXPERIMENTAL_NATIVE_TUNNELS=false.'

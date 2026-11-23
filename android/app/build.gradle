@@ -135,6 +135,14 @@ android {
         sourceSets.debug.jniLibs.srcDir nativeDir
     }
     buildTypes {
+        debug {
+            // Explicit test-distribution mode: install beside the production app
+            // instead of replacing a release-signed com.blackoutkit.vpn build.
+            if (project.findProperty("nativeTestPackage") == "true") {
+                applicationIdSuffix ".nativetest"
+                versionNameSuffix "-native-test"
+            }
+        }
         release {
             // Never enable an unverified tunnel in a distribution build.
             buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"

@@ -79,3 +79,4 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/licenses/native_tunnel_licenses.txt

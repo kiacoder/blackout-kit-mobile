@@ -222,5 +222,17 @@ void main() {
       expect(builder.contains('-PnativeTestPackage=true'), isTrue);
       expect(builder.contains('com.blackoutkit.vpn.nativetest'), isTrue);
     });
+
+    test('native test distribution carries third-party license notices', () {
+      final pubspec = source('pubspec.yaml');
+      final notices = source('assets/licenses/native_tunnel_licenses.txt');
+      final builder = source('tool/build_native_debug_windows.ps1');
+      expect(pubspec.contains('assets/licenses/native_tunnel_licenses.txt'), isTrue);
+      expect(notices.contains('Apache License'), isTrue);
+      expect(notices.contains('MIT license - WireGuard Go core'), isTrue);
+      expect(notices.contains('MIT license - AmneziaWG-Go'), isTrue);
+      expect(notices.contains('Go Authors BSD-style license'), isTrue);
+      expect(builder.contains('native_tunnel_licenses.txt'), isTrue);
+    });
   });
 }

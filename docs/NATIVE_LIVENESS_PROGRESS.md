@@ -54,10 +54,10 @@ a combined single-Go-runtime library removed that failure and the suite passed 7
   superseded by successful Flutter analysis/tests, Gradle app-module tests, and
   normal plus native-enabled debug APK builds.
 * **13** standalone JVM ownership/liveness checks passed with fake native calls.
-* The actual Gradle app-module unit suite now passes **19/19** with zero failures,
-  errors or skips. Two added `VpnSessionExecutorTest` cases verify nested
-  `forCurrent()` callbacks complete and stale tickets cannot run after a newer
-  generation starts.
+* The actual Gradle app-module unit suite now passes **27/27** with zero failures,
+  errors or skips. Four `VpnSessionExecutorTest` cases now cover nested
+  `forCurrent()` callbacks, stale-ticket suppression, stop during a blocking
+  start, and stop completion after a newer generation supersedes it.
 * Earlier Linux evidence includes **30 host**, **15 parser**, and **33 Python**
   checks passing. The current Windows all-tool Python run is not counted because
   that interpreter lacks PyYAML and NTFS does not expose the POSIX `0700` mode

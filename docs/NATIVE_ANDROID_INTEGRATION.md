@@ -81,9 +81,10 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
 * The earlier service/plugin source API check passed against both the pinned API
   jar and recovered AOSP API34 jar. That narrow evidence is now superseded by the
   successful Flutter analysis/tests, app-module Gradle tests, and debug APK builds.
-* Native ownership coordinator: **10 passing JVM checks with a fake backend**.
-  These cover handoff, failure, protection, restart and retained failed cleanup;
-  they do not execute JNI or Android FDs.
+* Native ownership coordinator: **11 passing app-module JUnit cases** plus
+  **13 standalone fake-backend checks**. These cover handoff, failed starts,
+  single-stack socket protection, restart, redacted failures and retained failed
+  cleanup; they do not execute JNI or Android FDs.
 * Profile parser: **15 passing JVM checks**.
 * Existing host suite: **30 passed**; Python suite: **33 passed**;
   standalone real JUnit suite: **7 passed**.
@@ -94,7 +95,9 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
   TCP/UDP-DNS, outage/recovery and repeated teardown. Not Android networking.
 * Flutter is now available on the tested Windows host. The full suite passes
   **546/546**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
-  exits 0, and `:app:testDebugUnitTest` passes for the Blackout app module.
+  exits 0, and `:app:testDebugUnitTest` passes **27/27** for the Blackout app
+  module. Four of those app-module cases exercise `VpnSessionExecutor`
+  serialization, stale-ticket suppression and start/stop cancellation ordering.
 
 `NATIVE_ANDROID_INTEGRATION_RESULTS.json` records artifact/log hashes and counts.
 Private raw logs remain ignored in `.buildlog`.

@@ -104,8 +104,9 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
   stale-ticket suppression, start/stop cancellation ordering, FD/socket failure
   paths, endpoint resolver redaction, AWG/WG field separation, IPv6 endpoint
   formatting, unsafe profile syntax, and atomic one-shot callback replacement.
-  The structural regression suite passes **19/19**, including an explicit check
-  that VPN revocation takes the callback atomically and posts delivery to main.
+  The structural regression suite passes **20/20**, including explicit checks
+  that VPN revocation takes the callback atomically and posts delivery to main,
+  and that the Android JVM suite remains a hard PR and release gate.
 
 `NATIVE_ANDROID_INTEGRATION_RESULTS.json` records artifact/log hashes and counts.
 Private raw logs remain ignored in `.buildlog`.

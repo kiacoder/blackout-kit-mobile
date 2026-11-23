@@ -20,6 +20,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -47,6 +53,12 @@ jobs:
         # --coverage is what produces coverage/lcov.info. Without it the Codecov
         # step below uploaded a file that was never generated.
         run: flutter test test/ --coverage
+
+      - name: Run Android app unit tests
+        # Native lifecycle/config tests live under android/app/src/test and are
+        # not executed by flutter test. Keep them as a hard PR gate.
+        working-directory: android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
 
       - name: Run integration tests
         # UNVERIFIED. These drive `app.main()`, which calls Hive.initFlutter()

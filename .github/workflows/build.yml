@@ -64,6 +64,12 @@ jobs:
           flutter analyze --no-fatal-infos --no-fatal-warnings
           flutter test
 
+      - name: Release gate — Android app unit tests
+        # Covers the Android service/native lifecycle and strict WG/AWG config
+        # boundary that flutter test cannot execute.
+        working-directory: android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
+
       - name: Set up Rust & Android targets
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, commit-pinned (CodeQL: non-immutable action)
         with:

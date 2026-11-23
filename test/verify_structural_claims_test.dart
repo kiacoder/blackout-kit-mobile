@@ -195,5 +195,12 @@ void main() {
       expect(service.contains('mainHandler.post { completion(false) }'), isTrue);
       expect(service.contains('clearConnectResultCallback(completion)'), isTrue);
     });
+
+    test('Android JVM suite is a PR and release gate', () {
+      final ci = source('.github/workflows/test.yml');
+      final release = source('.github/workflows/build.yml');
+      expect(ci.contains(':app:testDebugUnitTest'), isTrue);
+      expect(release.contains(':app:testDebugUnitTest'), isTrue);
+    });
   });
 }

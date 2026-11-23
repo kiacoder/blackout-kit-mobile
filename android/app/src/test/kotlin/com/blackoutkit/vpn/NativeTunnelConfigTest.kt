@@ -56,4 +56,45 @@ class NativeTunnelConfigTest {
             catch (_: IllegalArgumentException) {}
         }
     }
+
+    @Test fun endpointResolverFailureDoesNotEchoHostnameOrResolverDiagnostic() {
+        val config = NativeTunnelConfig.parse(profile(), false)
+        try {
+            config.userspace { throw IllegalStateException("resolver leaked example.invalid") }
+            fail("Expected resolution failure")
+        } catch (e: IllegalArgumentException) {
+            assertEquals("Invalid or unsupported native tunnel configuration", e.message)
+            assertFalse(e.message.orEmpty().contains("example.invalid"))
+            assertFalse(e.message.orEmpty().contains("resolver leaked"))
+        }
+    }
+
+    @Test fun ipv6EndpointIsBracketedInUserspaceConfig() {
+        val config = NativeTunnelConfig.parse(profile(), false)
+        val uapi = config.userspace { NativeTunnelConfig.numericAddress("2001:db8::1") }
+        assertTrue(uapi.contains("endpoint=[2001:db8:0:0:0:0:0:1]:51820\n"))
+    }
+
+    @Test fun awgFieldsRemainProtocolGated() {
+        val awg = profile().replace(
+            "Address = 10.0.0.2/32",
+            "S4 = 25\nH1 = 1-100\nAddress = 10.0.0.2/32",
+        )
+        reject(awg)
+        val uapi = NativeTunnelConfig.parse(awg, true)
+            .userspace { NativeTunnelConfig.numericAddress("192.0.2.1") }
+        assertTrue(uapi.contains("s4=25\n"))
+        assertTrue(uapi.contains("h1=1-100\n"))
+    }
+
+    @Test fun unsafeOrUnsupportedProfileSyntaxIsRejected() {
+        for (candidate in listOf(
+            profile().replace("Address =", "PostUp = run-command\nAddress ="),
+            profile() + "\nTable = off",
+            profile().replace(":51820", ":65536"),
+            profile() + "\u0000",
+        )) {
+            reject(candidate)
+        }
+    }
 }

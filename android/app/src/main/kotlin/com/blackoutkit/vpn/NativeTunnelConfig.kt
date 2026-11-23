@@ -52,7 +52,10 @@ internal class NativeTunnelConfig private constructor(
             peer["presharedkey"]?.let { output.append("preshared_key=${keyHex(it)}\n") }
             peer["endpoint"]?.let {
                 val (host, port) = endpoint(it)
-                val ip = resolve(host).hostAddress ?: fail()
+                // Keep resolver diagnostics from escaping this boundary: JVM
+                // UnknownHostException messages commonly echo the user-supplied host.
+                val resolved = try { resolve(host) } catch (_: Exception) { fail() }
+                val ip = resolved.hostAddress ?: fail()
                 output.append("endpoint=${if (ip.contains(':')) "[$ip]" else ip}:$port\n")
             }
             output.append("replace_allowed_ips=true\n")

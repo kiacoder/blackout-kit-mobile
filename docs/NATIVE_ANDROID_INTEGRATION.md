@@ -107,7 +107,7 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
 * Both engines: **10 isolated Linux kernel-TUN checks passed each**, including
   TCP/UDP-DNS, outage/recovery and repeated teardown. Not Android networking.
 * Flutter is now available on the tested Windows host. The full suite passes
-  **546/546**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
+  **550/550**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
   exits 0, and `:app:testDebugUnitTest` passes **33/33** for the Blackout app
   module. The added app-module cases exercise native lifecycle serialization,
   stale-ticket suppression, start/stop cancellation ordering, FD/socket failure
@@ -119,8 +119,11 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
   the Android JVM suite remains a hard PR/release gate, and the native test APK's
   side-by-side application ID stays opt-in/debug-only.
 
-`NATIVE_ANDROID_INTEGRATION_RESULTS.json` records artifact/log hashes and counts.
-Private raw logs remain ignored in `.buildlog`.
+`NATIVE_ANDROID_INTEGRATION_RESULTS.json` is retained as a **historical
+pre-combined-runtime checkpoint**; its old separate WG/AWG artifact entries must not
+be read as current release evidence. Current combined-runtime status is documented
+in this file and `NATIVE_LIVENESS_PROGRESS.md`. Private raw logs remain ignored in
+`.buildlog`.
 
 ## Build environment recovery and failures retained
 

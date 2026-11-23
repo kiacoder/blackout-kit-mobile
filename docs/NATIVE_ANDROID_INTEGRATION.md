@@ -107,13 +107,13 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
 * Both engines: **10 isolated Linux kernel-TUN checks passed each**, including
   TCP/UDP-DNS, outage/recovery and repeated teardown. Not Android networking.
 * Flutter is now available on the tested Windows host. The full suite passes
-  **550/550**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
+  **551/551**, CI-style `flutter analyze --no-fatal-infos --no-fatal-warnings`
   exits 0, and `:app:testDebugUnitTest` passes **33/33** for the Blackout app
   module. The added app-module cases exercise native lifecycle serialization,
   stale-ticket suppression, start/stop cancellation ordering, FD/socket failure
   paths, endpoint resolver redaction, AWG/WG field separation, IPv6 endpoint
   formatting, unsafe profile syntax, and atomic one-shot callback replacement.
-  The structural regression suite passes **22/22**, including explicit checks
+  The structural regression suite passes **23/23**, including explicit checks
   that VPN revocation takes the callback atomically and posts delivery to main,
   kill-switch engine death retains the live TUN only for an active hold request,
   the Android JVM suite remains a hard PR/release gate, and the native test APK's

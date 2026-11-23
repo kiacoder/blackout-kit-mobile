@@ -57,6 +57,10 @@ foreach ($Relative in $Expected) {
     throw "Debug APK is missing packaged native library: $Entry"
   }
 }
+$NoticeEntry = 'assets/flutter_assets/assets/licenses/native_tunnel_licenses.txt'
+if ($Entries -notcontains $NoticeEntry) {
+  throw "Debug APK is missing native third-party notices: $NoticeEntry"
+}
 
 $Hash = (Get-FileHash -Algorithm SHA256 $Apk).Hash.ToLowerInvariant()
 Write-Host "PASS native-enabled debug APK: $Apk"

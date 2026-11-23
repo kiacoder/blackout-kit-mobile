@@ -15,7 +15,7 @@ signed download URL redacted.
 
 That earlier build-recovery blocker is now superseded on the Windows development
 host: Flutter 3.24/Dart, Java 17, Android API34/build-tools/platform-tools and
-Gradle dependency resolution are usable. The full Flutter suite passes 546/546,
+Gradle dependency resolution are usable. The full Flutter suite passes 551/551,
 CI-style analyze exits 0, and native-enabled debug APK packaging succeeds. A Redmi
 13 (arm64-v8a, Android 16/API36) now runs the physical acceptance suite. Separate
 WG/AWG Go shared libraries reproduced `fatal error: addspecial on invalid pointer`;
@@ -54,10 +54,11 @@ a combined single-Go-runtime library removed that failure and the suite passed 7
   superseded by successful Flutter analysis/tests, Gradle app-module tests, and
   normal plus native-enabled debug APK builds.
 * **13** standalone JVM ownership/liveness checks passed with fake native calls.
-* The actual Gradle app-module unit suite now passes **27/27** with zero failures,
-  errors or skips. Four `VpnSessionExecutorTest` cases now cover nested
-  `forCurrent()` callbacks, stale-ticket suppression, stop during a blocking
-  start, and stop completion after a newer generation supersedes it.
+* The actual Gradle app-module unit suite now passes **33/33** with zero failures,
+  errors or skips. It covers native lifecycle/FD/socket failure paths, parser
+  hardening, atomic callback replacement, plus `VpnSessionExecutorTest` cases for
+  nested `forCurrent()` callbacks, stale-ticket suppression, stop during a
+  blocking start, and stop completion after a newer generation supersedes it.
 * Earlier Linux evidence includes **30 host**, **15 parser**, and **33 Python**
   checks passing. The current Windows all-tool Python run is not counted because
   that interpreter lacks PyYAML and NTFS does not expose the POSIX `0700` mode
@@ -80,16 +81,20 @@ used. All added test keys/peers are synthetic upstream fixtures.
 
 ## Still required
 
-* Android tests of actual FD ownership, native closure injection, stale callbacks,
-  kill-switch routing, protection failures and error delivery. Source compilation
-  and host mocks do not validate these behaviors on Android.
+* Physical Android validation of actual FD ownership, native closure injection,
+  kill-switch routing, socket-protection failures and error delivery. Host/JVM
+  tests now enforce the state-machine contracts, but do not prove Android FD or
+  routing behavior.
 * Physical JNI load/coexistence and repeated availability probes pass on the Redmi.
   Native WG/AWG start/stop, FD/socket ownership, real handshakes, TCP/UDP/DNS,
   network switching, reconnect, background/suspend and repeated start/stop remain.
-* Further license/security review is required before distribution. The rejected
-  simultaneous-Go-runtime design is guarded against by staging and Gradle checks.
+* Further security review and real WG/AWG traffic acceptance are required before
+  production distribution. The experimental test APK now carries the pinned native
+  third-party notices; the rejected simultaneous-Go-runtime design is guarded against
+  by staging and Gradle checks.
 
-Default-off debug gate and forced-off release behavior are unchanged. Mihomo is
-still disabled. minSdk24 is unchanged. The accepted 66-file inventory remains
-byte-for-byte unchanged. Development commits are pushed only to the draft PR;
-no release artifact or public distribution has been published.
+Default-off debug gate and forced-off production-release behavior are unchanged.
+Mihomo is still disabled. minSdk24 is unchanged. Development commits remain on the
+draft PR. A separately identified, side-by-side, debug-signed native test APK may
+be published only as an experimental pre-release for the remaining physical-device
+acceptance; this does not constitute production distribution readiness.

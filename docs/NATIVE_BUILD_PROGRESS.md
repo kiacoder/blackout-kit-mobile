@@ -12,7 +12,8 @@
 
 **Current checkpoint: native-enabled DEBUG APK packaging and JNI/coexistence on a
 physical ARM64 Android device are proven. Real native WG/AWG tunnel handshakes,
-traffic/leak testing, release publication and production readiness are not.**
+traffic/leak testing, production release publication and production readiness are
+not. An experimental side-by-side test APK is a device-acceptance artifact only.**
 
 The accepted 66-file inventory is preserved byte-for-byte:
 `docs/CHANGE_REVIEW_INVENTORY.json` SHA-256
@@ -48,8 +49,8 @@ Maven binary. This run is real JUnit but **not Gradle test execution**.
 
 A later Windows-host continuation recovered the missing app-build side: Flutter
 3.24/Dart, Java 17, Android API34/build-tools, platform-tools and Gradle dependency
-resolution are now usable. The full Flutter suite passes 546/546, CI-style analyze
-exits 0, the Blackout app-module Android unit tests pass, and both normal and
+resolution are now usable. The full Flutter suite passes 551/551, CI-style analyze
+exits 0, the Blackout app-module Android unit tests pass 33/33, and both normal and
 native-enabled debug APKs build. A Redmi 13 (arm64-v8a, Android 16/API36) is now
 used for physical-device acceptance; JNI loading and repeated WG/AWG availability
 probes pass with the combined runtime. No minSdk increase was made.
@@ -143,10 +144,11 @@ Android DNS integration, or a physical device. TCP readiness/recovery is bounded
 and may retry; the upstream single-packet timeout remains a blocker despite these
 kernel tests passing. See AWG_KERNEL_TUN_RESULTS.json and WIREGUARD_KERNEL_TUN_RESULTS.json.
 
-Existing application regressions rerun: **30 host tests, 33 Python tests, 7 JUnit
-tests passed**, plus the eleven-file API check after the logging changes. No full
-Flutter or Gradle suite is reported as passed. Xray/sing-box binaries and profile
-vault/factory remain unchanged by this continuation's native experiments.
+Historical application checkpoint: **30 host tests, 33 Python tests, 7 standalone
+JUnit tests passed**, plus the narrow API check. This checkpoint is superseded by
+the current integration evidence: full Flutter 551/551 and app-module Gradle 33/33
+now pass. Xray/sing-box binaries and profile vault/factory remain unchanged by these
+native experiments.
 
 ## E. Security / release gates before Android integration
 * EngineRunner now discards subprocess and tun2socks output instead of appending raw

@@ -108,6 +108,20 @@ class NativeTunnelStagingTests(unittest.TestCase):
                 stage.main()
             run.assert_not_called()
 
+    def test_source_digest_attached_to_wrong_path_is_rejected(self):
+        provenance = (self.source / 'PROVENANCE.txt').read_text()
+        first = stage.REQUIRED_FILES[0]
+        wrong = 'tool/native_combined/not-the-api.go'
+        provenance = provenance.replace(first, wrong, 1)
+        (self.source / 'PROVENANCE.txt').write_text(provenance)
+
+        with mock.patch.object(stage, 'ROOT', self.root), \
+             mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
+             mock.patch.object(stage.subprocess, 'run') as run:
+            with self.assertRaisesRegex(SystemExit, 'predates required combined source/patch'):
+                stage.main()
+            run.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

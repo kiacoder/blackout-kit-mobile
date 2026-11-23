@@ -46,10 +46,21 @@ def main():
         if pin not in provenance:
             raise SystemExit('Source provenance mismatch')
 
-    recorded = {line.split()[0] for line in provenance.splitlines() if line.split()}
+    recorded = []
+    for line in provenance.splitlines():
+        parts = line.split(maxsplit=1)
+        if len(parts) != 2 or len(parts[0]) != 64:
+            continue
+        recorded.append((parts[0], parts[1].replace('\\', '/')))
+
     for relative in REQUIRED_FILES:
         digest = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
-        if digest not in recorded:
+        matches = [
+            recorded_digest
+            for recorded_digest, recorded_path in recorded
+            if recorded_path == relative or recorded_path.endswith('/' + relative)
+        ]
+        if matches != [digest]:
             raise SystemExit(
                 f'Artifact predates required combined source/patch: {relative}; rebuild'
             )

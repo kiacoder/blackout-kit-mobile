@@ -69,9 +69,11 @@ For a connected ARM device, `tool/run_native_android_acceptance_windows.ps1` run
 the physical-device integration suite with the native Gradle property and the
 `BLACKOUT_NATIVE_ACCEPTANCE` Dart gate enabled.
 
-Staging checks the build manifest hashes, API/ABI metadata gates, and all fourteen
-required WG+AWG JNI exports directly from each ELF dynamic symbol table. It does not
-trust a sidecar symbol list as evidence of the binary's exported lifecycle ABI.
+Staging checks the build manifest hashes, binds each required source/patch
+digest to its expected provenance path, enforces API/ABI metadata gates, and verifies
+all fourteen required WG+AWG JNI exports directly from each ELF dynamic symbol table.
+It does not trust a sidecar symbol list as evidence of the binary's exported lifecycle
+ABI.
 It requires both engine JNI surfaces in the same ELF for both ABIs and refuses to
 replace existing staging. Gradle also rejects stale separate WG/AWG libraries to
 prevent the dual-Go-runtime crash from returning. This is not license clearance or
@@ -90,8 +92,11 @@ production approval. The opt-in DEBUG APK packages the combined runtime for ARM6
   single-stack socket protection, restart, redacted failures and retained failed
   cleanup; they do not execute JNI or Android FDs.
 * Profile parser: **15 passing JVM checks**.
-* Existing host suite: **30 passed**; Python suite: **33 passed**;
-  standalone real JUnit suite: **7 passed**.
+* Existing host suite: **30 passed**; the historical Python suite checkpoint
+  was **33 passed**; standalone real JUnit suite: **7 passed**. The combined
+  stager now has **5 focused unit checks** covering both-ABI/all-export gating,
+  no partial staging, artifact hashes, required source digests and digest/path
+  binding. The authoritative full Python count is left to the Linux factory CI.
 * AWG full core race suite: **25 top-level passed, 2 skipped**, now including
   the initial-padding variants. Stress: **20 barrier + 20 upstream packet tests
   passed**. WG full core race suite: **20 passed, 1 skipped**.

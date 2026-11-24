@@ -16,15 +16,22 @@ internal class NativeTunnelConfig private constructor(
             val a = address.address; val b = ip.address
             if (a.size != b.size) return false
             for (bit in 0 until prefix) {
-                val mask = 1 shl (7 - (bit % 8))
-                if ((a[bit / 8].toInt() and mask) != (b[bit / 8].toInt() and mask)) return false
+                val offset = bit % 8
+                val mask = 1 shl (7 - offset)
+                val byteIndex = bit / 8
+                val left = a[byteIndex].toInt() and mask
+                val right = b[byteIndex].toInt() and mask
+                if (left != right) return false
             }
             return true
         }
         fun masked(): Network {
             val bytes = address.address.copyOf()
             for (bit in prefix until bytes.size * 8) {
-                bytes[bit / 8] = (bytes[bit / 8].toInt() and (1 shl (7 - (bit % 8))).inv()).toByte()
+                val offset = bit % 8
+                val mask = 1 shl (7 - offset)
+                val byteIndex = bit / 8
+                bytes[byteIndex] = (bytes[byteIndex].toInt() and mask.inv()).toByte()
             }
             return Network(InetAddress.getByAddress(bytes), prefix)
         }

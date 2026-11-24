@@ -200,15 +200,17 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
 
-      - name: MobSF static analysis (optional reviewed image)
+      - name: VirusTotal hash reports (no APK upload)
+        env:
+          # Only the maintainer-owned integration branch, main, or release tags.
+          # No pull_request or fork secret access.
+          VT_API_KEY: ${{ (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/d58a3d0b-blackout-kit-mobile') && secrets.VIRUSTOTAL_API_KEY || '' }}
+        run: python3 tool/virustotal_reports.py dist
+
+      - name: MobSF static analysis (pinned official image)
         env:
           MOBSF_IMAGE: ${{ vars.MOBSF_IMAGE }}
         run: bash tool/scan_mobsf.sh dist
-
-      - name: VirusTotal hash reports (optional API key, no upload)
-        env:
-          VT_API_KEY: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.VIRUSTOTAL_API_KEY || '' }}
-        run: python3 tool/virustotal_reports.py dist
 
       - name: Prepare security report
         run: |

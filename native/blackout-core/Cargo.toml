@@ -31,13 +31,13 @@ smoltcp = { version = "0.11", default-features = false, features = ["std", "log"
 # TLS & DPI Resistance (Fingerprinted ClientHello + Fragmentation)
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "0.26"
-ring = "0.17"
+ring = "0.17.14"
 
 # QUIC Stack for Hysteria 2 & TUIC v5
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls"] }
 
 # WireGuard & AmneziaWG (Junk Packet Obfuscation)
-boringtun = "0.6"
+boringtun = "0.7.1"
 
 # Cryptography & Hashing (Shadowsocks 2022 blake3 / aes-gcm)
 blake3 = "1.5"

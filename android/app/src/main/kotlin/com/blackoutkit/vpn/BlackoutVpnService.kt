@@ -842,12 +842,8 @@ class BlackoutVpnService : VpnService() {
 
     /** Called on the main thread only after this request's cleanup settled. */
     private fun finishService(startId: Int? = null) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
+        // minSdk is 24, so the integer overload is always available.
+        stopForeground(STOP_FOREGROUND_REMOVE)
         if (startId == null) stopSelf() else stopSelfResult(startId)
     }
 

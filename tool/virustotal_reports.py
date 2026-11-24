@@ -36,6 +36,10 @@ def main(folder):
                 record['status'] = 'lookup-error'
         records.append(record)
     (folder / 'VIRUSTOTAL_REPORT.json').write_text(json.dumps(records, indent=2) + '\n', encoding='utf-8')
+    # Never interpret an unknown file or missing report as a clean scan.
+    print('VirusTotal hash lookup:', ', '.join(r['status'] for r in records))
+    if key and any(r['status'] == 'lookup-error' for r in records):
+        print('VirusTotal returned a lookup error; manual review is required.', file=sys.stderr)
 
 if __name__ == '__main__':
     main(Path(sys.argv[1]))

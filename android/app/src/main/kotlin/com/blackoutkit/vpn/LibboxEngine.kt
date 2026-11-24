@@ -2,6 +2,8 @@ package com.blackoutkit.vpn
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -260,7 +262,12 @@ private class LibboxPlatform(
 
     @Suppress("DEPRECATION")
     override fun uidByPackageName(packageName: String): Int = try {
-        vpnService.packageManager.getPackageUid(packageName, 0)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            vpnService.packageManager.getPackageUid(packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            // The pre-33 overload is required on the supported API 24-32 range.
+            vpnService.packageManager.getPackageUid(packageName, 0)
+        }
     } catch (e: Exception) {
         -1
     }

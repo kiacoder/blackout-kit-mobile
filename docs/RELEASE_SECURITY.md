@@ -98,3 +98,45 @@ No CodeQL rules, malware gates or signing verification have been disabled.
 Local verification: 575 Flutter tests, 11 focused Python security/staging
 tests, Linux anonymous descriptor regression, actionlint, and historical
 certificate verification passed. GitHub rerun remains necessary.
+
+
+## Scanner configuration and dependency remediation (2026-11-24)
+
+The repository secret VIRUSTOTAL_API_KEY now exists (only its name was
+inspected). Hash-only GET lookups are enabled for the maintainer integration
+branch, main and release tags. Unknown files, missing reports and API errors
+are not clean verdicts. Never publish the key, send it to MobSF or upload
+unapproved APKs to VirusTotal. VirusTotal public API terms prohibit use in
+commercial products/services; verify the applicable entitlement before use.
+
+MOBSF_IMAGE is configured to the official MobSF v4.6.9 multi-platform image:
+opensecurity/mobile-security-framework-mobsf@sha256:14646df326970ba21558c3c67e0a4ab9e9d92f7938ecb7b1a780c8cc536e16b0
+Source: upstream successful release build
+https://github.com/MobSF/Mobile-Security-Framework-MobSF/actions/runs/44358831543
+(the manifest list push for v4.6.9). The laptop's Docker registry returned
+HTTP 403, so the first actual container scan must run on GitHub. Both MD5
+and SHA-256 must match the universal APK before accepting its report.
+
+Dependabot #1 and #2 originate in boringtun 0.6.0, which pulled ring 0.16.20
+and pre-release curve25519-dalek 4.0.0-rc.3. Updated boringtun to 0.7.1,
+ring to 0.17.14 and resolved curve25519-dalek 4.1.3. Cargo tree confirms
+only the patched versions in the resolved graph. Host Rust tests: 13/13.
+Native WG/AWG acceptance is still a separate Android gate. Dependabot
+default-branch alerts cannot be considered closed until main is updated.
+
+CodeQL #40 (medium, certificate pinning): the public website reachability
+probe accepts user-selected destinations, sends no application credentials,
+uses HTTPS, validates hostnames and Android system trust, and disables
+redirects. Android documentation recommends against fixed certificate
+pinning; no static set can cover arbitrary websites. This is a documented
+review finding, not an implemented pinning fix. No alert has been dismissed.
+Quality notes: clarify IP-mask arithmetic (#38); remove unreachable
+pre-API24 stopForeground fallback (#37); use the modern package UID overload
+on API33+ (#26), preserving the supported API24-32 compatibility overload.
+The getAllNetworks synchronous enumeration (#25) is a deprecated compatibility
+API, not a reported security vulnerability. Replacing it with a callback
+registry changes lifecycle semantics and requires device testing.
+
+Review actual MobSF and VirusTotal evidence and CodeQL after the new CI run.
+Do not merge before actionable findings are resolved and remaining risks
+are reviewed. No release is approved by this entry.

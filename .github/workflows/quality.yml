@@ -10,6 +10,17 @@ permissions:
   contents: read
 
 jobs:
+  shell:
+    name: Shell syntax and correctness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check tracked shell scripts
+        run: bash tool/check_shell_quality.sh
+
   python:
     name: Python correctness checks
     runs-on: ubuntu-latest

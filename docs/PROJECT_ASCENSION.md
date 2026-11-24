@@ -221,3 +221,20 @@ AGP 7.4.2 supports compileSdk 33 officially, while app uses 34; lint also
 reports Kotlin metadata 1.9 vs 1.7.1. Upgrade separately with wrapper
 checksum, plugin compatibility, all variants and device tests. No warning
 suppression, minSdk increase, merge or release.
+
+
+## Phase 3 shell correctness and toolchain CI (2026-11-24)
+
+Baseline e3c422d: both host CI jobs passed (31 tests and Android API
+compile); APK and Tests passed. One separate iOS runner acquisition failed
+with capacity notices; another iOS build passed. Candidate toolchain
+37be23c passed GitHub Tests workflow 45437373000; full APK workflow
+45443595453 is in progress. See ANDROID_TOOLCHAIN_MIGRATION.md.
+
+Added tool/check_shell_quality.sh and a Code quality CI job using
+Bash syntax validation plus ShellCheck severity=error for every tracked
+.sh/.bash file. All 15 scripts passed local syntax-only checks; a malformed
+script in an isolated test repository was correctly rejected (exit 2).
+ShellCheck is not installed locally; hosted check still pending. Runner
+ShellCheck version is logged; warning/style debt remains open. No build
+pins changed in this PR, and no APK release or merge performed.

@@ -71,7 +71,10 @@ class SubprocessLifecycleTest {
     @Test
     fun stopEscalatesWhenChildIgnoresTerminate() {
         val child = FakeProcess(alive = true, ignoreTerminate = true)
-        val lifecycle = SubprocessLifecycle(waitFor = { process, _ -> !process.isAlive })
+        val lifecycle = SubprocessLifecycle(
+            waitFor = { process, _ -> !process.isAlive },
+            forceStop = { it.destroyForcibly() },
+        )
         lifecycle.stop(listOf(child), graceMs = 1)
         assertEquals(true, child.forced)
         assertEquals(false, child.isAlive)
@@ -80,7 +83,10 @@ class SubprocessLifecycleTest {
     @Test
     fun stopCleansUpWhenWaitIsInterrupted() {
         val child = FakeProcess(alive = true, ignoreTerminate = true)
-        val lifecycle = SubprocessLifecycle(waitFor = { _, _ -> throw InterruptedException() })
+        val lifecycle = SubprocessLifecycle(
+            waitFor = { _, _ -> throw InterruptedException() },
+            forceStop = { it.destroyForcibly() },
+        )
         try {
             lifecycle.stop(listOf(child))
             assertEquals(true, child.forced)
@@ -90,10 +96,53 @@ class SubprocessLifecycleTest {
         }
     }
 
+    @Test
+    fun compatibleWaitRecognizesExitedAndRunningProcesses() {
+        val child = FakeProcess(alive = true, code = 7)
+        assertEquals(true, ProcessCompat.isAlive(child))
+        assertEquals(false, ProcessCompat.waitForExit(child, 0))
+        child.destroy()
+        assertEquals(true, ProcessCompat.waitForExit(child, 0))
+        assertEquals(false, ProcessCompat.isAlive(child))
+        assertEquals(7, child.exitValue())
+    }
+
+    @Test
+    fun compatibleWaitPreservesBoundedTimeout() {
+        val child = FakeProcess(alive = true)
+        assertEquals(false, ProcessCompat.waitForExit(child, 20))
+        assertEquals(true, ProcessCompat.isAlive(child))
+    }
+
+    @Test
+    fun compatibleWaitIsInterruptible() {
+        val child = FakeProcess(alive = true)
+        Thread.currentThread().interrupt()
+        try {
+            try {
+                ProcessCompat.waitForExit(child, 1000)
+                org.junit.Assert.fail("Expected InterruptedException")
+            } catch (_: InterruptedException) { }
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    @Test
+    fun outputDrainerConsumesLargeStream() {
+        val input = ByteArrayInputStream(ByteArray(1024 * 1024))
+        val child = FakeProcess(alive = false, input = input)
+        val drainer = ProcessCompat.discardOutput(child)
+        drainer.join(1000)
+        assertEquals(false, drainer.isAlive)
+        assertEquals(0, input.available())
+    }
+
     private class FakeProcess(var alive: Boolean, private val code: Int = 0,
-                              private val ignoreTerminate: Boolean = false) : Process() {
+                              private val ignoreTerminate: Boolean = false,
+                              private val input: InputStream = ByteArrayInputStream(byteArrayOf())) : Process() {
         override fun getOutputStream(): OutputStream = ByteArrayOutputStream()
-        override fun getInputStream(): InputStream = ByteArrayInputStream(byteArrayOf())
+        override fun getInputStream(): InputStream = input
         override fun getErrorStream(): InputStream = ByteArrayInputStream(byteArrayOf())
         override fun waitFor(): Int { alive = false; return code }
         override fun waitFor(timeout: Long, unit: TimeUnit): Boolean { alive = false; return true }

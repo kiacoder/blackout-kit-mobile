@@ -175,3 +175,27 @@ in the iOS APK workflow and Swift CodeQL job; added seven-day version-update
 cooldowns to all four ecosystems (security updates unaffected). Local
 inventory and six regression tests pass. Fresh zizmor CI verification pending.
 Android lint remediation and APK report review remain open; PR stays draft.
+
+
+## Phase 3 Android lint gate (2026-11-24)
+
+The prior workflow-security repair passed zizmor, full/PR OSV and cargo-deny
+checks on b617895. Added ProcessCompat: API-24-safe liveness and bounded
+monotonic waits, guarded API-26 force termination, fixed-size output drain
+with no persistent diagnostics. Runner and probe retain unresolved process
+handles; probe shutdown now runs off the UI thread. API 24/25 uses destroy()
+when forcible termination is unavailable; actual teardown on those devices
+remains unverified. Checker timeout remains failure, not proof of exit.
+Restrict Open-with intent to content URIs and octet-stream/text/plain MIME
+types, matching existing activity restrictions; other MIME types require
+in-app import. Actual file-provider interoperability needs device tests.
+
+Local Gradle testDebugUnitTest and lintDebug succeeded twice: 40 JVM tests
+passed (four added), lint 18 errors/11 warnings -> 0 errors/9 warnings.
+25 targeted Flutter structural tests passed. Added lintDebug to required
+Tests workflow; fresh CI pending. Gradle still reports pre-existing Kotlin
+metadata/AGP compatibility diagnostics despite successful tasks; coordinated
+toolchain upgrade remains separate. No lint suppression or minSdk change.
+Remaining lint warnings: backup attribute, device ID, redundant API guard,
+Flutter theme resource and five launcher icon warnings. Device and APK
+security review still required before merge; no release performed.

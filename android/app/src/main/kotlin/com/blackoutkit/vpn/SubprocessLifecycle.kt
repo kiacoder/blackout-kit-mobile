@@ -2,11 +2,10 @@ package com.blackoutkit.vpn
 
 /** Process lifecycle rules shared by the Android runner and JVM tests. */
 internal class SubprocessLifecycle(
-    private val isAlive: (Process) -> Boolean = { it.isAlive },
-    private val waitFor: (Process, Long) -> Boolean = { process, timeout ->
-        process.waitFor(timeout, java.util.concurrent.TimeUnit.MILLISECONDS)
-    },
+    private val isAlive: (Process) -> Boolean = ProcessCompat::isAlive,
+    private val waitFor: (Process, Long) -> Boolean = ProcessCompat::waitForExit,
     private val sleep: (Long) -> Unit = { Thread.sleep(it) },
+    private val forceStop: (Process) -> Unit = ProcessCompat::forceStop,
 ) {
     fun awaitStartup(processes: List<Process>, timeoutMs: Long, pollMs: Long = 50): String? {
         val deadline = System.nanoTime() + timeoutMs * 1_000_000
@@ -39,14 +38,14 @@ internal class SubprocessLifecycle(
         for (process in children) {
             try {
                 if (isAlive(process) && !waitFor(process, graceMs)) {
-                    process.destroyForcibly()
+                    forceStop(process)
                     waitFor(process, graceMs)
                 }
             } catch (_: InterruptedException) {
                 // A monitor interrupt must not leave a core holding a SOCKS
                 // port. Continue cleanup, then restore the caller's flag.
                 interrupted = true
-                if (isAlive(process)) process.destroyForcibly()
+                if (isAlive(process)) forceStop(process)
             }
         }
         if (interrupted) Thread.currentThread().interrupt()

@@ -61,6 +61,11 @@ jobs:
         working-directory: android
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest
 
+      - name: Run Android lint
+        # Fail on lint errors; warning remediation is tracked independently.
+        working-directory: android
+        run: bash ./gradlew --no-daemon :app:lintDebug
+
       - name: Run integration tests
         # UNVERIFIED. These drive `app.main()`, which calls Hive.initFlutter()
         # and reaches platform channels that do not exist in the flutter_tester

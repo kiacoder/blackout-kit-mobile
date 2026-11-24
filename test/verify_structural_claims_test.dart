@@ -175,8 +175,13 @@ void main() {
       final commands =
           source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCommands.kt');
       expect(commands.contains('timeoutMs: Long = 20_000'), isTrue);
-      expect(commands.contains('process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)'), isTrue);
-      expect(commands.contains('process.destroyForcibly()'), isTrue);
+      expect(commands, contains('ProcessCompat.waitForExit(process, timeoutMs)'));
+      expect(commands, contains('ProcessCompat.forceStop(process)'));
+      final compat = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/ProcessCompat.kt');
+      expect(compat, contains('System.nanoTime()'));
+      expect(compat, contains('Build.VERSION.SDK_INT >= 26'));
+      expect(compat, contains('process.destroyForcibly()'));
     });
   });
 

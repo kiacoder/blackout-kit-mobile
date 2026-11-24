@@ -108,7 +108,7 @@ object EngineRunner {
     var onUnexpectedExit: ((String) -> Unit)? = null
 
     internal var processLauncher: (List<String>) -> Process = { command ->
-        ProcessBuilder(command).redirectErrorStream(true).start()
+        ProcessCompat.startQuietly(command)
     }
     // 750ms starved a cold start on real devices: loading a 47MB binary and
     // parsing a config takes 1-3s on mid-range hardware, so the startup wait
@@ -177,11 +177,7 @@ object EngineRunner {
             // rather than persisting plaintext or filling an unread pipe.
             // Status, exit codes and readiness remain available as diagnostics.
             val engineLog = File("/dev/null")
-            val logRedirect = ProcessBuilder.Redirect.to(engineLog)
-
-            engineProcess = ProcessBuilder(
-                engineSpec.run(enginePath, configFile)
-            ).redirectErrorStream(true).redirectOutput(logRedirect).start()
+            engineProcess = processLauncher(engineSpec.run(enginePath, configFile))
 
             // tun2socks needs the TUN descriptor itself. ProcessBuilder cannot
             // deliver it (see nativeSpawnWithFd), so the launcher forks,
@@ -306,7 +302,7 @@ object EngineRunner {
         var failed = false
         try {
             lifecycle.stop(listOfNotNull(tun2socksProcess, engineProcess))
-            if (tun2socksProcess?.isAlive == true || engineProcess?.isAlive == true) failed = true
+            if (listOfNotNull(tun2socksProcess, engineProcess).any(ProcessCompat::isAlive)) failed = true
             else {
                 tun2socksProcess = null
                 engineProcess = null

@@ -693,11 +693,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         if (!validation.valid) return validation.message
 
         val process = try {
-            ProcessBuilder(
+            ProcessCompat.startQuietly(
                 listOf(enginePath.absolutePath, "run", "-c", configFile.absolutePath)
-            ).redirectErrorStream(true)
-                .redirectOutput(ProcessBuilder.Redirect.to(File("/dev/null")))
-                .start()
+            )
         } catch (e: Exception) {
             return "Could not start sing-box: ${e.message}"
         }
@@ -706,8 +704,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         // Poll until it binds, the process dies, or the deadline passes.
         val ready = LocalSocksReadiness.await("127.0.0.1", socksPort, 8000)
         if (!ready) {
-            val died = !process.isAlive
-            stopSingboxProbe()
+            val died = !ProcessCompat.isAlive(process)
+            try {
+                stopSingboxProbe()
+            } catch (_: Exception) {
+                return "Probe cleanup did not complete within its deadline."
+            }
             return if (died) {
                 "sing-box exited during startup. Native diagnostics are withheld."
             } else {
@@ -718,17 +720,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun stopSingboxProbe() {
-        val process = probeProcess
-        probeProcess = null
-        if (process == null) return
-        try {
-            process.destroy()
-            if (!process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) {
-                process.destroyForcibly()
-            }
-        } catch (_: Exception) {
-            process.destroyForcibly()
+        val process = probeProcess ?: return
+        SubprocessLifecycle().stop(listOf(process), graceMs = 500)
+        if (ProcessCompat.isAlive(process)) {
+            // Keep the handle: do not start another core on an occupied port.
+            throw IllegalStateException("Probe cleanup did not complete within its deadline.")
         }
+        probeProcess = null
     }
 
     private fun handleProbeStart(call: MethodCall, result: MethodChannel.Result) {
@@ -767,8 +765,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 if (probeProcess != null || XrayEngine.isRunning) {
                     // A previous probe was never stopped (the caller crashed or
                     // timed out); clear it rather than refusing forever.
-                    stopSingboxProbe()
-                    XrayEngine.stop()
+                    try {
+                        stopSingboxProbe()
+                        XrayEngine.stop()
+                    } catch (_: Exception) {
+                        main.post { result.error("PROBE_STOP_FAILED", "Previous probe cleanup failed.", null) }
+                        return@synchronized
+                    }
                 }
                 if (!singboxConfig.isNullOrBlank()) {
                     val error = startSingboxProbe(ctx, singboxConfig, socksPort)
@@ -800,15 +803,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun handleProbeStop(result: MethodChannel.Result) {
-        synchronized(probeLock) {
-            try {
-                stopSingboxProbe()
-                XrayEngine.stop()
-                result.success(true)
-            } catch (t: Throwable) {
-                result.error("PROBE_STOP_FAILED", t.message, null)
+        // Startup may hold probeLock while waiting for readiness. Neither
+        // waiting for that lock nor bounded process cleanup belongs on UI.
+        Thread {
+            synchronized(probeLock) {
+                try {
+                    stopSingboxProbe()
+                    XrayEngine.stop()
+                    main.post { result.success(true) }
+                } catch (t: Throwable) {
+                    main.post { result.error("PROBE_STOP_FAILED", t.message, null) }
+                }
             }
-        }
+        }.start()
     }
 
     private fun handleProbeSites(call: MethodCall, result: MethodChannel.Result) {

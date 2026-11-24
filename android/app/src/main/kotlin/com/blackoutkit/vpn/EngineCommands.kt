@@ -2,7 +2,6 @@ package com.blackoutkit.vpn
 
 import java.io.File
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 /** Actual CLI contracts, not protocol counts. No shell or user-supplied executable. */
 internal enum class EngineCommands(val binary: String, val configName: String) {
@@ -42,14 +41,13 @@ internal class BoundedEngineCommand {
     fun execute(command: List<String>, timeoutMs: Long = 20_000): CommandOutcome {
         require(command.isNotEmpty() && timeoutMs > 0)
         val process = try {
-            ProcessBuilder(command).redirectErrorStream(true)
-                .redirectOutput(File("/dev/null")).start()
+            ProcessCompat.startQuietly(command)
         } catch (_: IOException) {
             return CommandOutcome(launchFailed = true)
         }
         var interrupted = false
         return try {
-            if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
+            if (!ProcessCompat.waitForExit(process, timeoutMs)) {
                 CommandOutcome(timedOut = true)
             } else {
                 CommandOutcome(exitCode = process.exitValue())
@@ -58,12 +56,14 @@ internal class BoundedEngineCommand {
             interrupted = true
             CommandOutcome(interrupted = true)
         } finally {
-            if (process.isAlive) process.destroyForcibly()
+            if (ProcessCompat.isAlive(process)) ProcessCompat.forceStop(process)
             try {
-                process.waitFor(500, TimeUnit.MILLISECONDS)
-                process.inputStream.close()
-                process.outputStream.close()
-                process.errorStream.close()
+                // The drain thread owns stdout; never close it from this
+                // thread, even after exit (a descendant may hold the pipe).
+                if (ProcessCompat.waitForExit(process, 500)) {
+                    process.outputStream.close()
+                    process.errorStream.close()
+                }
             } catch (_: InterruptedException) {
                 interrupted = true
             } catch (_: IOException) { }

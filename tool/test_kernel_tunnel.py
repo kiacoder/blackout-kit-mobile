@@ -85,6 +85,7 @@ def inside(binary, engine, parent_inode):
                 if check():
                     return
             except (OSError, http.client.HTTPException):
+                # The fixture may not be ready; retry before the deadline.
                 pass
             time.sleep(0.05)
         raise RuntimeError('Fixture readiness/forwarding timeout')
@@ -153,6 +154,7 @@ def inside(binary, engine, parent_inode):
                     try:
                         forwarded = tcp()
                     except (OSError, http.client.HTTPException):
+                        # Failure is expected while the outer link is down.
                         pass
                     if forwarded:
                         raise RuntimeError('Traffic unexpectedly bypassed disabled outer link')

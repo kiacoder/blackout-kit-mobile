@@ -172,8 +172,11 @@ jobs:
           EXPECTED_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
         run: |
           set -eu
-          signer=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          test -n "$signer"
+          signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          if [ ! -x "$signer" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0"
+          fi
+          test -x "$signer"
           python3 tool/release_security.py --apk-dir dist --apksigner "$signer"
 
       - name: Install antivirus and refresh signatures
@@ -298,7 +301,7 @@ jobs:
           label="$GITHUB_SHA"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then label="$GITHUB_REF_NAME"; fi
           (cd build/ios/ipa && zip -qry "blackout-kit-$label-ios-unsigned.ipa" Payload)
-          du -h "build/ios/ipa/blackout-kit-${GITHUB_REF_NAME}-ios-unsigned.ipa"
+          du -h "build/ios/ipa/blackout-kit-$label-ios-unsigned.ipa"
 
       - name: Upload IPA artifact
         # Always, so workflow_dispatch runs still yield something downloadable.

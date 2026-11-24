@@ -173,9 +173,29 @@ class CoreTests(unittest.TestCase):
                     'nameserver': [f'udp://127.0.0.1:{self.dns.server_address[1]}'],
                     'default-nameserver': ['127.0.0.1'], 'fallback': []},
         }
-        self.path = self.home / 'config.json'
-        self.path.write_text(json.dumps(self.config))
-        os.chmod(self.path, 0o600)
+    def config_fd(self):
+        # The Linux fixture uses anonymous RAM-backed storage. The disposable
+        # loopback controller credential never enters a named config file.
+        fd = os.memfd_create('mihomo-fixture', flags=os.MFD_CLOEXEC)
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(os.dup(fd), 'wb') as stream:
+                stream.write(json.dumps(self.config).encode('utf-8'))
+            os.lseek(fd, 0, os.SEEK_SET)
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+
+    def validate_config(self):
+        fd = self.config_fd()
+        try:
+            return subprocess.run([BINARY, '-t', '-d', str(self.home),
+                                   '-f', f'/proc/self/fd/{fd}'],
+                                  pass_fds=(fd,), stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL, timeout=10)
+        finally:
+            os.close(fd)
 
     def tearDown(self):
         try:
@@ -188,9 +208,14 @@ class CoreTests(unittest.TestCase):
 
     def start(self):
         started = time.monotonic()
-        self.process = subprocess.Popen([BINARY, '-d', str(self.home), '-f', str(self.path)],
-                                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL)
+        fd = self.config_fd()
+        try:
+            self.process = subprocess.Popen([BINARY, '-d', str(self.home),
+                                             '-f', f'/proc/self/fd/{fd}'],
+                                            pass_fds=(fd,), stdin=subprocess.DEVNULL,
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        finally:
+            os.close(fd)
         while time.monotonic() - started < 10:
             if self.process.poll() is not None:
                 self.fail('Mihomo exited before readiness')
@@ -205,6 +230,7 @@ class CoreTests(unittest.TestCase):
                                              'startupMs': round((time.monotonic() - started) * 1000), 'rss': rss})
                         return
             except OSError:
+                # The listener is not ready yet; retry within the deadline.
                 pass
             time.sleep(0.02)
         self.fail('Mihomo readiness timeout')
@@ -238,15 +264,12 @@ class CoreTests(unittest.TestCase):
         version = subprocess.run([BINARY, '-v'], capture_output=True, text=True, timeout=5)
         self.assertEqual(version.returncode, 0)
         self.assertIn('Mihomo Meta v1.19.34 linux amd64', version.stdout)
-        checked = subprocess.run([BINARY, '-t', '-d', str(self.home), '-f', str(self.path)],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        checked = self.validate_config()
         self.assertEqual(checked.returncode, 0)
 
     def test_invalid_config_is_rejected(self):
         self.config['proxies'] = [{'name': 'invalid', 'type': 'not-an-engine-type'}]
-        self.path.write_text(json.dumps(self.config))
-        checked = subprocess.run([BINARY, '-t', '-d', str(self.home), '-f', str(self.path)],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        checked = self.validate_config()
         self.assertNotEqual(checked.returncode, 0)
 
     def test_tcp_forwarding_by_ip(self):
@@ -275,6 +298,7 @@ class CoreTests(unittest.TestCase):
             result = fetch(self.socks_port, 'blocked.test', self.http.server_port)
             self.assertNotIn(b'BLACKOUT_LOOPBACK_FIXTURE', result)
         except OSError:
+            # A rejected or unavailable fixture connection is expected.
             pass
         self.assertEqual(self.http.hits, 0)
 
@@ -288,6 +312,7 @@ class CoreTests(unittest.TestCase):
             result = fetch(self.socks_port, '127.0.0.1', self.http.server_port)
             self.assertNotIn(b'BLACKOUT_LOOPBACK_FIXTURE', result)
         except OSError:
+            # A rejected or unavailable fixture connection is expected.
             pass
         self.assertEqual(self.http.hits, 0)
         self.assertEqual(self.api('PUT', '/proxies/select', {'name': 'DIRECT'})[0], 204)
@@ -336,6 +361,7 @@ class CoreTests(unittest.TestCase):
             result = fetch(self.socks_port, '127.0.0.1', port)
             self.assertNotIn(b'BLACKOUT_LOOPBACK_FIXTURE', result)
         except OSError:
+            # A rejected or unavailable fixture connection is expected.
             pass
         self.http = serve(HTTPFixture(('127.0.0.1', port), HTTPHandler))
         self.assertIn(b'BLACKOUT_LOOPBACK_FIXTURE', fetch(self.socks_port, '127.0.0.1', port))

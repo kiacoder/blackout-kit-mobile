@@ -858,7 +858,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                         if (network != null) {
                             probeSite(url, timeoutMs) { target ->
                                 check(nativeSessionCurrent(session))
-                                network.openConnection(target, Proxy.NO_PROXY) as HttpURLConnection
+                                network.openConnection(target, Proxy.NO_PROXY) as javax.net.ssl.HttpsURLConnection
                             }.let { outcome ->
                                 if (nativeSessionCurrent(session)) outcome
                                 else failedSite(url, "VPN session changed during verification")
@@ -933,15 +933,23 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         timeoutMs: Int
     ): Map<String, Any?> = probeSite(host, timeoutMs) { target ->
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-        target.openConnection(proxy) as HttpURLConnection
+        target.openConnection(proxy) as javax.net.ssl.HttpsURLConnection
     }
 
     private fun probeSite(
-        host: String, timeoutMs: Int, open: (URL) -> HttpURLConnection,
+        host: String, timeoutMs: Int, open: (URL) -> javax.net.ssl.HttpsURLConnection,
     ): Map<String, Any?> {
-        var conn: HttpURLConnection? = null
+        var conn: javax.net.ssl.HttpsURLConnection? = null
         val startedAt = SystemClock.elapsedRealtime()
         return try {
+            // User-selected public destinations have no stable application-
+            // controlled pin set. Keep Android's system CA and hostname
+            // validation; never install a custom trust-all manager or verifier.
+            require(host.length <= 253 && host.contains('.') &&
+                host.split('.').all { label ->
+                    label.length in 1..63 &&
+                        label.matches(Regex("[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"))
+                })
             conn = open(URL("https://$host")).apply {
                 connectTimeout = timeoutMs
                 readTimeout = timeoutMs

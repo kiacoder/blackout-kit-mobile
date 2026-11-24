@@ -45,8 +45,14 @@ def inventory(path, expected_abis):
         return libs
 
 def signer_digest(output):
-    fingerprints = re.findall(r'^Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F]+)\s*$', output, re.M)
-    if len(fingerprints) != 1 or not HEX.fullmatch(fingerprints[0].lower()):
+    # The pinned Android build-tools reports one signer and one leaf
+    # certificate. Also support numbered leaf certificate output.
+    counts = re.findall(r'^Number of signers:[ \t]*(\d+)[ \t]*$', output, re.M)
+    fingerprints = re.findall(
+        r'^Signer #1 certificate(?: #1)? SHA-256 digest:[ \t]*([0-9a-fA-F]{64})[ \t]*$',
+        output, re.M)
+    all_digests = re.findall(r'^Signer #\d+ certificate(?: #\d+)? SHA-256 digest:', output, re.M)
+    if counts != ['1'] or len(fingerprints) != 1 or len(all_digests) != 1:
         raise ValueError('Expected exactly one verified APK signer')
     return fingerprints[0].lower()
 
@@ -64,9 +70,16 @@ def verify_apks(folder, signer, tagged, expected):
             raise ValueError('Unexpected or duplicate APK variant')
         abi = matches[0]
         seen.add(abi)
-        output = subprocess.run([signer, 'verify', '--verbose', '--print-certs', str(apk)],
-                                check=True, text=True, capture_output=True, timeout=120).stdout
-        cert = signer_digest(output)
+        verified = subprocess.run([signer, 'verify', '--verbose', '--print-certs', str(apk)],
+                                  check=True, text=True, capture_output=True, timeout=120,
+                                  env={**os.environ, 'LC_ALL': 'C', 'LANG': 'C'})
+        try:
+            cert = signer_digest(verified.stdout)
+        except ValueError:
+            print('Unexpected apksigner report headers:',
+                  [line.split(':', 1)[0] for line in verified.stdout.splitlines()
+                   if line.startswith(('Signer ', 'Number of signers', 'Verified using'))])
+            raise
         if tagged and cert != expected:
             raise ValueError('Release certificate differs from pinned publisher certificate')
         records.append({'name': apk.name, 'bytes': apk.stat().st_size, 'sha256': digest(apk),

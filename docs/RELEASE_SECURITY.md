@@ -68,3 +68,33 @@ https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attesta
 https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository
 https://docs.virustotal.com/reference/file-info
 https://github.com/MobSF/docs/blob/master/configurations.md
+
+## CI repair: first security pipeline run (2026-11-24)
+
+Run 45362611848 compiled Android and iOS successfully but failed after
+compilation: certificate-report parsing and a branch-name/commit-label
+mismatch in the IPA size check. Pin Android build-tools 36.0.0, validate
+the reported signer count and leaf fingerprint (including numbered leaf
+format), and use one filename label throughout IPA packaging. The historical
+v1.19.2 ARMv7 certificate was verified again with the pinned tool.
+
+CodeQL alert 27 concerned a disposable loopback Mihomo test controller
+credential in a named config file. The Linux fixture now passes an anonymous
+memory-backed descriptor to the child process. A Linux regression checks
+descriptor permissions and child readability; the full external Mihomo
+binary suite has not been rerun in this repair.
+
+CodeQL alert 36 concerns missing certificate pinning on arbitrary user-defined
+HTTPS website probes, not a trust-all TLS implementation. Probes now explicitly
+require HTTPS, validate hostname syntax and retain Android system CA and
+hostname validation, without redirects or trust overrides. The Android base
+network policy explicitly denies remote cleartext and trusts system roots.
+A fixed application pin set cannot represent arbitrary user destinations;
+Android's own documentation cautions against certificate pinning:
+https://developer.android.com/privacy-and-security/security-ssl
+Keep this finding visible for review if CodeQL continues to report it.
+No CodeQL rules, malware gates or signing verification have been disabled.
+
+Local verification: 575 Flutter tests, 11 focused Python security/staging
+tests, Linux anonymous descriptor regression, actionlint, and historical
+certificate verification passed. GitHub rerun remains necessary.

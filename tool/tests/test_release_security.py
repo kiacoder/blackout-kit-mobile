@@ -2,7 +2,6 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
 from tool.release_security import inventory, signer_digest, verify_apks
 
 class ReleaseSecurityTests(unittest.TestCase):
@@ -32,9 +31,19 @@ class ReleaseSecurityTests(unittest.TestCase):
 
     def test_signer_count(self):
         line = 'Signer #1 certificate SHA-256 digest: ' + 'a'*64
-        self.assertEqual(signer_digest(line), 'a'*64)
-        with self.assertRaises(ValueError):
-            signer_digest(line + '\n' + line.replace('#1','#2'))
+        report = 'Verifies\nNumber of signers: 1\n' + line
+        self.assertEqual(signer_digest(report), 'a'*64)
+        for invalid in (line, report + '\n' + line.replace('#1','#2'),
+                        report.replace('signers: 1','signers: 2'),
+                        report.replace('certificate SHA-256','public key SHA-256')):
+            with self.assertRaises(ValueError):
+                signer_digest(invalid)
+
+    def test_numbered_leaf_certificate(self):
+        report = ('Verifies\nNumber of signers: 1\n'
+                  'Signer #1 certificate #1 SHA-256 digest: ' + 'AB'*32 + '\n'
+                  'Signer #1 public key SHA-256 digest: ' + 'cd'*32 + '\n')
+        self.assertEqual(signer_digest(report), 'ab'*32)
 
     def test_tag_requires_existing_certificate(self):
         with tempfile.TemporaryDirectory() as d:

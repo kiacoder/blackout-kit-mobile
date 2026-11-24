@@ -5,7 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest import mock
+import unittest.mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'stage_native_tunnels.py'
@@ -48,9 +48,9 @@ class NativeTunnelStagingTests(unittest.TestCase):
         self.temp.cleanup()
 
     def run_main(self, subprocess_side_effect=None):
-        with mock.patch.object(stage, 'ROOT', self.root), \
-             mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
-             mock.patch.object(stage.subprocess, 'run',
+        with unittest.mock.patch.object(stage, 'ROOT', self.root), \
+             unittest.mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
+             unittest.mock.patch.object(stage.subprocess, 'run',
                                side_effect=subprocess_side_effect) as run:
             stage.main()
             return run
@@ -85,9 +85,9 @@ class NativeTunnelStagingTests(unittest.TestCase):
     def test_hash_mismatch_is_rejected_before_checker_or_staging(self):
         binary = self.source / 'arm64-v8a' / 'libblackout-tunnels.so'
         binary.write_bytes(b'tampered')
-        with mock.patch.object(stage, 'ROOT', self.root), \
-             mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
-             mock.patch.object(stage.subprocess, 'run') as run:
+        with unittest.mock.patch.object(stage, 'ROOT', self.root), \
+             unittest.mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
+             unittest.mock.patch.object(stage.subprocess, 'run') as run:
             with self.assertRaisesRegex(SystemExit, 'Artifact hash mismatch'):
                 stage.main()
             run.assert_not_called()
@@ -101,9 +101,9 @@ class NativeTunnelStagingTests(unittest.TestCase):
         (self.source / 'PROVENANCE.txt').write_text(
             '\n'.join(line for line in provenance if digest not in line) + '\n'
         )
-        with mock.patch.object(stage, 'ROOT', self.root), \
-             mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
-             mock.patch.object(stage.subprocess, 'run') as run:
+        with unittest.mock.patch.object(stage, 'ROOT', self.root), \
+             unittest.mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
+             unittest.mock.patch.object(stage.subprocess, 'run') as run:
             with self.assertRaisesRegex(SystemExit, 'predates required combined source/patch'):
                 stage.main()
             run.assert_not_called()
@@ -115,9 +115,9 @@ class NativeTunnelStagingTests(unittest.TestCase):
         provenance = provenance.replace(first, wrong, 1)
         (self.source / 'PROVENANCE.txt').write_text(provenance)
 
-        with mock.patch.object(stage, 'ROOT', self.root), \
-             mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
-             mock.patch.object(stage.subprocess, 'run') as run:
+        with unittest.mock.patch.object(stage, 'ROOT', self.root), \
+             unittest.mock.patch.object(sys, 'argv', ['stage_native_tunnels.py', str(self.source)]), \
+             unittest.mock.patch.object(stage.subprocess, 'run') as run:
             with self.assertRaisesRegex(SystemExit, 'predates required combined source/patch'):
                 stage.main()
             run.assert_not_called()

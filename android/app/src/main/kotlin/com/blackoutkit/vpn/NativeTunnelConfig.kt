@@ -16,7 +16,7 @@ internal class NativeTunnelConfig private constructor(
             val a = address.address; val b = ip.address
             if (a.size != b.size) return false
             for (bit in 0 until prefix) {
-                val mask = 1 shl (7 - bit % 8)
+                val mask = 1 shl (7 - (bit % 8))
                 if ((a[bit / 8].toInt() and mask) != (b[bit / 8].toInt() and mask)) return false
             }
             return true
@@ -24,7 +24,7 @@ internal class NativeTunnelConfig private constructor(
         fun masked(): Network {
             val bytes = address.address.copyOf()
             for (bit in prefix until bytes.size * 8) {
-                bytes[bit / 8] = (bytes[bit / 8].toInt() and (1 shl (7 - bit % 8)).inv()).toByte()
+                bytes[bit / 8] = (bytes[bit / 8].toInt() and (1 shl (7 - (bit % 8))).inv()).toByte()
             }
             return Network(InetAddress.getByAddress(bytes), prefix)
         }
@@ -113,7 +113,7 @@ internal class NativeTunnelConfig private constructor(
                 value = (value shl 6) or digit; bits += 6
                 if (bits >= 8) { bits -= 8; bytes.add((value ushr bits) and 255) }
             }
-            if (bytes.size != 32 || value and 3 != 0) fail()
+            if (bytes.size != 32 || (value and 3) != 0) fail()
             return bytes.joinToString("") { it.toString(16).padStart(2, '0') }
         }
         fun parse(raw: String, amnezia: Boolean): NativeTunnelConfig {

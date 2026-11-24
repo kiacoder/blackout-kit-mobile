@@ -81,6 +81,18 @@ void main() {
     });
   });
 
+  test('missing and duplicate website outcomes cannot satisfy the threshold', () {
+    const a = SiteCheckOutcome(host: 'a.example.com', ok: true);
+    const b = SiteCheckOutcome(host: 'b.example.com', ok: true);
+    const hosts = ['a.example.com', 'b.example.com'];
+    expect(SiteCheckService.meetsThreshold(hosts, [a], -1), isFalse);
+    expect(SiteCheckService.meetsThreshold(hosts, [a, a], 1), isFalse);
+    expect(SiteCheckService.meetsThreshold(hosts, [a, b], -1), isTrue);
+    expect(SiteCheckService.meetsThreshold(hosts, [a], 1), isTrue);
+    expect(SiteCheckService.meetsThreshold(hosts,
+        [SiteCheckOutcome(host: 'unexpected.example.com', ok: true)], 1), isFalse);
+  });
+
   group('SiteCheckReport', () {
     const _usable = SiteCheckReport(
       configHash: 'a',

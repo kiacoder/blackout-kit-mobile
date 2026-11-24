@@ -4,6 +4,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.os.SystemClock
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -283,6 +287,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     private fun statusMap(): Map<String, Any?> = mapOf(
         "isConnected" to BlackoutVpnService.isRunning,
         "isRunning" to BlackoutVpnService.isRunning,
+        "activeNativeTunnel" to BlackoutVpnService.activeNativeTunnel,
         "error" to BlackoutVpnService.lastError,
         // Identity of the live tunnel: lets a reopened app adopt a tunnel that
         // outlived its Flutter process instead of showing "not connected".
@@ -624,6 +629,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             result.error("BAD_ARGS", "url is required", null)
             return
         }
+        if (BlackoutVpnService.activeNativeTunnel) {
+            result.success(null)
+            return
+        }
         Thread {
             val body = fetchBodyThroughSocks(urlStr, socksPort, timeoutMs)
             main.post { result.success(body) }
@@ -817,7 +826,24 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             return
         }
 
+        val native = BlackoutVpnService.isRunning && BlackoutVpnService.activeNativeTunnel
+        val session = BlackoutVpnService.connectedAtMs
+        if (BlackoutVpnService.isRunning && BlackoutVpnService.activeProtocolId == "dns") {
+            result.success(urls.map { failedSite(it, "DNS-only is not a VPN traffic test") })
+            return
+        }
+
         Thread {
+            // Never use the system default connection as a fallback for an IP
+            // tunnel. Only an explicit VPN Network can prove tunnel traffic.
+            val network = if (native) {
+                try { awaitNativeProbeNetwork(session) }
+                catch (_: Exception) { null }
+            } else null
+            if (native && network == null) {
+                main.post { result.success(urls.map { failedSite(it, "VPN network not accessible for verification") }) }
+                return@Thread
+            }
             // Fetch the hosts in parallel: sequential fetching made the site
             // check cost N x timeout (8 hosts x 10 s = 80 s per candidate),
             // which across a batched scan of hundreds of candidates turned a
@@ -829,7 +855,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             val outcomes = try {
                 val futures = urls.map { url ->
                     pool.submit(java.util.concurrent.Callable {
-                        probeSiteThroughSocks(url, socksPort, timeoutMs)
+                        if (network != null) {
+                            probeSite(url, timeoutMs) { target ->
+                                check(nativeSessionCurrent(session))
+                                network.openConnection(target, Proxy.NO_PROXY) as HttpURLConnection
+                            }.let { outcome ->
+                                if (nativeSessionCurrent(session)) outcome
+                                else failedSite(url, "VPN session changed during verification")
+                            }
+                        } else probeSiteThroughSocks(url, socksPort, timeoutMs)
                     })
                 }
                 futures.map { future ->
@@ -851,9 +885,38 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             } finally {
                 pool.shutdownNow()
             }
-            main.post { result.success(outcomes) }
+            main.post {
+                result.success(if (native && !nativeSessionCurrent(session))
+                    urls.map { failedSite(it, "VPN session changed during verification") }
+                    else outcomes)
+            }
         }.start()
     }
+
+    private fun nativeSessionCurrent(session: Long): Boolean =
+        BlackoutVpnService.isRunning && BlackoutVpnService.activeNativeTunnel &&
+            BlackoutVpnService.connectedAtMs == session
+
+    /** Android may publish the VPN Network just after establish() returns. */
+    private fun awaitNativeProbeNetwork(session: Long): Network? {
+        val cm = appContext?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return null
+        val deadline = SystemClock.elapsedRealtime() + 3_000
+        while (nativeSessionCurrent(session)) {
+            val network = cm.activeNetwork
+            val caps = network?.let { cm.getNetworkCapabilities(it) }
+            if (network != null && caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true) {
+                return network
+            }
+            if (SystemClock.elapsedRealtime() >= deadline) return null
+            try { Thread.sleep(100) } catch (_: InterruptedException) { return null }
+        }
+        return null
+    }
+
+    private fun failedSite(host: String, reason: String): Map<String, Any?> =
+        mapOf("host" to host, "ok" to false, "statusCode" to null,
+            "latencyMs" to null, "error" to reason)
 
     /**
      * Fetches one URL through the loopback SOCKS inbound.
@@ -868,19 +931,28 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
         host: String,
         socksPort: Int,
         timeoutMs: Int
+    ): Map<String, Any?> = probeSite(host, timeoutMs) { target ->
+        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
+        target.openConnection(proxy) as HttpURLConnection
+    }
+
+    private fun probeSite(
+        host: String, timeoutMs: Int, open: (URL) -> HttpURLConnection,
     ): Map<String, Any?> {
         var conn: HttpURLConnection? = null
-        val startedAt = System.currentTimeMillis()
+        val startedAt = SystemClock.elapsedRealtime()
         return try {
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-            conn = (URL("https://$host").openConnection(proxy) as HttpURLConnection).apply {
+            conn = open(URL("https://$host")).apply {
                 connectTimeout = timeoutMs
                 readTimeout = timeoutMs
                 requestMethod = "GET"
                 doInput = true
                 instanceFollowRedirects = false
+                useCaches = false
+                setRequestProperty("Connection", "close")
             }
             val code = conn.responseCode
+            if (code !in 100..599) return failedSite(host, "No valid HTTP response")
             // Drain a little so the connection is fully established and the
             // timing reflects a real round trip, then release it.
             try {
@@ -896,7 +968,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
                 "host" to host,
                 "ok" to true,
                 "statusCode" to code,
-                "latencyMs" to (System.currentTimeMillis() - startedAt),
+                "latencyMs" to (SystemClock.elapsedRealtime() - startedAt),
                 "error" to null,
             )
         } catch (e: Exception) {

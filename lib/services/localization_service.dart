@@ -359,6 +359,7 @@ class LocalizationService extends GetxService implements Translations {
       // follows the language like everything else.
       'status_ready': 'Ready',
       'status_tunnel_ended': 'Tunnel ended',
+      'None of the @count attempted configurations passed website verification.': 'None of the @count attempted configurations passed website verification.',
       'status_finding_fastest': 'Finding fastest config...',
       'status_connecting_to': 'Connecting to @name...',
       'status_connected_to': 'Connected to @name',
@@ -949,6 +950,7 @@ class LocalizationService extends GetxService implements Translations {
 
       'status_ready': 'آماده',
       'status_tunnel_ended': 'تونل بسته شد',
+      'None of the @count attempted configurations passed website verification.': '?????? ?? @count ???????? ?????????? ?? ????? ?????? ?? ?????????? ???? ????.',
       'status_finding_fastest': 'در حال یافتن سریع‌ترین کانفیگ...',
       'status_connecting_to': 'در حال اتصال به @name...',
       'status_connected_to': 'متصل به @name',
@@ -1503,6 +1505,7 @@ class LocalizationService extends GetxService implements Translations {
       'dns_only_no_config_needed': '仅 DNS 不需要配置。',
       'status_ready': '就绪',
       'status_tunnel_ended': '隧道已结束',
+      'None of the @count attempted configurations passed website verification.': '??? @count ????????????',
       'status_finding_fastest': '正在寻找最快的配置...',
       'status_connecting_to': '正在连接到 @name...',
       'status_connected_to': '已连接到 @name',

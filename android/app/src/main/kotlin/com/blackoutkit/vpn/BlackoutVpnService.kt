@@ -377,9 +377,10 @@ class BlackoutVpnService : VpnService() {
                 ticket.publish { notifyStatus("error") }
                 return false
             }
-            // Exclude our UID throughout startup, including the short interval
-            // between native socket creation and protect(). Never mix allow/deny.
-            require(packageName !in allowed)
+            // Native IP engines protect their transport sockets individually.
+            // Keep our app in the VPN so explicitly network-bound HTTPS probes
+            // can actually exercise its TUN, not the underlying connection.
+            // Resolve endpoints before establishing routes.
             val config = NativeTunnelConfig.parse(raw, protocol == "amneziawg")
             val settings = config.userspace() // resolve endpoints BEFORE TUN routes
             if (!ticket.isCurrent()) return false
@@ -388,8 +389,9 @@ class BlackoutVpnService : VpnService() {
             config.routes.forEach { builder.addRoute(it.address, it.prefix) }
             // Reject uncovered DNS rather than allowing carrier fallback.
             config.routedDns(dnsServers).forEach { builder.addDnsServer(it) }
-            if (allowed.isNotEmpty()) allowed.forEach { builder.addAllowedApplication(it) }
-            else (disallowed + packageName).distinct().forEach { builder.addDisallowedApplication(it) }
+            if (allowed.isNotEmpty()) (allowed + packageName).distinct().forEach {
+                builder.addAllowedApplication(it)
+            } else disallowed.distinct().forEach { builder.addDisallowedApplication(it) }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
             val fd = builder.establish() ?: error("No TUN")
             tun = fd

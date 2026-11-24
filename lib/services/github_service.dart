@@ -217,6 +217,23 @@ class GitHubService {
         );
       }
 
+      // Protocol-specific community feed: never fall back to unrelated
+      // repository files, or import other protocols under this source name.
+      if (source.id == 'community-morpheus-wireguard' ||
+          source.id == 'community-au1rxx-wireguard') {
+        final content = await fetchRawFile(source.owner, source.repo,
+            source.filePath!, branch: source.branch ?? 'main');
+        final parsed = source.id == 'community-au1rxx-wireguard'
+            ? ConfigParser.parseWireGuardEndpointDocument(content ?? '')
+            : ConfigParser.parseMultiple(content ?? '');
+        final configs = parsed.where((c) => c.protocol == 'wireguard' || c.protocol == 'amneziawg')
+            .toList();
+        if (configs.isEmpty) {
+          throw const SourceUnavailableException('No supported WireGuard/AWG profiles in community feed');
+        }
+        return configs;
+      }
+
       // An explicit filePath (set on the built-in sources) points straight at
       // the file known to hold configs, so the common case costs one request.
       // It is tried first but is not trusted blindly: if it 404s or parses to

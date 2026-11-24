@@ -133,14 +133,32 @@ class SiteCheckService {
 
   bool get enabled => _settings.siteCheckEnabled.value;
 
-  /// Hosts used for live verification (empty when the stage is disabled).
-  /// Capped: the live check runs on the connect critical path and four
-  /// hosts are enough to distinguish "tunnel carries traffic" from
-  /// "notification says connected, nothing loads".
-  static const int maxLiveCheckHosts = 4;
+  /// All configured hosts participate in the same pass threshold.
+  List<String> get liveCheckHosts => _settings.siteCheckUrls.toSet().toList();
 
-  List<String> get liveCheckHosts =>
-      _settings.siteCheckUrls.take(maxLiveCheckHosts).toList();
+  /// A missing, duplicate or unexpected native result is never a pass.
+  static List<SiteCheckOutcome> normalizeOutcomes(
+      List<String> hosts, List<SiteCheckOutcome> outcomes) {
+    final grouped = <String, List<SiteCheckOutcome>>{};
+    for (final result in outcomes) {
+      grouped.putIfAbsent(result.host, () => []).add(result);
+    }
+    return [
+      for (final host in hosts.toSet())
+        if (grouped[host]?.length == 1) grouped[host]!.single
+        else SiteCheckOutcome(host: host, ok: false,
+            error: 'Missing or ambiguous website result'),
+    ];
+  }
+
+  static bool meetsThreshold(List<String> hosts,
+      List<SiteCheckOutcome> outcomes, int threshold) {
+    final normalized = normalizeOutcomes(hosts, outcomes);
+    if (normalized.isEmpty) return false;
+    final passed = normalized.where((o) => o.ok).length;
+    return threshold < 0 ? passed == normalized.length
+        : passed >= threshold.clamp(1, normalized.length);
+  }
 
   /// Fetches all configured hosts through the established system tunnel.
   /// Unlike [verifyLiveConnection], this keeps one outcome per site so the
@@ -148,7 +166,7 @@ class SiteCheckService {
   Future<List<SiteCheckOutcome>> checkLiveConnection({
     Duration timeout = const Duration(seconds: 10),
   }) async {
-    final hosts = _settings.siteCheckUrls.toList();
+    final hosts = liveCheckHosts;
     if (hosts.isEmpty) return const [];
     try {
       final outcomes = await _vpnService.probeSites(
@@ -156,7 +174,7 @@ class SiteCheckService {
         hosts,
         timeout: timeout,
       );
-      return outcomes.map(SiteCheckOutcome.fromMap).toList();
+      return normalizeOutcomes(hosts, outcomes.map(SiteCheckOutcome.fromMap).toList());
     } catch (e) {
       _log.w('Live tunnel website checks failed: $e');
       return [for (final host in hosts) SiteCheckOutcome(
@@ -168,7 +186,8 @@ class SiteCheckService {
   }
 
   /// Verifies the CURRENTLY CONNECTED tunnel by fetching [liveCheckHosts]
-  /// through its loopback SOCKS inbound (port 10808). Exit-location lookup is
+  /// through its engine-specific path (SOCKS or the Android VPN Network).
+  /// Exit-location lookup is
   /// deliberately separate: an unavailable geolocation provider does not mean
   /// the VPN is down, so only these actual website checks determine liveness.
   ///
@@ -182,16 +201,14 @@ class SiteCheckService {
   Future<bool> verifyLiveConnection({
     Duration timeout = const Duration(seconds: 8),
   }) async {
-    final hosts = _settings.siteCheckUrls.toList();
+    final hosts = liveCheckHosts;
     if (hosts.isEmpty) return true;
     try {
       final outcomes = await checkLiveConnection(timeout: timeout);
       final reachable = outcomes.where((outcome) => outcome.ok).length;
       _log.i('Live tunnel check: $reachable/${hosts.length} hosts reachable');
       final threshold = _settings.connectWebsitePassThreshold.value;
-      return threshold < 0
-          ? reachable == hosts.length
-          : reachable >= threshold.clamp(1, hosts.length);
+      return meetsThreshold(hosts, outcomes, threshold);
     } catch (e) {
       // A failed verification probe must not itself break the connection
       // flow — but it also must not bless a dead tunnel. Treat the check as

@@ -262,7 +262,20 @@ class ConfigService {
     return null;
   }
 
-  Future<bool> saveConfig(Config config, {String? sourceId}) async {
+  // Serialize record + dedup-index changes across concurrent imports,
+  // refreshes and deletes. One failed mutation must not poison the queue.
+  Future<void> _configMutationTail = Future<void>.value();
+
+  Future<T> _mutateConfigs<T>(Future<T> Function() action) {
+    final next = _configMutationTail.then((_) => action());
+    _configMutationTail = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
+
+  Future<bool> saveConfig(Config config, {String? sourceId}) =>
+      _mutateConfigs(() => _saveConfig(config, sourceId: sourceId));
+
+  Future<bool> _saveConfig(Config config, {String? sourceId}) async {
     try {
       final hash = config.getHash();
 
@@ -320,12 +333,16 @@ class ConfigService {
   /// returns thousands of configs, and the old loop cost two Hive writes plus a
   /// log line for every one of them — tens of thousands of awaits on the fetch
   /// path, which is what left the library stuck on "Loading repositories".
-  Future<int> saveConfigs(
+  Future<int> saveConfigs(List<Config> configs, {String? sourceId}) =>
+      _mutateConfigs(() => _saveConfigs(configs, sourceId: sourceId));
+
+  Future<int> _saveConfigs(
     List<Config> configs, {
     String? sourceId,
   }) async {
     final dedup = Map<dynamic, dynamic>.of(_configBox.get(_dedupKey) ?? {});
     final batch = <String, Map<String, dynamic>>{};
+    var newCount = 0;
 
     for (final config in configs) {
       final hash = config.getHash();
@@ -359,6 +376,7 @@ class ConfigService {
       if (!config.validate()) continue;
       dedup[hash] = DateTime.now().toIso8601String();
       batch['config_$hash'] = _configToMap(config, sourceId: sourceId);
+      newCount++;
     }
 
     if (batch.isEmpty) return 0;
@@ -366,7 +384,7 @@ class ConfigService {
     await _configBox.putAll(batch);
     await _configBox.put(_dedupKey, dedup);
     _log.i('Saved ${batch.length}/${configs.length} configs');
-    return batch.length;
+    return newCount;
   }
 
   /// Get all stored configs
@@ -530,7 +548,10 @@ class ConfigService {
   }
 
   /// Delete config by hash
-  Future<bool> deleteConfig(String hash) async {
+  Future<bool> deleteConfig(String hash) =>
+      _mutateConfigs(() => _deleteConfig(hash));
+
+  Future<bool> _deleteConfig(String hash) async {
     try {
       final key = 'config_$hash';
       await _configBox.delete(key);
@@ -552,7 +573,10 @@ class ConfigService {
   }
 
   /// Clear all configs (careful!)
-  Future<void> clearAllConfigs() async {
+  Future<void> clearAllConfigs() =>
+      _mutateConfigs(_clearAllConfigs);
+
+  Future<void> _clearAllConfigs() async {
     try {
       await _configBox.clear();
       await _resultBox.clear();

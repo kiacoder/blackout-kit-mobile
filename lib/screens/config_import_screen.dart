@@ -34,6 +34,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   // dialogs stack on each other faster than they can be dismissed.
   bool _dialogOpen = false;
   bool _saving = false;
+  bool _pickingFile = false;
   String? _lastCode;
   DateTime? _lastHandledAt;
 
@@ -74,7 +75,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       } else {
         return;
       }
-      if (!mounted || content.trim().isEmpty) return;
+      if (!mounted || _dialogOpen || _saving || _pickingFile ||
+          content.trim().isEmpty || content.length > 5 * 1024 * 1024) return;
       final multiple = ConfigParser.parseMultiple(content);
       final single = multiple.length > 1
           ? null
@@ -181,10 +183,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           // on tab changes and resume, so an open dialog plus one more tick
           // stacked a second copy of the same list.
           if (!_dialogOpen && !_saving) {
-            _dialogOpen = true;
-            _showMultipleParsedDialog(configs).whenComplete(() {
-              if (mounted) _dialogOpen = false;
-            });
+            _showMultipleParsedDialog(configs);
           }
         }
       }
@@ -196,7 +195,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     // while a QR is in view: without them each dismissal instantly spawned
     // the next popup and the dialogs stacked faster than they could be
     // dismissed.
-    if (!mounted || !_isScanning || _dialogOpen || _saving) return;
+    if (!mounted || !_isScanning || _dialogOpen || _saving || _pickingFile) return;
     if (_tabController.index != 0) return; // scan tab not visible
 
     final barcodes = capture.barcodes;
@@ -220,7 +219,6 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
 
         _lastCode = code;
         _lastHandledAt = now;
-        _dialogOpen = true;
         setState(() {
           _isScanning = false;
           _parsedConfig = configs.first;
@@ -239,7 +237,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _pickFile() async {
-    if (_dialogOpen || _saving) return; // one import dialog at a time
+    if (!mounted || _dialogOpen || _saving || _pickingFile) return;
+    _pickingFile = true;
     try {
       // FileType.custom + allowedExtensions is a trap on Android: SAF matches
       // by MIME type, .conf/.ovpn have no standard MIME, so Gmail/downloaded
@@ -251,8 +250,15 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         withData: true,
       );
 
+      if (!mounted || _dialogOpen || _saving) return;
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
+        const maxImportBytes = 5 * 1024 * 1024;
+        if (file.size > maxImportBytes) {
+          Get.snackbar('File Too Large'.tr, 'This file is larger than 5 MB'.tr,
+              backgroundColor: Colors.red, colorText: Colors.white);
+          return;
+        }
         String content = '';
 
         if (file.bytes != null) {
@@ -266,7 +272,6 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
 
         // Parsing is synchronous and runs on the UI isolate: a huge file would
         // freeze the app. 5 MB is far beyond any real subscription.
-        const maxImportBytes = 5 * 1024 * 1024;
         if (content.length > maxImportBytes) {
           if (!mounted) return;
           Get.snackbar(
@@ -293,7 +298,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           // The picker and the file read are both awaits: the user can leave
           // this screen while the system dialog is up, and setState on a
           // disposed State throws.
-          if (!mounted) return;
+          if (!mounted || _dialogOpen || _saving) return;
           final filename = file.name;
           final multiple = ConfigParser.parseMultiple(content);
           // A subscription file starts with a URI; parse() then happily treats
@@ -326,12 +331,15 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         }
       }
     } catch (e) {
+      if (!mounted) return;
       Get.snackbar(
         'File Error'.tr,
         'Failed to read file: $e',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
+    } finally {
+      _pickingFile = false;
     }
   }
 
@@ -342,8 +350,9 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       final success = await _configController.configService.saveConfig(config);
     if (success) {
       await _configController.loadConfigs();
+      if (!mounted) return;
       final target = dialogContext ?? context;
-      if (!mounted || !target.mounted || ModalRoute.of(target)?.isCurrent != true) return;
+      if (!target.mounted || ModalRoute.of(target)?.isCurrent != true) return;
       Navigator.of(target).pop();
       Get.snackbar(
         'Config Saved'.tr,
@@ -404,7 +413,10 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _showParsedDialog(Config config) async {
-    await showDialog<void>(
+    if (!mounted || _dialogOpen || _saving) return;
+    _dialogOpen = true;
+    try {
+      await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Row(
@@ -454,12 +466,17 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       ),
     );
     // The dialog is closed (added, imported or cancelled): allow the next one.
-    _dialogOpen = false;
-    if (mounted) setState(() {});
+    } finally {
+      _dialogOpen = false;
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _showMultipleParsedDialog(List<Config> configs) async {
-    await showDialog<void>(
+    if (!mounted || _dialogOpen || _saving) return;
+    _dialogOpen = true;
+    try {
+      await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('${configs.length} ${'configs'.tr}'),
@@ -494,8 +511,10 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         ],
       ),
     );
-    _dialogOpen = false;
-    if (mounted) setState(() {});
+    } finally {
+      _dialogOpen = false;
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -656,7 +675,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                   if (!mounted) return;
                   final text = data?.text?.trim() ?? '';
                   if (text.isEmpty) return;
-                  // This button parsed with ConfigParser.parse(), so a
+                  // This button used the single-profile parser, so a
                   // clipboard holding several links collapsed to the first one
                   // (or to nothing). The text field and the auto-detect path
                   // already use _parsePayload; paste must too.
@@ -668,10 +687,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                   }
                   setState(() => _parsedConfig = configs.first);
                   if (configs.length > 1 && !_dialogOpen && !_saving) {
-                    _dialogOpen = true;
-                    _showMultipleParsedDialog(configs).whenComplete(() {
-                      if (mounted) _dialogOpen = false;
-                    });
+                    _showMultipleParsedDialog(configs);
                   }
                 },
                 icon: const Icon(Icons.content_paste, size: 18),
@@ -696,10 +712,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
               if (configs.length > 1) {
                 setState(() => _parsedConfig = configs.first);
                 if (!_dialogOpen && !_saving) {
-                  _dialogOpen = true;
-                  _showMultipleParsedDialog(configs).whenComplete(() {
-                    if (mounted) _dialogOpen = false;
-                  });
+                  _showMultipleParsedDialog(configs);
                 }
               } else {
                 setState(() =>

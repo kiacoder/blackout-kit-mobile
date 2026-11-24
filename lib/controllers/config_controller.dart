@@ -326,8 +326,14 @@ class ConfigController extends GetxController {
     } catch (_) {}
   }
 
+  final Set<String> _sourceFetches = {};
+
+  ConfigSource _currentSource(ConfigSource source) =>
+      sources.firstWhereOrNull((s) => s.id == source.id) ?? source;
+
   /// Fetch configs from a source and save to local storage
   Future<int> fetchFromSource(ConfigSource source) async {
+    if (!_sourceFetches.add(source.id)) return 0;
     try {
       _refreshBegin('Fetching ${source.name}...');
       _log.i('Fetching from ${source.name}');
@@ -339,12 +345,11 @@ class ConfigController extends GetxController {
       );
 
       // Update source with config count (and clear any previous failure).
-      final updated = source.copyWith(
-        configCount: saved,
+      final updated = _currentSource(source).copyWith(
+        configCount: configs.length,
         lastFetched: DateTime.now(),
         clearError: true,
       );
-      await configService.saveSource(updated);
       // Keep the in-memory list in step with the saved source, so a source
       // that just failed does not keep showing its old error afterwards.
       final sourceIndex = sources.indexWhere((s) => s.id == source.id);
@@ -354,6 +359,7 @@ class ConfigController extends GetxController {
         sources.value = nextSources;
       }
 
+      await configService.saveSource(updated);
       // Reload configs
       await loadConfigs();
 
@@ -379,18 +385,19 @@ class ConfigController extends GetxController {
       // the same empty state for both and the user had no way to see why the
       // list was blank (or that a retry might help).
       final reason = e.toString();
-      final failed = source.copyWith(
+      final failed = _currentSource(source).copyWith(
         error: reason.length > 120 ? '${reason.substring(0, 120)}…' : reason,
       );
-      await configService.saveSource(failed);
       final index = sources.indexWhere((s) => s.id == source.id);
       if (index != -1) {
         final next = List<ConfigSource>.of(sources);
         next[index] = failed;
         sources.value = next;
       }
+      await configService.saveSource(failed);
       return 0;
     } finally {
+      _sourceFetches.remove(source.id);
       _refreshEnd();
     }
   }
@@ -626,6 +633,8 @@ class ConfigController extends GetxController {
 
   /// Remove source
   Future<bool> removeSource(String sourceId) async {
+    // Do not allow a pending refresh to resurrect a deleted source.
+    if (_sourceFetches.contains(sourceId)) return false;
     try {
       // Deleting from storage is what actually removes it: dropping it from the
       // in-memory list alone means the next loadSource() brings it back.

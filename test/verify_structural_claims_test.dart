@@ -212,6 +212,21 @@ void main() {
       }
     });
 
+    test('native live verification binds to VPN network, never default HTTP or SOCKS fallback', () {
+      final plugin = source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
+      final probe = plugin.split('private fun handleProbeSites(').last.split('private fun failedSite(').first;
+      expect(probe, contains('NetworkCapabilities.TRANSPORT_VPN'));
+      expect(probe, contains('network.openConnection(target, Proxy.NO_PROXY)'));
+      expect(probe, contains('if (native && network == null)'));
+      expect(probe, contains('return@Thread'));
+      expect(probe, contains('nativeSessionCurrent(session)'));
+      final service = source('android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
+      final native = service.split('private fun establishNative(').last.split('private fun establish(').first;
+      expect(native, contains('(allowed + packageName).distinct()'));
+      expect(native, isNot(contains('(disallowed + packageName)')));
+      expect(native, contains('NativeTunnelEngine.start('));
+    });
+
     test('VPN revoke callback is atomically taken and dispatched on main', () {
       final service = source(
           'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');

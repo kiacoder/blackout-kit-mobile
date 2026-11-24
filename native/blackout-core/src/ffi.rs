@@ -48,9 +48,7 @@ pub extern "C" fn blackout_init(log_level: i32) -> i32 {
             3 => "debug",
             _ => "trace",
         };
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .try_init();
+        let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
     });
 
     let mut rt_lock = match RUNTIME.lock() {
@@ -76,8 +74,13 @@ pub extern "C" fn blackout_init(log_level: i32) -> i32 {
     BLACKOUT_OK
 }
 
+/// Starts a session with a borrowed TUN descriptor and a C JSON string.
+/// # Safety
+/// A non-null config_json must point to a readable, NUL-terminated string
+/// that remains valid for this call. The caller owns the TUN descriptor
+/// and must observe the session's lifetime contract.
 #[no_mangle]
-pub extern "C" fn blackout_start(tun_fd: i32, config_json: *const c_char) -> i32 {
+pub unsafe extern "C" fn blackout_start(tun_fd: i32, config_json: *const c_char) -> i32 {
     if tun_fd < 0 || config_json.is_null() {
         set_last_error("Invalid file descriptor or config pointer");
         return BLACKOUT_ERR_INVALID_PARAM;
@@ -131,7 +134,7 @@ pub extern "C" fn blackout_start(tun_fd: i32, config_json: *const c_char) -> i32
     let engine = Arc::new(BlackoutEngine {
         is_running: Arc::new(std::sync::atomic::AtomicBool::new(true)),
         stats: Arc::new(EngineStats::default()),
-        shutdown_tx: Arc::new(tokio::sync::Mutex::new(Some(shutdown_tx))),
+        shutdown_tx: Arc::new(Mutex::new(Some(shutdown_tx))),
     });
 
     let session = EngineSession::new(
@@ -158,17 +161,20 @@ pub extern "C" fn blackout_stop() -> i32 {
         Err(_) => return BLACKOUT_ERR_INTERNAL,
     };
 
-    if let Some(engine) = engine_lock.take() {
+    if let Some(engine) = engine_lock.as_ref() {
+        // JNI callers are ordinary threads, not necessarily Tokio workers.
+        // Sending a oneshot is synchronous; no ambient runtime is required.
+        let mut guard = match engine.shutdown_tx.lock() {
+            Ok(guard) => guard,
+            Err(_) => return BLACKOUT_ERR_INTERNAL,
+        };
         engine.is_running.store(false, Ordering::SeqCst);
-        let shutdown_tx_arc = engine.shutdown_tx.clone();
-        tokio::spawn(async move {
-            let mut guard = shutdown_tx_arc.lock().await;
-            if let Some(tx) = guard.take() {
-                let _ = tx.send(());
-            }
-        });
+        if let Some(tx) = guard.take() {
+            let _ = tx.send(());
+        }
         tracing::info!("Blackout native core stop signal triggered");
     }
+    engine_lock.take();
 
     BLACKOUT_OK
 }
@@ -183,8 +189,12 @@ pub extern "C" fn blackout_is_running() -> bool {
     false
 }
 
+/// Copies the current statistics (or zeroes when stopped).
+/// # Safety
+/// A non-null stats_out must be aligned and writable for one BlackoutStats,
+/// with exclusive access for the duration of the call.
 #[no_mangle]
-pub extern "C" fn blackout_get_stats(stats_out: *mut BlackoutStats) -> i32 {
+pub unsafe extern "C" fn blackout_get_stats(stats_out: *mut BlackoutStats) -> i32 {
     if stats_out.is_null() {
         return BLACKOUT_ERR_INVALID_PARAM;
     }
@@ -211,8 +221,12 @@ pub extern "C" fn blackout_get_stats(stats_out: *mut BlackoutStats) -> i32 {
     BLACKOUT_OK
 }
 
+/// Copies a bounded NUL-terminated diagnostic message.
+/// # Safety
+/// A non-null buffer with positive max_len must be writable for max_len
+/// bytes and must not alias any storage used by this function.
 #[no_mangle]
-pub extern "C" fn blackout_get_last_error(buffer: *mut c_char, max_len: i32) -> i32 {
+pub unsafe extern "C" fn blackout_get_last_error(buffer: *mut c_char, max_len: i32) -> i32 {
     if buffer.is_null() || max_len <= 0 {
         return 0;
     }
@@ -244,4 +258,55 @@ pub extern "C" fn blackout_get_last_error(buffer: *mut c_char, max_len: i32) -> 
 pub extern "C" fn blackout_version() -> *const c_char {
     static VERSION: &[u8] = b"BlackoutCore-Rust-0.1.0\0";
     VERSION.as_ptr() as *const c_char
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn stop_from_plain_thread_signals_once() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
+        let engine = Arc::new(BlackoutEngine::new());
+        engine.is_running.store(true, Ordering::SeqCst);
+        *engine.shutdown_tx.lock().unwrap() = Some(tx);
+        *ENGINE.lock().unwrap() = Some(engine.clone());
+        assert!(tokio::runtime::Handle::try_current().is_err());
+        assert_eq!(blackout_stop(), BLACKOUT_OK);
+        assert_eq!(rx.try_recv(), Ok(()));
+        assert!(!engine.is_running());
+        assert!(!blackout_is_running());
+        assert_eq!(blackout_stop(), BLACKOUT_OK);
+    }
+
+    #[test]
+    fn ffi_rejects_null_pointers_without_dereferencing() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        // SAFETY: null is explicitly supported as a rejected input.
+        unsafe {
+            assert_eq!(
+                blackout_start(-1, std::ptr::null()),
+                BLACKOUT_ERR_INVALID_PARAM
+            );
+            assert_eq!(
+                blackout_get_stats(std::ptr::null_mut()),
+                BLACKOUT_ERR_INVALID_PARAM
+            );
+            assert_eq!(blackout_get_last_error(std::ptr::null_mut(), 32), 0);
+        }
+    }
+
+    #[test]
+    fn ffi_error_copy_is_bounded_and_terminated() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        set_last_error("example diagnostic");
+        let mut buffer = [b'X'; 8];
+        // SAFETY: the first four bytes are exclusively writable.
+        let copied = unsafe { blackout_get_last_error(buffer.as_mut_ptr().cast(), 4) };
+        assert_eq!(copied, 4);
+        assert_eq!(buffer[3], 0);
+        assert_eq!(&buffer[4..], &[b'X'; 4]);
+    }
 }

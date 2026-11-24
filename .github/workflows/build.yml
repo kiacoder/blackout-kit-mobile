@@ -71,12 +71,12 @@ jobs:
 
       - name: Release gate — Dart analyze + unit tests
         # A tag must not publish unless the Dart layer is clean and the unit
-        # suite passes. Same policy as test.yml (--no-fatal-* keeps infos and
-        # warnings non-fatal). This is the hard gate: a failure here aborts
+        # suite passes. Same policy as test.yml: informational lints remain
+        # visible, but warnings and errors fail the build. This is the hard gate: a failure here aborts
         # the whole release, before anything is attached.
         run: |
           set -e
-          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter analyze --no-fatal-infos
           flutter test
 
       - name: Release gate — Android app unit tests

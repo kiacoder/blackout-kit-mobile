@@ -51,7 +51,7 @@ jobs:
           flutter pub get
           # Errors only — infos and warnings are not fatal (same policy as
           # the Tests workflow).
-          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter analyze --no-fatal-infos
           flutter test
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5

@@ -51,10 +51,9 @@ struct ClientRxToken(Vec<u8>);
 impl smoltcp::phy::RxToken for ClientRxToken {
     fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> R,
+        F: FnOnce(&[u8]) -> R,
     {
-        let mut packet = self.0;
-        f(&mut packet)
+        f(&self.0)
     }
 }
 
@@ -116,7 +115,7 @@ impl Harness {
         client_iface.update_ip_addrs(|addrs| {
             addrs
                 .push(IpCidr::new(
-                    IpAddress::Ipv4(Ipv4Address(CLIENT_ADDR.octets())),
+                    IpAddress::Ipv4(Ipv4Address::from_octets(CLIENT_ADDR.octets())),
                     24,
                 ))
                 .expect("client addr slot");
@@ -235,8 +234,14 @@ async fn tcp_echo_flows_bidirectionally_through_netstack() {
 
     // The "app" opens a connection to the echo server THROUGH the netstack.
     let handle = harness.client_sockets.add(app_client_socket());
-    let remote = (IpAddress::Ipv4(Ipv4Address(echo_ip.octets())), echo_addr.port());
-    let local = (IpAddress::Ipv4(Ipv4Address(CLIENT_ADDR.octets())), 40000u16);
+    let remote = (
+        IpAddress::Ipv4(Ipv4Address::from_octets(echo_ip.octets())),
+        echo_addr.port(),
+    );
+    let local = (
+        IpAddress::Ipv4(Ipv4Address::from_octets(CLIENT_ADDR.octets())),
+        40000u16,
+    );
     {
         let cx = harness.client_iface.context();
         harness
@@ -283,7 +288,11 @@ async fn tcp_echo_flows_bidirectionally_through_netstack() {
             "flow retirement after close",
         )
         .await;
-    assert_eq!(harness.core.tcp_flow_count(), 0, "flow must retire after close");
+    assert_eq!(
+        harness.core.tcp_flow_count(),
+        0,
+        "flow must retire after close"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -397,10 +406,15 @@ async fn unsupported_outbound_resets_flows_instead_of_leaking() {
     // Any address works — the flow must be RST'd before any dial attempt,
     // never silently relayed direct.
     let remote = (
-        IpAddress::Ipv4(Ipv4Address(Ipv4Addr::new(203, 0, 113, 7).octets())),
+        IpAddress::Ipv4(Ipv4Address::from_octets(
+            Ipv4Addr::new(203, 0, 113, 7).octets(),
+        )),
         443u16,
     );
-    let local = (IpAddress::Ipv4(Ipv4Address(CLIENT_ADDR.octets())), 40100u16);
+    let local = (
+        IpAddress::Ipv4(Ipv4Address::from_octets(CLIENT_ADDR.octets())),
+        40100u16,
+    );
     {
         let cx = harness.client_iface.context();
         harness
@@ -428,6 +442,9 @@ async fn unsupported_outbound_resets_flows_instead_of_leaking() {
             break;
         }
     }
-    assert!(saw_rst, "unsupported outbound must RST the flow (no silent leak)");
+    assert!(
+        saw_rst,
+        "unsupported outbound must RST the flow (no silent leak)"
+    );
     assert_eq!(harness.core.tcp_flow_count(), 0, "refused flow must retire");
 }

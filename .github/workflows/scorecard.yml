@@ -1,7 +1,7 @@
 name: OpenSSF Scorecard
 on:
   push:
-    branches: [main, 'arena/**']
+    branches: [main]
     paths:
       - '.github/workflows/scorecard.yml'
   schedule:
@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   scorecard:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

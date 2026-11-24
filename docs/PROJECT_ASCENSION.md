@@ -7,7 +7,7 @@
 | 0 | Security remediation and PR #20 acceptance | In progress |
 | 1 | Repository governance | Core settings active; migration/review pending |
 | 2 | Supply-chain security | Initial gates implemented; CI and review pending |
-| 3 | Code quality engineering | Planned |
+| 3 | Code quality engineering | Initial quality gates; Android lint remediation pending |
 | 4 | Advanced automated testing | Planned |
 | 5 | Android device laboratory | Planned |
 | 6 | Performance engineering | Planned |
@@ -117,3 +117,49 @@ https://github.com/google/osv-scanner-action
 https://github.com/zizmorcore/zizmor-action
 https://github.com/ossf/scorecard-action
 https://github.com/gradle/actions
+
+
+## Phase 2 repair and Phase 3 initial quality gates (2026-11-24)
+
+First supply-chain runs: binary inventory, Gradle wrapper, Dependency Review
+and OSV PR comparison passed. Full OSV scan reported nine RUSTSEC-2026-0574
+through RUSTSEC-2026-0582 advisories against heapless 0.8.0. Updated smoltcp
+to 0.13.1 (locked) and heapless to 0.9.4, adapted address types and immutable
+receive-token API. Cargo tree confirms heapless 0.8.0 no longer resolved.
+No advisory ignores. Full OSV/cargo-deny rescan is required.
+
+Fixed initial scanner configuration: cargo-deny default manifest-directory
+deny.toml discovery (removed invalid --config argument), Rust 1.99.1 runtime,
+zizmor 1.30.1 (supported digest by pinned action), Scorecard default branch
+only. The actual Scorecard assessment must run after merge; no score claimed.
+
+Rust FFI: three public raw-pointer entrypoints now declare unsafe contracts
+and document caller requirements. JNI uses explicit bounded unsafe calls.
+Fixed stop signaling from plain/JNI threads without an ambient Tokio runtime
+by sending the oneshot under a synchronous mutex; this does not establish
+full device-level teardown or prove no overlapping session work. Added
+three host regression tests (shutdown signal, null pointer rejection, bounded
+NUL-terminated error copy). C ABI names and signatures unchanged.
+Host tests: 16/16. Clippy: zero errors, four remaining warnings
+(three constructor argument-count warnings, one chunks_exact suggestion).
+
+Quality workflow: pinned Ruff 0.11.13 with upstream distribution SHA-256
+hashes, focused correctness rules (syntax, undefined names, invalid flow);
+Python compilation, Rust Clippy/tests, rustfmt on seven migrated Rust files.
+No blanket formatting of legacy files. Existing Dart analyzer warnings
+are now fatal in Tests and APK/iOS build; 202 informational findings remain.
+Added .editorconfig and opt-in PowerShell local quality script; no automatic
+Git hook installation. Broader Ruff rules, Dart formatting, Rust formatting
+expansion, Kotlin linting and ShellCheck remain planned.
+
+Android lintDebug baseline: 18 errors and 11 warnings. Most errors are
+API 26 Process/ProcessBuilder calls in EngineCommands, EngineRunner,
+SubprocessLifecycle and VpnPlugin despite minSdk 24. One AppLinkUrlError
+in AndroidManifest.xml. Preserve API24 support; fix with reviewed compatible
+process lifecycle and intent-filter handling, then make lint a CI gate.
+No lint suppression or minSdk increase. Report is local in ignored build
+output, not a committed artifact. Android device behavior still unverified.
+
+Local validation: focused Ruff passes, seven-file rustfmt passes, actionlint
+passes all 11 workflows, 12 tracked binaries unchanged. Android lint fails
+as described. New scanner and quality jobs await CI; no production merge.

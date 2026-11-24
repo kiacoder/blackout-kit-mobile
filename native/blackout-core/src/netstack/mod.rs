@@ -23,8 +23,8 @@ mod packet;
 mod tests;
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use smoltcp::iface::{Interface, SocketSet};
@@ -100,8 +100,8 @@ impl TunDevice {
 
 fn to_smoltcp_ip(ip: std::net::IpAddr) -> IpAddress {
     match ip {
-        std::net::IpAddr::V4(v4) => IpAddress::Ipv4(Ipv4Address(v4.octets())),
-        std::net::IpAddr::V6(v6) => IpAddress::Ipv6(Ipv6Address(v6.octets())),
+        std::net::IpAddr::V4(v4) => IpAddress::Ipv4(Ipv4Address::from_octets(v4.octets())),
+        std::net::IpAddr::V6(v6) => IpAddress::Ipv6(Ipv6Address::from_octets(v6.octets())),
     }
 }
 
@@ -129,17 +129,13 @@ impl NetstackCore {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.subsec_nanos() as u64 ^ (d.as_secs() << 8))
             .unwrap_or(0xB1ACC07);
-        let mut iface = Interface::new(
-            config,
-            &mut device,
-            smoltcp::time::Instant::from_millis(0),
-        );
+        let mut iface = Interface::new(config, &mut device, smoltcp::time::Instant::from_millis(0));
         iface.set_any_ip(true);
         let (a, b, c, d) = CORE_INTERFACE_ADDR;
         iface.update_ip_addrs(|addrs| {
             addrs
                 .push(IpCidr::new(
-                    IpAddress::Ipv4(Ipv4Address([a, b, c, d])),
+                    IpAddress::Ipv4(Ipv4Address::from_octets([a, b, c, d])),
                     CORE_INTERFACE_PREFIX,
                 ))
                 .expect("core interface address slot");
@@ -150,7 +146,7 @@ impl NetstackCore {
         // exactly what a TUN netstack masquerading as arbitrary servers needs.
         iface
             .routes_mut()
-            .add_default_ipv4_route(Ipv4Address([a, b, c, d]))
+            .add_default_ipv4_route(Ipv4Address::from_octets([a, b, c, d]))
             .expect("core default route slot");
         let sockets = SocketSet::new(vec![]);
         let udp_relay_enabled = matches!(outbound, TcpOutbound::Direct);
@@ -281,8 +277,7 @@ impl NetstackCore {
                 // netstack→pump (app data). Both directions need capacity.
                 let (to_netstack_tx, net_rx) =
                     mpsc::channel::<UpstreamMsg>(UPSTREAM_CHANNEL_CAPACITY);
-                let (net_tx, to_pump_rx) =
-                    mpsc::channel::<UpstreamMsg>(UPSTREAM_CHANNEL_CAPACITY);
+                let (net_tx, to_pump_rx) = mpsc::channel::<UpstreamMsg>(UPSTREAM_CHANNEL_CAPACITY);
                 flow.up_tx = Some(net_tx);
                 flow.up_rx = Some(net_rx);
                 flows::spawn_upstream_pump(

@@ -2,6 +2,13 @@
 
 Thank you for your interest in contributing! This document outlines how to get started, coding standards, and the contribution process.
 
+## Repository governance
+
+Read [GOVERNANCE.md](GOVERNANCE.md) before opening a PR. Main requires a pull
+request and passing required tests. Changes affecting security, CI, signing or
+native engines require explicit risk and test evidence. A green build alone
+is not release approval.
+
 ## Getting Started
 
 ### Prerequisites

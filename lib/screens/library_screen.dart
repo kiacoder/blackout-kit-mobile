@@ -829,10 +829,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final repoController = TextEditingController();
     final branchController = TextEditingController(text: 'main');
 
-    Get.dialog(
-      AlertDialog(
+    var saving = false;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
         title: Text('add_custom_source'.tr),
-        content: Column(
+        content: SingleChildScrollView(child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
@@ -867,14 +869,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             ),
           ],
-        ),
+        )),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text('cancel'.tr),
           ),
           ElevatedButton(
             onPressed: () async {
+              if (saving) return;
+              saving = true;
+              try {
               final addedSource = await _configController.addCustomSource(
                 name: nameController.text,
                 owner: ownerController.text,
@@ -882,7 +887,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 branch: branchController.text,
               );
 
-              Get.back();
+              if (!dialogContext.mounted || ModalRoute.of(dialogContext)?.isCurrent != true) return;
+              Navigator.of(dialogContext).pop();
 
               if (addedSource != null) {
                 Get.snackbar(
@@ -901,6 +907,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   colorText: Colors.white,
                 );
               }
+              } finally { saving = false; }
             },
             child: Text('add'.tr),
           ),

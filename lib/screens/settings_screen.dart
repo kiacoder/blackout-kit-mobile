@@ -32,6 +32,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _protocolDialogPending = false;
   late final SettingsController _settingsController;
   late final ConfigController _configController;
   String _appVersion = 'Loading…';
@@ -867,8 +868,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // choice with the stale text, silently switching the selection back to
     // 'custom' and the old address.
     final openingText = controller.text.trim();
-    Get.dialog(
-      AlertDialog(
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
         title: Text('dns_resolver'.tr),
         contentPadding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
         content: SizedBox(
@@ -959,7 +961,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         isDense: true,
                       ),
                       onSubmitted: (value) async {
-                        if (await _applyCustomDns(value)) {
+                        if (await _applyCustomDns(value) && context.mounted && ModalRoute.of(context)?.isCurrent == true) {
                           setDialogState(() {});
                         }
                       },
@@ -971,7 +973,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: Get.back, child: Text('cancel'.tr)),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text('cancel'.tr)),
           TextButton(
             onPressed: () async {
               final trimmed = controller.text.trim();
@@ -983,7 +985,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // user can fix it instead of closing on a silent no-op.
                 if (!await _applyCustomDns(trimmed)) return;
               }
-              Get.back();
+              if (dialogContext.mounted && ModalRoute.of(dialogContext)?.isCurrent == true) {
+                Navigator.of(dialogContext).pop();
+              }
             },
             child: Text('done'.tr),
           ),
@@ -1079,8 +1083,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ];
 
   Future<void> _showProtocolDialog() async {
-    final availability = await Get.find<VPNService>().getEngineInfo();
-    if (!mounted) return;
+    if (_protocolDialogPending) return;
+    _protocolDialogPending = true;
+    try {
+      EngineAvailability availability;
+      try {
+        availability = await Get.find<VPNService>().getEngineInfo().timeout(const Duration(seconds: 5));
+      } catch (_) {
+        availability = const EngineAvailability.unknown();
+      }
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
 
     // If the native layer could not tell us anything (e.g. running on an
     // unsupported host), do not grey anything out — assume the protocol is
@@ -1089,11 +1101,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? _servedProtocols.where(availability.canConnect).toList()
         : _servedProtocols;
     final blocked = availability.isKnown
-        ? _unbundledProtocols.where((p) => !availability.canConnect(p)).toList()
+        ? [..._servedProtocols, ..._unbundledProtocols].where((p) => !availability.canConnect(p)).toList()
         : <String>[];
 
-    Get.dialog(
-      AlertDialog(
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
         title: Text('preferred_protocol'.tr),
         content: Obx(() {
           final preferred = _settingsController.preferredProtocol.value;
@@ -1111,7 +1124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         if (value != null) {
                           _settingsController.setPreferredProtocol(value);
                         }
-                        Get.back();
+                        Navigator.of(dialogContext).pop();
                       },
                     ),
                   if (blocked.isNotEmpty) ...[
@@ -1132,7 +1145,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         enabled: false,
                         dense: true,
                         title: Text(protocol.toUpperCase()),
-                        subtitle: Text('requires_singbox'.tr),
+                        subtitle: Text(availability.restartRequiredProtocols.contains(protocol)
+                            ? 'Fully restart the app to switch runtime families.'.tr
+                            : 'Not available in this build'.tr),
                       ),
                   ],
                 ],
@@ -1140,10 +1155,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             );
         }),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: Text('close'.tr)),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: Text('close'.tr)),
         ],
       ),
     );
+    } finally {
+      _protocolDialogPending = false;
+    }
   }
 
   void _showScanBatchSizeDialog() {
@@ -1457,21 +1475,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showResetDialog() {
-    Get.dialog(
-      AlertDialog(
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
         title: Text('reset_to_defaults_confirm'.tr),
         content: Text(
           'This will reset all settings to their default values. Your saved configs will not be affected.'.tr,
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text('cancel'.tr),
           ),
           ElevatedButton(
             onPressed: () async {
               await _settingsController.resetToDefaults();
-              Get.back();
+              if (!dialogContext.mounted || ModalRoute.of(dialogContext)?.isCurrent != true) return;
+              Navigator.of(dialogContext).pop();
               Get.snackbar(
                 'Reset',
                 'Settings have been reset to defaults'.tr,

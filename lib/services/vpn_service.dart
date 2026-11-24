@@ -232,7 +232,9 @@ class VPNService {
           nativeTunnelConfig = config.rawUri;
         } else if (config is AmneziaWGConfig) {
           _status = VPNStatus.error;
-          _lastError = 'AmneziaWG requires an enabled private native-tunnel build.';
+          _lastError = engines.restartRequiredProtocols.contains(config.protocol)
+              ? 'Fully restart the app before switching VPN runtime families.'
+              : 'AmneziaWG requires an enabled private native-tunnel build.';
           return false;
         }
       }
@@ -632,6 +634,9 @@ class VPNService {
 /// (iOS, tests, desktop), in which case callers should not grey anything out.
 class EngineAvailability {
   final bool isKnown;
+  final bool runtimeRestartRequired;
+  final List<String> restartRequiredProtocols;
+  final bool packagedCapabilities;
   final bool xrayAvailable;
   final String? xrayVersion;
   final List<String> xrayProtocols;
@@ -654,6 +659,9 @@ class EngineAvailability {
 
   const EngineAvailability({
     required this.isKnown,
+    this.runtimeRestartRequired = false,
+    this.restartRequiredProtocols = const [],
+    this.packagedCapabilities = false,
     required this.xrayAvailable,
     required this.xrayVersion,
     required this.xrayProtocols,
@@ -670,6 +678,9 @@ class EngineAvailability {
 
   const EngineAvailability.unknown()
       : isKnown = false,
+        runtimeRestartRequired = false,
+        restartRequiredProtocols = const [],
+        packagedCapabilities = false,
         xrayAvailable = false,
         xrayVersion = null,
         xrayProtocols = const [],
@@ -688,6 +699,9 @@ class EngineAvailability {
         (map[key] as List?)?.map((e) => e.toString()).toList() ?? const [];
     return EngineAvailability(
       isKnown: true,
+      runtimeRestartRequired: map['runtimeRestartRequired'] == true,
+      restartRequiredProtocols: strings('restartRequiredProtocols'),
+      packagedCapabilities: map['capabilitySource'] == 'packaged',
       xrayAvailable: map['xrayAvailable'] == true,
       xrayVersion: map['xrayVersion'] as String?,
       xrayProtocols: strings('xrayProtocols'),
@@ -720,7 +734,9 @@ class EngineAvailability {
     if (!isKnown)
       return 'Engine support could not be determined on this platform.';
     if (supportedProtocols.isEmpty) {
-      return 'No engine is bundled in this build.';
+      return runtimeRestartRequired
+          ? 'Restart the app before switching VPN runtime families.'
+          : 'No engine is bundled in this build.';
     }
     final bundled = <String>[
       if (mihomoAvailable) 'Mihomo (experimental)',
@@ -733,6 +749,8 @@ class EngineAvailability {
         .where((p) => !supportedProtocols.contains(p))
         .toList();
     return '${bundled.join(" + ")} - ${supportedProtocols.join(", ")}'
-        '${configurableOnly.isEmpty ? "" : " | configurable only: ${configurableOnly.join(", ")}"}';
+        '${configurableOnly.isEmpty ? "" : " | configurable only: ${configurableOnly.join(", ")}"}'
+        '${packagedCapabilities ? " | packaged; runtime checked at connection" : ""}'
+        '${runtimeRestartRequired ? " | fully restart the app before switching runtime families" : ""}';
   }
 }

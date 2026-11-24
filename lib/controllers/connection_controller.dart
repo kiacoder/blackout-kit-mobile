@@ -178,8 +178,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// Foreground-only liveness watchdog (see [_startLivenessWatchdog]).
   Timer? _livenessTimer;
 
-  /// Cached native capability report. Engine support is fixed for the lifetime
-  /// of the process, so probing once is enough. It is an Rx so the library
+  /// Latest passive capability report. Runtime admission can change after the
+  /// first connection, so refresh before selection/connection. It is an Rx so the library
   /// tiles' Obx rebuilds when the async probe lands — as a plain field the
   /// Connect buttons built before the answer stayed tappable forever (CON-06).
   final _engineAvailability = Rx<EngineAvailability?>(null);
@@ -1104,7 +1104,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// the per-connect check in [connect] still guards the actual attempt.
   Future<List<Config>> _servableConfigs(List<Config> configs) async {
     try {
-      _engineAvailability.value ??= await vpnService.getEngineInfo();
+      _engineAvailability.value = await vpnService.getEngineInfo();
     } catch (e) {
       _log.w('Engine capability probe failed, testing all configs: $e');
       return configs;
@@ -1133,13 +1133,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     return availability.canConnect(protocol);
   }
 
-  /// Runs the engine capability probe if it has not answered yet.
+  /// Refreshes the passive engine capability inventory.
   ///
   /// The library calls this so its tiles can grey out protocols this build
   /// cannot run *before* the user taps Connect and gets a red error for
   /// something the app already knew.
   Future<void> ensureEngineAvailability() async {
-    if (_engineAvailability.value != null) return;
     try {
       _engineAvailability.value = await vpnService.getEngineInfo();
     } catch (e) {
@@ -1155,7 +1154,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// blocking a connection that might have worked.
   Future<String?> _engineRefusal(Config config) async {
     try {
-      _engineAvailability.value ??= await vpnService.getEngineInfo();
+      _engineAvailability.value = await vpnService.getEngineInfo();
     } catch (e) {
       _log.w('Engine capability probe failed, continuing: $e');
       return null;
@@ -1208,6 +1207,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     final availability = _engineAvailability.value!;
     if (!availability.isKnown) return null;
     if (availability.canConnect(config.protocol)) return null;
+    if (availability.restartRequiredProtocols.contains(config.protocol)) {
+      return 'This engine is unavailable in the current process. Fully restart the app before switching runtime families.';
+    }
 
     final supported = availability.supportedProtocols;
     final supportedLabel = supported.isEmpty

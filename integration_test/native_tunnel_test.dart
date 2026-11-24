@@ -5,8 +5,8 @@
 /// happened to the 1,053 lines of mock Kotlin that commit `4e73204` removed.
 /// This file is the one that actually talks to `android.net.VpnService`.
 ///
-/// This is the test that closes the project's top open risk. It has **never been
-/// run**, because no Android hardware has been available.
+/// These are local lifecycle smoke checks, not peer handshake or traffic tests.
+/// Run each runtime family in a fresh Android process.
 ///
 /// ```bash
 /// # Plug in a device with USB debugging on, then:
@@ -78,8 +78,7 @@ void main() {
     expect(
       info.xrayAvailable,
       isTrue,
-      reason: 'libv2ray.aar did not load. Either libgojni.so is missing for this '
-          'ABI, or Seq.setContext/initCoreEnv failed.',
+      reason: 'Packaged libgojni.so is missing for this ABI.',
     );
     expect(info.xrayProtocols, contains('vless'));
     expect(info.canConnect('vless'), isTrue);
@@ -90,16 +89,15 @@ void main() {
     }
   });
 
-  testWidgets('native WG/AWG JNI probes remain stable on this device', (tester) async {
-    // The original dual-library design crashed asynchronously after both Go
-    // c-shared runtimes were loaded. Repeated capability reads keep this test
-    // alive long enough to catch that class of coexistence regression.
+  testWidgets('native WG/AWG packaged capability reads remain stable on this device', (tester) async {
+    // These reads must not load any native library; actual WG/AWG startup
+    // below is the JNI exercise. The two Go families require fresh processes.
     for (var i = 0; i < 20; i++) {
       final info = await vpn.getEngineInfo();
       expect(info.nativeWireguardAvailable, isTrue,
-          reason: 'WireGuard JNI failed combined-runtime probe at iteration $i.');
+          reason: 'WireGuard packaged capability missing at iteration $i.');
       expect(info.nativeAmneziawgAvailable, isTrue,
-          reason: 'AmneziaWG JNI failed combined-runtime probe at iteration $i.');
+          reason: 'AmneziaWG packaged capability missing at iteration $i.');
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
   }, skip: !nativeAcceptance);
@@ -159,6 +157,16 @@ PersistentKeepalive = 1
     expect(await vpn.isRunning(), isFalse);
   }, skip: !nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
 
+  testWidgets('embedded runtime is unavailable after native runtime claim',
+      (tester) async {
+    final info = await vpn.getEngineInfo();
+    expect(info.runtimeRestartRequired, isTrue);
+    expect(info.restartRequiredProtocols, contains('vless'));
+    expect(info.xrayAvailable, isFalse);
+    expect(await vpn.connect(ConfigParser.parse(probeUri)!), isFalse);
+    expect(await vpn.isRunning(), isFalse);
+  }, skip: !nativeAcceptance);
+
   testWidgets('VpnService.prepare() succeeds', (tester) async {
     final prepared = await vpn.prepare();
 
@@ -200,7 +208,7 @@ PersistentKeepalive = 1
 
     expect(await vpn.isRunning(), isTrue,
         reason: 'the tunnel died while it was supposed to be up');
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, skip: nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('disconnect tears the tunnel down', (tester) async {
     final config = ConfigParser.parse(probeUri);
@@ -213,7 +221,7 @@ PersistentKeepalive = 1
     expect(await vpn.disconnect(), isTrue);
     expect(await vpn.isRunning(), isFalse,
         reason: 'disconnect() reported success but the tunnel is still running');
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, skip: nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('an unavailable protocol is refused, not black-holed', (tester) async {
     // OpenVPN is explicitly reported unavailable by the Android engine-info

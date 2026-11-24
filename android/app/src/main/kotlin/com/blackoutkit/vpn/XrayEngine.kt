@@ -139,6 +139,10 @@ object XrayEngine {
      * `!geo*.dat` entries from `ignoreAssetsPattern` first.
      */
     private fun ensureEnv(context: Context): Boolean {
+        if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
+            lastError = GoRuntimeAdmission.RESTART_REQUIRED
+            return false
+        }
         if (envInitialized.get()) return true
         synchronized(this) {
             if (envInitialized.get()) return true
@@ -182,7 +186,9 @@ object XrayEngine {
 
     /** Human-readable core version, or null if the AAR is missing. */
     fun version(): String? = try {
-        Libv2ray.checkVersionX()
+        if (GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED))
+            Libv2ray.checkVersionX()
+        else null
     } catch (t: Throwable) {
         Log.w(TAG, "checkVersionX failed: ${t.javaClass.name}: ${t.message}", t)
         null

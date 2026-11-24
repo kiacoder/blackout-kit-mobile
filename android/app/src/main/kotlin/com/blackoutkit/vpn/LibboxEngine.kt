@@ -56,7 +56,9 @@ object LibboxEngine {
      * whether the embedded runtime is actually loadable on this ABI.
      */
     fun version(): String? = try {
-        Libbox.version()?.takeIf { it.isNotBlank() && it != "unknown" }
+        if (GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED))
+            Libbox.version()?.takeIf { it.isNotBlank() && it != "unknown" }
+        else null
     } catch (e: Throwable) {
         Log.w(TAG, "libbox version probe failed: ${e.javaClass.simpleName}: ${e.message}")
         null
@@ -64,7 +66,8 @@ object LibboxEngine {
 
     /** True only when a libbox call successfully reaches the embedded runtime. */
     fun isAvailable(): Boolean = try {
-        Libbox.version() != null
+        GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED) &&
+            Libbox.version() != null
     } catch (e: Throwable) {
         Log.w(TAG, "libbox availability probe failed: ${e.javaClass.simpleName}: ${e.message}")
         false
@@ -81,8 +84,15 @@ object LibboxEngine {
             stop()
         }
         lastError = null
+        if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
+            lastError = GoRuntimeAdmission.RESTART_REQUIRED
+            return false
+        }
         val svc = try {
             Libbox.newService(configJson, LibboxPlatform(vpnService, tunFd))
+        } catch (e: LinkageError) {
+            lastError = "Embedded sing-box runtime is unavailable or incompatible"
+            return false
         } catch (e: Exception) {
             lastError = "libbox config rejected: ${e.message}"
             Log.e(TAG, lastError!!, e)

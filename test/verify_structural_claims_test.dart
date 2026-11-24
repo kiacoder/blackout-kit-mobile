@@ -197,6 +197,21 @@ void main() {
           isTrue);
     });
 
+    test('engine catalogue is passive and never loads a Go runtime', () {
+      final plugin = source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
+      final catalogue = plugin.split('private fun engineInfoMap()').last.split('private fun statusMap()').first;
+      expect(catalogue, contains('bundled("libgojni.so")'));
+      expect(catalogue, contains('bundled("libblackout-tunnels.so")'));
+      for (final forbidden in ['XrayEngine.version(', 'LibboxEngine.version(',
+        'LibboxEngine.isAvailable(', 'NativeTunnelEngine.available(', 'System.loadLibrary(', '.claim(']) {
+        expect(catalogue, isNot(contains(forbidden)));
+      }
+      for (final engine in ['XrayEngine', 'LibboxEngine', 'NativeTunnelEngine']) {
+        expect(source('android/app/src/main/kotlin/com/blackoutkit/vpn/$engine.kt'),
+          contains('GoRuntimeAdmission.process.claim('));
+      }
+    });
+
     test('VPN revoke callback is atomically taken and dispatched on main', () {
       final service = source(
           'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');

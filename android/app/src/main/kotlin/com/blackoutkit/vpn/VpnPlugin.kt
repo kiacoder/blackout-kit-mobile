@@ -202,35 +202,50 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
     }
 
     private fun engineInfoMap(): Map<String, Any?> {
-        val xrayVersion = XrayEngine.version()
-        // sing-box runs as a subprocess engine, which needs its .so inside the
-        // APK's nativeLibraryDir. Reporting it available without the binary
-        // made the Dart pre-flight pass hysteria2/tuic/amneziawg/warp configs,
-        // which then failed instantly inside EngineRunner — "engines start to
-        // fail". Gate the claim on the file actually being present.
-        val singboxSo = File(
-            appContext?.applicationInfo?.nativeLibraryDir ?: "",
-            "libsingbox.so"
-        )
-        val singboxSoExists = singboxSo.exists()
-        val libboxAvailable = LibboxEngine.isAvailable()
-        val libboxVer = LibboxEngine.version()
-        val singboxAvailable = libboxAvailable || singboxSoExists
-        val cleanLibboxVer = libboxVer ?: if (singboxSoExists) "subprocess bundled" else null
-        Log.i(TAG, "engineInfoMap: nativeDir=${appContext?.applicationInfo?.nativeLibraryDir}, singboxSoExists=$singboxSoExists, libboxAvailable=$libboxAvailable, libboxVer=${cleanLibboxVer ?: "unavailable"}, xrayVer=$xrayVersion")
+        // A catalogue query must never load a native runtime. The previous
+        // version probe initialized both Go libraries merely by opening Settings.
+        // Package presence is a candidate capability, not a successful start.
+        val dir = appContext?.applicationInfo?.nativeLibraryDir?.let { File(it) }
+        fun bundled(name: String) = dir?.let { File(it, name).isFile } == true
+        val owner = GoRuntimeAdmission.process.current()
+        val embeddedAllowed = owner != GoRuntimeAdmission.Family.NATIVE_TUNNELS
+        val nativeAllowed = owner != GoRuntimeAdmission.Family.EMBEDDED
+        val embeddedBundled = bundled("libgojni.so")
+        val xrayAvailable = embeddedAllowed && embeddedBundled
+        val singboxSubprocess = bundled("libsingbox.so") &&
+            bundled("libtun2socks.so") && bundled("libfdlauncher.so")
+        val singboxAvailable = xrayAvailable || singboxSubprocess
+        val nativeBundled = BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS &&
+            bundled("libblackout-tunnels.so")
+        val nativeCandidate = nativeBundled && nativeAllowed
+        val xrayProtocols = listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard")
+        val singboxProtocols = listOf("hysteria2", "tuic", "anytls")
+        val restartRequired = buildList {
+            if (nativeBundled && !nativeAllowed) {
+                add("amneziawg")
+                // WireGuard can still use the embedded Xray runtime.
+                if (!xrayAvailable) add("wireguard")
+            }
+            if (embeddedBundled && !embeddedAllowed) {
+                addAll(xrayProtocols.filter { it != "wireguard" || !nativeCandidate })
+                if (!singboxSubprocess) addAll(singboxProtocols)
+            }
+        }
         return mapOf(
-            "nativeWireguardAvailable" to NativeTunnelEngine.available("wireguard"),
-            "nativeAmneziawgAvailable" to NativeTunnelEngine.available("amneziawg"),
+            "nativeWireguardAvailable" to nativeCandidate,
+            "nativeAmneziawgAvailable" to nativeCandidate,
+            "runtimeRestartRequired" to (nativeBundled && embeddedBundled && owner != null),
+            "restartRequiredProtocols" to restartRequired,
+            "capabilitySource" to "packaged",
             "mihomoAvailable" to (BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO &&
                 listOf("libmihomo.so", "libtun2socks.so", "libfdlauncher.so").all {
                     File(appContext?.applicationInfo?.nativeLibraryDir ?: "", it).canExecute()
                 }),
-            "xrayAvailable" to (xrayVersion != null),
-            "xrayVersion" to xrayVersion,
-            "xrayProtocols" to
-                listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard"),
+            "xrayAvailable" to xrayAvailable,
+            "xrayVersion" to null,
+            "xrayProtocols" to xrayProtocols,
             "singboxAvailable" to singboxAvailable,
-            "singboxVersion" to cleanLibboxVer,
+            "singboxVersion" to null,
             // amneziawg is NOT here on purpose: the bundled libsingbox.so is a
             // vanilla build (no `amnezia` option anywhere in the binary), so an
             // AmneziaWG profile is rejected at config decode time. Advertising
@@ -250,11 +265,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware 
             // previous session. That is a false tunnel state, not a failure.
             "singboxProtocols" to
                 if (singboxAvailable)
-                    listOf("hysteria2", "tuic", "anytls")
+                    singboxProtocols
                 else emptyList<String>(),
             "unavailableProtocols" to
                 (listOf("openvpn", "psiphon", "shadowtls", "warp", "sni", "mhrv") +
-                    (if (NativeTunnelEngine.available("amneziawg")) emptyList() else listOf("amneziawg")) +
+                    (if (nativeCandidate) emptyList() else listOf("amneziawg")) +
                     if (singboxAvailable) emptyList()
                     else listOf("hysteria2", "tuic", "anytls")),
             // These are accepted as editable configuration profiles, not

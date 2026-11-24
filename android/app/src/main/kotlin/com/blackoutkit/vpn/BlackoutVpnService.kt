@@ -372,7 +372,11 @@ class BlackoutVpnService : VpnService() {
     ): Boolean {
         lastError = null
         return try {
-            check(NativeTunnelEngine.available(protocol))
+            if (!NativeTunnelEngine.available(protocol)) {
+                lastError = NativeTunnelEngine.lastError ?: "Native tunnel library is unavailable or incompatible"
+                ticket.publish { notifyStatus("error") }
+                return false
+            }
             // Exclude our UID throughout startup, including the short interval
             // between native socket creation and protect(). Never mix allow/deny.
             require(packageName !in allowed)

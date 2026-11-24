@@ -71,9 +71,12 @@ void main() {
         'android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt',
       );
       final advertised = RegExp(
-        r'"singboxProtocols" to\s*if \(singboxAvailable\)\s*listOf\(([^)]*)\)',
+        r'val singboxProtocols\s*=\s*listOf\(([^)]*)\)',
       ).firstMatch(kt);
       expect(advertised, isNotNull);
+      expect(kt, matches(RegExp(
+        r'"singboxProtocols" to\s*if \(singboxAvailable\)\s*singboxProtocols\s*else emptyList<String>\(\)',
+      )));
 
       final names = RegExp(r'"([a-z0-9]+)"')
           .allMatches(advertised!.group(1)!)

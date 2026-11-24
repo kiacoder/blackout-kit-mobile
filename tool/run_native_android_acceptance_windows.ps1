@@ -39,4 +39,4 @@ finally {
   Pop-Location
 }
 
-Write-Host "PASS native Android acceptance on $DeviceId ($Abi)."
+Write-Host "PASS native Android packaged capability and local WG/AWG lifecycle acceptance on $DeviceId ($Abi)."

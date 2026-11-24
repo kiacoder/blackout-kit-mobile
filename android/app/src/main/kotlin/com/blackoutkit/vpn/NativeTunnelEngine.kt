@@ -19,6 +19,10 @@ internal object NativeTunnelEngine {
     @Synchronized fun available(protocol: String): Boolean {
         if (!BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS) return false
         if (protocol !in setOf("wireguard", "amneziawg")) return false
+        if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.NATIVE_TUNNELS)) {
+            lastError = GoRuntimeAdmission.RESTART_REQUIRED
+            return false
+        }
         if (protocol in verified) return true
         return try {
             if (!combinedLibraryLoaded) {
@@ -41,7 +45,10 @@ internal object NativeTunnelEngine {
 
     @Synchronized fun start(service: VpnService, protocol: String, tun: ParcelFileDescriptor, settings: String): Boolean {
         lastError = null
-        if (!available(protocol)) { lastError = "Native tunnel is disabled or its reviewed library is missing"; return false }
+        if (!available(protocol)) {
+            if (lastError == null) lastError = "Native tunnel is disabled or its reviewed library is missing"
+            return false
+        }
         val backend = object : NativeTunnelLifecycle.Backend {
             override fun turnOn(fd: Int, settings: String): Int =
                 if (protocol == "amneziawg") AWG.awgTurnOn("blackout", fd, settings)

@@ -10,7 +10,6 @@ import 'package:get/get.dart';
 
 import '../controllers/config_controller.dart';
 import '../models/engine_capability.dart';
-import '../models/config.dart';
 import '../services/vpn_service.dart';
 
 class EngineHubScreen extends StatefulWidget {
@@ -37,7 +36,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
 
   Future<void> _loadAvailability() async {
     try {
-      final info = await Get.find<VPNService>().getEngineInfo();
+      final info = await Get.find<VPNService>().getEngineInfo().timeout(const Duration(seconds: 5));
       if (!mounted) return;
       setState(() => _availability = info);
     } catch (_) {
@@ -68,6 +67,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     if (engine.engine == EngineType.singbox_proxy && _availability?.singboxVersion != null) {
       return _availability!.singboxVersion;
     }
+    if (_availability?.packagedCapabilities == true) return null;
     return engine.version;
   }
 
@@ -114,6 +114,9 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
   String _engineUnavailableMessage(EngineCapability engine) {
     if (_isEndpointGated(engine)) {
       return 'This profile format is configurable, but this build cannot connect it until a compatible endpoint and runtime are available.'.tr;
+    }
+    if (engine.compatibleProtocols.any((_availability?.restartRequiredProtocols ?? const <String>[]).contains)) {
+      return 'This runtime may require a full app restart before switching engine families.'.tr;
     }
     return 'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.'.tr;
   }
@@ -196,7 +199,11 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                           Text(
                             _capabilityUnknown
                                 ? 'Engine support could not be determined on this platform'.tr
-                                : 'Engines without a bundled runtime are shown greyed out'.tr,
+                                : _availability?.runtimeRestartRequired == true
+                                    ? 'Fully restart the app before switching VPN runtime families.'.tr
+                                    : _availability?.packagedCapabilities == true
+                                        ? 'Packaged engines; runtime checked at connection.'.tr
+                                        : 'Engines without a bundled runtime are shown greyed out'.tr,
                             style: TextStyle(fontSize: 12, color: theme.hintColor),
                           ),
                         ],
@@ -226,7 +233,10 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
           Expanded(
             child: Obx(() {
               // Subscribe even when the selected category has no entries.
-              final configs = _configController.allConfigs.toList();
+              final counts = <String, int>{};
+              for (final config in _configController.allConfigs.toList()) {
+                counts.update(config.protocol, (count) => count + 1, ifAbsent: () => 1);
+              }
               return ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
@@ -256,7 +266,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       ),
                     ),
                     for (final engine in entry.value) ...[
-                      _buildEngineCard(context, engine, configs),
+                      _buildEngineCard(context, engine, counts),
                       const SizedBox(height: 8),
                     ],
                   ],
@@ -283,10 +293,10 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     );
   }
 
-  Widget _buildEngineCard(BuildContext context, EngineCapability engine, List<Config> configs) {
+  Widget _buildEngineCard(BuildContext context, EngineCapability engine, Map<String, int> counts) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final configCount = configs.where((c) => engine.compatibleProtocols.contains(c.protocol)).length;
+    final configCount = engine.compatibleProtocols.toSet().fold<int>(0, (sum, protocol) => sum + (counts[protocol] ?? 0));
     final runnable = _isRunnable(engine);
     final catColor = runnable ? _getCategoryColor(engine.category) : theme.disabledColor;
     final version = _versionFor(engine);
@@ -359,7 +369,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  _isEndpointGated(engine) ? 'Endpoint gated'.tr : 'Not bundled'.tr,
+                                  _isEndpointGated(engine) ? 'Endpoint gated'.tr : 'Unavailable'.tr,
                                   style: TextStyle(fontSize: 10, color: theme.hintColor),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,

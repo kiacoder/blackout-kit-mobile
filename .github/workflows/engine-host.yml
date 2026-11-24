@@ -1,5 +1,6 @@
 name: Native engine host checks
 on:
+  workflow_dispatch:
   push:
     paths: ['android/app/src/main/kotlin/**', 'tool/kotlin/**', 'tool/test_engine_host.sh', 'tool/check_android_engine_sources.sh', '.github/workflows/engine-host.yml']
   pull_request:

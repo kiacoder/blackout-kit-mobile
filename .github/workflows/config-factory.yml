@@ -1,5 +1,6 @@
 name: Offline configuration factory
 on:
+  workflow_dispatch:
   push:
     paths: ['tool/config_factory.py', 'tool/tests/**', 'tool/requirements-config.txt', '.github/workflows/config-factory.yml']
   pull_request:

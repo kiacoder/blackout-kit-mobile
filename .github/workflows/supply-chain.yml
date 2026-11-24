@@ -1,0 +1,91 @@
+name: Supply chain security
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '27 4 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    name: Binary inventory and action pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 tool/verify_supply_chain.py
+      - run: python3 -m unittest tool.tests.test_supply_chain -v
+      - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        with:
+          fail-on-severity: high
+
+  rust-policy:
+    name: Rust dependency policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@17aeb3c839e42274e2b8adf721c8c65edfdc74dd # v2
+        with:
+          manifest-path: native/blackout-core/Cargo.toml
+          arguments: --all-features --locked
+          command: check
+          command-arguments: --config native/blackout-core/deny.toml
+
+  workflow-security:
+    name: Workflow security analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: v1.33.1
+          inputs: .github
+          online-audits: false
+          advanced-security: false
+          annotations: true
+
+  osv-pr:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@32d3cd482bdadfb38b186c0ad1b031902d55d932 # v2.7.1
+    with:
+      upload-sarif: false
+      fail-on-vuln: true
+
+  osv-full:
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@32d3cd482bdadfb38b186c0ad1b031902d55d932 # v2.7.1
+    with:
+      upload-sarif: false
+      fail-on-vuln: true

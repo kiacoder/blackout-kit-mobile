@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 0 | Security remediation and PR #20 acceptance | In progress |
 | 1 | Repository governance | Core settings active; migration/review pending |
-| 2 | Supply-chain security | Planned |
+| 2 | Supply-chain security | Initial gates implemented; CI and review pending |
 | 3 | Code quality engineering | Planned |
 | 4 | Advanced automated testing | Planned |
 | 5 | Android device laboratory | Planned |
@@ -67,3 +67,53 @@ References:
 https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
 https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
 https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+
+## Phase 2 - supply-chain security, 2026-11-24
+
+- All direct external workflow references pinned to full Git commit SHAs.
+  All existing checkout steps disable credential persistence.
+- New Supply chain security workflow: dependency review on PRs (high and
+  critical introduced advisories fail), cargo-deny advisory/license/source
+  policy, zizmor workflow analysis, OSV new-vulnerability PR scans and full
+  scans, Gradle wrapper validation, tracked binary and action-pin integrity.
+- OpenSSF Scorecard workflow: weekly/manual and integration-branch baseline
+  push, JSON evidence artifact, publishing disabled until the baseline is
+  reviewed. No score or badge claimed.
+- Cargo Dependabot updates grouped weekly. No automatic merging.
+- Gradle 7.6.6 all distribution pinned to official SHA-256:
+  6ed4d467349e2d3f555a578829c4aeadd67d73e2ec5d213c2a62f8f2829d9fa9.
+  Source: https://services.gradle.org/distributions/gradle-7.6.6-all.zip.sha256
+  Existing wrapper JAR is a historical version; independent wrapper validation
+  must confirm it is a recognized official wrapper.
+- Machine-readable baseline for 12 tracked binary files, including the AAR
+  and both nested JNI hashes, five native shared libraries, Gradle wrapper,
+  and five historical APKs. CI verifies paths and hashes before any build in
+  the existing Tests and APK workflows. A matching checksum proves unchanged
+  bytes, not verified upstream source provenance or malware-free status.
+- Six synthetic regression tests cover valid manifest, altered/unknown binary,
+  duplicate entry, mutable action ref and allowed local action.
+- Rust license policy permits observed permissive SPDX terms; this does not
+  clear licenses of opaque native libraries. No advisory exceptions added.
+
+Local validation: 12 artifact hashes match; six new tests pass; actionlint
+passes all ten workflows. No new scanner result or complete CI verdict
+claimed yet. The new supply-chain jobs are not yet added to the required
+main ruleset; the existing mandatory Tests job now includes integrity.
+Review results and then require stable checks. Independent tools may have
+transitive container tags/installers outside our direct action pin check.
+Gitleaks, Trivy, provenance reconstruction for historic prebuilt engines,
+release secret migration, and public Scorecard publication remain follow-up.
+
+Phase 0 evidence update: run 45421149333 succeeded, including the MobSF
+step. VirusTotal logged unknown-file for all three APK hashes; this is not
+an antivirus verdict. Full MobSF report review is still pending, and no
+production merge or release is approved here.
+
+References:
+https://github.com/actions/dependency-review-action
+https://github.com/EmbarkStudios/cargo-deny-action
+https://github.com/google/osv-scanner-action
+https://github.com/zizmorcore/zizmor-action
+https://github.com/ossf/scorecard-action
+https://github.com/gradle/actions

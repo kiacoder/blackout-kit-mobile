@@ -34,7 +34,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -52,7 +54,7 @@ jobs:
           flutter analyze --no-fatal-infos --no-fatal-warnings
           flutter test
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.23'
 
@@ -78,7 +80,7 @@ jobs:
 
       - name: Upload libbox interface dump
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: libbox-swiftinterface
           path: /tmp/libbox-iface
@@ -133,7 +135,7 @@ jobs:
           du -h build/ios/ipa/blackout-kit-ios-unsigned.ipa
 
       - name: Upload unsigned IPA artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: blackout-kit-ios-unsigned-ipa
           path: build/ios/ipa/blackout-kit-ios-unsigned.ipa
@@ -141,7 +143,7 @@ jobs:
 
       - name: Upload build log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: xcodebuild-log
           path: ~/Library/Developer/Xcode/DerivedData/Logs/Build/*.xcactivitylog

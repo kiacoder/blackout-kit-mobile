@@ -37,6 +37,9 @@ jobs:
           test "$GITHUB_REF_NAME" = "v$version"
 
 
+      - name: Verify checked-in binary inventory and action pins
+        run: python3 tool/verify_supply_chain.py
+
       - name: Set up Java
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:

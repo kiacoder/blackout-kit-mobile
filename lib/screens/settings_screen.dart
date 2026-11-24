@@ -1095,7 +1095,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Get.dialog(
       AlertDialog(
         title: Text('preferred_protocol'.tr),
-        content: Obx(() => SingleChildScrollView(
+        content: Obx(() {
+          final preferred = _settingsController.preferredProtocol.value;
+          return SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1104,7 +1106,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     RadioListTile<String>(
                       title: Text(protocol.toUpperCase()),
                       value: protocol,
-                      groupValue: _settingsController.preferredProtocol.value,
+                      groupValue: preferred,
                       onChanged: (value) {
                         if (value != null) {
                           _settingsController.setPreferredProtocol(value);
@@ -1135,7 +1137,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ],
               ),
-            )),
+            );
+        }),
         actions: [
           TextButton(onPressed: () => Get.back(), child: Text('close'.tr)),
         ],
@@ -1534,6 +1537,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
   }
 
   Future<void> _check() async {
+    if (!mounted) return;
     setState(() {
       _phase = 'checking';
       _error = '';

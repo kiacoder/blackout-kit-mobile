@@ -140,7 +140,7 @@ android {
             // instead of replacing a release-signed com.blackoutkit.vpn build.
             if (project.findProperty("nativeTestPackage") == "true") {
                 applicationIdSuffix ".nativetest"
-                versionNameSuffix "-native-test.1"
+                versionNameSuffix "-native-test.2"
             }
         }
         release {

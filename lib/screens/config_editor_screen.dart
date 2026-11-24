@@ -25,6 +25,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
 
   bool _isValid = true;
   bool _checkingNative = false;
+  bool _saving = false;
   // Parsing and validating are different questions. `_isValid` used to mean
   // "the text parses", so a config missing its password still showed a green
   // "Syntax Valid" tick and was only rejected later, with the wrong reason.
@@ -76,6 +77,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
   }
 
   Future<void> _saveChanges() async {
+    if (_saving || !mounted) return;
     final newText = _textController.text.trim();
     if (newText.isEmpty) {
       Get.snackbar(
@@ -129,9 +131,12 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     final isDuplicate = _configController.allConfigs
         .any((c) => c.getHash() == parsed.getHash());
 
+    _saving = true;
+    try {
     final stored = await _configController.configService
         .saveConfig(parsed, sourceId: originalSource);
     if (!stored) {
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
       // The two remaining causes are distinguishable now that validation ran
       // above: either the library already holds this exact config, or the
       // write itself failed.
@@ -149,6 +154,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
     await _configController.deleteConfig(widget.config);
     await _configController.loadConfigs();
 
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
     Get.back();
     Get.snackbar(
       'Config Updated'.tr,
@@ -156,6 +162,9 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
       backgroundColor: Colors.green,
       colorText: Colors.white,
     );
+    } finally {
+      _saving = false;
+    }
   }
 
 

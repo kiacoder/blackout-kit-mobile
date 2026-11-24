@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 
 import '../controllers/config_controller.dart';
 import '../models/engine_capability.dart';
+import '../models/config.dart';
 import '../services/vpn_service.dart';
 
 class EngineHubScreen extends StatefulWidget {
@@ -210,10 +211,10 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                   child: Row(
                     children: [
                       _buildCategoryChip('All'),
-                      _buildCategoryChip('Core VPN'.tr),
-                      _buildCategoryChip('Proxy Core'.tr),
-                      _buildCategoryChip('DPI Obfuscation'.tr),
-                      _buildCategoryChip('Relay / Mesh'.tr),
+                      _buildCategoryChip('Core VPN'),
+                      _buildCategoryChip('Proxy Core'),
+                      _buildCategoryChip('DPI Obfuscation'),
+                      _buildCategoryChip('Relay / Mesh'),
                     ],
                   ),
                 ),
@@ -224,6 +225,8 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
           // Engine Cards List
           Expanded(
             child: Obx(() {
+              // Subscribe even when the selected category has no entries.
+              final configs = _configController.allConfigs.toList();
               return ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
@@ -253,7 +256,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       ),
                     ),
                     for (final engine in entry.value) ...[
-                      _buildEngineCard(context, engine),
+                      _buildEngineCard(context, engine, configs),
                       const SizedBox(height: 8),
                     ],
                   ],
@@ -271,7 +274,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: ChoiceChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
+        label: Text(label.tr, style: const TextStyle(fontSize: 12)),
         selected: selected,
         onSelected: (val) {
           if (val) setState(() => _selectedCategory = label);
@@ -280,10 +283,10 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     );
   }
 
-  Widget _buildEngineCard(BuildContext context, EngineCapability engine) {
+  Widget _buildEngineCard(BuildContext context, EngineCapability engine, List<Config> configs) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final configCount = _getConfigCountForEngine(engine);
+    final configCount = configs.where((c) => engine.compatibleProtocols.contains(c.protocol)).length;
     final runnable = _isRunnable(engine);
     final catColor = runnable ? _getCategoryColor(engine.category) : theme.disabledColor;
     final version = _versionFor(engine);
@@ -349,7 +352,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                             ),
                             const SizedBox(width: 8),
                             if (!runnable)
-                              Container(
+                              Flexible(child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: theme.disabledColor.withOpacity(0.15),
@@ -358,8 +361,10 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                                 child: Text(
                                   _isEndpointGated(engine) ? 'Endpoint gated'.tr : 'Not bundled'.tr,
                                   style: TextStyle(fontSize: 10, color: theme.hintColor),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              )
+                              ))
                             else if (version != null)
                               Flexible(
                                 child: Container(
@@ -414,7 +419,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Wrap(
+                  Expanded(child: Wrap(
                     spacing: 4,
                     children: engine.compatibleProtocols.map((p) {
                       final protocolServed = !_capabilityUnknown && _availability!.canConnect(p);
@@ -433,7 +438,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       );
                     }).toList(),
-                  ),
+                  )),
                   Icon(Icons.chevron_right, size: 18, color: theme.hintColor),
                 ],
               ),

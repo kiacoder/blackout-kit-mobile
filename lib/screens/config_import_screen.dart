@@ -44,8 +44,14 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     _tabController.addListener(_handleTabChange);
     _configController = Get.find<ConfigController>();
 
-    _autoCheckClipboard();
-    _consumeIntentPayload();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ConfigImportScreen.pendingPayload != null) {
+        _consumeIntentPayload();
+      } else {
+        _autoCheckClipboard();
+      }
+    });
   }
 
   /// Ingests a payload received via "Open with" / share (see IntentService).
@@ -157,7 +163,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       // The clipboard read is an await; the screen can be gone by now.
-      if (!mounted) return;
+      if (!mounted || _dialogOpen || _saving) return;
       if (data != null && data.text != null && data.text!.isNotEmpty) {
         final text = data.text!.trim();
         final configs = _parsePayload(text);
@@ -190,7 +196,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     // while a QR is in view: without them each dismissal instantly spawned
     // the next popup and the dialogs stacked faster than they could be
     // dismissed.
-    if (!_isScanning || _dialogOpen || _saving) return;
+    if (!mounted || !_isScanning || _dialogOpen || _saving) return;
     if (_tabController.index != 0) return; // scan tab not visible
 
     final barcodes = capture.barcodes;
@@ -329,14 +335,16 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     }
   }
 
-  Future<void> _saveConfig(Config config) async {
+  Future<void> _saveConfig(Config config, {BuildContext? dialogContext}) async {
     if (_saving) return; // double-tap guard: one save per dialog
     _saving = true;
     try {
       final success = await _configController.configService.saveConfig(config);
     if (success) {
       await _configController.loadConfigs();
-      Get.back();
+      final target = dialogContext ?? context;
+      if (!mounted || !target.mounted || ModalRoute.of(target)?.isCurrent != true) return;
+      Navigator.of(target).pop();
       Get.snackbar(
         'Config Saved'.tr,
         '${config.displayName} added to Library',
@@ -344,6 +352,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         colorText: Colors.white,
       );
     } else {
+      if (!mounted) return;
       // saveConfig() returns false for a duplicate AND for a failed write.
       // Look at what is actually stored before blaming the user for a dupe.
       final alreadyStored = _configController.allConfigs
@@ -362,13 +371,14 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     }
   }
 
-  Future<void> _saveMultipleConfigs(List<Config> configs) async {
+  Future<void> _saveMultipleConfigs(List<Config> configs, {required BuildContext dialogContext}) async {
     if (_saving) return; // double-tap guard
     _saving = true;
     try {
       final savedCount = await _configController.configService.saveConfigs(configs);
       await _configController.loadConfigs();
-      Get.back();
+      if (!mounted || !dialogContext.mounted || ModalRoute.of(dialogContext)?.isCurrent != true) return;
+      Navigator.of(dialogContext).pop();
       if (savedCount == 0) {
         // Every entry already existed. The old message still said
         // "Successfully added 0 configs", which reads like a success.
@@ -394,8 +404,9 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _showParsedDialog(Config config) async {
-    await Get.dialog(
-      AlertDialog(
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
         title: Row(
           children: [
             const Icon(Icons.verified, color: Colors.green),
@@ -427,11 +438,11 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           TextButton(
             // Scanning stays off after Cancel: the camera is paused and the
             // QR is probably still in view - Rescan resumes deliberately.
-            onPressed: () => Get.back(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text('cancel'.tr),
           ),
           ElevatedButton.icon(
-            onPressed: _saving ? null : () => _saveConfig(config),
+            onPressed: _saving ? null : () => _saveConfig(config, dialogContext: dialogContext),
             icon: Icon(Icons.add),
             label: Text('add_to_library'.tr),
             style: ElevatedButton.styleFrom(
@@ -448,8 +459,9 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _showMultipleParsedDialog(List<Config> configs) async {
-    await Get.dialog(
-      AlertDialog(
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
         title: Text('${configs.length} ${'configs'.tr}'),
         content: SizedBox(
           width: double.maxFinite,
@@ -468,11 +480,11 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text('cancel'.tr),
           ),
           ElevatedButton(
-            onPressed: _saving ? null : () => _saveMultipleConfigs(configs),
+            onPressed: _saving ? null : () => _saveMultipleConfigs(configs, dialogContext: dialogContext),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
@@ -631,7 +643,17 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
               ),
               ElevatedButton.icon(
                 onPressed: () async {
-                  final data = await Clipboard.getData(Clipboard.kTextPlain);
+                  final ClipboardData? data;
+                  try {
+                    data = await Clipboard.getData(Clipboard.kTextPlain);
+                  } catch (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Clipboard unavailable'.tr)),
+                    );
+                    return;
+                  }
+                  if (!mounted) return;
                   final text = data?.text?.trim() ?? '';
                   if (text.isEmpty) return;
                   // This button parsed with ConfigParser.parse(), so a

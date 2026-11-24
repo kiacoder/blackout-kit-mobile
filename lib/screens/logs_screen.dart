@@ -133,7 +133,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 ),
               );
 
-              if (confirm == true) {
+              if (confirm == true && mounted) {
                 _debugService.clearLogs();
                 setState(() {});
               }

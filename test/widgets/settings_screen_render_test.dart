@@ -16,12 +16,20 @@ import 'package:hive/hive.dart';
 import 'package:blackout_kit_mobile/controllers/config_controller.dart';
 import 'package:blackout_kit_mobile/controllers/settings_controller.dart';
 import 'package:blackout_kit_mobile/screens/settings_screen.dart';
+import 'package:blackout_kit_mobile/screens/engine_hub_screen.dart';
+import 'package:blackout_kit_mobile/services/vpn_service.dart';
 import 'package:blackout_kit_mobile/services/config_service.dart';
 import 'package:blackout_kit_mobile/services/github_service.dart';
 import 'package:blackout_kit_mobile/services/secure_vault.dart';
 import 'package:blackout_kit_mobile/services/tester_service.dart';
 import 'package:blackout_kit_mobile/services/update_service.dart';
 import 'package:blackout_kit_mobile/services/localization_service.dart';
+
+class _NoEngines extends VPNService {
+  @override
+  Future<EngineAvailability> getEngineInfo() async =>
+      EngineAvailability.fromMap(const <String, dynamic>{});
+}
 
 void main() {
   late Directory dir;
@@ -50,6 +58,7 @@ void main() {
       testerService: TesterService(),
     ));
     Get.put<UpdateService>(UpdateService());
+    Get.put<VPNService>(_NoEngines());
   });
 
   testWidgets('settings renders its sections, not a blank gray box',
@@ -103,4 +112,52 @@ void main() {
     expect(find.text('Repositories'), findsOneWidget);
     expect(find.text('About'), findsOneWidget);
   });
+  for (final language in ['fa', 'zh']) {
+    testWidgets('engine category filter works in $language', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 760));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(GetMaterialApp(
+        translations: LocalizationService(),
+        locale: Locale(language),
+        fallbackLocale: const Locale('en'),
+        home: const EngineHubScreen(),
+      ));
+      await tester.pumpAndSettle();
+      final core = find.widgetWithText(ChoiceChip, 'Core VPN'.tr);
+      expect(core, findsOneWidget);
+      await tester.tap(core);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Core VPN'), findsOneWidget);
+      expect(find.text('WIREGUARD'), findsWidgets);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'All'.tr));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('preferred protocol dialog renders with no available engines',
+      (tester) async {
+    await tester.pumpWidget(GetMaterialApp(
+      translations: LocalizationService(),
+      locale: const Locale('en'),
+      fallbackLocale: const Locale('en'),
+      home: const SettingsScreen(),
+    ));
+    await tester.pump();
+    final tile = find.widgetWithText(ListTile, 'preferred_protocol'.tr);
+    await tester.ensureVisible(tile);
+    await tester.pump();
+    await tester.tap(tile);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(RadioListTile<String>), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('close'.tr));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
 }

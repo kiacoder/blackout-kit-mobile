@@ -163,3 +163,15 @@ output, not a committed artifact. Android device behavior still unverified.
 Local validation: focused Ruff passes, seven-file rustfmt passes, actionlint
 passes all 11 workflows, 12 tracked binaries unchanged. Android lint fails
 as described. New scanner and quality jobs await CI; no production merge.
+
+
+## Phase 2 workflow audit follow-up (2026-11-24)
+
+GitHub checks on 479e0de: Python correctness, Rust Clippy/regression,
+host tests, factory tests, dependency review, cargo-deny, artifact inventory
+and full OSV scan passed. Workflow security analysis reported two implicit
+Go caches and four insufficient Dependabot cooldowns. Disabled Go caching
+in the iOS APK workflow and Swift CodeQL job; added seven-day version-update
+cooldowns to all four ecosystems (security updates unaffected). Local
+inventory and six regression tests pass. Fresh zizmor CI verification pending.
+Android lint remediation and APK report review remain open; PR stays draft.

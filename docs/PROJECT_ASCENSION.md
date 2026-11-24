@@ -199,3 +199,25 @@ toolchain upgrade remains separate. No lint suppression or minSdk change.
 Remaining lint warnings: backup attribute, device ID, redundant API guard,
 Flutter theme resource and five launcher icon warnings. Device and APK
 security review still required before merge; no release performed.
+
+
+## Phase 3 Android warning and host CI follow-up (2026-11-24)
+
+Host workflow on f83014f failed: standalone Kotlin source lists omitted
+ProcessCompat. Added production source to host, narrow Android API and local
+JUnit harnesses, with a host-only SDK-26 Build stand-in for JVM execution.
+The narrow Android compile still uses the actual android.jar. Added a real
+1 MiB subprocess output test; Linux host CI confirmation pending. Local
+WSL has no JDK; Docker daemon unavailable, so Linux execution not claimed.
+
+Replaced ANDROID_ID-derived XUDP key/public fallback with a persisted random
+32-byte per-install key. Existing users rotate that key on first startup
+after upgrade; device-level persistence/interoperability still unverified.
+Added Flutter NormalTheme manifest metadata; removed redundant SDK guard.
+Local Gradle testDebugUnitTest and lintDebug passed (40 JVM tests; 0 errors,
+6 warnings). Remaining warnings: API-31 backup attribute (preserve protection)
+and five launcher icon shapes (preserve branding pending design review).
+AGP 7.4.2 supports compileSdk 33 officially, while app uses 34; lint also
+reports Kotlin metadata 1.9 vs 1.7.1. Upgrade separately with wrapper
+checksum, plugin compatibility, all variants and device tests. No warning
+suppression, minSdk increase, merge or release.

@@ -9,6 +9,8 @@ mkdir -p .cache/host-tests
   android/app/src/main/kotlin/com/blackoutkit/vpn/NativeChildStop.kt \
   android/app/src/main/kotlin/com/blackoutkit/vpn/VpnSessionExecutor.kt \
   android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCommands.kt \
+  android/app/src/main/kotlin/com/blackoutkit/vpn/ProcessCompat.kt \
+  tool/kotlin/HostAndroidBuild.kt \
   android/app/src/main/kotlin/com/blackoutkit/vpn/SubprocessLifecycle.kt \
   android/app/src/main/kotlin/com/blackoutkit/vpn/LocalSocksReadiness.kt \
   tool/kotlin/EngineHostTests.kt \

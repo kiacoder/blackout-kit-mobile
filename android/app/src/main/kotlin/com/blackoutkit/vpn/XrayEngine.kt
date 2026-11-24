@@ -1,15 +1,13 @@
 package com.blackoutkit.vpn
 
 import android.content.Context
-import android.os.Build
-import android.provider.Settings
 import android.util.Base64
 import android.util.Log
 import go.Seq
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.Libv2ray
-import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -172,16 +170,22 @@ object XrayEngine {
      * Java-to-Go string conversion.
      */
     private fun xudpBaseKey(context: Context): String {
-        val seed = try {
-            Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ANDROID_ID
-            )
-        } catch (t: Throwable) {
-            null
-        } ?: "blackout-kit"
-        val digest = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray())
-        return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+        // Called under the initialization lock. Persist an independent random
+        // key instead of deriving one from a device ID or a public fallback.
+        val preferences = context.getSharedPreferences("xudp_private", Context.MODE_PRIVATE)
+        val flags = Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
+        val existing = preferences.getString("base_key", null)
+        if (existing != null) {
+            val decoded = try { Base64.decode(existing, flags) }
+            catch (_: IllegalArgumentException) { null }
+            if (decoded?.size == 32) return existing
+        }
+        val key = ByteArray(32).apply { SecureRandom().nextBytes(this) }
+        val encoded = Base64.encodeToString(key, flags)
+        check(preferences.edit().putString("base_key", encoded).commit()) {
+            "Could not persist the XUDP installation key"
+        }
+        return encoded
     }
 
     /** Human-readable core version, or null if the AAR is missing. */
@@ -295,5 +299,5 @@ object XrayEngine {
 
     /** True when this device can actually run the bundled core. */
     fun isSupported(): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && version() != null
+        version() != null
 }

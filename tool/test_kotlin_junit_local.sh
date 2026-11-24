@@ -19,7 +19,8 @@ mapfile -d '' JAVA_SOURCES < <(find "$source/src/main/java" -name '*.java' -prin
 # Every current src/test file; fail compilation if a new test needs unavailable deps.
 mapfile -d '' TEST_SOURCES < <(find android/app/src/test -name '*.kt' -print0)
 "$KOTLINC" \
-  android/app/src/main/kotlin/com/blackoutkit/vpn/{SubprocessLifecycle,LocalSocksReadiness,NativeTunnelLifecycle,NativeTunnelConfig}.kt \
+  android/app/src/main/kotlin/com/blackoutkit/vpn/{ProcessCompat,SubprocessLifecycle,LocalSocksReadiness,NativeTunnelLifecycle,NativeTunnelConfig,GoRuntimeAdmission,OneShotCallbackSlot,VpnSessionExecutor}.kt \
+  tool/kotlin/HostAndroidBuild.kt \
   "${TEST_SOURCES[@]}" -cp ".cache/junit-classes:$source/lib/hamcrest-core-1.3.jar" \
   -jvm-target 17 -include-runtime -d .cache/kotlin-junit-tests.jar
 CLASSES=()

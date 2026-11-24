@@ -169,6 +169,11 @@ fun main() {
             val result = validator.validate(EngineCommands.MIHOMO, checker, config)
             check(!result.valid && result.code == "CONFIG_REJECTED" && !result.message.contains("SECRET"))
         }
+        test("native checker drains large output without exposing diagnostics") {
+            checker.writeText("#!/bin/sh\nhead -c 1048576 /dev/zero\nexit 0\n")
+            val result = validator.validate(EngineCommands.MIHOMO, checker, config, 3000)
+            check(result.valid && result.code == "NATIVE_VALIDATED")
+        }
         test("native checker timeout") {
             checker.writeText("#!/bin/sh\nexec sleep 30\n")
             check(validator.validate(EngineCommands.MIHOMO, checker, config, 100).code == "CHECK_TIMEOUT")

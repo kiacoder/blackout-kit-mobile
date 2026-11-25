@@ -1083,3 +1083,23 @@ in Gradle output. Newest detailed MobSF artifact download still
 unverified; source privacy findings are not a claim that the
 scanner's warnings disappeared. Storage emulator jobs still running
 at inspection. No production binary replacement or release.
+
+
+## Phase 3 emulator boot diagnostics and compact scanner evidence (2026-11-25)
+
+Run 45591441880 passed resolution and fixture compilation, but
+both API24 and API34 jobs timed out before ADB connected (exit124).
+No migration ran and no emulator startup log was preserved.
+Extracted CI-only emulator boot runner with explicit acceleration
+check, prestarted ADB server, fresh named hardware profile,
+SwiftShader software rendering (Vulkan disabled), bounded boot
+polling, process liveness check and failure diagnostics upload.
+Startup options are a proposed correction, not a confirmed root
+cause or verified fix. Reference Android developer emulator docs.
+Added compact security summary artifact to APK workflow so reviewers
+need not download all APK variants to see attested scan counts and
+statuses. Latest completed APK run 45589868521 again reported zero
+ClamAV detections and three unknown VirusTotal files. Detailed MobSF
+artifact still not retrieved locally. Python 96/96, shell syntax and
+12 binary/action checks passed. No production dependencies or
+binaries changed; hosted acceptance retry pending.

@@ -6,6 +6,7 @@ on:
     paths:
       - 'tool/prepare_storage_migration_experiment.py'
       - 'tool/run_storage_migration_acceptance.py'
+      - 'tool/run_storage_emulator_ci.sh'
       - 'tool/fixtures/storage_migration/**'
       - '.github/workflows/storage-migration-experiment.yml'
 permissions:
@@ -120,28 +121,7 @@ jobs:
           name: isolated-storage-fixtures
           path: .cache/storage-fixtures-output
       - name: Verify artifacts and run on a fresh disposable emulator
-        run: |
-          set -euo pipefail
-          sdk="$ANDROID_HOME/cmdline-tools/latest/bin"
-          tools="$ANDROID_HOME/build-tools/34.0.0"
-          adb="$ANDROID_HOME/platform-tools/adb"
-          serial=emulator-5554
-          image="system-images;android-$API;google_apis;x86_64"
-          "$sdk/sdkmanager" "platform-tools" "build-tools;34.0.0" "emulator" "$image"
-          test -c /dev/kvm
-          sudo chmod a+rw /dev/kvm
-          echo no | "$sdk/avdmanager" create avd --name storage-fixture --package "$image"
-          "$ANDROID_HOME/emulator/emulator" -avd storage-fixture -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/storage-emulator.log" 2>&1 &
-          emulator_pid=$!
-          trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
-          timeout 180 "$adb" -s "$serial" wait-for-device
-          for i in $(seq 1 120); do
-            if [ "$("$adb" -s "$serial" shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
-            sleep 2
-          done
-          test "$("$adb" -s "$serial" shell getprop sys.boot_completed | tr -d '\r')" = 1
-          "$adb" -s "$serial" shell input keyevent 82
-          python3 tool/run_storage_migration_acceptance.py --folder .cache/storage-fixtures-output --aapt "$tools/aapt" --apksigner "$tools/apksigner" --adb "$adb" --serial "$serial" --output migration-result.json
+        run: bash tool/run_storage_emulator_ci.sh "$API"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -149,3 +129,10 @@ jobs:
           path: migration-result.json
           if-no-files-found: warn
           retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: storage-emulator-diagnostics-api-${{ matrix.api }}
+          path: ${{ runner.temp }}/storage-emulator.log
+          if-no-files-found: warn
+          retention-days: 7

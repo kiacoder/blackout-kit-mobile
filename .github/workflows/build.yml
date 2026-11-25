@@ -232,6 +232,20 @@ jobs:
         with:
           subject-path: dist/*.json
 
+      - name: Upload compact security evidence for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: blackout-kit-security-summary
+          path: |
+            dist/SECURITY_REPORT.json
+            dist/APK_INVENTORY.json
+            dist/CLAMAV_VERSION.txt
+            dist/CLAMAV_REPORT.txt
+            dist/MOBSF_STATUS.json
+            dist/VIRUSTOTAL_REPORT.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload APK artifacts and evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

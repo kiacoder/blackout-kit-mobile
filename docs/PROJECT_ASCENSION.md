@@ -1159,3 +1159,29 @@ key-rotation acceptance, no MobSF score improvement claimed.
 Hosted storage workflow 45595704614 both fixture builds passed
 and emulator jobs were in progress at inspection. No production
 binary replacement or main merge.
+
+
+## Phase 3 updater download integrity and AVD location repair (2026-11-25)
+
+Verified GitHub latest release v1.19.2 supplies SHA256 metadata
+for all three APK variants. Updater validates HTTPS official
+repository/tag asset URL, requires SHA256 and a 1-256 MiB declared
+size, limits progress/cancels oversized responses, stages in a
+private temporary directory, verifies exact size and streaming
+SHA256 before renaming to the installable path. Existing native
+package and signer checks retained; PlatformException reaches
+UI without losing the native error code. Three new Dart tests
+cover valid digest, same-size corruption, truncation and malformed
+metadata. Flutter 588/588, Python 98/98, 12 binary/action checks
+and shell syntax passed. Targeted analysis has 3 informational
+findings, no warnings/errors. Legacy release assets lacking digest
+will now require manual installation. Live download/installer
+acceptance not performed; checksum metadata is not independent
+signature authentication, and digest verification occurs at download
+completion, not on each permission retry.
+Hosted storage run 45595704614 confirmed PulseAudio fix and usable
+KVM; emulator still failed to locate the created AVD. CI now uses
+explicit job-owned ANDROID_USER_HOME, ANDROID_AVD_HOME and AVD
+path, checks ini/config existence and emulator listing before boot.
+Root cause of path disagreement not yet verified; retry pending.
+No production dependency/native binary replacement or main merge.

@@ -3,6 +3,11 @@
 /// The bug this locks down: the updater used to pick the arm64 asset by name,
 /// so a 32-bit phone downloaded an APK it could never install
 /// (INSTALL_FAILED_NO_MATCHING_ABIS) and the install "just failed".
+library;
+
+import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:blackout_kit_mobile/services/update_service.dart';
 
@@ -20,6 +25,59 @@ Map<String, dynamic> releaseWith(Map<String, int> assets, {String tag = 'v1.0.0-
     };
 
 void main() {
+  group('Update download integrity', () {
+    AppUpdate update({
+      String url = 'https://github.com/kiacoder/blackout-kit-mobile/releases/download/v1.2.3/test.apk',
+      int size = UpdateDownloadPolicy.minBytes,
+      String? digest,
+    }) => AppUpdate(
+      tagName: 'v1.2.3',
+      buildNumber: 10203,
+      version: '1.2.3',
+      notes: '',
+      apkUrl: url,
+      apkSize: size,
+      apkDigest: digest,
+    );
+
+    final data = List<int>.filled(UpdateDownloadPolicy.minBytes, 42);
+    final expected = 'sha256:${sha256.convert(data)}';
+
+    test('rejects missing digest and wrong download origins', () {
+      expect(() => UpdateDownloadPolicy.validate(update()), throwsFormatException);
+      for (final url in [
+        'http://github.com/kiacoder/blackout-kit-mobile/releases/download/v1.2.3/test.apk',
+        'https://github.com/another/repo/releases/download/v1.2.3/test.apk',
+        'https://github.com/kiacoder/blackout-kit-mobile/releases/download/v1.2.4/test.apk',
+      ]) {
+        expect(() => UpdateDownloadPolicy.validate(update(url: url, digest: expected)),
+            throwsFormatException);
+      }
+      expect(() => UpdateDownloadPolicy.validate(update(size: 1, digest: expected)),
+          throwsFormatException);
+    });
+
+    test('accepts exact digest, rejects same-size corruption and truncation', () async {
+      final folder = await Directory.systemTemp.createTemp('update-integrity-');
+      addTearDown(() => folder.delete(recursive: true));
+      final file = File('${folder.path}/fixture.part');
+      await file.writeAsBytes(data);
+      await UpdateDownloadPolicy.verify(file, update(digest: expected));
+      await file.writeAsBytes(List<int>.filled(data.length, 43));
+      await expectLater(UpdateDownloadPolicy.verify(file, update(digest: expected)),
+          throwsFormatException);
+      await file.writeAsBytes([42]);
+      await expectLater(UpdateDownloadPolicy.verify(file, update(digest: expected)),
+          throwsFormatException);
+    });
+
+    test('parses official GitHub SHA-256 metadata', () {
+      final release = releaseWith({'app-arm64-v8a-release.apk': data.length});
+      (release['assets'] as List).first['digest'] = expected;
+      expect(AppUpdate.fromReleaseJson(release)!.apkDigest, expected);
+    });
+  });
+
   group('AppUpdate.fromReleaseJson', () {
     test('picks the arm64 asset on a 64-bit device', () {
       final u = AppUpdate.fromReleaseJson(

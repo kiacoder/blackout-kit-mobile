@@ -37,8 +37,14 @@ if "$adb" devices | grep -Eq '^[^[:space:]]+[[:space:]]+(device|offline|unauthor
   echo "Existing ADB device detected" >&2
   exit 1
 fi
-echo no | "$sdk/avdmanager" create avd --name storage-fixture --package "$image" --device pixel_2
-"$emulator" -list-avds
+# Force both tools to use the same new, job-owned Android user/AVD home.
+export ANDROID_USER_HOME="$RUNNER_TEMP/storage-android-home"
+export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+mkdir -p "$ANDROID_AVD_HOME"
+echo no | "$sdk/avdmanager" create avd --name storage-fixture --package "$image" --device pixel_2 --path "$ANDROID_AVD_HOME/storage-fixture.avd"
+test -s "$ANDROID_AVD_HOME/storage-fixture.ini"
+test -s "$ANDROID_AVD_HOME/storage-fixture.avd/config.ini"
+"$emulator" -list-avds | grep -Fx storage-fixture
 "$emulator" -avd storage-fixture -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader -feature -Vulkan -accel on -verbose > "$log" 2>&1 &
 emulator_pid=$!
 cleanup() {

@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include "parent_guard.h"
 #include "owned_child.h"
+#include "descriptor_guard.h"
 #include <pthread.h>
 #include <limits.h>
 
@@ -151,6 +152,14 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
             }
         }
 
+        /* Never inherit the app's standard input. */
+        int nullInput = open("/dev/null", O_RDONLY | O_CLOEXEC);
+        if (nullInput < 0 || dup2(nullInput, STDIN_FILENO) < 0 ||
+            fcntl(STDIN_FILENO, F_SETFD, 0) < 0) {
+            _exit(126);
+        }
+        if (nullInput != STDIN_FILENO) close(nullInput);
+
         /*
          * The engine reads the tunnel from fd 3. Copy the descriptor there.
          */
@@ -169,10 +178,8 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
          */
         if (fcntl(3, F_SETFD, 0) < 0) _exit(126);
 
-        /* Keep the child from holding the parent's other descriptors. */
-        for (int d = 4; d < 128; d++) {
-            close(d);
-        }
+        /* Keep only standard streams and the explicitly mapped TUN. */
+        if (close_extra_descriptors() != 0) _exit(126);
         execv(path, argv);
         /* execv only returns on failure; 127 tells the caller so. */
         _exit(127);

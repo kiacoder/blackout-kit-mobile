@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "parent_guard.h"
 #include "owned_child.h"
+#include "descriptor_guard.h"
 #include <assert.h>
 #include <errno.h>
 #include <sys/wait.h>
@@ -70,6 +71,44 @@ static void test_owned_child(void) {
     assert(owned_child_poll(&owner, 42) == CHILD_UNKNOWN);
 }
 
+static void test_descriptor_cleanup(int (*cleanup)(void)) {
+    int base = open("/dev/null", O_RDONLY);
+    assert(base >= 0);
+    int high = fcntl(base, F_DUPFD, 256);
+    int higher = fcntl(base, F_DUPFD, 512);
+    assert(high >= 256 && higher >= 512);
+    /* Exercise more than one getdents64 buffer, including sparse high FDs. */
+    int many[256];
+    for (size_t i = 0; i < sizeof(many) / sizeof(many[0]); ++i) {
+        many[i] = fcntl(base, F_DUPFD, 600);
+        assert(many[i] >= 600);
+    }
+    pid_t child = fork();
+    assert(child >= 0);
+    if (child == 0) {
+        if (dup2(base, 3) < 0) _exit(1);
+        if (cleanup() != 0) _exit(2);
+        if (fcntl(3, F_GETFD) < 0) _exit(3);
+        if (fcntl(high, F_GETFD) >= 0 || errno != EBADF) _exit(4);
+        if (fcntl(higher, F_GETFD) >= 0 || errno != EBADF) _exit(5);
+        for (size_t i = 0; i < sizeof(many) / sizeof(many[0]); ++i) {
+            if (fcntl(many[i], F_GETFD) >= 0 || errno != EBADF) _exit(6);
+        }
+        _exit(0);
+    }
+    int status;
+    assert(waitpid(child, &status, 0) == child);
+    assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    assert(fcntl(high, F_GETFD) >= 0 && fcntl(higher, F_GETFD) >= 0);
+    for (size_t i = 0; i < sizeof(many) / sizeof(many[0]); ++i) {
+        assert(fcntl(many[i], F_GETFD) >= 0);
+        close(many[i]);
+    }
+    close(high);
+    close(higher);
+    close(base);
+}
+
 int main(void) {
     alarm(10);
     assert(prctl(PR_SET_CHILD_SUBREAPER, 1UL, 0UL, 0UL, 0UL) == 0);
@@ -77,5 +116,7 @@ int main(void) {
     assert(prctl(PR_SET_PDEATHSIG, 0UL, 0UL, 0UL, 0UL) == 0);
     test_parent_exit();
     test_owned_child();
+    test_descriptor_cleanup(close_extra_descriptors);
+    test_descriptor_cleanup(close_extra_descriptors_proc);
     return 0;
 }

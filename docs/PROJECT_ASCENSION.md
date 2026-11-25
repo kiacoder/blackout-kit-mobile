@@ -715,3 +715,24 @@ still stops at 128; defer full descriptor enumeration to a tested
 follow-up. Java subprocess lifetime, crash residue, reproducible
 builds, fresh scanner results and device acceptance remain open.
 No main merge or release.
+
+
+## Phase 3 native descriptor isolation (2026-11-25)
+
+Removed the fixed 128 descriptor cutoff in fdlauncher. The forked
+child redirects stdin to /dev/null, preserves its explicit TUN slot
+3, and closes all higher descriptors using kernel getdents64 over
+/proc/self/fd (no libc directory allocation after fork). Non-Android
+Linux can use close_range first. Android deliberately avoids probing
+the newer syscall because older seccomp policies may trap rather than
+return ENOSYS. Unexpected enumeration/close failures refuse exec.
+Linux regression exercises both dispatch and explicit proc paths,
+258 high descriptors across multiple buffers, preservation of slot 3
+and unchanged parent descriptors. WSL regression, final Android
+debug CMake build, 67 JVM tests, strict lint (no issues), full Kotlin
+quality and 12 binary checks passed. Prior native lifecycle hosted
+checks passed. Flutter suite unchanged since prior 578-test pass;
+not rerun in this C-only batch. Android device SELinux/seccomp and
+actual fd behavior still require acceptance. Java subprocess death
+handling, orphan residue, reproducible source builds and fresh
+scanner results remain open. No production release.

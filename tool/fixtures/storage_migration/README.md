@@ -28,3 +28,14 @@ Upstream reports an issue involving the exact legacy-to-candidate migration with
 backup enabled (issue #1289); neither backup setting is approved by this fixture
 until device results are available:
 https://github.com/juliansteenbakker/flutter_secure_storage/issues/1289
+
+
+Automated acceptance now runs on disposable hosted API 24 and 34
+emulators. The runner verifies SHA256SUMS, package versions and
+shared signer before installing, refuses a pre-existing fixture,
+checks each upgrade and restart, and removes only the fixture it
+installed. Actual device outcomes are recorded independently of
+APK compilation. For local artifact-only verification, invoke
+python tool/run_storage_migration_acceptance.py with --folder,
+--aapt, --apksigner and --output. To execute on a disposable
+emulator, also pass --adb and its explicit --serial.

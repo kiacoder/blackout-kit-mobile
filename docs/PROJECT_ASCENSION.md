@@ -1029,3 +1029,21 @@ package archive request returned HTTP403; no local v10 build.
 No authorized ADB device attached. Main app dependencies,
 lockfile, runtime options and tracked native binaries unchanged.
 Hosted retry pending; no migration acceptance or release.
+
+
+## Phase 3 hosted storage fixture builds and automated emulator acceptance (2026-11-25)
+
+Hosted run 45589868510 passed both jobs. App dependency resolution
+selected secure-storage 10.3.4, package_info_plus 8.3.1 and web
+1.1.1; targeted call-site analysis passed. All three synthetic
+APK variants compiled and passed package version/shared signer
+checks. Artifact 15010701351 contains fixtures, lockfiles and
+SHA256SUMS; local app candidate lock downloaded and inspected.
+Added automated emulator acceptance runner: verifies all hashes,
+package identities, versions and signer; refuses physical devices
+and pre-existing fixtures; validates migration and restart for both
+backup settings, removes only its disposable fixture. Hosted API24
+and API34 jobs added. Six mock regression tests; Linux Python
+92/92 and 12 binary/action-pin checks passed. No real device
+acceptance yet, no production dependency, native binary or lockfile
+change. Hosted emulator boot and test results still pending.

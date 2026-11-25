@@ -5,6 +5,7 @@ on:
     branches: ['arena/**']
     paths:
       - 'tool/prepare_storage_migration_experiment.py'
+      - 'tool/run_storage_migration_acceptance.py'
       - 'tool/fixtures/storage_migration/**'
       - '.github/workflows/storage-migration-experiment.yml'
 permissions:
@@ -93,4 +94,58 @@ jobs:
           path: .cache/storage-fixtures-output/
           include-hidden-files: true
           if-no-files-found: error
+          retention-days: 14
+
+  acceptance:
+    name: Synthetic migration on Android API ${{ matrix.api }}
+    needs: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [24, 34]
+    env:
+      API: ${{ matrix.api }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: isolated-storage-fixtures
+          path: .cache/storage-fixtures-output
+      - name: Verify artifacts and run on a fresh disposable emulator
+        run: |
+          set -euo pipefail
+          sdk="$ANDROID_HOME/cmdline-tools/latest/bin"
+          tools="$ANDROID_HOME/build-tools/34.0.0"
+          adb="$ANDROID_HOME/platform-tools/adb"
+          serial=emulator-5554
+          image="system-images;android-$API;google_apis;x86_64"
+          "$sdk/sdkmanager" "platform-tools" "build-tools;34.0.0" "emulator" "$image"
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          echo no | "$sdk/avdmanager" create avd --name storage-fixture --package "$image"
+          "$ANDROID_HOME/emulator/emulator" -avd storage-fixture -port 5554 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/storage-emulator.log" 2>&1 &
+          emulator_pid=$!
+          trap 'kill "$emulator_pid" 2>/dev/null || true' EXIT
+          timeout 180 "$adb" -s "$serial" wait-for-device
+          for i in $(seq 1 120); do
+            if [ "$("$adb" -s "$serial" shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
+            sleep 2
+          done
+          test "$("$adb" -s "$serial" shell getprop sys.boot_completed | tr -d '\r')" = 1
+          "$adb" -s "$serial" shell input keyevent 82
+          python3 tool/run_storage_migration_acceptance.py --folder .cache/storage-fixtures-output --aapt "$tools/aapt" --apksigner "$tools/apksigner" --adb "$adb" --serial "$serial" --output migration-result.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: storage-migration-result-api-${{ matrix.api }}
+          path: migration-result.json
+          if-no-files-found: warn
           retention-days: 14

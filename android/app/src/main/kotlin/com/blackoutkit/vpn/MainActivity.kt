@@ -1,6 +1,5 @@
 package com.blackoutkit.vpn
 
-import android.content.ContentProviderClient
 import android.content.Intent
 import android.net.Uri
 import android.os.ParcelFileDescriptor
@@ -117,8 +116,7 @@ class MainActivity : FlutterActivity() {
     private fun copyToCache(uri: Uri?): String? {
         if (uri == null || !isSafeImportUri(uri)) return null
         return try {
-            val client = contentResolver.acquireUnstableContentProviderClient(uri)
-            client?.let { copyFromProvider(it, uri) }
+            readImport(uri)
         } catch (_: SecurityException) {
             Log.w(TAG, "Import provider access denied")
             null
@@ -134,29 +132,31 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun copyFromProvider(
-        client: ContentProviderClient,
-        uri: Uri,
-    ): String? =
-        try {
+    private fun readImport(uri: Uri): String? {
+        val client = contentResolver.acquireUnstableContentProviderClient(uri) ?: return null
+        return try {
             val pfd = client.openFile(uri, "r")
-            pfd?.let { copyImportFile(it) }
+            if (pfd == null) {
+                null
+            } else {
+                ParcelFileDescriptor.AutoCloseInputStream(pfd).use(::copyImportFile)
+            }
         } finally {
-            // Keep the existing API-24 compatible provider cleanup.
+            // release() remains compatible with API 24 and 25.
             client.release()
         }
+    }
 
-    private fun copyImportFile(pfd: ParcelFileDescriptor): String? =
-        ParcelFileDescriptor.AutoCloseInputStream(pfd).use { source ->
-            val file = File.createTempFile("import-", ".cfg", cacheDir)
-            var retained = false
-            try {
-                retained = file.outputStream().use { copyBoundedImport(source, it, MAX_IMPORT_BYTES) }
-                if (retained) file.absolutePath else null
-            } finally {
-                if (!retained) file.delete()
-            }
+    private fun copyImportFile(source: java.io.InputStream): String? {
+        val file = File.createTempFile("import-", ".cfg", cacheDir)
+        var retained = false
+        try {
+            retained = file.outputStream().use { copyBoundedImport(source, it, MAX_IMPORT_BYTES) }
+            return if (retained) file.absolutePath else null
+        } finally {
+            if (!retained) file.delete()
         }
+    }
 
     // / CodeQL High #20 — the URI comes from an external intent, so a hostile
     // / sender controls it completely. Two hard rules before any resolution:

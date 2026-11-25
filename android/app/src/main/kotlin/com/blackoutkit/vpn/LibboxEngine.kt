@@ -210,7 +210,9 @@ private class LibboxPlatform(
                     java.net.NetworkInterface
                         .getByName(name)
                         ?.index ?: -1
-                } catch (_: Exception) {
+                } catch (_: java.net.SocketException) {
+                    -1
+                } catch (_: SecurityException) {
                     -1
                 }
             listener.updateDefaultInterface(name, idx, false, false)
@@ -224,8 +226,10 @@ private class LibboxPlatform(
         monitorCallback = null
         try {
             cm.unregisterNetworkCallback(callback)
-        } catch (e: Exception) {
-            Log.w("LibboxPlatform", "interface monitor close failed: ${e.message}")
+        } catch (_: IllegalArgumentException) {
+            Log.w("LibboxPlatform", "interface monitor was not registered")
+        } catch (_: SecurityException) {
+            Log.w("LibboxPlatform", "interface monitor close denied")
         }
     }
 
@@ -234,34 +238,10 @@ private class LibboxPlatform(
         val list = mutableListOf<NetworkInterface>()
         try {
             for (network in cm.allNetworks) {
-                val link = cm.getLinkProperties(network) ?: continue
-                val caps = cm.getNetworkCapabilities(network) ?: continue
-                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
-                val iface = NetworkInterface()
-                val name = link.interfaceName ?: continue
-                iface.index =
-                    try {
-                        java.net.NetworkInterface
-                            .getByName(name)
-                            ?.index ?: -1
-                    } catch (_: Exception) {
-                        -1
-                    }
-                iface.name = name
-                iface.mtu = 0
-                iface.addresses = EmptyStringIterator
-                iface.dnsServer = EmptyStringIterator
-                iface.flags = 0
-                iface.type =
-                    when {
-                        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 1
-                        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 2
-                        else -> LIBBOX_OTHER_INTERFACE
-                    }
-                list.add(iface)
+                describeNetwork(cm, network)?.let(list::add)
             }
-        } catch (e: Exception) {
-            Log.w("LibboxPlatform", "interface enumeration failed: ${e.message}")
+        } catch (_: SecurityException) {
+            Log.w("LibboxPlatform", "interface enumeration denied")
         }
         return InterfaceIterator(list)
     }
@@ -301,12 +281,51 @@ private class LibboxPlatform(
                 // The pre-33 overload is required on the supported API 24-32 range.
                 vpnService.packageManager.getPackageUid(packageName, 0)
             }
-        } catch (e: Exception) {
+        } catch (_: PackageManager.NameNotFoundException) {
+            -1
+        } catch (_: SecurityException) {
             -1
         }
 
     override fun writeLog(message: String?) {
         Log.i("Libbox", message ?: "")
+    }
+}
+
+/** Describe only an internet-capable network with a named interface. */
+@Suppress("DEPRECATION")
+private fun describeNetwork(
+    cm: ConnectivityManager,
+    network: Network,
+): NetworkInterface? {
+    val link = cm.getLinkProperties(network)
+    val caps = cm.getNetworkCapabilities(network)
+    val name = link?.interfaceName
+    if (name == null || caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+        return null
+    }
+    return NetworkInterface().apply {
+        index =
+            try {
+                java.net.NetworkInterface
+                    .getByName(name)
+                    ?.index ?: -1
+            } catch (_: java.net.SocketException) {
+                -1
+            } catch (_: SecurityException) {
+                -1
+            }
+        this.name = name
+        mtu = 0
+        addresses = EmptyStringIterator
+        dnsServer = EmptyStringIterator
+        flags = 0
+        type =
+            when {
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 1
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 2
+                else -> LIBBOX_OTHER_INTERFACE
+            }
     }
 }
 

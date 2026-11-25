@@ -388,13 +388,21 @@ object EngineRunner {
         protocol: String = "hysteria2",
     ): Boolean {
         lastError = null
+        if (json.toByteArray(Charsets.UTF_8).size > MAX_ENGINE_CONFIG_BYTES) {
+            lastError = "Configuration exceeds the 8 MiB engine limit."
+            return false
+        }
+        return writeValidatedConfig(context, json, protocol)
+    }
+
+    private fun writeValidatedConfig(
+        context: Context,
+        json: String,
+        protocol: String,
+    ): Boolean {
+        val spec = EngineCommands.forProtocol(protocol) ?: return false
         return try {
             val dir = configDir(context)
-            val spec = EngineCommands.forProtocol(protocol) ?: return false
-            if (json.toByteArray(Charsets.UTF_8).size > MAX_ENGINE_CONFIG_BYTES) {
-                lastError = "Configuration exceeds the 8 MiB engine limit."
-                return false
-            }
             val file = File(dir, spec.configName)
             val temporary = File.createTempFile("engine-", ".tmp", dir)
             try {
@@ -404,9 +412,13 @@ object EngineRunner {
                 temporary.delete()
             }
             true
-        } catch (e: Exception) {
-            lastError = "Could not write engine config: ${e.message}"
-            Log.e(TAG, lastError, e)
+        } catch (_: java.io.IOException) {
+            lastError = "Could not write engine config."
+            Log.e(TAG, lastError!!)
+            false
+        } catch (_: SecurityException) {
+            lastError = "Engine config storage access denied."
+            Log.e(TAG, lastError!!)
             false
         }
     }

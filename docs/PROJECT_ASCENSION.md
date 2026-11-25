@@ -326,3 +326,25 @@ files including the two new sources. Full ktlint, 575 Flutter tests,
 Android JVM tests, Android lint, binary inventory and diff checks
 passed locally. Fresh CI and device validation pending. Phase 3
 remains open; no production merge or release.
+
+
+## Phase 3 Detekt engine cleanup batch 4 (2026-11-25)
+
+Prior 33cf005 Kotlin, host, Tests and both iOS CI jobs passed; APK
+job was pending at inspection. Refactored Xray initialization/startup
+branches and shared failed-start cleanup; simplified EngineRunner config
+write validation and narrowed IO/security exceptions; extracted libbox
+network description and narrowed network/package lookup exceptions.
+Reorganized import provider/descriptor ownership in one method, preserving
+API24 release and AutoCloseInputStream ownership. Both Recycle warnings
+from batch 3 resolved without suppression.
+
+Detekt 94 -> 83 weighted issues; strict scope remains 25 files. Full
+ktlint, scoped Detekt, 46 JVM tests, 575 Flutter tests, 12 binary
+checks and diff checks passed. Android lint 0 errors/6 pre-existing
+warnings. Confirmed via javap that bundled Xray startLoop/stopLoop
+declare generic checked Exception, so those catches remain flagged
+until a deliberate boundary review. No additional Detekt suppressions.
+Remaining 33 broad catches, 17 return counts, 10 long methods, 9
+complexity, 14 other findings. Fresh CI/device validation pending;
+Phase 3 not complete, no main merge or release.

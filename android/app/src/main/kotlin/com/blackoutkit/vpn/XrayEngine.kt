@@ -145,28 +145,30 @@ object XrayEngine {
             lastError = GoRuntimeAdmission.RESTART_REQUIRED
             return false
         }
-        if (envInitialized.get()) return true
-        synchronized(this) {
-            if (envInitialized.get()) return true
-            return try {
-                Seq.setContext(context.applicationContext)
-                // First argument becomes `xray.location.asset` — the on-disk
-                // root the geodata loader probes before falling back to the
-                // AssetManager set above. filesDir is normally empty of geo
-                // files, so the fallback is what would serve them; see the
-                // note above on why nothing does today.
-                // Second argument becomes `xray.xudp.basekey`.
-                Libv2ray.initCoreEnv(context.filesDir.absolutePath, xudpBaseKey(context))
-                envInitialized.set(true)
-                Log.i(TAG, "core env initialised, ${version()}")
-                true
-            } catch (t: Throwable) {
-                lastError = "Could not initialise the Xray core environment: ${t.message}"
-                Log.e(TAG, lastError, t)
-                false
+        return envInitialized.get() ||
+            synchronized(this) {
+                envInitialized.get() || initializeEnvironment(context)
             }
-        }
     }
+
+    private fun initializeEnvironment(context: Context): Boolean =
+        try {
+            Seq.setContext(context.applicationContext)
+            // First argument becomes `xray.location.asset` — the on-disk
+            // root the geodata loader probes before falling back to the
+            // AssetManager set above. filesDir is normally empty of geo
+            // files, so the fallback is what would serve them; see the
+            // note above on why nothing does today.
+            // Second argument becomes `xray.xudp.basekey`.
+            Libv2ray.initCoreEnv(context.filesDir.absolutePath, xudpBaseKey(context))
+            envInitialized.set(true)
+            Log.i(TAG, "core env initialised, ${version()}")
+            true
+        } catch (t: Throwable) {
+            lastError = "Could not initialise the Xray core environment: ${t.message}"
+            Log.e(TAG, lastError, t)
+            false
+        }
 
     /**
      * XUDP reads this setting as unpadded URL-safe Base64 and decodes it to a
@@ -231,8 +233,13 @@ object XrayEngine {
             Log.e(TAG, lastError!!)
             return false
         }
-        if (!ensureEnv(context)) return false
+        return ensureEnv(context) && startInitializedCore(configJson, tunFd)
+    }
 
+    private fun startInitializedCore(
+        configJson: String,
+        tunFd: Int,
+    ): Boolean {
         stop()
 
         // The controller handle must outlive the try below: the catch needs it
@@ -251,24 +258,17 @@ object XrayEngine {
             lastConfigJson = configJson
             created.startLoop(configJson, tunFd)
 
-            if (!created.isRunning) {
-                // A half-started controller must be stopped explicitly —
-                // leaving it unassigned means teardown() has no handle and
-                // the native core keeps running with nobody owning it.
-                try {
-                    created.stopLoop()
-                } catch (t: Throwable) {
-                    Log.w(TAG, "stopLoop after failed start: ${t.message}")
-                }
+            if (created.isRunning) {
+                controller = created
+                lastError = null
+                Log.i(TAG, "core running, tunFd=$tunFd")
+                true
+            } else {
+                stopFailedStart(created)
                 lastError = "Xray core reported that it failed to start"
                 Log.e(TAG, lastError!!)
-                return false
+                false
             }
-
-            controller = created
-            lastError = null
-            Log.i(TAG, "core running, tunFd=$tunFd")
-            true
         } catch (t: Throwable) {
             // A config parse error surfaces here as an exception from
             // startLoop; the message is the most useful thing we can show.
@@ -279,12 +279,16 @@ object XrayEngine {
             // controller explicitly; this path used to return without doing
             // so, leaving a running core with no owner — nothing would ever
             // call stopLoop on it, and the next connect started a second one.
-            try {
-                created.stopLoop()
-            } catch (stopError: Throwable) {
-                Log.w(TAG, "stopLoop after failed start: ${stopError.message}")
-            }
+            stopFailedStart(created)
             false
+        }
+    }
+
+    private fun stopFailedStart(created: CoreController) {
+        try {
+            created.stopLoop()
+        } catch (stopError: Throwable) {
+            Log.w(TAG, "stopLoop after failed start: ${stopError.javaClass.simpleName}")
         }
     }
 

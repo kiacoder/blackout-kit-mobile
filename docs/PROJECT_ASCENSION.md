@@ -1118,3 +1118,23 @@ Actions guard rejects non-CI invocation. Shell syntax, local
 non-CI rejection (exit2), Python 96/96 and 12 binary/action
 checks passed. Hosted retry still needed to confirm runtime repair.
 Production dependencies and native binaries unchanged; no release approval.
+
+
+## Phase 3 finding-level scanner evidence (2026-11-25)
+
+Compact artifact from run 45593879818 downloaded successfully:
+commit f3afdd0, test-only signing, ClamAV 3 scanned/0 infected,
+VirusTotal three unknown-file statuses, MobSF 46/100 with 4 high,
+10 warning, 1 info, 2 secure and 1 hotspot entries. Report
+now includes each finding's severity, title, section, stable rule
+SHA256 and full-evidence SHA256, without copying descriptions
+that can contain scanner-extracted secrets. Stable rule identity
+is based on section/title, not a vendor-assigned advisory ID;
+multiple instances may share a rule. Historical full report parsed
+all 18 entries successfully. Two new tests cover stable identity,
+evidence changes and malformed finding rejection. Python 98/98
+and 12 binary/action-pin checks passed. Current loopback-only
+cleartext exceptions retained pending runtime acceptance rather
+than changing behavior for a score. No score increase claimed.
+Storage retry 45595704614 still building at inspection; no
+production dependency or native binary changes.

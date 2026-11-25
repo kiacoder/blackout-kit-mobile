@@ -91,6 +91,40 @@ def verify_apks(folder, signer, tagged, expected):
         'signing': 'release-certificate-pinned' if tagged else 'test-only',
         'apks': records}, indent=2) + '\n', encoding='utf-8')
 
+def mobsf_findings(appsec):
+    """Retain review identifiers without copying scanner-extracted secret values."""
+    counts = {}
+    findings = []
+    for level in ('high', 'warning', 'info', 'secure', 'hotspot'):
+        entries = appsec[level]
+        if not isinstance(entries, list):
+            raise ValueError('Malformed MobSF severity results')
+        counts[level] = len(entries)
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError('Malformed MobSF finding')
+            title, section = entry.get('title'), entry.get('section')
+            description = entry.get('description')
+            if (not isinstance(title, str) or not title.strip() or len(title) > 4096
+                    or not isinstance(section, str) or not section.strip()
+                    or len(section) > 128 or not isinstance(description, str)):
+                raise ValueError('Malformed MobSF finding fields')
+            # Full descriptions can include strings that look like credentials.
+            # Hash the evidence rather than copying these into the compact report.
+            fingerprint = hashlib.sha256(
+                json.dumps([level, section, title, description],
+                           ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+            ).hexdigest()
+            # The rule identity is stable across changes in the affected file list.
+            rule = hashlib.sha256(
+                json.dumps([section, title], ensure_ascii=False,
+                           separators=(',', ':')).encode('utf-8')
+            ).hexdigest()
+            findings.append({'severity': level, 'section': section, 'title': title,
+                             'rule_sha256': rule, 'evidence_sha256': fingerprint})
+    return counts, findings
+
+
 def scanner_summary(folder, records):
     expected = {record['name']: record['sha256'] for record in records}
     if len(expected) != 3 or len(records) != 3:
@@ -117,16 +151,12 @@ def scanner_summary(folder, records):
         if len(universal) != 1 or report['sha256'] != universal[0]:
             raise ValueError('MobSF report does not match universal APK')
         appsec = report['appsec']
-        counts = {}
-        for level in ('high', 'warning', 'info', 'secure', 'hotspot'):
-            if not isinstance(appsec[level], list):
-                raise ValueError('Malformed MobSF severity results')
-            counts[level] = len(appsec[level])
+        counts, findings = mobsf_findings(appsec)
         score = appsec['security_score']
         if type(score) is not int or not 0 <= score <= 100:
             raise ValueError('Invalid MobSF security score')
         mobsf.update(scope='universal APK static analysis only',
-                     score=score, counts=counts)
+                     score=score, counts=counts, findings=findings)
     elif status['status'] != 'not-configured' or report_path.exists():
         raise ValueError('Unexpected MobSF status or stale report')
     return {'clamav': {'scanned_files': 3, 'infected_files': 0},

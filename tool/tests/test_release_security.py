@@ -66,7 +66,7 @@ class ScannerEvidenceTests(unittest.TestCase):
         self.write("VIRUSTOTAL_REPORT.json", self.vt)
         self.write("MOBSF_STATUS.json", {"status": "completed-review-required"})
         self.mobsf = {"sha256": "c" * 64, "appsec": {
-            "high": [{}], "warning": [], "info": [], "secure": [], "hotspot": [],
+            "high": [{"title": "fixture rule", "section": "code", "description": "synthetic secret value"}], "warning": [], "info": [], "secure": [], "hotspot": [],
             "security_score": 46,
         }}
         self.write("MOBSF_REPORT.json", self.mobsf)
@@ -80,6 +80,22 @@ class ScannerEvidenceTests(unittest.TestCase):
         self.assertTrue(result["review_required"])
         self.assertEqual(result["virustotal"][0]["status"], "unknown-file")
         self.assertEqual(result["mobsf"]["counts"]["high"], 1)
+
+    def test_compact_findings_do_not_copy_descriptions(self):
+        first = scanner_summary(self.folder, self.records)["mobsf"]["findings"][0]
+        self.assertEqual(first["title"], "fixture rule")
+        self.assertNotIn("synthetic secret value", json.dumps(first))
+        self.mobsf["appsec"]["high"][0]["description"] = "different affected files"
+        self.write("MOBSF_REPORT.json", self.mobsf)
+        second = scanner_summary(self.folder, self.records)["mobsf"]["findings"][0]
+        self.assertEqual(first["rule_sha256"], second["rule_sha256"])
+        self.assertNotEqual(first["evidence_sha256"], second["evidence_sha256"])
+
+    def test_malformed_finding_rejected(self):
+        self.mobsf["appsec"]["high"][0]["description"] = None
+        self.write("MOBSF_REPORT.json", self.mobsf)
+        with self.assertRaisesRegex(ValueError, "finding fields"):
+            scanner_summary(self.folder, self.records)
 
     def test_clamav_partial_scan_or_detection_rejected(self):
         for value in ("Scanned files: 2\nInfected files: 0", "Scanned files: 3\nInfected files: 1",

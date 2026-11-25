@@ -524,10 +524,6 @@ class VpnPlugin :
     }
 
     private inner class CatalogueController {
-        private val validationBusy =
-            java.util.concurrent.atomic
-                .AtomicBoolean(false)
-
         fun handleValidateEngineConfig(
             call: MethodCall,
             result: MethodChannel.Result,
@@ -565,32 +561,43 @@ class VpnPlugin :
                 return
             }
             Thread({
-                var file: File? = null
                 val outcome =
                     try {
-                        file = File.createTempFile("native-check-", ".json", context.cacheDir)
-                        file!!.writeText(text)
-                        NativeConfigValidator().validate(
-                            spec,
-                            File(context.applicationInfo.nativeLibraryDir, spec.binary),
-                            file!!,
-                        )
+                        checkConfig.release()
+                        val file = checkConfig.stage(File(context.filesDir, "native-checks"), text)
+                        val validation =
+                            NativeConfigValidator().validate(
+                                spec,
+                                File(context.applicationInfo.nativeLibraryDir, spec.binary),
+                                file,
+                            )
+                        validation
                     } catch (_: Exception) {
                         NativeValidation(
                             false,
                             "CHECK_FAILED",
                             "Native validation could not complete; raw diagnostics are withheld.",
                         )
+                    }
+                val completed =
+                    try {
+                        checkConfig.release()
+                        outcome
+                    } catch (_: Exception) {
+                        NativeValidation(
+                            false,
+                            "CHECK_CLEANUP_PENDING",
+                            "Configuration cleanup is pending. Retry the check.",
+                        )
                     } finally {
-                        file?.delete()
                         validationBusy.set(false)
                     }
                 main.post {
                     result.success(
                         mapOf(
-                            "valid" to outcome.valid,
-                            "code" to outcome.code,
-                            "message" to outcome.message,
+                            "valid" to completed.valid,
+                            "code" to completed.code,
+                            "message" to completed.message,
                             "connectionTested" to false,
                         ),
                     )
@@ -859,3 +866,9 @@ private fun looksLikeIpv6(value: String): Boolean {
                 )
         }
 }
+
+// Survive Flutter plugin detach/reattach while a checker or file needs cleanup.
+private val validationBusy =
+    java.util.concurrent.atomic
+        .AtomicBoolean(false)
+private val checkConfig = TransientEngineConfig()

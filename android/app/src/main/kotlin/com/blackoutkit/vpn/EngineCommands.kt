@@ -48,8 +48,9 @@ internal data class CommandOutcome(
     val timedOut: Boolean = false,
     val interrupted: Boolean = false,
     val launchFailed: Boolean = false,
+    val cleanupPending: Boolean = false,
 ) {
-    val succeeded: Boolean get() = exitCode == 0 && !timedOut && !interrupted && !launchFailed
+    val succeeded: Boolean get() = exitCode == 0 && !timedOut && !interrupted && !launchFailed && !cleanupPending
 }
 
 /**
@@ -57,43 +58,108 @@ internal data class CommandOutcome(
  * parsers can echo passwords, keys or complete input lines in their errors.
  * No unbounded readText, common-pool worker, or persistent diagnostic file.
  */
-internal class BoundedEngineCommand {
+internal class BoundedEngineCommand(
+    private val launch: (List<String>) -> Process = ProcessCompat::startQuietly,
+    private val waitFor: (Process, Long) -> Boolean = ProcessCompat::waitForExit,
+    private val forceStop: (Process) -> Unit = ProcessCompat::forceStop,
+) {
+    private class PendingCheck(
+        val process: Process,
+        val config: File?,
+    )
+
+    @Volatile
+    private var pending: PendingCheck? = null
+
+    @Synchronized
     fun execute(
         command: List<String>,
         timeoutMs: Long = 20_000,
+        config: File? = null,
     ): CommandOutcome {
         require(command.isNotEmpty() && timeoutMs > 0)
+        return if (!retryCleanup()) {
+            CommandOutcome(cleanupPending = true)
+        } else {
+            executeOwned(command, timeoutMs, config)
+        }
+    }
+
+    private fun executeOwned(
+        command: List<String>,
+        timeoutMs: Long,
+        config: File?,
+    ): CommandOutcome {
         val process =
             try {
-                ProcessCompat.startQuietly(command)
+                launch(command)
             } catch (_: IOException) {
                 return CommandOutcome(launchFailed = true)
             }
-        var interrupted = false
+        pending = PendingCheck(process, config)
+        var outcome = CommandOutcome(launchFailed = true)
+        var cleaned = false
+        try {
+            outcome =
+                if (waitFor(process, timeoutMs)) {
+                    CommandOutcome(exitCode = process.exitValue())
+                } else {
+                    CommandOutcome(timedOut = true)
+                }
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            outcome = CommandOutcome(interrupted = true)
+        } finally {
+            cleaned = retryCleanup()
+        }
+        return if (cleaned) outcome else outcome.copy(cleanupPending = true)
+    }
+
+    /** Retain the exact process and file until its exit has been confirmed. */
+    private fun retryCleanup(): Boolean {
+        val owned = pending ?: return true
+        val process = owned.process
+        var interrupted = Thread.interrupted()
         return try {
-            if (!ProcessCompat.waitForExit(process, timeoutMs)) {
-                CommandOutcome(timedOut = true)
+            if (ProcessCompat.isAlive(process)) forceStop(process)
+            if (waitFor(process, CHECK_CLEANUP_MS)) {
+                pending = null
+                closeStreams(process)
+                true
             } else {
-                CommandOutcome(exitCode = process.exitValue())
+                false
             }
         } catch (_: InterruptedException) {
             interrupted = true
-            CommandOutcome(interrupted = true)
+            false
+        } catch (_: IllegalStateException) {
+            false
+        } catch (_: SecurityException) {
+            false
         } finally {
-            if (ProcessCompat.isAlive(process)) ProcessCompat.forceStop(process)
-            try {
-                // The drain thread owns stdout; never close it from this
-                // thread, even after exit (a descendant may hold the pipe).
-                if (ProcessCompat.waitForExit(process, CHECK_CLEANUP_MS)) {
-                    process.outputStream.close()
-                    process.errorStream.close()
-                }
-            } catch (_: InterruptedException) {
-                interrupted = true
-            } catch (_: IOException) {
-            }
             if (interrupted) Thread.currentThread().interrupt()
         }
+    }
+
+    private fun closeStreams(process: Process) {
+        try {
+            process.outputStream.close()
+            process.errorStream.close()
+        } catch (_: IOException) {
+            // The drain thread owns stdout; never close it from this thread.
+        }
+    }
+
+    /** Callers must not delete a file still owned by a checker. */
+    fun releaseConfig(file: File): Boolean {
+        if (pending?.config != file) return true
+        return synchronized(this) {
+            pending?.config != file || retryCleanup()
+        }
+    }
+
+    companion object {
+        val process = BoundedEngineCommand()
     }
 }
 
@@ -104,7 +170,7 @@ internal data class NativeValidation(
 )
 
 internal class NativeConfigValidator(
-    private val commands: BoundedEngineCommand = BoundedEngineCommand(),
+    private val commands: BoundedEngineCommand = BoundedEngineCommand.process,
 ) {
     fun validate(
         engine: EngineCommands,
@@ -126,7 +192,7 @@ internal class NativeConfigValidator(
                 "Engine configuration is missing, empty or larger than 8 MiB.",
             )
         } else {
-            validationOutcome(commands.execute(engine.check(executable, config), timeoutMs))
+            validationOutcome(commands.execute(engine.check(executable, config), timeoutMs, config))
         }
     }
 
@@ -137,6 +203,12 @@ internal class NativeConfigValidator(
                     true,
                     "NATIVE_VALIDATED",
                     "The installed engine accepted the configuration; connectivity is not tested.",
+                )
+            result.cleanupPending ->
+                NativeValidation(
+                    false,
+                    "CHECK_CLEANUP_PENDING",
+                    "Previous engine checker has not stopped. Retry after cleanup.",
                 )
             result.timedOut -> NativeValidation(false, "CHECK_TIMEOUT", "Engine configuration validation timed out.")
             result.interrupted -> NativeValidation(false, "CANCELLED", "Engine configuration validation was cancelled.")

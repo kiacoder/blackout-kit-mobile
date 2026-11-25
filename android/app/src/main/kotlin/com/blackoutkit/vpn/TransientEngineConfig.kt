@@ -8,7 +8,9 @@ import java.io.IOException
  * The caller must stop its native reader before releasing the file.
  * A failed deletion retains ownership for a subsequent cleanup attempt.
  */
-internal class TransientEngineConfig {
+internal class TransientEngineConfig(
+    private val canRelease: (File) -> Boolean = BoundedEngineCommand.process::releaseConfig,
+) {
     private var owned: File? = null
 
     fun stage(
@@ -27,6 +29,7 @@ internal class TransientEngineConfig {
 
     fun release() {
         val file = owned ?: return
+        check(canRelease(file)) { "Engine checker still owns configuration" }
         check(file.delete() || !file.exists()) { "Engine configuration cleanup failed" }
         owned = null
     }

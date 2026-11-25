@@ -736,3 +736,27 @@ not rerun in this C-only batch. Android device SELinux/seccomp and
 actual fd behavior still require acceptance. Java subprocess death
 handling, orphan residue, reproducible source builds and fresh
 scanner results remain open. No production release.
+
+
+## Phase 3 configuration checker ownership (2026-11-25)
+
+All native config validators now share one process-scoped bounded
+checker owner. A failed stop retains the actual Process and its
+config path; the next check retries cleanup before launching anything.
+Explicit CHECK_CLEANUP_PENDING outcome prevents a failed cleanup from
+being reported as validation success. TransientEngineConfig refuses
+to delete a checker-owned file until process exit is confirmed.
+Plugin validation admission and file owner survive Flutter detach/
+reattach; private filesDir/native-checks avoids cache eviction.
+Two JVM regressions cover resistant-child cleanup, file retention,
+retry and interrupt restoration. Structural timeout test updated to
+check injected production functions and bounded cleanup. Full Kotlin
+quality, 578 Flutter tests, 69 Android JVM tests, strict Android lint
+(no issues) and 12 binary checks passed locally.
+
+This is in-process ownership, not a complete app-death guard for
+Java ProcessBuilder. The shared checker serializes calls; a competing
+call can wait behind an active check. App-process crash residue,
+long-lived subprocess parent protection, physical-device acceptance,
+secure-storage migration, reproducible native builds and current
+scanner verdicts remain open. No main merge or release.

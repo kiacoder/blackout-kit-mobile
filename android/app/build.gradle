@@ -141,6 +141,12 @@ android {
     }
     buildTypes {
         debug {
+            externalNativeBuild {
+                cmake {
+                    arguments "-DBLACKOUT_PROCESS_GUARD_EXPERIMENT=" +
+                            (project.findProperty("enableProcessGuardExperiment") == "true" ? "ON" : "OFF")
+                }
+            }
             // Explicit test-distribution mode: install beside the production app
             // instead of replacing a release-signed com.blackoutkit.vpn build.
             if (project.findProperty("nativeTestPackage") == "true") {
@@ -149,6 +155,11 @@ android {
             }
         }
         release {
+            externalNativeBuild {
+                cmake {
+                    arguments "-DBLACKOUT_PROCESS_GUARD_EXPERIMENT=OFF"
+                }
+            }
             // Never enable an unverified tunnel in a distribution build.
             buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"
             signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug

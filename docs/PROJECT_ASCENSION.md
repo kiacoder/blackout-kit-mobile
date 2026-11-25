@@ -760,3 +760,29 @@ call can wait behind an active check. App-process crash residue,
 long-lived subprocess parent protection, physical-device acceptance,
 secure-storage migration, reproducible native builds and current
 scanner verdicts remain open. No main merge or release.
+
+
+## Phase 3 experimental subprocess supervisor (2026-11-25)
+
+Added a standalone native supervisor candidate using a lifetime pipe
+from its owner, not the lifetime of a Java launching thread. Child
+gets a parent-death guard, isolated descriptors and /dev/null stdin;
+no shell and no persistent diagnostics. Linux regressions cover
+normal exit, pipe closure, TERM, forced supervisor death, launching
+thread turnover and owner process death (6 passed). CI now runs them.
+
+Opt-in debug packaging via -PenableProcessGuardExperiment=true was
+verified in an assembled APK with ARM64 and ARMv7 ELF entries.
+Candidate retained only in ignored .cache/process-guard-experiment/
+app-debug.apk, SHA256 0a13f49be6eb69272662c1bb29f38d84f1781beb96592dd46a6ac63917da4fb1.
+Default APK rebuilt and verified to exclude the candidate. Release
+CMake configuration explicitly disables it; release inventory rejects
+libprocess_guard.so, with regression coverage. Local Android build,
+69 JVM tests, strict lint and 6 release-security tests passed; binary
+inventory checks and Python compilation passed. Ruff unavailable
+locally; hosted quality gate remains required. No attached Android
+device found. The supervisor is NOT wired into ProcessCompat or
+production engine launches. Android extraction/execution and lifetime
+behavior must be tested before activation. Force-kill does not itself
+prove descendants are reaped, and old crash residue remains open.
+No production merge or release.

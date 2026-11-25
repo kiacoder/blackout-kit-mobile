@@ -141,6 +141,52 @@ void main() {
     expect(reports.last.active, isTrue);
   });
 
+  test('migration does not close a live legacy box', () async {
+    final store = MemoryKeyStore();
+    final legacy = await Hive.openBox<Map>('configs');
+    await legacy.put('fixture', {'value': 'live'});
+    final vault = SecureVault(store: store);
+
+    final blocked = await vault.migrate();
+    expect(blocked.locked, isTrue);
+    expect(legacy.isOpen, isTrue);
+    expect(legacy.get('fixture'), {'value': 'live'});
+    expect(await Hive.boxExists('configs_v2'), isFalse);
+
+    await legacy.close();
+    expect((await vault.migrate()).active, isTrue);
+    expect(await Hive.boxExists('configs'), isFalse);
+  });
+
+  test('open encrypted box cannot bypass key validation during migration',
+      () async {
+    final store = MemoryKeyStore();
+    final vault = SecureVault(store: store);
+    final key = await vault.getOrCreateKey();
+    final encrypted = await Hive.openBox<Map>('configs_v2',
+        encryptionCipher: HiveAesCipher(key!));
+    await encrypted.put('existing', {'value': 'encrypted'});
+    final legacy = await Hive.openBox<Map>('sources');
+    await legacy.put('source', {'value': 'legacy'});
+    await legacy.close();
+
+    final wrongStore = MemoryKeyStore();
+    await wrongStore.write('blackout_config_vault_key', List.filled(64, '0').join());
+    final blocked = await SecureVault(store: wrongStore).migrate();
+    expect(blocked.locked, isTrue);
+    expect(encrypted.isOpen, isTrue);
+    expect(encrypted.get('existing'), {'value': 'encrypted'});
+    expect(await Hive.boxExists('sources'), isTrue);
+    expect(await Hive.boxExists('sources_v2'), isFalse);
+
+    await encrypted.close();
+    expect((await vault.migrate()).active, isTrue);
+    final migrated = await openPreservingBox<Map>('sources_v2',
+        cipher: HiveAesCipher(key));
+    expect(migrated.get('source'), {'value': 'legacy'});
+    await migrated.close();
+  });
+
   test('a lost key keeps the data and reports a locked vault', () async {
     // First run: key created, config saved, boxes encrypted.
     final store = MemoryKeyStore();

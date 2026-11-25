@@ -1456,3 +1456,16 @@ Local vault suite 13/13, full Flutter suite 593/593, and 12 tracked
 binary/workflow action reference checks passed. This is not cross-isolate
 or cross-process locking. Storage plugin modernization, MobSF findings,
 and physical-device acceptance remain pending.
+
+## Phase 3 vault migration open-box safety (2026-11-25)
+
+All hosted workflows at 38835b6 passed. Refuse legacy migration when any
+vault box is already open, preserving live owners and preventing Hive's
+open-box cache from bypassing verification of the supplied encryption key.
+Retry with a closed library and the correct key remains supported. Two
+regression tests cover live legacy and encrypted boxes, including a wrong
+key during partial migration. Vault tests 15/15, full Flutter 595/595,
+targeted analyzer zero issues, 12 binary/action checks and diff check passed.
+Full widget suite retains a non-fatal unavailable wakelock channel warning.
+This is a same-isolate migration guard, not a cross-process file lock.
+No storage dependency promotion, new MobSF score or device acceptance claimed.

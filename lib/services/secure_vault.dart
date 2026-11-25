@@ -265,8 +265,25 @@ class SecureVault {
       hasLegacy = hasLegacy || await _boxExists(name);
     }
     if (hasLegacy) {
+      // Hive returns an already-open box without authenticating the supplied
+      // cipher. Also, closing a borrowed legacy box can disrupt a live owner.
+      // Require a quiescent library before copying or deleting any records.
+      for (final name in [
+        ..._encryptedBoxNames.keys,
+        ..._encryptedBoxNames.values,
+      ]) {
+        if (Hive.isBoxOpen(name)) {
+          return const MigrationReport(
+            active: false,
+            migrated: false,
+            locked: true,
+            detail: 'Storage migration requires a closed library. '
+                'Existing data was preserved.',
+          );
+        }
+      }
       for (final name in _encryptedBoxNames.values) {
-        if (await _boxExists(name) && !Hive.isBoxOpen(name)) {
+        if (await _boxExists(name)) {
           final existing = await openPreservingBox<Map>(
             name,
             cipher: HiveAesCipher(key),

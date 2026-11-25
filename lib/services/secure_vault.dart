@@ -20,6 +20,7 @@
 ///     (there is no platform channel on the Dart VM).
 library;
 
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -116,6 +117,10 @@ class SecureVault {
     'test_results': 'test_results_v2',
   };
 
+  // Vault instances in the app isolate share a single persisted key slot.
+  // Queue reads/creation so a second caller cannot overwrite a newly minted
+  // key before the first caller has confirmed that it was persisted.
+  static Future<void> _keyQueue = Future<void>.value();
   final KeyStore _store;
 
   SecureVault({KeyStore? store}) : _store = store ?? SecureKeyStore();
@@ -141,6 +146,10 @@ class SecureVault {
   /// whole saved library on a keystore reset or a restore onto a new device.
   /// See [VaultState.locked].
   Future<Uint8List?> getOrCreateKey() async {
+    final previous = _keyQueue;
+    final completion = Completer<void>();
+    _keyQueue = completion.future;
+    await previous;
     try {
       final existing = await _store.read(_keyName);
       if (existing != null && existing.isNotEmpty) {
@@ -163,6 +172,8 @@ class SecureVault {
       return key;
     } catch (_) {
       return null;
+    } finally {
+      completion.complete();
     }
   }
 

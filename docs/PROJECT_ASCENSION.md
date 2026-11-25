@@ -1430,3 +1430,17 @@ version codes may legitimately differ. Python 113/113, 12 binary/action
 checks and diff check passed; actual hosted gate validation pending.
 No changes to storage dependency, native binaries or minSDK. No physical
 ADB device attached, production release or main merge.
+
+## Phase 3 vault key initialization race fix (2026-11-25)
+
+All d1e9ac0 hosted workflows passed, including normal distribution
+identity verification (45635405074, publication skipped). Serialize
+SecureVault key lookup/creation across instances in the same Dart
+isolate until persisted-key verification completes; release the queue
+on failure as well as success. No key bytes cached in shared state.
+Two regression tests cover concurrent first-use and failed requests.
+Local vault suite 11/11, full Flutter suite 591/591, targeted analyzer
+zero issues, 12 binary/action checks and diff check passed.
+This does not provide cross-isolate or cross-process locking, nor does
+it modernize the storage plugin. Legacy migration backup mode and
+physical device acceptance still pending; no MobSF improvement claimed.

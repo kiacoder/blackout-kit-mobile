@@ -1,6 +1,7 @@
 /// BK-01: losing the vault key must never delete the encrypted library.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +30,28 @@ class NonPersistingKeyStore implements KeyStore {
 
   @override
   Future<void> write(String key, String value) async {}
+}
+
+class DelayedKeyStore implements KeyStore {
+  final writeStarted = Completer<void>();
+  final allowWrite = Completer<void>();
+  String? value;
+  int reads = 0;
+  int writes = 0;
+
+  @override
+  Future<String?> read(String key) async {
+    reads++;
+    return value;
+  }
+
+  @override
+  Future<void> write(String key, String value) async {
+    writes++;
+    if (!writeStarted.isCompleted) writeStarted.complete();
+    await allowWrite.future;
+    this.value = value;
+  }
 }
 
 // Hive 2.2.3 does not await the backend close after a failed open.
@@ -62,6 +85,30 @@ void main() {
     await Hive.close();
     await awaitFixtureLocksReleased(dir);
     await dir.delete(recursive: true);
+  });
+
+  test('concurrent vault instances create exactly one persisted key', () async {
+    final store = DelayedKeyStore();
+    final first = SecureVault(store: store).getOrCreateKey();
+    await store.writeStarted.future;
+    final second = SecureVault(store: store).getOrCreateKey();
+    // Give the second caller a turn while the first write is blocked.
+    await Future<void>.delayed(Duration.zero);
+    final readsBeforeRelease = store.reads;
+    store.allowWrite.complete();
+    final keys = await Future.wait([first, second]);
+    expect(readsBeforeRelease, 1);
+    expect(store.writes, 1);
+    expect(keys.first, isNotNull);
+    expect(keys.last, keys.first);
+    expect(identical(keys.first, keys.last), isFalse);
+  });
+
+  test('a failed key request releases the initialization queue', () async {
+    final failed = SecureVault(store: UnavailableKeyStore()).getOrCreateKey();
+    final healthy = SecureVault(store: MemoryKeyStore()).getOrCreateKey();
+    expect(await failed, isNull);
+    expect(await healthy, hasLength(32));
   });
 
   test('a lost key keeps the data and reports a locked vault', () async {

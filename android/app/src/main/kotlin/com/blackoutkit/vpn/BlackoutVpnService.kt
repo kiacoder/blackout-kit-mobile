@@ -751,11 +751,7 @@ class BlackoutVpnService : VpnService() {
                     lastError = "Mihomo is experimental and disabled, or its configuration is missing."
                     false
                 }
-                !EngineRunner.writeConfig(this@BlackoutVpnService, mihomoConfig, protocol) -> {
-                    lastError = "Could not store the Mihomo configuration."
-                    false
-                }
-                else -> EngineRunner.start(this@BlackoutVpnService, tunFd, request.socksPort, protocol)
+                else -> EngineRunner.start(this@BlackoutVpnService, tunFd, request.socksPort, protocol, mihomoConfig)
             }
         }
 
@@ -784,11 +780,8 @@ class BlackoutVpnService : VpnService() {
 
             // A non-Xray protocol MUST arrive with its config document.
             //
-            // This used to be `if (!singboxConfig.isNullOrBlank() && !writeConfig(...))`,
-            // so a null config skipped the write entirely and EngineRunner.start()
-            // loaded whatever singbox.json was already on disk - the previous
-            // session's server, under the new protocol's name. The tunnel came up
-            // and reported "connected" while running the wrong proxy.
+            // Pass the current document directly to the runner. It stages a
+            // unique session file and never loads a previous session's profile.
             // The Rust core scaffolding is bundled, but its TCP outbound dispatcher
             // still refuses the supported sing-box protocols. Do not route a user
             // tunnel into it until its selected protocol has a tested end-to-end
@@ -827,17 +820,13 @@ class BlackoutVpnService : VpnService() {
                     Log.e(TAG, lastError!!)
                     false
                 }
-                !EngineRunner.writeConfig(this@BlackoutVpnService, singboxConfig) -> {
-                    lastError = EngineRunner.lastError ?: "Could not write the sing-box config."
-                    Log.e(TAG, lastError!!)
-                    false
-                }
                 else ->
                     EngineRunner.start(
                         context = this@BlackoutVpnService,
                         tunFd = tunFd,
                         socksPort = request.socksPort,
                         protocol = protocol,
+                        json = singboxConfig,
                     )
             }
         }

@@ -39,3 +39,33 @@ Merged PR20 commit 0638ded into isolated toolchain branch at f6925cac3cda7e9065d
 - [Refreshed APK/iOS build run](https://github.com/kiacoder/blackout-kit-mobile/actions/runs/45562490487)
 
 Both were in progress at inspection. Re-run the network policy change on the candidate before promotion. No merge to main or release authorized by this review. Local Google Maven resolution, final artifact review, native traffic and upgrade/device acceptance remain open.
+
+
+## Native binary and configuration follow-up (2026-11-25)
+
+Earlier universal APK native analysis covers nine libraries in each of
+ARM64 and ARMv7. All report NX and position independence; full RELRO
+is reported where applicable (Flutter/Dart exceptions). Both ABIs of
+libgojni, libsingbox, libtun2socks and libblackout_core lack conventional
+C stack-canary and fortified-call signatures. fdlauncher has canaries
+but no fortified calls detected. Go/Rust runtime/code generation is not
+equivalent to C; inspect actual CGO, unsafe FFI, source provenance and
+release ELF properties. Do not add artificial symbol references to
+improve the score. fdlauncher now explicitly requests stack protector,
+FORTIFY_SOURCE=2, format checks, full RELRO and non-executable stack;
+debug build succeeded and compiler/linker flags were verified. Release
+binary and MobSF confirmation are still required.
+
+Replaced fixed credential-bearing subprocess config paths with unique
+app-private session files owned by TransientEngineConfig. Current
+config is mandatory for start; old files cannot be selected. Active
+file stays until the associated engine is stopped; failed deletion
+retains the handle for retry. Probe validation rejection and launch
+I/O failure attempt cleanup. No secure-erase guarantee; previous
+fixed-name files and crash residue need separately validated cleanup.
+Cross-engine admission and unresolved checker processes remain open.
+
+Three new ownership tests passed. Both refreshed f6925ca toolchain
+Tests and APK/iOS builds succeeded; this does not validate the latest
+configuration cleanup commit or device behavior. Artifact 14999290623
+is available for fresh report review. No revised MobSF score claimed.

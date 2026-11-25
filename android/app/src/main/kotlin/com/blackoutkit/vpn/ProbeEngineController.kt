@@ -23,6 +23,7 @@ internal object ProbeEngineController {
     private const val CLEANUP_TIMEOUT_MS = 500L
     private const val MAX_PROBE_CONFIG_BYTES = 8 * 1024 * 1024
     private var probeProcess: Process? = null
+    private val configOwner = TransientEngineConfig()
 
     @Synchronized
     fun start(request: ProbeEngineRequest): ProbeEngineFailure? {
@@ -84,18 +85,20 @@ internal object ProbeEngineController {
     ): ProbeEngineFailure? =
         try {
             val dir = EngineRunner.configDirectory(request.context)
-            val file = File(dir, "singbox-probe.json")
-            file.writeText(config)
+            val file = configOwner.stage(dir, config)
             val validation = NativeConfigValidator().validate(EngineCommands.SING_BOX, engine, file)
             if (!validation.valid) {
+                configOwner.release()
                 startFailure(validation.message)
             } else {
                 launch(engine, file, request.socksPort)
             }
         } catch (_: IOException) {
-            startFailure("Probe configuration or process could not be opened.")
+            cleanupAfterFailure("Probe configuration or process could not be opened.")
         } catch (_: SecurityException) {
-            startFailure("Probe configuration or process access denied.")
+            cleanupAfterFailure("Probe configuration or process access denied.")
+        } catch (_: IllegalStateException) {
+            cleanupFailure()
         }
 
     private fun launch(
@@ -128,11 +131,23 @@ internal object ProbeEngineController {
     }
 
     private fun stopSingboxProbe() {
-        val process = probeProcess ?: return
-        SubprocessLifecycle().stop(listOf(process), graceMs = CLEANUP_TIMEOUT_MS)
-        check(!ProcessCompat.isAlive(process)) { "Probe cleanup did not complete within its deadline." }
-        probeProcess = null
+        probeProcess?.let { process ->
+            SubprocessLifecycle().stop(listOf(process), graceMs = CLEANUP_TIMEOUT_MS)
+            check(!ProcessCompat.isAlive(process)) { "Probe cleanup did not complete within its deadline." }
+            probeProcess = null
+        }
+        configOwner.release()
     }
+
+    private fun cleanupAfterFailure(message: String): ProbeEngineFailure =
+        try {
+            stopSingboxProbe()
+            startFailure(message)
+        } catch (_: IllegalStateException) {
+            cleanupFailure()
+        } catch (_: SecurityException) {
+            cleanupFailure()
+        }
 
     private fun cleanupFailure() = ProbeEngineFailure("PROBE_STOP_FAILED", "Previous probe cleanup failed.")
 

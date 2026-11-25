@@ -629,3 +629,22 @@ with pub.dev authorization failure. No resolved lockfile, build or
 key migration evidence; do not promote. Remaining MobSF findings
 require a fresh scan, dependency mapping, device acceptance and
 review; no claimed score improvement or production release.
+
+
+## Phase 3 native configuration security follow-up (2026-11-25)
+
+Refreshed f6925ca candidate Tests, APK and iOS builds passed. Prior
+d00def9 hosted Kotlin, Rust and supply-chain checks passed at inspection.
+Reviewed previous MobSF native mitigations (both packaged ABIs);
+explicit C fdlauncher compiler/linker hardening built successfully.
+Replaced fixed reusable subprocess config files with owned per-session
+files for full tunnels and sing-box probes. Added three tests covering
+unique files, replacement refusal and deletion retry; updated the
+missing-config regression assertion and Android API source list.
+Full ktlint and Detekt, 578 Flutter tests, 63 Android JVM tests, strict
+Android lint (no issues), 12 binary checks, 15 shell syntax checks and
+Android debug CMake build passed. Old analyzer metadata diagnostics,
+legacy/crash residue, checker child ownership, cross-engine admission,
+dependency and native provenance review, fresh CI, device validation
+and current MobSF score remain open. See security review for details.
+No main merge or release.

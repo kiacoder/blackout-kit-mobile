@@ -143,25 +143,29 @@ object EngineRunner {
     )
 
     private val launcher = LaunchCoordinator()
+    private val configOwner = TransientEngineConfig()
 
     fun start(
         context: Context,
         tunFd: Int,
         socksPort: Int,
         protocol: String,
+        json: String,
     ): Boolean {
         lastError = null
         stop()
-        val files = launcher.prepareLaunch(context, protocol) ?: return false
+        if (json.isBlank() || json.toByteArray(Charsets.UTF_8).size > MAX_ENGINE_CONFIG_BYTES) {
+            lastError = "Missing configuration or configuration exceeds the 8 MiB engine limit."
+            return false
+        }
         var started = false
         return try {
-            intentionalStop.set(false)
-            val validation = NativeConfigValidator().validate(files.spec, files.enginePath, files.configFile)
-            if (!validation.valid) {
-                lastError = validation.message
+            val files = launcher.prepareLaunch(context, protocol, json)
+            if (files == null) {
                 false
             } else {
-                launcher.launchValidated(context, files, tunFd, socksPort).also { started = it }
+                intentionalStop.set(false)
+                launcher.validateAndLaunch(context, files, tunFd, socksPort).also { started = it }
             }
         } catch (_: java.io.IOException) {
             lastError = "Engine launch failed due to an I/O error."
@@ -187,6 +191,7 @@ object EngineRunner {
         fun prepareLaunch(
             context: Context,
             protocol: String,
+            json: String,
         ): LaunchFiles? {
             val spec = EngineCommands.forProtocol(protocol)
             if (spec == null) {
@@ -209,18 +214,26 @@ object EngineRunner {
                 Log.w(TAG, lastError!!)
                 null
             } else {
-                val config = File(configDir(context), spec.configName)
-                if (!config.exists()) {
-                    lastError = "No configuration has been written for the selected engine."
-                    Log.w(TAG, lastError!!)
-                    null
-                } else {
-                    LaunchFiles(spec, engine, bridge, config)
-                }
+                val config = configOwner.stage(configDir(context), json)
+                LaunchFiles(spec, engine, bridge, config)
             }
         }
 
-        fun launchValidated(
+        fun validateAndLaunch(
+            context: Context,
+            files: LaunchFiles,
+            tunFd: Int,
+            socksPort: Int,
+        ): Boolean {
+            val validation = NativeConfigValidator().validate(files.spec, files.enginePath, files.configFile)
+            return if (!validation.valid) {
+                failLaunch(validation.message)
+            } else {
+                launchValidated(context, files, tunFd, socksPort)
+            }
+        }
+
+        private fun launchValidated(
             context: Context,
             files: LaunchFiles,
             tunFd: Int,
@@ -421,48 +434,7 @@ object EngineRunner {
             lastError = "Native child cleanup did not complete within its deadline."
             throw IllegalStateException(lastError)
         }
-    }
-
-    /** Called by Dart before connect() for a subprocess-backed engine. */
-    fun writeConfig(
-        context: Context,
-        json: String,
-        protocol: String = "hysteria2",
-    ): Boolean {
-        lastError = null
-        if (json.toByteArray(Charsets.UTF_8).size > MAX_ENGINE_CONFIG_BYTES) {
-            lastError = "Configuration exceeds the 8 MiB engine limit."
-            return false
-        }
-        return writeValidatedConfig(context, json, protocol)
-    }
-
-    private fun writeValidatedConfig(
-        context: Context,
-        json: String,
-        protocol: String,
-    ): Boolean {
-        val spec = EngineCommands.forProtocol(protocol) ?: return false
-        return try {
-            val dir = configDir(context)
-            val file = File(dir, spec.configName)
-            val temporary = File.createTempFile("engine-", ".tmp", dir)
-            try {
-                temporary.writeText(json)
-                if (!temporary.renameTo(file)) throw java.io.IOException("Config replacement failed")
-            } finally {
-                temporary.delete()
-            }
-            true
-        } catch (_: java.io.IOException) {
-            lastError = "Could not write engine config."
-            Log.e(TAG, lastError!!)
-            false
-        } catch (_: SecurityException) {
-            lastError = "Engine config storage access denied."
-            Log.e(TAG, lastError!!)
-            false
-        }
+        configOwner.release()
     }
 
     /** Directory the engine reads its config from; the probe writes here too. */

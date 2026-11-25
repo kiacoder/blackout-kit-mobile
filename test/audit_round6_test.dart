@@ -107,9 +107,13 @@ void main() {
         reason: 'a null config must not fall through to the stale-file path',
       );
       expect(subprocess.indexOf('singboxConfig.isNullOrBlank()'),
-          lessThan(subprocess.indexOf('EngineRunner.writeConfig(')));
-      expect(subprocess.indexOf('EngineRunner.writeConfig('),
           lessThan(subprocess.indexOf('EngineRunner.start(')));
+      expect(subprocess, contains('json = singboxConfig'));
+      final runner = _source(
+        'android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt',
+      );
+      expect(runner, contains('configOwner.stage(configDir(context), json)'));
+      expect(runner, contains('configOwner.release()'));
     });
 
     test('connect() refuses a protocol that yields no config', () {

@@ -1380,3 +1380,20 @@ Six new synthetic tests passed; Ubuntu WSL full Python 111/111,
 12 binary/action checks and diff check passed. Actual APK audit awaits
 completed packaging. Local Ruff and physical Android acceptance pending.
 No production binaries, dependencies, or release changed.
+
+## Phase 3 hosted native packaging milestone (2026-11-25)
+
+Runs 45619237138 and 45619219039 both completed successfully,
+including four replica builds, byte comparison and isolated APK packaging.
+Artifact 15025085131 from run 45619237138 is available; independent
+local download/audit initiated but not completed at inspection. Hosted
+Tests, iOS, Rust Android, code quality, native host and supply-chain
+checks for 47dfd8a passed. Normal APK workflow 45619219014 still running.
+Pushed verifier commits d885137 and d5361df to the existing draft PR20;
+fresh hosted checks queued/running. No main merge or production release.
+GitHub default-branch Dependabot alerts #1 (curve25519-dalek,
+GHSA-x4gp-pqpj-f43q) and #2 (ring, GHSA-4p46-pwfr-66x6) remain open.
+PR20 lock contains curve25519-dalek 4.1.3 and ring 0.17.14, at or above
+reported patched versions 4.1.3 and 0.17.12; default branch still contains
+4.0.0-rc.3 and ring 0.16.20. Do not close alerts manually or claim
+production remediation before merge and rescanning. No ADB device attached.

@@ -26,21 +26,24 @@ internal object LocalSocksReadiness {
         timeoutMs: Int,
     ): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(0)
-        while (true) {
-            val remaining = deadline - System.currentTimeMillis()
-            if (remaining <= 0) return false
+        var remaining = deadline - System.currentTimeMillis()
+        while (remaining > 0) {
             val attemptBudget = minOf(remaining, ATTEMPT_TIMEOUT_MS).toInt().coerceAtLeast(1)
             if (attempt(host, port, attemptBudget)) return true
-            val left = deadline - System.currentTimeMillis()
-            if (left <= RETRY_INTERVAL_MS) return false
-            try {
-                Thread.sleep(RETRY_INTERVAL_MS)
-            } catch (interrupted: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return false
-            }
+            if (deadline - System.currentTimeMillis() <= RETRY_INTERVAL_MS || !pauseBeforeRetry()) break
+            remaining = deadline - System.currentTimeMillis()
         }
+        return false
     }
+
+    private fun pauseBeforeRetry(): Boolean =
+        try {
+            Thread.sleep(RETRY_INTERVAL_MS)
+            true
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
 
     /** One SOCKS5 greeting. False on refusal, timeout or a bad reply. */
     private fun attempt(

@@ -34,21 +34,48 @@ internal class NativeTunnelLifecycle {
             lastError = "A native tunnel is already active"
             return false
         }
-        val fd = detach()
+        return startUnownedTunnel(next, settings, detach, closeUndelivered, protect)
+    }
+
+    private fun startUnownedTunnel(
+        next: Backend,
+        settings: String,
+        detach: () -> Int,
+        closeUndelivered: (Int) -> Unit,
+        protect: (Int) -> Boolean,
+    ): Boolean {
+        val started = transferDescriptor(next, settings, detach(), closeUndelivered) ?: return false
+        handle = started
+        backend = next
+        return protectStartedTunnel(next, protect)
+    }
+
+    private fun transferDescriptor(
+        next: Backend,
+        settings: String,
+        fd: Int,
+        closeUndelivered: (Int) -> Unit,
+    ): Int? {
         val started =
             try {
                 next.turnOn(fd, settings)
             } catch (_: LinkageError) {
                 closeUndelivered(fd)
                 lastError = "Native tunnel entry point is unavailable"
-                return false
+                return null
             }
-        if (started < 0) {
+        return if (started < 0) {
             lastError = "Native tunnel rejected configuration or could not start"
-            return false
+            null
+        } else {
+            started
         }
-        handle = started
-        backend = next
+    }
+
+    private fun protectStartedTunnel(
+        next: Backend,
+        protect: (Int) -> Boolean,
+    ): Boolean {
         try {
             val sockets = next.sockets(handle)
             check(sockets.any { it >= 0 })

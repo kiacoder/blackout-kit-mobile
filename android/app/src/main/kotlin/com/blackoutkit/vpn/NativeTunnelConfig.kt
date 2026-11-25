@@ -21,16 +21,15 @@ internal class NativeTunnelConfig private constructor(
         fun contains(ip: InetAddress): Boolean {
             val a = address.address
             val b = ip.address
-            if (a.size != b.size) return false
-            for (bit in 0 until prefix) {
-                val offset = bit % BITS_PER_BYTE
-                val mask = 1 shl (BITS_PER_BYTE - 1 - offset)
-                val byteIndex = bit / BITS_PER_BYTE
-                val left = a[byteIndex].toInt() and mask
-                val right = b[byteIndex].toInt() and mask
-                if (left != right) return false
-            }
-            return true
+            return a.size == b.size &&
+                (0 until prefix).all { bit ->
+                    val offset = bit % BITS_PER_BYTE
+                    val mask = 1 shl (BITS_PER_BYTE - 1 - offset)
+                    val byteIndex = bit / BITS_PER_BYTE
+                    val left = a[byteIndex].toInt() and mask
+                    val right = b[byteIndex].toInt() and mask
+                    left == right
+                }
         }
 
         fun masked(): Network {
@@ -162,7 +161,8 @@ internal class NativeTunnelConfig private constructor(
                 } else {
                     rawHost
                 }
-            if (host.isEmpty() || host.any { it.isWhitespace() } || ('/' in host) || ('@' in host)) fail()
+            if (host.isEmpty()) fail()
+            if (host.any { it.isWhitespace() || it == '/' || it == '@' }) fail()
             if (':' in host && !rawHost.startsWith('[')) fail()
             val port = number(text.substring(at + 1), MAX_U16).toInt()
             if (port == 0) fail()
@@ -196,51 +196,68 @@ internal class NativeTunnelConfig private constructor(
             amnezia: Boolean,
         ): NativeTunnelConfig {
             if (raw.toByteArray(Charsets.UTF_8).size > MAX_CONFIG_BYTES || raw.contains('\u0000')) fail()
-            val interfaceFields = linkedMapOf<String, String>()
-            val peers = ArrayList<MutableMap<String, String>>()
-            var current: MutableMap<String, String>? = null
-            var seenInterface = false
-            for (line in raw.lineSequence()) {
-                val text = line.substringBefore('#').trim()
-                if (text.isEmpty()) continue
-                if (text.equals("[Interface]", true)) {
-                    if (seenInterface || peers.isNotEmpty()) fail()
-                    seenInterface = true
-                    current = interfaceFields
-                    continue
+            val (interfaceFields, peers) = SectionParser(amnezia).parse(raw)
+            if (keyHex(interfaceFields["privatekey"] ?: fail()).all { it == '0' }) fail()
+            val addresses = networks(interfaceFields["address"] ?: fail())
+            val dns = interfaceFields["dns"]?.split(',')?.map { numericAddress(it.trim()).hostAddress!! } ?: emptyList()
+            val mtu = validateInterfaceOptions(interfaceFields)
+            val routes = validatePeers(peers)
+            return NativeTunnelConfig(addresses, routes, dns, mtu, interfaceFields, peers)
+        }
+
+        private class SectionParser(
+            amnezia: Boolean,
+        ) {
+            private val allowedInterfaceKeys = interfaceKeys + (if (amnezia) awgFields else emptySet())
+            private val interfaceFields = linkedMapOf<String, String>()
+            private val peers = ArrayList<MutableMap<String, String>>()
+            private var current: MutableMap<String, String>? = null
+            private var seenInterface = false
+
+            fun parse(raw: String): Pair<Map<String, String>, List<Map<String, String>>> {
+                for (line in raw.lineSequence()) {
+                    consume(line.substringBefore('#').trim())
                 }
-                if (text.equals("[Peer]", true)) {
-                    if (!seenInterface || peers.size >= MAX_PEERS) fail()
-                    current = linkedMapOf()
-                    peers.add(current)
-                    continue
+                if (!seenInterface || peers.isEmpty()) fail()
+                return interfaceFields to peers
+            }
+
+            private fun consume(text: String) {
+                when {
+                    text.isEmpty() -> Unit
+                    text.equals("[Interface]", true) -> openInterface()
+                    text.equals("[Peer]", true) -> openPeer()
+                    else -> parseField(text)
                 }
+            }
+
+            private fun openInterface() {
+                if (seenInterface || peers.isNotEmpty()) fail()
+                seenInterface = true
+                current = interfaceFields
+            }
+
+            private fun openPeer() {
+                if (!seenInterface || peers.size >= MAX_PEERS) fail()
+                val peer = linkedMapOf<String, String>()
+                peers.add(peer)
+                current = peer
+            }
+
+            private fun parseField(text: String) {
                 val target = current ?: fail()
+                val allowed = if (target === interfaceFields) allowedInterfaceKeys else peerKeys
                 val at = text.indexOf('=')
                 if (at <= 0) fail()
                 val key = text.substring(0, at).trim().lowercase()
                 val value = text.substring(at + 1).trim()
-                val allowed =
-                    if (target ===
-                        interfaceFields
-                    ) {
-                        interfaceKeys + (if (amnezia) awgFields else emptySet())
-                    } else {
-                        peerKeys
-                    }
-                if (key !in allowed ||
-                    target.containsKey(key) ||
-                    value.isEmpty() ||
-                    value.length > MAX_FIELD_LENGTH
-                ) {
-                    fail()
-                }
+                if (key !in allowed || target.containsKey(key)) fail()
+                if (value.isEmpty() || value.length > MAX_FIELD_LENGTH) fail()
                 target[key] = value
             }
-            if (!seenInterface || peers.isEmpty()) fail()
-            if (keyHex(interfaceFields["privatekey"] ?: fail()).all { it == '0' }) fail()
-            val addresses = networks(interfaceFields["address"] ?: fail())
-            val dns = interfaceFields["dns"]?.split(',')?.map { numericAddress(it.trim()).hostAddress!! } ?: emptyList()
+        }
+
+        private fun validateInterfaceOptions(interfaceFields: Map<String, String>): Int {
             val mtu =
                 interfaceFields["mtu"]?.let { number(it, MAX_MTU).toInt().also { n -> if (n < MIN_IPV6_MTU) fail() } }
                     ?: DEFAULT_MTU
@@ -264,17 +281,19 @@ internal class NativeTunnelConfig private constructor(
                     if (values.size == 2 && values[0] > values[1]) fail()
                 }
             }
+            return mtu
+        }
+
+        private fun validatePeers(peers: List<Map<String, String>>): List<Network> {
             val publicKeys = HashSet<String>()
-            val routes =
-                peers.flatMap { peer ->
-                    val publicKey = keyHex(peer["publickey"] ?: fail())
-                    if (publicKey.all { it == '0' } || !publicKeys.add(publicKey)) fail()
-                    peer["presharedkey"]?.let { keyHex(it) }
-                    peer["endpoint"]?.let { endpoint(it) }
-                    peer["persistentkeepalive"]?.let { number(it, MAX_U16) }
-                    networks(peer["allowedips"] ?: fail()).map { it.masked() }
-                }
-            return NativeTunnelConfig(addresses, routes, dns, mtu, interfaceFields, peers)
+            return peers.flatMap { peer ->
+                val publicKey = keyHex(peer["publickey"] ?: fail())
+                if (publicKey.all { it == '0' } || !publicKeys.add(publicKey)) fail()
+                peer["presharedkey"]?.let { keyHex(it) }
+                peer["endpoint"]?.let { endpoint(it) }
+                peer["persistentkeepalive"]?.let { number(it, MAX_U16) }
+                networks(peer["allowedips"] ?: fail()).map { it.masked() }
+            }
         }
     }
 }

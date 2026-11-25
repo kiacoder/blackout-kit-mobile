@@ -46,12 +46,13 @@ internal object ProcessCompat {
     /** No files, shell wrapper, credentials in logs, or unbounded buffering. */
     fun startQuietly(command: List<String>): Process {
         val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        var drainStarted = false
         try {
             discardOutput(process)
+            drainStarted = true
             return process
-        } catch (e: Exception) {
-            forceStop(process)
-            throw e
+        } finally {
+            if (!drainStarted) forceStop(process)
         }
     }
 

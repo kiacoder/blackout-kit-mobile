@@ -282,3 +282,28 @@ assertions updated for whitespace, braces and named constants without
 removing the underlying checks. Standalone Linux host tests and fresh
 GitHub CI await verification. Old AGP metadata diagnostics persist;
 experimental toolchain promotion and device tests remain pending.
+
+
+## Phase 3 Detekt lifecycle and parser refactor (2026-11-25)
+
+Prior fc60f32 Kotlin formatting/static-analysis and Linux host CI jobs
+passed. Refactored native config section parser, field validation and
+peer/interface validation into bounded helpers with unchanged checks.
+Separated native TUN descriptor transfer from protection/ownership
+checks, split JNI startup/availability guards, simplified bounded child
+shutdown and SOCKS readiness retries while retaining interrupt semantics.
+ProcessCompat now guarantees attempted child cleanup if output drain
+startup fails via finally, rather than catching a generic exception.
+
+Detekt full audit 128 -> 115 weighted issues; strict scope 12 -> 19
+files. Ktlint remains fully clean; no new rule exceptions or baselines.
+Added two JUnit parser regression tests (header order, duplicate fields,
+case-insensitive headers and comments). Local verification: 42 Android
+JVM tests, 575 Flutter tests, lint 0 errors/6 warnings, scoped Detekt,
+full ktlint, binary inventory and diff checks passed. New CI pending.
+
+Remaining 115 weighted issues: 48 broad catches, 25 return counts,
+11 long methods, 10 complexity, 8 swallowed exceptions, 4 too many
+functions, 3 parameter-list findings, 2 loop-jump findings, 2 nesting,
+1 throws-count and 1 large class. Native Android device validation
+remains outstanding. Phase 3 still open; no production merge or release.

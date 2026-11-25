@@ -111,6 +111,31 @@ class NativeTunnelConfigTest {
         assertTrue(uapi.contains("h1=1-100\n"))
     }
 
+    @Test fun sectionOrderAndDuplicateFieldsAreRejected() {
+        val original = profile()
+        val peer = original.substringAfter("[Peer]")
+        for (candidate in listOf(
+            "[Peer]\n$peer",
+            "[Peer]\n$peer\n$original",
+            "PrivateKey = $key\n$original",
+            original + "\n[Interface]\nPrivateKey = $key",
+            original.replace("Address =", "privateKEY = $key\nAddress ="),
+            original.substringBefore("[Peer]"),
+        )) {
+            reject(candidate)
+        }
+    }
+
+    @Test fun sectionHeadersAreCaseInsensitiveAndCommentsAreIgnored() {
+        val decorated =
+            profile()
+                .replace("[Interface]", "[INTERFACE] # comment")
+                .replace("[Peer]", "[pEeR] # comment")
+        val parsed = NativeTunnelConfig.parse(decorated, false)
+        assertEquals("10.0.0.2/32", parsed.addresses.single().text())
+        assertEquals("10.0.0.0/24", parsed.routes.single().text())
+    }
+
     @Test fun unsafeOrUnsupportedProfileSyntaxIsRejected() {
         for (candidate in listOf(
             profile().replace("Address =", "PostUp = run-command\nAddress ="),

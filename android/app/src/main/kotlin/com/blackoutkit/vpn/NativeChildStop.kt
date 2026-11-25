@@ -19,19 +19,20 @@ internal class NativeChildStop(
         // Clear an existing interrupt while draining; restore it on every exit.
         var interrupted = Thread.interrupted()
 
+        fun pause(remaining: Long): Boolean =
+            try {
+                sleep(minOf(CHILD_POLL_INTERVAL_MS, (remaining / CHILD_NANOS_PER_MILLI).coerceAtLeast(1)))
+                true
+            } catch (_: InterruptedException) {
+                interrupted = true
+                false
+            }
+
         fun awaitExit(): Boolean {
             val deadline = now() + graceMs * CHILD_NANOS_PER_MILLI
             while (poll(pid) == -1) {
                 val remaining = deadline - now()
-                if (remaining <= 0) return false
-                try {
-                    sleep(minOf(CHILD_POLL_INTERVAL_MS, (remaining / CHILD_NANOS_PER_MILLI).coerceAtLeast(1)))
-                } catch (
-                    _: InterruptedException,
-                ) {
-                    interrupted = true
-                    return false
-                }
+                if (remaining <= 0 || !pause(remaining)) return false
             }
             return true
         }
@@ -41,12 +42,15 @@ internal class NativeChildStop(
                 terminate(pid)
             } catch (_: Exception) {
             }
-            if (awaitExit()) return true
-            try {
-                kill(pid)
-            } catch (_: Exception) {
+            if (awaitExit()) {
+                true
+            } else {
+                try {
+                    kill(pid)
+                } catch (_: Exception) {
+                }
+                awaitExit()
             }
-            awaitExit()
         } finally {
             if (interrupted) Thread.currentThread().interrupt()
         }

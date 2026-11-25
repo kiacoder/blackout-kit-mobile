@@ -18,14 +18,19 @@ internal object NativeTunnelEngine {
         private set
 
     @Synchronized fun available(protocol: String): Boolean {
-        if (!BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS) return false
-        if (protocol !in setOf("wireguard", "amneziawg")) return false
-        if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.NATIVE_TUNNELS)) {
-            lastError = GoRuntimeAdmission.RESTART_REQUIRED
+        if (!BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS || protocol !in setOf("wireguard", "amneziawg")) {
             return false
         }
-        if (protocol in verified) return true
-        return try {
+        return if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.NATIVE_TUNNELS)) {
+            lastError = GoRuntimeAdmission.RESTART_REQUIRED
+            false
+        } else {
+            protocol in verified || verifyNativeAbi(protocol)
+        }
+    }
+
+    private fun verifyNativeAbi(protocol: String): Boolean =
+        try {
             if (!combinedLibraryLoaded) {
                 System.loadLibrary("blackout-tunnels")
                 combinedLibraryLoaded = true
@@ -46,7 +51,6 @@ internal object NativeTunnelEngine {
         } catch (_: Exception) {
             false
         }
-    }
 
     @Synchronized fun start(
         service: VpnService,

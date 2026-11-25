@@ -1364,3 +1364,19 @@ for these tests. Local Ruff unavailable; hosted check still required.
 At inspection run 45619237138 had both tun2socks replicas successful,
 both singbox replicas running. No physical device attached; no native
 binary/dependency promotion, release or main merge.
+
+## Phase 3 independent native APK download audit (2026-11-25)
+
+Both hosted runs 45619237138 and 45619219039 completed all four
+standalone native candidate builds and independent byte comparison;
+APK packaging jobs still running at inspection. Downloaded the first
+run's comparison report and validated the exact four engine/ABI digests.
+Added tool/audit_native_candidate_download.py for independent download
+checks: strict replica engine/ABI inventory, APK SHA256, exact embedded
+candidate bytes, packaging evidence agreement, Android signature and
+isolated debuggable application identity. Use matching artifacts from
+the same trusted run; unsigned JSON reports are not authentication.
+Six new synthetic tests passed; Ubuntu WSL full Python 111/111,
+12 binary/action checks and diff check passed. Actual APK audit awaits
+completed packaging. Local Ruff and physical Android acceptance pending.
+No production binaries, dependencies, or release changed.

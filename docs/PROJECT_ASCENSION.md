@@ -1249,3 +1249,23 @@ mode and failed key-read reporting. Python 98/98 and 12 binary
 checks passed. New hosted matrix not yet verified. Candidate
 results are synthetic, not real-device production acceptance.
 No production dependency or binary replacement.
+
+
+## Phase 3 verified migration option and full-app experiment (2026-11-25)
+
+Run 45601181502 independently repeated successful non-backup
+migration and restart on API24/API34. Backup-enabled mode failed
+at read_key on both APIs. Select backup-disabled migration as
+the candidate for further validation, with resetOnError=false.
+Do not ship backup-enabled mode or suppress its experimental failure.
+Full-app APK/iOS build 45601181509 and Tests passed on 46b539b;
+Linux vault teardown correction confirmed by hosted build success.
+Extended disposable candidate checkout to apply separately tested
+AGP8.5.2/Gradle8.7/Kotlin2.0.21 toolchain, resolve storage10.3.4
+and compatible package-info, run full Dart analysis/tests and
+Android unit/lint/debug assembly. Guarded toolchain transformer
+requires exact expected inputs and has regression coverage.
+Python 99/99, 12 binary/action checks and diff check passed.
+This combined app build remains unverified; no shipping dependency
+changes, no installation, no publication. ARM physical acceptance
+and interrupted migration recovery remain mandatory review items.

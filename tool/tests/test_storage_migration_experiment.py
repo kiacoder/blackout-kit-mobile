@@ -2,7 +2,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tool.prepare_storage_migration_experiment import candidate_manifest, candidate_source, fixture_toolchain, prepare_fixture
+from tool.prepare_storage_migration_experiment import app_toolchain, candidate_manifest, candidate_source, fixture_toolchain, prepare_fixture
 
 
 class StorageMigrationExperimentTests(unittest.TestCase):
@@ -55,3 +55,26 @@ class StorageMigrationExperimentTests(unittest.TestCase):
             before = wrapper.read_text()
             fixture_toolchain(folder)
             self.assertEqual(wrapper.read_text(), before)
+
+
+    def test_application_toolchain_changes_only_expected_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            inputs = {
+                "android/settings.gradle": 'version "7.4.2"\nversion "1.9.25"',
+                "android/app/build.gradle": '    namespace = "com.blackoutkit.vpn"',
+                "android/gradle/wrapper/gradle-wrapper.properties": (
+                    "gradle-7.6.6-all.zip\n"
+                    "6ed4d467349e2d3f555a578829c4aeadd67d73e2ec5d213c2a62f8f2829d9fa9"
+                ),
+            }
+            for name, content in inputs.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            app_toolchain(root)
+            self.assertIn('version "8.5.2"', (root / "android/settings.gradle").read_text())
+            self.assertIn("buildConfig = true", (root / "android/app/build.gradle").read_text())
+            self.assertIn("gradle-8.7-bin.zip", (root / "android/gradle/wrapper/gradle-wrapper.properties").read_text())
+            with self.assertRaises(ValueError):
+                app_toolchain(root)

@@ -45,6 +45,35 @@ def fixture_toolchain(folder):
     wrapper.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def app_toolchain(root):
+    """Apply the separately tested toolchain only in a disposable CI checkout."""
+    edits = {
+        "android/settings.gradle": [
+            ('version "7.4.2"', 'version "8.5.2"'),
+            ('version "1.9.25"', 'version "2.0.21"'),
+        ],
+        "android/app/build.gradle": [
+            ('    namespace = "com.blackoutkit.vpn"',
+             '    namespace = "com.blackoutkit.vpn"\n    buildFeatures {\n        buildConfig = true\n    }'),
+        ],
+        "android/gradle/wrapper/gradle-wrapper.properties": [
+            ("gradle-7.6.6-all.zip", "gradle-8.7-bin.zip"),
+            ("6ed4d467349e2d3f555a578829c4aeadd67d73e2ec5d213c2a62f8f2829d9fa9", GRADLE_SHA),
+        ],
+    }
+    changed = {}
+    for name, replacements in edits.items():
+        path = root / name
+        source = path.read_text(encoding="utf-8")
+        for old, new in replacements:
+            if source.count(old) != 1 or new in source:
+                raise ValueError("Unexpected application toolchain: " + name)
+            source = source.replace(old, new)
+        changed[path] = source
+    for path, source in changed.items():
+        path.write_text(source, encoding="utf-8")
+
+
 def candidate_source(source, backup=False):
     if source.count(OLD_OPTIONS) != 1 or "resetOnError: false," not in source:
         raise ValueError("Unexpected secure-store options; review migration")

@@ -118,8 +118,8 @@ class ConfigService {
   Future<void> saveTestResult(TestResult result) async {
     try {
       await _resultBox.put(result.configHash, result.toJson());
-    } catch (e) {
-      _log.e('Error saving test result: $e');
+    } catch (_) {
+      _log.e('Error saving test result');
     }
   }
 
@@ -133,13 +133,13 @@ class ConfigService {
         try {
           results[key] =
               TestResult.fromJson(Map<String, dynamic>.from(data));
-        } catch (e) {
-          _log.w('Skipping unreadable test result $key: $e');
+        } catch (_) {
+          _log.w('Skipping unreadable test result');
         }
       }
       return results;
-    } catch (e) {
-      _log.e('Error loading test results: $e');
+    } catch (_) {
+      _log.e('Error loading test results');
       return {};
     }
   }
@@ -148,8 +148,8 @@ class ConfigService {
   Future<void> deleteTestResult(String configHash) async {
     try {
       await _resultBox.delete(configHash);
-    } catch (e) {
-      _log.e('Error deleting test result: $e');
+    } catch (_) {
+      _log.e('Error deleting test result');
     }
   }
 
@@ -257,13 +257,13 @@ class ConfigService {
             }
           }
         }
-        _log.w('Duplicate config detected: $hash (source: $sourceId)');
+        _log.w('Duplicate config detected');
         return false;
       }
 
       // Validate config
       if (!config.validate()) {
-        _log.e('Invalid config: ${config.displayName}');
+        _log.e('Invalid config');
         return false;
       }
 
@@ -276,10 +276,10 @@ class ConfigService {
       dedup[hash] = DateTime.now().toIso8601String();
       await _configBox.put(_dedupKey, dedup);
 
-      _log.i('Saved config: ${config.displayName} (hash: $hash)');
+      _log.i('Saved config');
       return true;
-    } catch (e) {
-      _log.e('Error saving config: $e');
+    } catch (_) {
+      _log.e('Error saving config');
       return false;
     }
   }
@@ -360,8 +360,8 @@ class ConfigService {
       }
       _log.i('Loaded ${configs.length} configs from storage');
       return configs;
-    } catch (e) {
-      _log.e('Error loading configs: $e');
+    } catch (_) {
+      _log.e('Error loading configs');
       return [];
     }
   }
@@ -389,8 +389,8 @@ class ConfigService {
           map[key.substring('config_'.length)] = ids;
         }
       }
-    } catch (e) {
-      _log.e('Error building hash→sourceIds map: $e');
+    } catch (_) {
+      _log.e('Error building hash→sourceIds map');
     }
     return map;
   }
@@ -407,8 +407,8 @@ class ConfigService {
           map[key.substring('config_'.length)] = sourceId;
         }
       }
-    } catch (e) {
-      _log.e('Error building hash→source map: $e');
+    } catch (_) {
+      _log.e('Error building hash→source map');
     }
     return map;
   }
@@ -431,8 +431,8 @@ class ConfigService {
           map[key.substring('config_'.length)] = parsed;
         }
       }
-    } catch (e) {
-      _log.e('Error building hash→savedAt map: $e');
+    } catch (_) {
+      _log.e('Error building hash→savedAt map');
     }
     return map;
   }
@@ -464,8 +464,8 @@ class ConfigService {
           counts[sourceId] = (counts[sourceId] ?? 0) + 1;
         }
       }
-    } catch (e) {
-      _log.e('Error counting configs by source: $e');
+    } catch (_) {
+      _log.e('Error counting configs by source');
     }
     return counts;
   }
@@ -486,8 +486,8 @@ class ConfigService {
         }
       }
       return configs;
-    } catch (e) {
-      _log.e('Error loading configs by source: $e');
+    } catch (_) {
+      _log.e('Error loading configs by source');
       return [];
     }
   }
@@ -521,10 +521,10 @@ class ConfigService {
       // Its measurement is meaningless without the config.
       await deleteTestResult(hash);
 
-      _log.i('Deleted config: $hash');
+      _log.i('Deleted config');
       return true;
-    } catch (e) {
-      _log.e('Error deleting config: $e');
+    } catch (_) {
+      _log.e('Error deleting config');
       return false;
     }
   }
@@ -538,8 +538,8 @@ class ConfigService {
       await _configBox.clear();
       await _resultBox.clear();
       _log.w('All configs cleared');
-    } catch (e) {
-      _log.e('Error clearing configs: $e');
+    } catch (_) {
+      _log.e('Error clearing configs');
     }
   }
 
@@ -547,10 +547,10 @@ class ConfigService {
   Future<bool> saveSource(ConfigSource source) async {
     try {
       await _sourceBox.put(source.id, source.toJson());
-      _log.i('Saved source: ${source.name}');
+      _log.i('Saved source');
       return true;
-    } catch (e) {
-      _log.e('Error saving source: $e');
+    } catch (_) {
+      _log.e('Error saving source');
       return false;
     }
   }
@@ -562,10 +562,10 @@ class ConfigService {
   Future<bool> deleteSource(String id) async {
     try {
       await _sourceBox.delete(id);
-      _log.i('Deleted source: $id');
+      _log.i('Deleted source');
       return true;
-    } catch (e) {
-      _log.e('Error deleting source: $e');
+    } catch (_) {
+      _log.e('Error deleting source');
       return false;
     }
   }
@@ -575,7 +575,7 @@ class ConfigService {
   /// Each record is decoded on its own: one corrupt or schema-drifted entry
   /// used to throw inside the single try block and return an EMPTY list,
   /// which made every stored source disappear from the app until the record
-  /// was removed. A skipped record is logged with its key; a list that loads
+  /// was removed. A skipped record is logged without its key; a list that loads
   /// 9 of 10 sources is strictly better than one that loads none.
   List<ConfigSource> getAllSources() {
     final sources = <ConfigSource>[];
@@ -587,8 +587,8 @@ class ConfigService {
         sources.add(
           ConfigSource.fromJson(Map<String, dynamic>.from(data)),
         );
-      } catch (e) {
-        _log.w('Skipping unreadable source $key: $e');
+      } catch (_) {
+        _log.w('Skipping unreadable source');
       }
     }
     return sources;
@@ -600,8 +600,8 @@ class ConfigService {
       final data = _sourceBox.get(id);
       if (data == null) return null;
       return ConfigSource.fromJson(Map<String, dynamic>.from(data));
-    } catch (e) {
-      _log.e('Error loading source: $e');
+    } catch (_) {
+      _log.e('Error loading source');
       return null;
     }
   }
@@ -704,8 +704,8 @@ class ConfigService {
             customName: data['displayName'] as String?,
           );
       }
-    } catch (e) {
-      _log.e('Error converting map to config: $e');
+    } catch (_) {
+      _log.e('Error converting map to config');
       return null;
     }
   }

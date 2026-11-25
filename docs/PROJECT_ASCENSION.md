@@ -1469,3 +1469,17 @@ targeted analyzer zero issues, 12 binary/action checks and diff check passed.
 Full widget suite retains a non-fatal unavailable wakelock channel warning.
 This is a same-isolate migration guard, not a cross-process file lock.
 No storage dependency promotion, new MobSF score or device acceptance claimed.
+
+## Phase 3 configuration storage log privacy (2026-11-25)
+
+Removed ConfigService diagnostic interpolation of configuration labels,
+source labels/IDs, configuration hashes, corrupt record keys and raw
+exceptions. Keep fixed operation messages and aggregate counts. Two
+synthetic capture tests verify successful/duplicate/delete operations
+and malformed stored records without exposing identifying values.
+Full Flutter suite 597/597; targeted analyzer zero issues; 12 tracked
+binary/action checks and diff check passed. Existing nonfatal widget
+wakelock warning remains. At inspection previous bcd6fb8 workflows
+passed except separate iOS workflow still running. This is scoped to
+ConfigService logging, not an app-wide redaction claim. No new MobSF
+score, storage dependency promotion, device acceptance or release.

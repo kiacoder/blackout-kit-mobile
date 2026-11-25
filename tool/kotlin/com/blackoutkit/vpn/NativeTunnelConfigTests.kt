@@ -1,8 +1,11 @@
 package com.blackoutkit.vpn
 
+private const val TEST_KEY_BYTES = 32
+
 fun main() {
     val key = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
-    val config = """
+    val config =
+        """
         [Interface]
         PrivateKey = $key
         Address = 10.0.0.2/32, fd00::2/128
@@ -12,28 +15,52 @@ fun main() {
         Endpoint = example.invalid:51820
         AllowedIPs = 0.0.0.0/0, ::/0
         PersistentKeepalive = 25
-    """.trimIndent()
+        """.trimIndent()
     var passed = 0
-    fun test(name: String, block: () -> Unit) { block(); passed++; println("PASS $name") }
-    fun reject(text: String, awg: Boolean = false) {
-        try { NativeTunnelConfig.parse(text, awg); error("Accepted invalid config") }
-        catch (e: IllegalArgumentException) { check(!e.message.orEmpty().contains(key)) }
+
+    fun test(
+        name: String,
+        block: () -> Unit,
+    ) {
+        block()
+        passed++
+        println("PASS $name")
+    }
+
+    fun reject(
+        text: String,
+        awg: Boolean = false,
+    ) {
+        try {
+            NativeTunnelConfig.parse(text, awg)
+            error("Accepted invalid config")
+        } catch (
+            e: IllegalArgumentException,
+        ) {
+            check(!e.message.orEmpty().contains(key))
+        }
     }
     test("dual-stack config and endpoint resolution") {
         val parsed = NativeTunnelConfig.parse(config, false)
         val uapi = parsed.userspace { NativeTunnelConfig.numericAddress("192.0.2.1") }
         check(parsed.addresses.size == 2 && parsed.routes.size == 2)
         check("endpoint=192.0.2.1:51820\n" in uapi)
-        check("private_key=${"01".repeat(32)}\n" in uapi)
+        check("private_key=${"01".repeat(TEST_KEY_BYTES)}\n" in uapi)
         check(!parsed.toString().contains(key))
     }
     test("IPv6 endpoint bracketing") {
-        check("endpoint=[" in NativeTunnelConfig.parse(config, false).userspace { NativeTunnelConfig.numericAddress("2001:db8::1") })
+        check(
+            "endpoint=[" in
+                NativeTunnelConfig.parse(config, false).userspace { NativeTunnelConfig.numericAddress("2001:db8::1") },
+        )
     }
     test("AWG and WG remain distinct") {
         val awg = config.replace("Address =", "S4 = 25\nH1 = 1-100\nAddress =")
         reject(awg)
-        check("s4=25\n" in NativeTunnelConfig.parse(awg, true).userspace { NativeTunnelConfig.numericAddress("192.0.2.1") })
+        check(
+            "s4=25\n" in
+                NativeTunnelConfig.parse(awg, true).userspace { NativeTunnelConfig.numericAddress("192.0.2.1") },
+        )
     }
     test("hooks rejected") { reject(config.replace("Address =", "PostUp = run-command\nAddress =")) }
     test("duplicate keys rejected") { reject(config.replace("Address =", "PrivateKey = $key\nAddress =")) }
@@ -52,7 +79,9 @@ fun main() {
         check(!route.contains(NativeTunnelConfig.numericAddress("10.0.0.3")))
     }
     val zero = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-    test("zero private key cannot clear the interface identity") { reject(config.replace("PrivateKey = $key", "PrivateKey = $zero")) }
+    test("zero private key cannot clear the interface identity") {
+        reject(config.replace("PrivateKey = $key", "PrivateKey = $zero"))
+    }
     test("zero public key rejected") { reject(config.replace("PublicKey = $key", "PublicKey = $zero")) }
     test("zero preshared key still represents disabled PSK") {
         NativeTunnelConfig.parse(config + "\nPresharedKey = $zero", false)
@@ -66,20 +95,32 @@ fun main() {
         check(parsed.addresses.first().text() == "10.0.0.2/32")
         check("allowed_ip=192.0.2.0/24\n" in parsed.userspace { NativeTunnelConfig.numericAddress("192.0.2.1") })
     }
-    test("signed numeric fields rejected") { reject(config.replace("PersistentKeepalive = 25", "PersistentKeepalive = +25")) }
+    test("signed numeric fields rejected") {
+        reject(config.replace("PersistentKeepalive = 25", "PersistentKeepalive = +25"))
+    }
     test("dual-stack routed DNS accepted") {
         val parsed = NativeTunnelConfig.parse(config, false)
         check(parsed.routedDns(listOf("10.0.0.1", "2001:db8::1")).size == 2)
     }
     test("DNS outside split routes rejected without disclosing input") {
         val parsed = NativeTunnelConfig.parse(config.replace("0.0.0.0/0, ::/0", "10.0.0.0/24"), false)
-        try { parsed.routedDns(listOf("192.0.2.53")); error("Accepted uncovered DNS") }
-        catch (e: IllegalArgumentException) { check(!e.message.orEmpty().contains("192.0.2.53")) }
+        try {
+            parsed.routedDns(listOf("192.0.2.53"))
+            error("Accepted uncovered DNS")
+        } catch (
+            e: IllegalArgumentException,
+        ) {
+            check(!e.message.orEmpty().contains("192.0.2.53"))
+        }
     }
     test("empty and non-unicast DNS refused") {
         val parsed = NativeTunnelConfig.parse(config, false)
         for (dns in listOf(emptyList(), listOf("0.0.0.0"), listOf("127.0.0.1"), listOf("ff02::1"))) {
-            try { parsed.routedDns(dns); error("Accepted unsafe DNS") } catch (_: IllegalArgumentException) {}
+            try {
+                parsed.routedDns(dns)
+                error("Accepted unsafe DNS")
+            } catch (_: IllegalArgumentException) {
+            }
         }
     }
     println("$passed parser checks passed; not Android integration tests")

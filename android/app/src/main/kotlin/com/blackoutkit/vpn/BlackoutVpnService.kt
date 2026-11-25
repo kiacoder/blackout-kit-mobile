@@ -33,15 +33,15 @@ import android.util.Log
  * on slower devices.
  */
 class BlackoutVpnService : VpnService() {
-
     companion object {
         private const val TAG = "BlackoutVpnService"
+        private const val NATIVE_MONITOR_INTERVAL_MS = 2000L
 
         private const val PREFS = "blackout_vpn_state"
         private const val KEY_HELD_BLOCKING = "held_blocking"
 
-        /// Invoked once the tunnel has actually been torn down. Used by the
-        /// plugin to acknowledge a disconnect only after the interface is gone.
+        // / Invoked once the tunnel has actually been torn down. Used by the
+        // / plugin to acknowledge a disconnect only after the interface is gone.
         @Volatile
         var onTeardownComplete: ((Boolean) -> Unit)? = null
 
@@ -95,6 +95,7 @@ class BlackoutVpnService : VpnService() {
          */
         private const val VPN_ADDRESS_V4 = "10.111.222.1"
         private const val VPN_PREFIX_V4 = 30
+
         /**
          * MTU of the TUN interface.
          *
@@ -162,10 +163,11 @@ class BlackoutVpnService : VpnService() {
         private val connectResultSlot = OneShotCallbackSlot<Boolean>()
         var connectResultCallback: ((Boolean) -> Unit)?
             get() = connectResultSlot.value
-            set(value) { connectResultSlot.value = value }
+            set(value) {
+                connectResultSlot.value = value
+            }
 
-        private fun takeConnectResultCallback(): ((Boolean) -> Unit)? =
-            connectResultSlot.take()
+        private fun takeConnectResultCallback(): ((Boolean) -> Unit)? = connectResultSlot.take()
 
         private fun clearConnectResultCallback(expected: ((Boolean) -> Unit)?) {
             connectResultSlot.clear(expected)
@@ -191,6 +193,7 @@ class BlackoutVpnService : VpnService() {
      * process, and after enough reconnects the process runs out of them.
      */
     private var engineTunFd: ParcelFileDescriptor? = null
+
     @Volatile private var nativeMonitor: Runnable? = null
     private var activeProtocol: String? = null
     private var activeName: String? = null
@@ -213,20 +216,27 @@ class BlackoutVpnService : VpnService() {
      * that *is* a userspace kill switch. Dropping the interface here would
      * instantly restore the very leak the user asked to prevent.
      */
-    private fun onEngineDied(reason: String, ticket: VpnSessionExecutor.Ticket) {
+    private fun onEngineDied(
+        reason: String,
+        ticket: VpnSessionExecutor.Ticket,
+    ) {
         sessions.forCurrent(ticket) {
             lastError = reason
             if (holdTunnelOnFailure && tun != null) {
                 isRunning = false
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                    .putBoolean(KEY_HELD_BLOCKING, true).apply()
+                getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(KEY_HELD_BLOCKING, true)
+                    .apply()
                 ticket.publish { notifyStatus("blocked") }
             } else {
                 var cleaned = false
                 try {
                     teardown()
                     cleaned = true
-                } catch (_: Exception) { } catch (_: LinkageError) { }
+                } catch (_: Exception) {
+                } catch (_: LinkageError) {
+                }
                 ticket.publish {
                     notifyStatus("error")
                     if (cleaned) finishService()
@@ -240,31 +250,42 @@ class BlackoutVpnService : VpnService() {
      * no handshake or traffic success is inferred from an open device.
      */
     private fun startNativeMonitor(ticket: VpnSessionExecutor.Ticket) {
-        val poll = object : Runnable {
-            override fun run() {
-                if (nativeMonitor !== this || !ticket.isCurrent()) return
-                val self = this
-                sessions.forCurrent(ticket) {
-                    if (NativeTunnelEngine.isClosed()) {
-                        // Close the native handle even when the service keeps
-                        // its own TUN duplicate for the requested kill switch.
-                        var cleaned = false
-                        try { NativeTunnelEngine.stop(); cleaned = true }
-                        catch (_: Exception) { } catch (_: LinkageError) { }
-                        ticket.publish { if (nativeMonitor === self) nativeMonitor = null }
-                        onEngineDied(if (cleaned) "Native tunnel closed unexpectedly"
-                            else "Native tunnel failed; cleanup is pending", ticket)
-                    } else {
-                        ticket.publish {
-                            if (nativeMonitor === self) mainHandler.postDelayed(self, 2000L)
+        val poll =
+            object : Runnable {
+                override fun run() {
+                    if (nativeMonitor !== this || !ticket.isCurrent()) return
+                    val self = this
+                    sessions.forCurrent(ticket) {
+                        if (NativeTunnelEngine.isClosed()) {
+                            // Close the native handle even when the service keeps
+                            // its own TUN duplicate for the requested kill switch.
+                            var cleaned = false
+                            try {
+                                NativeTunnelEngine.stop()
+                                cleaned = true
+                            } catch (_: Exception) {
+                            } catch (_: LinkageError) {
+                            }
+                            ticket.publish { if (nativeMonitor === self) nativeMonitor = null }
+                            onEngineDied(
+                                if (cleaned) {
+                                    "Native tunnel closed unexpectedly"
+                                } else {
+                                    "Native tunnel failed; cleanup is pending"
+                                },
+                                ticket,
+                            )
+                        } else {
+                            ticket.publish {
+                                if (nativeMonitor === self) mainHandler.postDelayed(self, NATIVE_MONITOR_INTERVAL_MS)
+                            }
                         }
                     }
                 }
             }
-        }
         nativeMonitor?.let { mainHandler.removeCallbacks(it) }
         nativeMonitor = poll
-        mainHandler.postDelayed(poll, 2000L)
+        mainHandler.postDelayed(poll, NATIVE_MONITOR_INTERVAL_MS)
     }
 
     override fun onCreate() {
@@ -282,17 +303,27 @@ class BlackoutVpnService : VpnService() {
         // reconcile() reported a connection that carried nothing. Clear the
         // stale marker; a genuine hold is always within the lifetime of the
         // instance that set it, where `tun` already tracks the truth.
-        val held = getSharedPreferences(PREFS, MODE_PRIVATE)
-            .getBoolean(KEY_HELD_BLOCKING, false)
+        val held =
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getBoolean(KEY_HELD_BLOCKING, false)
         if (held) {
-            Log.w(TAG, "stale held-blocking marker from a previous process - " +
-                "the tunnel died with it, clearing instead of reporting 'blocked'")
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                .putBoolean(KEY_HELD_BLOCKING, false).apply()
+            Log.w(
+                TAG,
+                "stale held-blocking marker from a previous process - " +
+                    "the tunnel died with it, clearing instead of reporting 'blocked'",
+            )
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_HELD_BLOCKING, false)
+                .apply()
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
         if (intent?.action == ACTION_DISCONNECT) {
             val completion = onTeardownComplete
             onTeardownComplete = null
@@ -311,8 +342,9 @@ class BlackoutVpnService : VpnService() {
 
         val protocol = intent?.getStringExtra(EXTRA_PROTOCOL) ?: "unknown"
         val displayName = intent?.getStringExtra(EXTRA_DISPLAY_NAME) ?: "Blackout Kit"
-        val socksPort = intent?.getIntExtra(EXTRA_SOCKS_PORT, DEFAULT_SOCKS_PORT)
-            ?: DEFAULT_SOCKS_PORT
+        val socksPort =
+            intent?.getIntExtra(EXTRA_SOCKS_PORT, DEFAULT_SOCKS_PORT)
+                ?: DEFAULT_SOCKS_PORT
         val dns = intent?.getStringExtra(EXTRA_DNS) ?: DEFAULT_DNS
         val dnsServers =
             intent?.getStringArrayListExtra(EXTRA_DNS_SERVERS)?.takeIf { it.isNotEmpty() }
@@ -337,22 +369,30 @@ class BlackoutVpnService : VpnService() {
             if (dnsOnly) {
                 establishDnsOnly(dnsServers, displayName, ticket)
             } else if (nativeConfig != null) {
-                establishNative(protocol, nativeConfig, displayName, dnsServers,
-                    allowed, disallowed, holdOnFailure, ticket)
+                establishNative(
+                    protocol,
+                    nativeConfig,
+                    displayName,
+                    dnsServers,
+                    allowed,
+                    disallowed,
+                    holdOnFailure,
+                    ticket,
+                )
             } else {
                 establish(
-                protocol = protocol,
-                displayName = displayName,
-                socksPort = socksPort,
-                dnsServers = dnsServers,
-                allowed = allowed,
-                disallowed = disallowed,
-                holdOnFailure = holdOnFailure,
+                    protocol = protocol,
+                    displayName = displayName,
+                    socksPort = socksPort,
+                    dnsServers = dnsServers,
+                    allowed = allowed,
+                    disallowed = disallowed,
+                    holdOnFailure = holdOnFailure,
                     xrayConfig = xrayConfig,
                     singboxConfig = singboxConfig,
                     libboxConfig = libboxConfig,
                     mihomoConfig = mihomoConfig,
-                    ticket = ticket
+                    ticket = ticket,
                 )
             }
         }, complete = { ok ->
@@ -366,9 +406,14 @@ class BlackoutVpnService : VpnService() {
 
     /** Native IP tunnel: never send WG/AWG through a SOCKS/proxy TUN adapter. */
     private fun establishNative(
-        protocol: String, raw: String, displayName: String, dnsServers: List<String>,
-        allowed: List<String>, disallowed: List<String>, holdOnFailure: Boolean,
-        ticket: VpnSessionExecutor.Ticket
+        protocol: String,
+        raw: String,
+        displayName: String,
+        dnsServers: List<String>,
+        allowed: List<String>,
+        disallowed: List<String>,
+        holdOnFailure: Boolean,
+        ticket: VpnSessionExecutor.Ticket,
     ): Boolean {
         lastError = null
         return try {
@@ -389,9 +434,13 @@ class BlackoutVpnService : VpnService() {
             config.routes.forEach { builder.addRoute(it.address, it.prefix) }
             // Reject uncovered DNS rather than allowing carrier fallback.
             config.routedDns(dnsServers).forEach { builder.addDnsServer(it) }
-            if (allowed.isNotEmpty()) (allowed + packageName).distinct().forEach {
-                builder.addAllowedApplication(it)
-            } else disallowed.distinct().forEach { builder.addDisallowedApplication(it) }
+            if (allowed.isNotEmpty()) {
+                (allowed + packageName).distinct().forEach {
+                    builder.addAllowedApplication(it)
+                }
+            } else {
+                disallowed.distinct().forEach { builder.addDisallowedApplication(it) }
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
             val fd = builder.establish() ?: error("No TUN")
             tun = fd
@@ -437,7 +486,7 @@ class BlackoutVpnService : VpnService() {
         singboxConfig: String?,
         libboxConfig: String?,
         mihomoConfig: String?,
-        ticket: VpnSessionExecutor.Ticket
+        ticket: VpnSessionExecutor.Ticket,
     ): Boolean {
         lastError = null
         if (protocol == "mihomo" && allowed.contains(packageName)) {
@@ -446,20 +495,21 @@ class BlackoutVpnService : VpnService() {
         }
 
         return try {
-            val builder = Builder()
-                .setSession(displayName)
-                .setMtu(VPN_MTU)
-                .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
-                .addRoute("0.0.0.0", 0)
-                // IPv6 blackhole (kill switch for v6): route ::/0 into the TUN
-                // WITHOUT giving the interface an IPv6 address. v6 packets
-                // enter the tunnel, find no v6 netstack on the other side, and
-                // are dropped — nothing bypasses the tunnel on dual-stack
-                // networks. Apps fall back to IPv4 per Happy Eyeballs and that
-                // traffic is proxied normally. Adding a real v6 address
-                // instead would require the core's tun inbound to be verified
-                // v6-capable on hardware first; leaking was not an option.
-                .addRoute("::", 0)
+            val builder =
+                Builder()
+                    .setSession(displayName)
+                    .setMtu(VPN_MTU)
+                    .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
+                    .addRoute("0.0.0.0", 0)
+                    // IPv6 blackhole (kill switch for v6): route ::/0 into the TUN
+                    // WITHOUT giving the interface an IPv6 address. v6 packets
+                    // enter the tunnel, find no v6 netstack on the other side, and
+                    // are dropped — nothing bypasses the tunnel on dual-stack
+                    // networks. Apps fall back to IPv4 per Happy Eyeballs and that
+                    // traffic is proxied normally. Adding a real v6 address
+                    // instead would require the core's tun inbound to be verified
+                    // v6-capable on hardware first; leaking was not an option.
+                    .addRoute("::", 0)
 
             // DNS leak prevention: every resolver the tunnel advertises is one
             // we control. The system resolver is never offered, so queries
@@ -501,8 +551,11 @@ class BlackoutVpnService : VpnService() {
             val useAllowedList = allowed.isNotEmpty()
             for (pkg in appList) {
                 try {
-                    if (useAllowedList) builder.addAllowedApplication(pkg)
-                    else builder.addDisallowedApplication(pkg)
+                    if (useAllowedList) {
+                        builder.addAllowedApplication(pkg)
+                    } else {
+                        builder.addDisallowedApplication(pkg)
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "split tunneling rejected $pkg: ${e.message}")
                 }
@@ -548,19 +601,20 @@ class BlackoutVpnService : VpnService() {
             // closes it when the core stops. Handing it the raw fd of `tun`
             // means teardown()'s later close() targets a recycled descriptor.
             // The engine gets its own dup and closes only that.
-            val engineFd = try {
-                // dup(), NOT fromFd(): fromFd wraps the SAME descriptor without
-                // duplicating it, so the engine's close() and teardown()'s
-                // close() would hit one descriptor twice - and the second close
-                // would land on whatever descriptor number the kernel had since
-                // recycled.
-                fd.dup()
-            } catch (e: Exception) {
-                Log.e(TAG, "could not duplicate the tun fd: ${e.message}")
-                lastError = "Could not duplicate the tun fd: ${e.message}"
-                ticket.publish { notifyStatus("error") }
-                return false
-            }
+            val engineFd =
+                try {
+                    // dup(), NOT fromFd(): fromFd wraps the SAME descriptor without
+                    // duplicating it, so the engine's close() and teardown()'s
+                    // close() would hit one descriptor twice - and the second close
+                    // would land on whatever descriptor number the kernel had since
+                    // recycled.
+                    fd.dup()
+                } catch (e: Exception) {
+                    Log.e(TAG, "could not duplicate the tun fd: ${e.message}")
+                    lastError = "Could not duplicate the tun fd: ${e.message}"
+                    ticket.publish { notifyStatus("error") }
+                    return false
+                }
 
             // The engine must be up before we claim success, otherwise all
             // traffic would be black-holed by the default route just installed.
@@ -622,7 +676,7 @@ class BlackoutVpnService : VpnService() {
         libboxConfig: String?,
         tunFd: Int,
         socksPort: Int,
-        mihomoConfig: String?
+        mihomoConfig: String?,
     ): Boolean {
         if (protocol == "mihomo") {
             if (!BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO || mihomoConfig.isNullOrBlank()) {
@@ -681,7 +735,7 @@ class BlackoutVpnService : VpnService() {
         if (singboxConfig.isNullOrBlank()) {
             lastError =
                 "No sing-box config was supplied for protocol '$protocol'; " +
-                    "refusing to start an engine on a stale config file."
+                "refusing to start an engine on a stale config file."
             Log.e(TAG, lastError!!)
             return false
         }
@@ -694,7 +748,7 @@ class BlackoutVpnService : VpnService() {
             context = this,
             tunFd = tunFd,
             socksPort = socksPort,
-            protocol = protocol
+            protocol = protocol,
         )
     }
 
@@ -711,14 +765,17 @@ class BlackoutVpnService : VpnService() {
      * who only wanted a different resolver had to have a config and route all
      * their traffic through a server to get it.
      */
-    private fun establishDnsOnly(dnsServers: List<String>, displayName: String,
-                                 ticket: VpnSessionExecutor.Ticket): Boolean {
-
+    private fun establishDnsOnly(
+        dnsServers: List<String>,
+        displayName: String,
+        ticket: VpnSessionExecutor.Ticket,
+    ): Boolean {
         return try {
-            val builder = Builder()
-                .setSession(displayName)
-                .setMtu(VPN_MTU)
-                .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
+            val builder =
+                Builder()
+                    .setSession(displayName)
+                    .setMtu(VPN_MTU)
+                    .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
 
             var accepted = 0
             for (server in dnsServers) {
@@ -772,7 +829,6 @@ class BlackoutVpnService : VpnService() {
         }
     }
 
-
     /** The system revoked our tunnel (another VPN took over, or the user disabled it). */
     override fun onRevoke() {
         lastError = "VPN was revoked by the system"
@@ -804,10 +860,20 @@ class BlackoutVpnService : VpnService() {
         EngineRunner.onUnexpectedExit = null
         holdTunnelOnFailure = false
         var cleanupFailed = false
-        for (stopEngine in listOf<() -> Unit>(XrayEngine::stop, EngineRunner::stop,
-                BlackoutCoreEngine::stop, LibboxEngine::stop, NativeTunnelEngine::stop)) {
-            try { stopEngine() } catch (_: Exception) { cleanupFailed = true }
-            catch (_: LinkageError) { cleanupFailed = true }
+        for (stopEngine in listOf<() -> Unit>(
+            XrayEngine::stop,
+            EngineRunner::stop,
+            BlackoutCoreEngine::stop,
+            LibboxEngine::stop,
+            NativeTunnelEngine::stop,
+        )) {
+            try {
+                stopEngine()
+            } catch (_: Exception) {
+                cleanupFailed = true
+            } catch (_: LinkageError) {
+                cleanupFailed = true
+            }
         }
         try {
             engineTunFd?.close()
@@ -827,8 +893,10 @@ class BlackoutVpnService : VpnService() {
         activeNativeTunnel = false
         // The held-blocking marker describes a live tunnel; once the interface
         // is gone the state is "stopped" again, not "blocked".
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putBoolean(KEY_HELD_BLOCKING, false).apply()
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_HELD_BLOCKING, false)
+            .apply()
         activeProtocol = null
         activeName = null
         activeProtocolId = null
@@ -855,31 +923,34 @@ class BlackoutVpnService : VpnService() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "VPN status",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Shown while the Blackout Kit tunnel is active"
-            setShowBadge(false)
-        }
+        val channel =
+            NotificationChannel(
+                CHANNEL_ID,
+                "VPN status",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Shown while the Blackout Kit tunnel is active"
+                setShowBadge(false)
+            }
         manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
-        val openApp = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val openApp =
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
 
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL_ID)
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-        }
+        val builder =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(this, CHANNEL_ID)
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(this)
+            }
 
         return builder
             .setContentTitle("Blackout Kit")
@@ -892,11 +963,11 @@ class BlackoutVpnService : VpnService() {
 
     private fun startForegroundCompat() {
         val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= 34) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)

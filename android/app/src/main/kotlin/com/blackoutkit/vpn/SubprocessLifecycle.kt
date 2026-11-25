@@ -1,5 +1,7 @@
 package com.blackoutkit.vpn
 
+private const val PROCESS_NANOS_PER_MILLI = 1_000_000L
+
 /** Process lifecycle rules shared by the Android runner and JVM tests. */
 internal class SubprocessLifecycle(
     private val isAlive: (Process) -> Boolean = ProcessCompat::isAlive,
@@ -7,8 +9,12 @@ internal class SubprocessLifecycle(
     private val sleep: (Long) -> Unit = { Thread.sleep(it) },
     private val forceStop: (Process) -> Unit = ProcessCompat::forceStop,
 ) {
-    fun awaitStartup(processes: List<Process>, timeoutMs: Long, pollMs: Long = 50): String? {
-        val deadline = System.nanoTime() + timeoutMs * 1_000_000
+    fun awaitStartup(
+        processes: List<Process>,
+        timeoutMs: Long,
+        pollMs: Long = 50,
+    ): String? {
+        val deadline = System.nanoTime() + timeoutMs * PROCESS_NANOS_PER_MILLI
         while (System.nanoTime() < deadline) {
             val exited = processes.firstOrNull { !isAlive(it) }
             if (exited != null) {
@@ -18,7 +24,7 @@ internal class SubprocessLifecycle(
                     "Engine process exited during startup."
                 }
             }
-            val remainingMs = ((deadline - System.nanoTime()).coerceAtLeast(0) / 1_000_000)
+            val remainingMs = ((deadline - System.nanoTime()).coerceAtLeast(0) / PROCESS_NANOS_PER_MILLI)
             if (remainingMs == 0L) break
             sleep(minOf(pollMs, remainingMs))
         }
@@ -28,7 +34,10 @@ internal class SubprocessLifecycle(
     fun exitedProcess(processes: List<Process>): Process? = processes.firstOrNull { !isAlive(it) }
 
     /** Bounded TERM -> KILL cleanup; never discard a live process after TERM. */
-    fun stop(processes: List<Process>, graceMs: Long = 500) {
+    fun stop(
+        processes: List<Process>,
+        graceMs: Long = 500,
+    ) {
         val children = processes.asReversed().distinct()
         var interrupted = false
         // Signal every child first so their grace periods can overlap.
@@ -51,5 +60,8 @@ internal class SubprocessLifecycle(
         if (interrupted) Thread.currentThread().interrupt()
     }
 
-    fun waitForExit(process: Process, timeoutMs: Long): Boolean = waitFor(process, timeoutMs)
+    fun waitForExit(
+        process: Process,
+        timeoutMs: Long,
+    ): Boolean = waitFor(process, timeoutMs)
 }

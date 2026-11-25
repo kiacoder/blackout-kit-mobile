@@ -14,11 +14,15 @@ class VpnSessionExecutorTest {
         val started = CountDownLatch(1)
         val nested = CountDownLatch(1)
 
-        val ticket = executor.start(
-            cleanup = {},
-            start = { started.countDown(); true },
-            complete = {},
-        ) ?: error("executor refused start")
+        val ticket =
+            executor.start(
+                cleanup = {},
+                start = {
+                    started.countDown()
+                    true
+                },
+                complete = {},
+            ) ?: error("executor refused start")
 
         assertTrue(started.await(2, TimeUnit.SECONDS))
 
@@ -39,16 +43,23 @@ class VpnSessionExecutorTest {
         val secondStarted = CountDownLatch(1)
         val staleRan = CountDownLatch(1)
 
-        val first = executor.start(
-            cleanup = {},
-            start = { firstStarted.countDown(); true },
-            complete = {},
-        ) ?: error("executor refused first start")
+        val first =
+            executor.start(
+                cleanup = {},
+                start = {
+                    firstStarted.countDown()
+                    true
+                },
+                complete = {},
+            ) ?: error("executor refused first start")
         assertTrue(firstStarted.await(2, TimeUnit.SECONDS))
 
         executor.start(
             cleanup = {},
-            start = { secondStarted.countDown(); true },
+            start = {
+                secondStarted.countDown()
+                true
+            },
             complete = {},
         ) ?: error("executor refused second start")
         assertTrue(secondStarted.await(2, TimeUnit.SECONDS))
@@ -91,8 +102,10 @@ class VpnSessionExecutorTest {
             close = true,
         )
 
-        assertFalse("stop raced cleanup against blocking native start",
-            stopComplete.await(150, TimeUnit.MILLISECONDS))
+        assertFalse(
+            "stop raced cleanup against blocking native start",
+            stopComplete.await(150, TimeUnit.MILLISECONDS),
+        )
         releaseStart.countDown()
         assertTrue(stopComplete.await(2, TimeUnit.SECONDS))
         assertEquals(

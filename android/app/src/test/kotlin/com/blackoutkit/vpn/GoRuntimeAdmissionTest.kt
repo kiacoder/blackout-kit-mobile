@@ -1,6 +1,9 @@
 package com.blackoutkit.vpn
 
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -30,9 +33,13 @@ class GoRuntimeAdmissionTest {
         val start = CountDownLatch(1)
         val executor = Executors.newFixedThreadPool(2)
         try {
-            val claims = GoRuntimeAdmission.Family.values().map { family ->
-                executor.submit<Boolean> { start.await(); gate.claim(family) }
-            }
+            val claims =
+                GoRuntimeAdmission.Family.values().map { family ->
+                    executor.submit<Boolean> {
+                        start.await()
+                        gate.claim(family)
+                    }
+                }
             start.countDown()
             assertEquals(1, claims.count { it.get() })
         } finally {

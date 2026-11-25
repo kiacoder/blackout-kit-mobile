@@ -1,6 +1,9 @@
 package com.blackoutkit.vpn
 
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.util.Base64
 
@@ -9,7 +12,9 @@ class NativeTunnelConfigTest {
     // Synthetic bytes only; JDK Base64 is used in tests, not API24 production code.
     private val key = Base64.getEncoder().encodeToString(ByteArray(32) { 1 })
     private val zero = Base64.getEncoder().encodeToString(ByteArray(32))
-    private fun profile() = """
+
+    private fun profile() =
+        """
         [Interface]
         PrivateKey = $key
         Address = 10.0.0.2/32
@@ -17,10 +22,17 @@ class NativeTunnelConfigTest {
         PublicKey = $key
         Endpoint = example.invalid:51820
         AllowedIPs = 10.0.0.129/24
-    """.trimIndent()
+        """.trimIndent()
+
     private fun reject(text: String) {
-        try { NativeTunnelConfig.parse(text, false); fail("Expected profile rejection") }
-        catch (e: IllegalArgumentException) { assertFalse(e.message.orEmpty().contains(key)) }
+        try {
+            NativeTunnelConfig.parse(text, false)
+            fail("Expected profile rejection")
+        } catch (
+            e: IllegalArgumentException,
+        ) {
+            assertFalse(e.message.orEmpty().contains(key))
+        }
     }
 
     @Test fun routesAreMaskedButInterfaceAddressesAreNot() {
@@ -45,15 +57,24 @@ class NativeTunnelConfigTest {
     @Test fun dnsMustBeCoveredByInstalledRoutes() {
         val config = NativeTunnelConfig.parse(profile(), false)
         assertEquals(1, config.routedDns(listOf("10.0.0.1")).size)
-        try { config.routedDns(listOf("192.0.2.53")); fail("Expected uncovered DNS rejection") }
-        catch (e: IllegalArgumentException) { assertFalse(e.message.orEmpty().contains("192.0.2.53")) }
+        try {
+            config.routedDns(listOf("192.0.2.53"))
+            fail("Expected uncovered DNS rejection")
+        } catch (
+            e: IllegalArgumentException,
+        ) {
+            assertFalse(e.message.orEmpty().contains("192.0.2.53"))
+        }
     }
 
     @Test fun defaultRouteDoesNotPermitLoopbackOrMulticastDns() {
         val config = NativeTunnelConfig.parse(profile().replace("10.0.0.129/24", "0.0.0.0/0, ::/0"), false)
         for (dns in listOf(emptyList(), listOf("127.0.0.1"), listOf("0.0.0.0"), listOf("ff02::1"))) {
-            try { config.routedDns(dns); fail("Expected unsafe DNS rejection") }
-            catch (_: IllegalArgumentException) {}
+            try {
+                config.routedDns(dns)
+                fail("Expected unsafe DNS rejection")
+            } catch (_: IllegalArgumentException) {
+            }
         }
     }
 
@@ -76,13 +97,16 @@ class NativeTunnelConfigTest {
     }
 
     @Test fun awgFieldsRemainProtocolGated() {
-        val awg = profile().replace(
-            "Address = 10.0.0.2/32",
-            "S4 = 25\nH1 = 1-100\nAddress = 10.0.0.2/32",
-        )
+        val awg =
+            profile().replace(
+                "Address = 10.0.0.2/32",
+                "S4 = 25\nH1 = 1-100\nAddress = 10.0.0.2/32",
+            )
         reject(awg)
-        val uapi = NativeTunnelConfig.parse(awg, true)
-            .userspace { NativeTunnelConfig.numericAddress("192.0.2.1") }
+        val uapi =
+            NativeTunnelConfig
+                .parse(awg, true)
+                .userspace { NativeTunnelConfig.numericAddress("192.0.2.1") }
         assertTrue(uapi.contains("s4=25\n"))
         assertTrue(uapi.contains("h1=1-100\n"))
     }

@@ -3,10 +3,10 @@ package com.blackoutkit.vpn
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.os.Build
 import android.util.Log
 import libbox.BoxService
 import libbox.InterfaceUpdateListener
@@ -18,6 +18,8 @@ import libbox.PlatformInterface
 import libbox.TunOptions
 import libbox.WIFIState
 import java.util.concurrent.atomic.AtomicBoolean
+
+private const val LIBBOX_OTHER_INTERFACE = 4
 
 /**
  * In-process libbox core (embedded sing-box, no subprocess).
@@ -57,30 +59,38 @@ object LibboxEngine {
      * substitute a compile-time guess here: callers use this probe to decide
      * whether the embedded runtime is actually loadable on this ABI.
      */
-    fun version(): String? = try {
-        if (GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED))
-            Libbox.version()?.takeIf { it.isNotBlank() && it != "unknown" }
-        else null
-    } catch (e: Throwable) {
-        Log.w(TAG, "libbox version probe failed: ${e.javaClass.simpleName}: ${e.message}")
-        null
-    }
+    fun version(): String? =
+        try {
+            if (GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
+                Libbox.version()?.takeIf { it.isNotBlank() && it != "unknown" }
+            } else {
+                null
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "libbox version probe failed: ${e.javaClass.simpleName}: ${e.message}")
+            null
+        }
 
     /** True only when a libbox call successfully reaches the embedded runtime. */
-    fun isAvailable(): Boolean = try {
-        GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED) &&
-            Libbox.version() != null
-    } catch (e: Throwable) {
-        Log.w(TAG, "libbox availability probe failed: ${e.javaClass.simpleName}: ${e.message}")
-        false
-    }
+    fun isAvailable(): Boolean =
+        try {
+            GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED) &&
+                Libbox.version() != null
+        } catch (e: Throwable) {
+            Log.w(TAG, "libbox availability probe failed: ${e.javaClass.simpleName}: ${e.message}")
+            false
+        }
 
     /**
      * Starts the embedded core. The core dups the fd it receives via
      * [openTun][LibboxPlatform.openTun], so [tunFd] stays owned by the
      * VpnService and is closed by its usual [teardown][BlackoutVpnService.teardown].
      */
-    fun start(vpnService: BlackoutVpnService, tunFd: Int, configJson: String): Boolean {
+    fun start(
+        vpnService: BlackoutVpnService,
+        tunFd: Int,
+        configJson: String,
+    ): Boolean {
         if (running.get()) {
             Log.w(TAG, "start() while already running - stopping the old service first")
             stop()
@@ -90,16 +100,17 @@ object LibboxEngine {
             lastError = GoRuntimeAdmission.RESTART_REQUIRED
             return false
         }
-        val svc = try {
-            Libbox.newService(configJson, LibboxPlatform(vpnService, tunFd))
-        } catch (e: LinkageError) {
-            lastError = "Embedded sing-box runtime is unavailable or incompatible"
-            return false
-        } catch (e: Exception) {
-            lastError = "libbox config rejected: ${e.message}"
-            Log.e(TAG, lastError!!, e)
-            return false
-        }
+        val svc =
+            try {
+                Libbox.newService(configJson, LibboxPlatform(vpnService, tunFd))
+            } catch (e: LinkageError) {
+                lastError = "Embedded sing-box runtime is unavailable or incompatible"
+                return false
+            } catch (e: Exception) {
+                lastError = "libbox config rejected: ${e.message}"
+                Log.e(TAG, lastError!!, e)
+                return false
+            }
         try {
             svc.start()
         } catch (e: Exception) {
@@ -142,14 +153,14 @@ object LibboxEngine {
 @SuppressLint("MissingPermission")
 private class LibboxPlatform(
     private val vpnService: BlackoutVpnService,
-    private val tunFd: Int
+    private val tunFd: Int,
 ) : PlatformInterface {
     private val cm = vpnService.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     override fun openTun(options: TunOptions): Int {
         Log.i(
             "LibboxPlatform",
-            "openTun: mtu=${options.mtu}, autoRoute=${options.autoRoute}, strictRoute=${options.strictRoute}"
+            "openTun: mtu=${options.mtu}, autoRoute=${options.autoRoute}, strictRoute=${options.strictRoute}",
         )
         return tunFd
     }
@@ -159,7 +170,7 @@ private class LibboxPlatform(
     /** sing-box binds outbound sockets to the physical network: protect them from our own VPN. */
     override fun autoDetectInterfaceControl(fd: Int) {
         if (!vpnService.protect(fd)) {
-            throw Exception("protect(fd) failed")
+            throw java.io.IOException("protect(fd) failed")
         }
     }
 
@@ -167,15 +178,19 @@ private class LibboxPlatform(
 
     override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
         try {
-            val callback = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) {
-                    reportDefaultInterface(listener, network)
-                }
+            val callback =
+                object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        reportDefaultInterface(listener, network)
+                    }
 
-                override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                    reportDefaultInterface(listener, network)
+                    override fun onCapabilitiesChanged(
+                        network: Network,
+                        capabilities: NetworkCapabilities,
+                    ) {
+                        reportDefaultInterface(listener, network)
+                    }
                 }
-            }
             monitorCallback = callback
             cm.registerDefaultNetworkCallback(callback)
         } catch (e: Exception) {
@@ -183,11 +198,21 @@ private class LibboxPlatform(
         }
     }
 
-    private fun reportDefaultInterface(listener: InterfaceUpdateListener, network: Network) {
+    private fun reportDefaultInterface(
+        listener: InterfaceUpdateListener,
+        network: Network,
+    ) {
         try {
             val link = cm.getLinkProperties(network) ?: return
             val name = link.interfaceName ?: return
-            val idx = try { java.net.NetworkInterface.getByName(name)?.index ?: -1 } catch (_: Exception) { -1 }
+            val idx =
+                try {
+                    java.net.NetworkInterface
+                        .getByName(name)
+                        ?.index ?: -1
+                } catch (_: Exception) {
+                    -1
+                }
             listener.updateDefaultInterface(name, idx, false, false)
         } catch (e: Exception) {
             Log.w("LibboxPlatform", "interface report failed: ${e.message}")
@@ -214,19 +239,25 @@ private class LibboxPlatform(
                 if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
                 val iface = NetworkInterface()
                 val name = link.interfaceName ?: continue
-                iface.index = try {
-                    java.net.NetworkInterface.getByName(name)?.index ?: -1
-                } catch (_: Exception) { -1 }
+                iface.index =
+                    try {
+                        java.net.NetworkInterface
+                            .getByName(name)
+                            ?.index ?: -1
+                    } catch (_: Exception) {
+                        -1
+                    }
                 iface.name = name
                 iface.mtu = 0
                 iface.addresses = EmptyStringIterator
                 iface.dnsServer = EmptyStringIterator
                 iface.flags = 0
-                iface.type = when {
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 1
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 2
-                    else -> 4
-                }
+                iface.type =
+                    when {
+                        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> 1
+                        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> 2
+                        else -> LIBBOX_OTHER_INTERFACE
+                    }
                 list.add(iface)
             }
         } catch (e: Exception) {
@@ -241,7 +272,9 @@ private class LibboxPlatform(
 
     override fun readWIFIState(): WIFIState? = null
 
-    override fun clearDNSCache() {}
+    override fun clearDNSCache() {
+        // Android owns DNS caching; this platform adapter has no cache to clear.
+    }
 
     override fun sendNotification(notification: Notification?) {
         // The foreground-service notification is managed by BlackoutVpnService.
@@ -254,23 +287,23 @@ private class LibboxPlatform(
         sourceAddress: String?,
         sourcePort: Int,
         destinationAddress: String?,
-        destinationPort: Int
+        destinationPort: Int,
     ): Int = -1
 
-    override fun packageNameByUid(uid: Int): String =
-        vpnService.packageManager.getNameForUid(uid) ?: ""
+    override fun packageNameByUid(uid: Int): String = vpnService.packageManager.getNameForUid(uid) ?: ""
 
     @Suppress("DEPRECATION")
-    override fun uidByPackageName(packageName: String): Int = try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            vpnService.packageManager.getPackageUid(packageName, PackageManager.PackageInfoFlags.of(0))
-        } else {
-            // The pre-33 overload is required on the supported API 24-32 range.
-            vpnService.packageManager.getPackageUid(packageName, 0)
+    override fun uidByPackageName(packageName: String): Int =
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                vpnService.packageManager.getPackageUid(packageName, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                // The pre-33 overload is required on the supported API 24-32 range.
+                vpnService.packageManager.getPackageUid(packageName, 0)
+            }
+        } catch (e: Exception) {
+            -1
         }
-    } catch (e: Exception) {
-        -1
-    }
 
     override fun writeLog(message: String?) {
         Log.i("Libbox", message ?: "")
@@ -280,13 +313,18 @@ private class LibboxPlatform(
 /** Empty iterator for fields the platform layer is allowed to leave blank. */
 private object EmptyStringIterator : libbox.StringIterator {
     override fun hasNext(): Boolean = false
+
     override fun len(): Int = 0
+
     override fun next(): String = ""
 }
 
-private class InterfaceIterator(private val items: List<NetworkInterface>) :
-    NetworkInterfaceIterator {
+private class InterfaceIterator(
+    private val items: List<NetworkInterface>,
+) : NetworkInterfaceIterator {
     private var index = 0
+
     override fun hasNext(): Boolean = index < items.size
+
     override fun next(): NetworkInterface = items[index++]
 }

@@ -12,6 +12,8 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import java.io.File
 
+private const val BYTES_PER_KIB = 1024L
+
 /**
  * In-app self-update: hands a downloaded APK to Android's package installer.
  *
@@ -36,14 +38,18 @@ import java.io.File
  * "the download is not a valid APK" rather than the installer's opaque
  * "problem parsing the package".
  */
-class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
-
+class UpdatePlugin(
+    private val appContext: Context,
+) : MethodCallHandler {
     fun register(messenger: io.flutter.plugin.common.BinaryMessenger) {
         val channel = MethodChannel(messenger, CHANNEL)
         channel.setMethodCallHandler(this)
     }
 
-    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+    override fun onMethodCall(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         when (call.method) {
             "installApk" -> installApk(call, result)
             // Which release asset fits this device. A 32-bit phone cannot
@@ -55,11 +61,12 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
         }
     }
 
-    /// Compares the archive's signing certificate with the installed app's.
-    ///
-    /// Returns an error message when they differ, null when they match (or
-    /// when the platform will not tell us - older APIs report nothing, and
-    /// Android's own signature enforcement remains the backstop there).
+    // / Compares the archive's signing certificate with the installed app's.
+    // /
+    // / Returns an error message when they differ, null when they match (or
+    // / when the platform will not tell us - older APIs report nothing, and
+    // / Android's own signature enforcement remains the backstop there).
+
     /** Signature flags for this OS level: signingInfo is API 28+. */
     private fun signatureFlags(): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -72,11 +79,12 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
     /** Every signer digest on [info], newest API first, legacy as fallback. */
     @Suppress("DEPRECATION")
     private fun signerDigests(info: android.content.pm.PackageInfo): Set<String> {
-        val modern = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            info.signingInfo?.apkContentsSigners?.map { certDigest(it.toByteArray()) }
-        } else {
-            null
-        }
+        val modern =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.signingInfo?.apkContentsSigners?.map { certDigest(it.toByteArray()) }
+            } else {
+                null
+            }
         val legacy = info.signatures?.map { certDigest(it.toByteArray()) }
         return (modern ?: legacy).orEmpty().toSet()
     }
@@ -91,15 +99,14 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
      * exception. That turned the check into a no-op on API 24-27 (where
      * `signingInfo` does not exist) and on any device where the lookup threw.
      */
-    private fun verifySameSigner(
-        archive: android.content.pm.PackageInfo,
-    ): String? {
-        val installed = try {
-            appContext.packageManager.getPackageInfo(appContext.packageName, signatureFlags())
-        } catch (e: Exception) {
-            return "Could not read this app's signature to compare against the " +
-                "update (${e.message}). Nothing was installed."
-        }
+    private fun verifySameSigner(archive: android.content.pm.PackageInfo): String? {
+        val installed =
+            try {
+                appContext.packageManager.getPackageInfo(appContext.packageName, signatureFlags())
+            } catch (e: Exception) {
+                return "Could not read this app's signature to compare against the " +
+                    "update (${e.message}). Nothing was installed."
+            }
 
         val mine = signerDigests(installed)
         val theirs = signerDigests(archive)
@@ -122,7 +129,10 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
         return md.digest(bytes).joinToString("") { "%02x".format(it) }
     }
 
-    private fun installApk(call: MethodCall, result: MethodChannel.Result) {
+    private fun installApk(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         val path = call.argument<String>("path")
         if (path.isNullOrBlank()) {
             result.error("INVALID_ARGS", "path is required", null)
@@ -139,15 +149,16 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
         //
         // The flags matter: GET_SIGNING_CERTIFICATES is what makes the signer
         // available for the checks below.
-        val archive = try {
-            appContext.packageManager.getPackageArchiveInfo(path, signatureFlags())
-        } catch (e: Exception) {
-            null
-        }
+        val archive =
+            try {
+                appContext.packageManager.getPackageArchiveInfo(path, signatureFlags())
+            } catch (e: Exception) {
+                null
+            }
         if (archive == null) {
             result.error(
                 "BAD_APK",
-                "The downloaded file is not a valid APK (${file.length() / 1024} KB). " +
+                "The downloaded file is not a valid APK (${file.length() / BYTES_PER_KIB} KB). " +
                     "Delete it and download again.",
                 null,
             )
@@ -190,17 +201,21 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
         }
 
         try {
-            val uri = FileProvider.getUriForFile(
-                appContext, "${appContext.packageName}.fileprovider", file
-            )
-            val intent = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, "application/vnd.android.package-archive")
-                .addFlags(
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        or Intent.FLAG_ACTIVITY_NEW_TASK
+            val uri =
+                FileProvider.getUriForFile(
+                    appContext,
+                    "${appContext.packageName}.fileprovider",
+                    file,
                 )
-                // OEM installers read the grant from the clip data.
-                .apply { clipData = ClipData.newRawUri("update", uri) }
+            val intent =
+                Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            or Intent.FLAG_ACTIVITY_NEW_TASK,
+                    )
+                    // OEM installers read the grant from the clip data.
+                    .apply { clipData = ClipData.newRawUri("update", uri) }
             appContext.startActivity(intent)
             result.success(true)
         } catch (e: Exception) {
@@ -218,15 +233,16 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
     private fun openUnknownSourcesSettings() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         try {
-            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                .setData(Uri.parse("package:${appContext.packageName}"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val intent =
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                    .setData(Uri.parse("package:${appContext.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             appContext.startActivity(intent)
         } catch (_: Exception) {
             try {
                 appContext.startActivity(
                     Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             } catch (_: Exception) {
                 // Nothing else to try; the Dart layer already reports the reason.

@@ -6,6 +6,6 @@ cd "$(dirname "$0")/.."
 KOTLINC="${KOTLINC:-kotlinc}"
 mkdir -p .cache/host-tests
 "$KOTLINC" android/app/src/main/kotlin/com/blackoutkit/vpn/NativeTunnelLifecycle.kt \
-  tool/kotlin/NativeTunnelLifecycleTests.kt -jvm-target 17 -include-runtime \
+  tool/kotlin/com/blackoutkit/vpn/NativeTunnelLifecycleTests.kt -jvm-target 17 -include-runtime \
   -d .cache/host-tests/native-lifecycle.jar
 "$JAVA_HOME/bin/java" -jar .cache/host-tests/native-lifecycle.jar

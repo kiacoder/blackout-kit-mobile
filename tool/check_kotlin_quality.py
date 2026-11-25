@@ -23,6 +23,16 @@ TOOLS = {
 GATED = [
     "android/app/src/main/kotlin/com/blackoutkit/vpn/OneShotCallbackSlot.kt",
     "android/app/src/main/kotlin/com/blackoutkit/vpn/GoRuntimeAdmission.kt",
+    "android/app/src/main/kotlin/com/blackoutkit/vpn/SubprocessLifecycle.kt",
+    "android/app/src/main/kotlin/com/blackoutkit/vpn/VpnSessionExecutor.kt",
+    "android/app/src/main/kotlin/com/wireguard/android/backend/GoBackend.kt",
+    "android/app/src/main/kotlin/org/amnezia/awg/GoBackend.kt",
+    "android/app/src/test/kotlin/com/blackoutkit/vpn/GoRuntimeAdmissionTest.kt",
+    "android/app/src/test/kotlin/com/blackoutkit/vpn/NativeTunnelConfigTest.kt",
+    "android/app/src/test/kotlin/com/blackoutkit/vpn/OneShotCallbackSlotTest.kt",
+    "android/app/src/test/kotlin/com/blackoutkit/vpn/SubprocessLifecycleTest.kt",
+    "android/app/src/test/kotlin/com/blackoutkit/vpn/VpnSessionExecutorTest.kt",
+    "tool/kotlin/android/os/Build.kt",
 ]
 
 
@@ -59,7 +69,7 @@ def main():
     for file in GATED:
         if not (ROOT / file).is_file():
             raise RuntimeError(f"Missing gated source: {file}")
-    lint_inputs = ["android/app/src/**/*.kt", "tool/kotlin/**/*.kt"] if args.audit else GATED
+    lint_inputs = ["android/app/src/**/*.kt", "tool/kotlin/**/*.kt"]
     detekt_inputs = ["android/app/src", "tool/kotlin"] if args.audit else GATED
     lint = subprocess.run(
         [java, "-jar", str(jar("ktlint")), "--relative", *lint_inputs],

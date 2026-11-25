@@ -10,6 +10,8 @@ import libv2ray.Libv2ray
 import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
 
+private const val XUDP_KEY_BYTES = 32
+
 /**
  * In-process wrapper around the bundled Xray core (libv2ray /
  * AndroidLibXrayLite, gomobile-bound).
@@ -44,7 +46,6 @@ import java.util.concurrent.atomic.AtomicBoolean
  *     interface CoreCallbackHandler { long onEmitStatus(long, String); long shutdown(); long startup(); }
  */
 object XrayEngine {
-
     private const val TAG = "BlackoutXrayEngine"
 
     /** `tunFd == 0` means "do not use TUN" on the native side. */
@@ -97,13 +98,16 @@ object XrayEngine {
             if (!stoppingIntentionally) {
                 Log.e(TAG, "core stopped without being asked to - treating as a failure")
                 unexpectedStopListener?.invoke(
-                    "The Xray core stopped unexpectedly"
+                    "The Xray core stopped unexpectedly",
                 )
             }
             return 0
         }
 
-        override fun onEmitStatus(code: Long, message: String?): Long {
+        override fun onEmitStatus(
+            code: Long,
+            message: String?,
+        ): Long {
             Log.i(TAG, "core status [$code] $message")
             return 0
         }
@@ -176,11 +180,15 @@ object XrayEngine {
         val flags = Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
         val existing = preferences.getString("base_key", null)
         if (existing != null) {
-            val decoded = try { Base64.decode(existing, flags) }
-            catch (_: IllegalArgumentException) { null }
-            if (decoded?.size == 32) return existing
+            val decoded =
+                try {
+                    Base64.decode(existing, flags)
+                } catch (_: IllegalArgumentException) {
+                    null
+                }
+            if (decoded?.size == XUDP_KEY_BYTES) return existing
         }
-        val key = ByteArray(32).apply { SecureRandom().nextBytes(this) }
+        val key = ByteArray(XUDP_KEY_BYTES).apply { SecureRandom().nextBytes(this) }
         val encoded = Base64.encodeToString(key, flags)
         check(preferences.edit().putString("base_key", encoded).commit()) {
             "Could not persist the XUDP installation key"
@@ -189,14 +197,17 @@ object XrayEngine {
     }
 
     /** Human-readable core version, or null if the AAR is missing. */
-    fun version(): String? = try {
-        if (GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED))
-            Libv2ray.checkVersionX()
-        else null
-    } catch (t: Throwable) {
-        Log.w(TAG, "checkVersionX failed: ${t.javaClass.name}: ${t.message}", t)
-        null
-    }
+    fun version(): String? =
+        try {
+            if (GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
+                Libv2ray.checkVersionX()
+            } else {
+                null
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "checkVersionX failed: ${t.javaClass.name}: ${t.message}", t)
+            null
+        }
 
     /**
      * Starts the core against [tunFd].
@@ -210,7 +221,11 @@ object XrayEngine {
      *   installed by the time this returns, so a false positive black-holes all
      *   traffic on the device.
      */
-    fun start(context: Context, configJson: String, tunFd: Int): Boolean {
+    fun start(
+        context: Context,
+        configJson: String,
+        tunFd: Int,
+    ): Boolean {
         if (configJson.isBlank()) {
             lastError = "Refusing to start the Xray core with an empty config"
             Log.e(TAG, lastError!!)
@@ -223,13 +238,14 @@ object XrayEngine {
         // The controller handle must outlive the try below: the catch needs it
         // to stop a core that threw half-way through startLoop. Declaring it
         // inside the try would make it invisible to the catch.
-        val created = try {
-            Libv2ray.newCoreController(CoreCallback)
-        } catch (t: Throwable) {
-            lastError = "Could not create the Xray core controller: ${t.message}"
-            Log.e(TAG, lastError, t)
-            return false
-        }
+        val created =
+            try {
+                Libv2ray.newCoreController(CoreCallback)
+            } catch (t: Throwable) {
+                lastError = "Could not create the Xray core controller: ${t.message}"
+                Log.e(TAG, lastError, t)
+                return false
+            }
 
         return try {
             lastConfigJson = configJson
@@ -277,8 +293,10 @@ object XrayEngine {
      * port only. Used by the connection tester, which probes a config without
      * touching the device's routing.
      */
-    fun startProxyOnly(context: Context, configJson: String): Boolean =
-        start(context, configJson, NO_TUN)
+    fun startProxyOnly(
+        context: Context,
+        configJson: String,
+    ): Boolean = start(context, configJson, NO_TUN)
 
     /** Tears the core down. Safe to call when nothing is running. */
     fun stop() {
@@ -298,6 +316,5 @@ object XrayEngine {
     }
 
     /** True when this device can actually run the bundled core. */
-    fun isSupported(): Boolean =
-        version() != null
+    fun isSupported(): Boolean = version() != null
 }

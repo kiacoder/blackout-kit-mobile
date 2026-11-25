@@ -48,17 +48,20 @@ object EngineRunner {
      * it takes the fd in-process over JNI.
      */
     private external fun nativeSpawnWithFd(
-        path: String, args: Array<String>, fd: Int, logPath: String,
+        path: String,
+        args: Array<String>,
+        fd: Int,
+        logPath: String,
     ): Int
 
     /** -1 while the child runs, otherwise its exit code. */
     private external fun nativePollPid(pid: Int): Int
 
-    /** Blocks until the child is gone; same codes as [nativePollPid]. */
-    private external fun nativeWaitPid(pid: Int): Int
-
     /** Sends a signal to a launcher-started child (SIGTERM/SIGKILL). */
-    private external fun nativeKillPid(pid: Int, signal: Int): Int
+    private external fun nativeKillPid(
+        pid: Int,
+        signal: Int,
+    ): Int
 
     @Volatile
     private var nativeLoaded = false
@@ -91,7 +94,6 @@ object EngineRunner {
      * `xray.proxy.wireguard`, and [XrayEngine] now serves it directly.
      */
 
-
     @Volatile
     var lastError: String? = null
         private set
@@ -104,27 +106,41 @@ object EngineRunner {
     private var engineProcess: Process? = null
     private var monitorThread: Thread? = null
     private val intentionalStop = AtomicBoolean(false)
+
     @Volatile
     var onUnexpectedExit: ((String) -> Unit)? = null
 
     internal var processLauncher: (List<String>) -> Process = { command ->
         ProcessCompat.startQuietly(command)
     }
+
     // 750ms starved a cold start on real devices: loading a 47MB binary and
     // parsing a config takes 1-3s on mid-range hardware, so the startup wait
     // and the readiness probe must both allow it.
-    internal var startupWaitMs: Long = 3000
+    private const val STARTUP_WAIT_MS = 3000L
+    internal var startupWaitMs: Long = STARTUP_WAIT_MS
     internal var readinessProbe: (String, Int, Int) -> Boolean = LocalSocksReadiness::await
     internal var readinessPortProvider: (Context, String) -> Int = { _, config ->
-        Regex("\\\"listen_port\\\"\\s*:\\s*(\\d+)").find(config)
-            ?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        Regex("\\\"listen_port\\\"\\s*:\\s*(\\d+)")
+            .find(config)
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull() ?: 0
     }
     internal var lifecycle = SubprocessLifecycle()
 
-    private fun engineLogTail(@Suppress("UNUSED_PARAMETER") log: File): String =
-        " Native log content is withheld because it may contain credentials."
+    private const val MONITOR_INTERVAL_MS = 100L
+    private const val MAX_SOCKS_PORT = 65535
+    private const val SOCKS_READY_TIMEOUT_MS = 2000
+    private const val MAX_ENGINE_CONFIG_BYTES = 8 * 1024 * 1024
+    private const val NATIVE_LOG_WITHHELD = " Native log content is withheld because it may contain credentials."
 
-    fun start(context: Context, tunFd: Int, socksPort: Int, protocol: String): Boolean {
+    fun start(
+        context: Context,
+        tunFd: Int,
+        socksPort: Int,
+        protocol: String,
+    ): Boolean {
         lastError = null
         stop()
 
@@ -147,12 +163,13 @@ object EngineRunner {
         val absent = listOf(tun2socksPath, enginePath).filterNot { it.exists() }
 
         if (absent.isNotEmpty()) {
-            lastError = buildString {
-                append("'$protocol' needs an engine that is not bundled in this build ")
-                append("(missing: ${absent.joinToString { it.name }}). ")
-                append("The tunnel was refused instead of black-holing your traffic. ")
-                append("Use a VLESS, VMess, Trojan or Shadowsocks config for now.")
-            }
+            lastError =
+                buildString {
+                    append("'$protocol' needs an engine that is not bundled in this build ")
+                    append("(missing: ${absent.joinToString { it.name }}). ")
+                    append("The tunnel was refused instead of black-holing your traffic. ")
+                    append("Use a VLESS, VMess, Trojan or Shadowsocks config for now.")
+                }
             Log.w(TAG, lastError!!)
             return false
         }
@@ -190,43 +207,48 @@ object EngineRunner {
                 stop()
                 return false
             }
-            tun2socksPid = nativeSpawnWithFd(
-                tun2socksPath.absolutePath,
-                arrayOf(
+            tun2socksPid =
+                nativeSpawnWithFd(
                     tun2socksPath.absolutePath,
-                    // DOUBLE dashes are mandatory here. This build parses its
-                    // options with go-flags, where a single dash means a
-                    // shorthand cluster: "-mtu" is read as "-m -t -u" and dies
-                    // with `unknown shorthand flag: 'm' in -mtu` (and "-device"
-                    // is read as "-d evice", silently swallowing the value).
-                    // The device is a URI, not a bare descriptor: "fd://<n>"
-                    // selects the fdbased driver, which opens that descriptor -
-                    // the launcher dup2()s the tun fd to exactly FD_SLOT.
-                    "--device", "fd://$FD_SLOT",
-                    "--proxy", "socks5://127.0.0.1:$socksPort",
-                    "--mtu", BlackoutVpnService.VPN_MTU.toString(),
-                    "--loglevel", "info",
-                ),
-                tunFd,
-                engineLog.absolutePath,
-            )
+                    arrayOf(
+                        tun2socksPath.absolutePath,
+                        // DOUBLE dashes are mandatory here. This build parses its
+                        // options with go-flags, where a single dash means a
+                        // shorthand cluster: "-mtu" is read as "-m -t -u" and dies
+                        // with `unknown shorthand flag: 'm' in -mtu` (and "-device"
+                        // is read as "-d evice", silently swallowing the value).
+                        // The device is a URI, not a bare descriptor: "fd://<n>"
+                        // selects the fdbased driver, which opens that descriptor -
+                        // the launcher dup2()s the tun fd to exactly FD_SLOT.
+                        "--device",
+                        "fd://$FD_SLOT",
+                        "--proxy",
+                        "socks5://127.0.0.1:$socksPort",
+                        "--mtu",
+                        BlackoutVpnService.VPN_MTU.toString(),
+                        "--loglevel",
+                        "info",
+                    ),
+                    tunFd,
+                    engineLog.absolutePath,
+                )
             if (tun2socksPid <= 0) {
                 lastError = "Could not start tun2socks (native launcher refused). " +
-                    engineLogTail(engineLog)
+                    NATIVE_LOG_WITHHELD
                 stop()
                 return false
             }
 
             if (anyChildDied()) {
                 lastError = "tun2socks exited during startup (code ${tun2socksExitCode()})." +
-                    engineLogTail(engineLog)
+                    NATIVE_LOG_WITHHELD
                 stop()
                 return false
             }
             val children = listOfNotNull(engineProcess, tun2socksProcess)
             val startupError = lifecycle.awaitStartup(children, startupWaitMs)
             if (startupError != null) {
-                lastError = startupError + engineLogTail(engineLog)
+                lastError = startupError + NATIVE_LOG_WITHHELD
                 stop()
                 return false
             }
@@ -235,46 +257,65 @@ object EngineRunner {
             // tun2socks surfaced as a misleading SOCKS-handshake timeout.
             if (anyChildDied()) {
                 lastError = "tun2socks exited during startup (code ${tun2socksExitCode()}). " +
-                    engineLogTail(engineLog)
+                    NATIVE_LOG_WITHHELD
                 stop()
                 return false
             }
-            val readinessPort = if (engineSpec == EngineCommands.MIHOMO) socksPort
-                else readinessPortProvider(context, configFile.readText())
-            if (readinessPort !in 1..65535 || !readinessProbe("127.0.0.1", readinessPort, 2000)) {
-                lastError = "The selected engine did not accept a local SOCKS5 readiness handshake." + engineLogTail(engineLog)
-                stop()
-                return false
-            }
-
-            monitorThread = Thread({
-                while (!intentionalStop.get()) {
-                    val childrenNow = listOfNotNull(engineProcess, tun2socksProcess)
-                    val exited = lifecycle.exitedProcess(childrenNow)
-                    if (exited != null) {
-                        val reason = "Engine process exited unexpectedly (code ${runCatching { exited.exitValue() }.getOrNull() ?: "unknown"})."
-                        lastError = reason
-                        if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
-                        return@Thread
-                    }
-                    // tun2socks was started through the native launcher, so it
-                    // is not a Process the lifecycle helper can see.
-                    if (nativeLoaded && tun2socksPid > 0 &&
-                        nativePollPid(tun2socksPid) != -1) {
-                        val reason = "tun2socks exited unexpectedly (code ${tun2socksExitCode()})."
-                        lastError = reason
-                        if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
-                        return@Thread
-                    }
-                    try {
-                        Thread.sleep(100)
-                    } catch (_: InterruptedException) {
-                        return@Thread
-                    }
+            val readinessPort =
+                if (engineSpec == EngineCommands.MIHOMO) {
+                    socksPort
+                } else {
+                    readinessPortProvider(context, configFile.readText())
                 }
-            }, "blackout-engine-monitor").apply { isDaemon = true; start() }
+            if (readinessPort !in 1..MAX_SOCKS_PORT ||
+                !readinessProbe("127.0.0.1", readinessPort, SOCKS_READY_TIMEOUT_MS)
+            ) {
+                lastError =
+                    "The selected engine did not accept a local SOCKS5 readiness handshake." + NATIVE_LOG_WITHHELD
+                stop()
+                return false
+            }
 
-            Log.i(TAG, "engine processes remained alive and accepted a local SOCKS5 handshake: $engineName, socks=127.0.0.1:$readinessPort, tunFd=$tunFd")
+            monitorThread =
+                Thread({
+                    while (!intentionalStop.get()) {
+                        val childrenNow = listOfNotNull(engineProcess, tun2socksProcess)
+                        val exited = lifecycle.exitedProcess(childrenNow)
+                        if (exited != null) {
+                            val reason = "Engine process exited unexpectedly (code ${runCatching {
+                                exited.exitValue()
+                            }.getOrNull() ?: "unknown"})."
+                            lastError = reason
+                            if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
+                            return@Thread
+                        }
+                        // tun2socks was started through the native launcher, so it
+                        // is not a Process the lifecycle helper can see.
+                        if (nativeLoaded &&
+                            tun2socksPid > 0 &&
+                            nativePollPid(tun2socksPid) != -1
+                        ) {
+                            val reason = "tun2socks exited unexpectedly (code ${tun2socksExitCode()})."
+                            lastError = reason
+                            if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
+                            return@Thread
+                        }
+                        try {
+                            Thread.sleep(MONITOR_INTERVAL_MS)
+                        } catch (_: InterruptedException) {
+                            return@Thread
+                        }
+                    }
+                }, "blackout-engine-monitor").apply {
+                    isDaemon = true
+                    start()
+                }
+
+            Log.i(
+                TAG,
+                "engine processes remained alive and accepted a local SOCKS5 handshake: " +
+                    "$engineName, socks=127.0.0.1:$readinessPort, tunFd=$tunFd",
+            )
             true
         } catch (e: Exception) {
             lastError = "Engine launch failed: ${e.message}"
@@ -288,12 +329,10 @@ object EngineRunner {
      * True when the launcher-started tun2socks child has exited. -1 from
      * [nativePollPid] means "still running", anything else is a status.
      */
-    private fun anyChildDied(): Boolean =
-        nativeLoaded && tun2socksPid > 0 && nativePollPid(tun2socksPid) != -1
+    private fun anyChildDied(): Boolean = nativeLoaded && tun2socksPid > 0 && nativePollPid(tun2socksPid) != -1
 
     /** Exit code of the launcher-started tun2socks child, reaped if needed. */
-    private fun tun2socksExitCode(): Int =
-        if (nativeLoaded && tun2socksPid > 0) nativePollPid(tun2socksPid) else -1
+    private fun tun2socksExitCode(): Int = if (nativeLoaded && tun2socksPid > 0) nativePollPid(tun2socksPid) else -1
 
     fun stop() {
         intentionalStop.set(true)
@@ -302,23 +341,37 @@ object EngineRunner {
         var failed = false
         try {
             lifecycle.stop(listOfNotNull(tun2socksProcess, engineProcess))
-            if (listOfNotNull(tun2socksProcess, engineProcess).any(ProcessCompat::isAlive)) failed = true
-            else {
+            if (listOfNotNull(tun2socksProcess, engineProcess).any(ProcessCompat::isAlive)) {
+                failed = true
+            } else {
                 tun2socksProcess = null
                 engineProcess = null
             }
-        } catch (_: Exception) { failed = true }
+        } catch (_: Exception) {
+            failed = true
+        }
         // Poll reaps with WNOHANG. Never call blocking nativeWaitPid here:
         // a failed signal used to wedge the sole VPN lifecycle worker forever.
         if (nativeLoaded && tun2socksPid > 0) {
             val pid = tun2socksPid
-            val stopped = try {
-                NativeChildStop(
-                    poll = ::nativePollPid,
-                    terminate = { nativeKillPid(it, android.system.OsConstants.SIGTERM); Unit },
-                    kill = { nativeKillPid(it, android.system.OsConstants.SIGKILL); Unit },
-                ).stop(pid)
-            } catch (_: Exception) { false } catch (_: LinkageError) { false }
+            val stopped =
+                try {
+                    NativeChildStop(
+                        poll = ::nativePollPid,
+                        terminate = {
+                            nativeKillPid(it, android.system.OsConstants.SIGTERM)
+                            Unit
+                        },
+                        kill = {
+                            nativeKillPid(it, android.system.OsConstants.SIGKILL)
+                            Unit
+                        },
+                    ).stop(pid)
+                } catch (_: Exception) {
+                    false
+                } catch (_: LinkageError) {
+                    false
+                }
             if (stopped) tun2socksPid = -1 else failed = true
         }
         if (failed) {
@@ -329,12 +382,16 @@ object EngineRunner {
     }
 
     /** Called by Dart before connect() for a subprocess-backed engine. */
-    fun writeConfig(context: Context, json: String, protocol: String = "hysteria2"): Boolean {
+    fun writeConfig(
+        context: Context,
+        json: String,
+        protocol: String = "hysteria2",
+    ): Boolean {
         lastError = null
         return try {
             val dir = configDir(context)
             val spec = EngineCommands.forProtocol(protocol) ?: return false
-            if (json.toByteArray(Charsets.UTF_8).size > 8 * 1024 * 1024) {
+            if (json.toByteArray(Charsets.UTF_8).size > MAX_ENGINE_CONFIG_BYTES) {
                 lastError = "Configuration exceeds the 8 MiB engine limit."
                 return false
             }
@@ -357,6 +414,5 @@ object EngineRunner {
     /** Directory the engine reads its config from; the probe writes here too. */
     internal fun configDirectory(context: Context): File = configDir(context)
 
-    private fun configDir(context: Context): File =
-        File(context.filesDir, "engine").apply { mkdirs() }
+    private fun configDir(context: Context): File = File(context.filesDir, "engine").apply { mkdirs() }
 }

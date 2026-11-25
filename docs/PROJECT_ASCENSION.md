@@ -254,3 +254,31 @@ available with --audit and fails on outstanding findings. No baseline or
 blanket suppression added. Expand strict scope in tested batches. Local
 Ruff unavailable; CI validation and Android regression recheck pending.
 No production merge or release. See ANDROID_TOOLCHAIN_MIGRATION.md.
+
+
+## Phase 3 Kotlin cleanup batch (2026-11-25)
+
+Full ktlint audit now passes across all 32 Kotlin files (1313 initial
+findings to zero reported). Aligned Kotlin line length to 120. Six scoped
+JNI naming exceptions preserve existing Rust ABI symbols; no global rule
+disabled. Full formatting is now enforced in CI. Host fixtures moved into
+package-matching directories; all script references updated.
+
+Detekt weighted issues reduced 337 -> 128; MagicNumber and MaxLineLength
+now report zero. Introduced semantic constants for wire encoding, protocol
+limits, process timeouts and test fixtures. Removed unused Kotlin JNI
+declaration (native implementation unchanged), replaced constant-return
+log helper with a constant, and strengthened a host negative-stop test.
+Strict Detekt scope expanded from 2 to 12 clean files; --audit still fails
+on outstanding issues. No baseline or blanket exception suppressions.
+Remaining debt includes 49 broad catches, 32 return-count findings,
+complexity/long-method issues and exception handling. Do not mark Phase 3
+complete or advance to Phase 4 until this cleanup is reviewed.
+
+Verified: full Kotlin formatting and scoped Detekt pass, 575 Flutter
+tests, 40 Android JVM tests, Android lint 0 errors/6 warnings, all 15
+Bash syntax checks, binary inventory/action pin verification. Structural
+assertions updated for whitespace, braces and named constants without
+removing the underlying checks. Standalone Linux host tests and fresh
+GitHub CI await verification. Old AGP metadata diagnostics persist;
+experimental toolchain promotion and device tests remain pending.

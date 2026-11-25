@@ -75,7 +75,7 @@ void main() {
       ).firstMatch(kt);
       expect(advertised, isNotNull);
       expect(kt, matches(RegExp(
-        r'"singboxProtocols" to\s*if \(singboxAvailable\)\s*singboxProtocols\s*else emptyList<String>\(\)',
+        r'"singboxProtocols"\s+to\s+if\s*\(singboxAvailable\)\s*\{\s*singboxProtocols\s*\}\s*else\s*\{\s*emptyList<String>\(\)\s*\}',
       )));
 
       final names = RegExp(r'"([a-z0-9]+)"')

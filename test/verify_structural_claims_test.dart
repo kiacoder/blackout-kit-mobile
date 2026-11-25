@@ -164,7 +164,10 @@ void main() {
       final svc = source(
           'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
       expect(svc.contains('if (holdTunnelOnFailure && tun != null)'), isTrue);
-      expect(svc.contains('.putBoolean(KEY_HELD_BLOCKING, true).apply()'), isTrue);
+      expect(
+          RegExp(r'\.putBoolean\(KEY_HELD_BLOCKING, true\)\s*\.apply\(\)')
+              .hasMatch(svc),
+          isTrue);
       expect(svc.contains('ticket.publish { notifyStatus("blocked") }'), isTrue);
       expect(svc.contains('isRunning = false'), isTrue);
     });
@@ -180,7 +183,8 @@ void main() {
       final compat = source(
           'android/app/src/main/kotlin/com/blackoutkit/vpn/ProcessCompat.kt');
       expect(compat, contains('System.nanoTime()'));
-      expect(compat, contains('Build.VERSION.SDK_INT >= 26'));
+      expect(compat, contains('FORCIBLE_DESTROY_MIN_API = 26'));
+      expect(compat, contains('Build.VERSION.SDK_INT >= FORCIBLE_DESTROY_MIN_API'));
       expect(compat, contains('process.destroyForcibly()'));
     });
   });
@@ -221,7 +225,9 @@ void main() {
       final plugin = source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
       final probe = plugin.split('private fun handleProbeSites(').last.split('private fun failedSite(').first;
       expect(probe, contains('NetworkCapabilities.TRANSPORT_VPN'));
-      expect(probe, contains('network.openConnection(target, Proxy.NO_PROXY)'));
+      expect(
+            probe,
+            matches(RegExp(r'network\.openConnection\(\s*target,\s*Proxy\.NO_PROXY,?\s*\)')));
       expect(probe, contains('if (native && network == null)'));
       expect(probe, contains('return@Thread'));
       expect(probe, contains('nativeSessionCurrent(session)'));

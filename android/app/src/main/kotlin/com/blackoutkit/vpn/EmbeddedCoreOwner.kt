@@ -46,6 +46,7 @@ internal class EmbeddedCoreOwner<T : Any>(
  * checked java.lang.Exception. Translate that ABI at one boundary; do not
  * consume fatal JVM errors or include native diagnostics in user-facing text.
  */
+@Suppress("TooGenericExceptionCaught")
 internal fun <T> embeddedCall(block: () -> T): Result<T> =
     try {
         Result.success(block())

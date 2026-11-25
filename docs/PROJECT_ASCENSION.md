@@ -555,3 +555,32 @@ Detekt, 575 Flutter tests, 60 Android JVM tests, Android lint, and 12
 binary checks passed. Fresh CI, physical-device verification, cross-
 engine admission and toolchain promotion remain outstanding. No main
 merge or production release.
+
+
+## Phase 3 Kotlin cleanup completion (batch 15, 2026-11-25)
+
+Full ktlint and Detekt gates pass for all 43 Kotlin files. The staged
+Detekt allowlist has been removed; the default and --audit commands
+now run the same full scan. VPN plugin responsibilities are separated
+into permission, connection, catalogue and diagnostic controllers.
+Service responsibilities are separated into native/proxy setup,
+engine selection, DNS-only setup, engine monitoring and foreground
+notification components. No baseline or globally disabled rules.
+One function-level TooGenericExceptionCaught suppression is documented
+for embeddedCall: the shipped gomobile ABI declares java.lang.Exception
+for newService/start/close/startLoop/stopLoop. Retain checked exception
+translation and interrupt restoration without swallowing fatal JVM
+errors. Existing scoped JNI naming exceptions remain. Unresolved
+Detekt findings 337 -> 0; full formatting gate passes.
+
+Added bounded retry for transient Maven download failures after prior
+39202ef push CI returned HTTP 429 (PR equivalent passed). SHA256
+validation and official Maven source unchanged. Mocked retry/404
+checks passed. A temporary unused/magic-number Kotlin fixture was
+rejected by the full gate, removed, and the clean gate passed again.
+575 Flutter tests, 60 Android JVM tests, lint 0 errors/6 warnings,
+12 binary checks and diff checks passed locally. Prior 39202ef APK,
+both iOS builds, Tests, host, Rust, OSV and supply-chain jobs passed.
+Kotlin cleanup complete; Phase 3 still has broader toolchain, existing
+lint warnings and quality work. Fresh full CI and physical-device
+validation remain open. No main merge/release.

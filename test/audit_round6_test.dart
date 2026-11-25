@@ -96,7 +96,7 @@ void main() {
       final subprocess = kt
           .split('private fun startSingboxSubprocess(')
           .last
-          .split('private fun establishDnsOnly(')
+          .split('private inner class DnsSetup')
           .first;
       final refusal = RegExp(
         r'singboxConfig\.isNullOrBlank\(\)\s*->\s*\{[^}]*\bfalse\s*\}',

@@ -236,7 +236,7 @@ void main() {
       expect(probe, contains('check(!request.native)'));
       expect(probe, contains('nativeSessionCurrent(session)'));
       final service = source('android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
-      final native = service.split('private fun establishNative(').last.split('private fun establish(').first;
+      final native = service.split('private inner class NativeSetup').last.split('private inner class ProxySetup').first;
       expect(native, contains('(request.allowed + packageName).distinct()'));
       expect(native, isNot(contains('(request.disallowed + packageName)')));
       expect(native, contains('NativeTunnelEngine.start('));

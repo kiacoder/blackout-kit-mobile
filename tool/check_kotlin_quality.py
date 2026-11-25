@@ -4,6 +4,8 @@ import hashlib
 import os
 from pathlib import Path
 import subprocess
+import time
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,48 +21,26 @@ TOOLS = {
         "3afe89a11120303c73c9bdda3d8fe558dd9070a6937d27819ddc04b275381245",
     ),
 }
-# Strict scope expands as existing findings are fixed, not silently suppressed.
-GATED = [
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/OneShotCallbackSlot.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/GoRuntimeAdmission.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/SubprocessLifecycle.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/VpnSessionExecutor.kt",
-    "android/app/src/main/kotlin/com/wireguard/android/backend/GoBackend.kt",
-    "android/app/src/main/kotlin/org/amnezia/awg/GoBackend.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/GoRuntimeAdmissionTest.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/NativeTunnelConfigTest.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/OneShotCallbackSlotTest.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/SubprocessLifecycleTest.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/VpnSessionExecutorTest.kt",
-    "tool/kotlin/android/os/Build.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutCoreEngine.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/LocalSocksReadiness.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/NativeChildStop.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/NativeTunnelConfig.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/NativeTunnelEngine.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/NativeTunnelLifecycle.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/ProcessCompat.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCommands.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/MainActivity.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/NetworkPlugin.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/UpdatePlugin.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/BoundedImport.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/BoundedImportTest.kt",
-    "tool/kotlin/com/blackoutkit/vpn/EngineHostTests.kt",
-    "tool/kotlin/com/blackoutkit/vpn/NativeTunnelConfigTests.kt",
-    "tool/kotlin/com/blackoutkit/vpn/NativeTunnelLifecycleTests.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/SiteProbeRunner.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/SiteProbeRunnerTest.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/LibboxEngine.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/XrayEngine.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/EmbeddedCoreOwnerTest.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/TunnelCleanup.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/TunnelCleanupTest.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCatalogue.kt",
-    "android/app/src/test/kotlin/com/blackoutkit/vpn/EngineCatalogueTest.kt",
-    "android/app/src/main/kotlin/com/blackoutkit/vpn/ProbeEngineController.kt",
-]
+# All production and test Kotlin sources, with no baseline or partial allowlist.
+DETEKT_INPUTS = ["android/app/src", "tool/kotlin"]
+DOWNLOAD_ATTEMPTS = 4
+RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
+
+
+def download(url, target):
+    for attempt in range(DOWNLOAD_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response, target.open("wb") as output:
+                while chunk := response.read(1024 * 1024):
+                    output.write(chunk)
+            return
+        except urllib.error.HTTPError as error:
+            if error.code not in RETRYABLE_HTTP_STATUS or attempt + 1 == DOWNLOAD_ATTEMPTS:
+                raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt + 1 == DOWNLOAD_ATTEMPTS:
+                raise
+        time.sleep(5 * 2**attempt)
 
 
 def digest(path):
@@ -75,9 +55,7 @@ def jar(name):
     if not path.exists():
         temp = path.with_suffix(".part")
         try:
-            with urllib.request.urlopen(MAVEN + url, timeout=60) as response, temp.open("wb") as output:
-                while chunk := response.read(1024 * 1024):
-                    output.write(chunk)
+            download(MAVEN + url, temp)
             if digest(temp) != expected:
                 raise RuntimeError(f"{name} download checksum mismatch")
             temp.replace(path)
@@ -90,14 +68,11 @@ def jar(name):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--audit", action="store_true", help="Scan all Kotlin files; fail on findings")
-    args = parser.parse_args()
+    parser.add_argument("--audit", action="store_true", help="Compatibility alias; full audit is always enforced")
+    parser.parse_args()
     java = str(Path(os.environ["JAVA_HOME"]) / "bin" / "java") if "JAVA_HOME" in os.environ else "java"
-    for file in GATED:
-        if not (ROOT / file).is_file():
-            raise RuntimeError(f"Missing gated source: {file}")
     lint_inputs = ["android/app/src/**/*.kt", "tool/kotlin/**/*.kt"]
-    detekt_inputs = ["android/app/src", "tool/kotlin"] if args.audit else GATED
+    detekt_inputs = DETEKT_INPUTS
     lint = subprocess.run(
         [java, "-jar", str(jar("ktlint")), "--relative", *lint_inputs],
         cwd=ROOT, check=False,

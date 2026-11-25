@@ -348,3 +348,21 @@ until a deliberate boundary review. No additional Detekt suppressions.
 Remaining 33 broad catches, 17 return counts, 10 long methods, 9
 complexity, 14 other findings. Fresh CI/device validation pending;
 Phase 3 not complete, no main merge or release.
+
+
+## Phase 3 VPN service and plugin cleanup batch 5 (2026-11-25)
+
+Prior af718dc hosted Kotlin, host, Tests and supply-chain checks passed;
+APK and iOS builds were pending at inspection. Extracted connection
+intent construction, consent dispatch and timeout scheduling from the
+plugin. Grouped service request parameters in a private non-data class
+(no generated configuration-revealing toString), preserving native
+extra removal, callback capture and session ticket checks. Simplified
+notification permission, HTTP status handling and IP matching control
+flow. Detekt 83 -> 71 weighted findings; all three long-parameter-list
+findings resolved. Strict scope remains 25 files. Full ktlint, scoped
+Detekt, 575 Flutter tests, Android JVM tests and lint passed locally.
+Remaining 33 broad catches, 11 return counts, 9 long methods, 7
+complexity, 11 other findings. No new suppressions. Old toolchain
+metadata diagnostics, native device validation and fresh CI remain
+open. Phase 3 remains incomplete; no main merge or release.

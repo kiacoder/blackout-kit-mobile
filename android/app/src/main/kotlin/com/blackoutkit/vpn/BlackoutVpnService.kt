@@ -340,6 +340,14 @@ class BlackoutVpnService : VpnService() {
         // Must happen promptly and on the main thread, so it stays here.
         startForegroundCompat()
 
+        startRequestedSession(StartRequest(intent), startId)
+        return START_NOT_STICKY
+    }
+
+    // Deliberately not a data class: engine configuration strings may contain credentials.
+    private class StartRequest(
+        intent: Intent?,
+    ) {
         val protocol = intent?.getStringExtra(EXTRA_PROTOCOL) ?: "unknown"
         val displayName = intent?.getStringExtra(EXTRA_DISPLAY_NAME) ?: "Blackout Kit"
         val socksPort =
@@ -359,62 +367,44 @@ class BlackoutVpnService : VpnService() {
         val mihomoConfig = intent?.getStringExtra(EXTRA_MIHOMO_CONFIG)
         val libboxConfig = intent?.getStringExtra(EXTRA_LIBBOX_CONFIG)
         val nativeConfig = intent?.getStringExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
-        intent?.removeExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
-        val dnsOnly = intent?.getBooleanExtra(EXTRA_DNS_ONLY, false) ?: false
 
+        init {
+            intent?.removeExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
+        }
+
+        val dnsOnly = intent?.getBooleanExtra(EXTRA_DNS_ONLY, false) ?: false
+    }
+
+    private fun startRequestedSession(
+        request: StartRequest,
+        startId: Int,
+    ) {
         // Capture this request's callback; a late start may not consume a
         // later connection's callback. Ticket checks also run at UI delivery.
         val completion = connectResultCallback
         sessions.start(cleanup = ::teardown, start = { ticket ->
-            if (dnsOnly) {
-                establishDnsOnly(dnsServers, displayName, ticket)
-            } else if (nativeConfig != null) {
-                establishNative(
-                    protocol,
-                    nativeConfig,
-                    displayName,
-                    dnsServers,
-                    allowed,
-                    disallowed,
-                    holdOnFailure,
-                    ticket,
-                )
-            } else {
-                establish(
-                    protocol = protocol,
-                    displayName = displayName,
-                    socksPort = socksPort,
-                    dnsServers = dnsServers,
-                    allowed = allowed,
-                    disallowed = disallowed,
-                    holdOnFailure = holdOnFailure,
-                    xrayConfig = xrayConfig,
-                    singboxConfig = singboxConfig,
-                    libboxConfig = libboxConfig,
-                    mihomoConfig = mihomoConfig,
-                    ticket = ticket,
-                )
+            when {
+                request.dnsOnly -> establishDnsOnly(request.dnsServers, request.displayName, ticket)
+                request.nativeConfig != null -> establishNative(request, request.nativeConfig, ticket)
+                else -> establish(request, ticket)
             }
         }, complete = { ok ->
             clearConnectResultCallback(completion)
             completion?.invoke(ok)
             if (!ok) finishService(startId)
         })
-
-        return START_NOT_STICKY
     }
 
     /** Native IP tunnel: never send WG/AWG through a SOCKS/proxy TUN adapter. */
     private fun establishNative(
-        protocol: String,
+        request: StartRequest,
         raw: String,
-        displayName: String,
-        dnsServers: List<String>,
-        allowed: List<String>,
-        disallowed: List<String>,
-        holdOnFailure: Boolean,
         ticket: VpnSessionExecutor.Ticket,
     ): Boolean {
+        val protocol = request.protocol
+        val displayName = request.displayName
+        val allowed = request.allowed
+        val disallowed = request.disallowed
         lastError = null
         return try {
             if (!NativeTunnelEngine.available(protocol)) {
@@ -433,7 +423,7 @@ class BlackoutVpnService : VpnService() {
             config.addresses.forEach { builder.addAddress(it.address, it.prefix) }
             config.routes.forEach { builder.addRoute(it.address, it.prefix) }
             // Reject uncovered DNS rather than allowing carrier fallback.
-            config.routedDns(dnsServers).forEach { builder.addDnsServer(it) }
+            config.routedDns(request.dnsServers).forEach { builder.addDnsServer(it) }
             if (allowed.isNotEmpty()) {
                 (allowed + packageName).distinct().forEach {
                     builder.addAllowedApplication(it)
@@ -444,7 +434,7 @@ class BlackoutVpnService : VpnService() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
             val fd = builder.establish() ?: error("No TUN")
             tun = fd
-            holdTunnelOnFailure = holdOnFailure
+            holdTunnelOnFailure = request.holdOnFailure
             if (!NativeTunnelEngine.start(this, protocol, fd, settings)) {
                 lastError = NativeTunnelEngine.lastError
                 ticket.publish { notifyStatus("error") }
@@ -475,19 +465,15 @@ class BlackoutVpnService : VpnService() {
     }
 
     private fun establish(
-        protocol: String,
-        displayName: String,
-        socksPort: Int,
-        dnsServers: List<String>,
-        allowed: List<String>,
-        disallowed: List<String>,
-        holdOnFailure: Boolean,
-        xrayConfig: String?,
-        singboxConfig: String?,
-        libboxConfig: String?,
-        mihomoConfig: String?,
+        request: StartRequest,
         ticket: VpnSessionExecutor.Ticket,
     ): Boolean {
+        val protocol = request.protocol
+        val displayName = request.displayName
+        val socksPort = request.socksPort
+        val dnsServers = request.dnsServers
+        val allowed = request.allowed
+        val disallowed = request.disallowed
         lastError = null
         if (protocol == "mihomo" && allowed.contains(packageName)) {
             lastError = "Mihomo's subprocess must remain outside its VPN. Remove Blackout from the allowed-app list."
@@ -593,7 +579,7 @@ class BlackoutVpnService : VpnService() {
 
             // Arm the kill switch before the engine starts, so a crash during
             // startup is caught too.
-            holdTunnelOnFailure = holdOnFailure
+            holdTunnelOnFailure = request.holdOnFailure
             XrayEngine.unexpectedStopListener = { reason -> onEngineDied(reason, ticket) }
             EngineRunner.onUnexpectedExit = { reason -> onEngineDied(reason, ticket) }
 
@@ -620,7 +606,7 @@ class BlackoutVpnService : VpnService() {
             // traffic would be black-holed by the default route just installed.
             engineTunFd = engineFd
             val engineOk =
-                startEngine(protocol, xrayConfig, singboxConfig, libboxConfig, engineFd.fd, socksPort, mihomoConfig)
+                startEngine(request, engineFd.fd)
             if (!engineOk) {
                 // The engine sets its own lastError with the REAL reason
                 // ("Xray core rejected the configuration: ..."). It used to
@@ -670,14 +656,15 @@ class BlackoutVpnService : VpnService() {
      * caller, not a reason to fall through to an engine that cannot serve it.
      */
     private fun startEngine(
-        protocol: String,
-        xrayConfig: String?,
-        singboxConfig: String?,
-        libboxConfig: String?,
+        request: StartRequest,
         tunFd: Int,
-        socksPort: Int,
-        mihomoConfig: String?,
     ): Boolean {
+        val protocol = request.protocol
+        val xrayConfig = request.xrayConfig
+        val singboxConfig = request.singboxConfig
+        val libboxConfig = request.libboxConfig
+        val socksPort = request.socksPort
+        val mihomoConfig = request.mihomoConfig
         if (protocol == "mihomo") {
             if (!BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO || mihomoConfig.isNullOrBlank()) {
                 lastError = "Mihomo is experimental and disabled, or its configuration is missing."
@@ -922,17 +909,18 @@ class BlackoutVpnService : VpnService() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel =
-            NotificationChannel(
-                CHANNEL_ID,
-                "VPN status",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Shown while the Blackout Kit tunnel is active"
-                setShowBadge(false)
-            }
-        manager.createNotificationChannel(channel)
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+            val channel =
+                NotificationChannel(
+                    CHANNEL_ID,
+                    "VPN status",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "Shown while the Blackout Kit tunnel is active"
+                    setShowBadge(false)
+                }
+            manager.createNotificationChannel(channel)
+        }
     }
 
     private fun buildNotification(): Notification {

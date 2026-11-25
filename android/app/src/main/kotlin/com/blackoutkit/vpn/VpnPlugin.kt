@@ -376,12 +376,9 @@ class VpnPlugin :
             result.success(false)
             return
         }
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
-            result.success(true) // install-time permission before 13
-            return
-        }
         val granted =
-            act.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+                act.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) {
             result.success(true)
@@ -409,6 +406,13 @@ class VpnPlugin :
             return
         }
 
+        requestConsent(consent, result)
+    }
+
+    private fun requestConsent(
+        consent: Intent,
+        result: MethodChannel.Result,
+    ) {
         val act = activity
         if (act == null) {
             result.error("NO_ACTIVITY", "VPN consent needs a foreground Activity", null)
@@ -437,15 +441,21 @@ class VpnPlugin :
             result.error("NO_CONTEXT", "Plugin is not attached to a Flutter engine", null)
             return
         }
-        if (VpnService.prepare(ctx) != null) {
-            result.error("NOT_PREPARED", "VPN consent has not been granted - call prepare() first", null)
-            return
+        when {
+            VpnService.prepare(ctx) != null ->
+                result.error("NOT_PREPARED", "VPN consent has not been granted - call prepare() first", null)
+            pendingConnect != null || disconnectInFlight ->
+                result.error("BUSY", "A VPN lifecycle operation is already in flight", null)
+            else -> beginConnect(ctx, call, result, dnsOnly)
         }
-        if (pendingConnect != null || disconnectInFlight) {
-            result.error("BUSY", "A VPN lifecycle operation is already in flight", null)
-            return
-        }
+    }
 
+    private fun beginConnect(
+        ctx: Context,
+        call: MethodCall,
+        result: MethodChannel.Result,
+        dnsOnly: Boolean,
+    ) {
         pendingConnect = result
         BlackoutVpnService.connectResultCallback = { ok -> resolveConnect(ok) }
 
@@ -453,51 +463,7 @@ class VpnPlugin :
         // getConnectedIP can dial the tunnel later.
         lastSocksPort = call.argument<Int>("socksPort") ?: BlackoutVpnService.DEFAULT_SOCKS_PORT
 
-        val intent =
-            Intent(ctx, BlackoutVpnService::class.java).apply {
-                action = BlackoutVpnService.ACTION_CONNECT
-                putExtra(BlackoutVpnService.EXTRA_PROTOCOL, call.argument<String>("protocol"))
-                putExtra(BlackoutVpnService.EXTRA_DISPLAY_NAME, call.argument<String>("displayName"))
-                putExtra(
-                    BlackoutVpnService.EXTRA_SOCKS_PORT,
-                    call.argument<Int>("socksPort") ?: BlackoutVpnService.DEFAULT_SOCKS_PORT,
-                )
-                putExtra(BlackoutVpnService.EXTRA_DNS, call.argument<String>("dns"))
-                putStringArrayListExtra(
-                    BlackoutVpnService.EXTRA_DNS_SERVERS,
-                    ArrayList(call.argument<List<String>>("dnsServers") ?: emptyList()),
-                )
-                putExtra(
-                    BlackoutVpnService.EXTRA_HOLD_ON_ENGINE_FAILURE,
-                    call.argument<Boolean>("holdTunnelOnEngineFailure") ?: false,
-                )
-                // Present only for Xray-family protocols; its presence is what
-                // selects the in-process core over the subprocess runner.
-                putExtra(
-                    BlackoutVpnService.EXTRA_XRAY_CONFIG,
-                    call.argument<String>("xrayConfig"),
-                )
-                putExtra(
-                    BlackoutVpnService.EXTRA_SINGBOX_CONFIG,
-                    call.argument<String>("singboxConfig"),
-                )
-                putExtra(
-                    BlackoutVpnService.EXTRA_LIBBOX_CONFIG,
-                    call.argument<String>("libboxConfig"),
-                )
-                putStringArrayListExtra(
-                    BlackoutVpnService.EXTRA_ALLOWED_APPS,
-                    ArrayList(call.argument<List<String>>("allowedApps") ?: emptyList()),
-                )
-                putStringArrayListExtra(
-                    BlackoutVpnService.EXTRA_DISALLOWED_APPS,
-                    ArrayList(call.argument<List<String>>("disallowedApps") ?: emptyList()),
-                )
-                putExtra(BlackoutVpnService.EXTRA_NATIVE_TUNNEL_CONFIG, call.argument<String>("nativeTunnelConfig"))
-                putExtra(BlackoutVpnService.EXTRA_MIHOMO_CONFIG, call.argument<String>("mihomoConfig"))
-                putExtra(BlackoutVpnService.EXTRA_DNS_ONLY, dnsOnly)
-            }
-
+        val intent = connectIntent(ctx, call, dnsOnly)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ctx.startForegroundService(intent)
@@ -508,7 +474,59 @@ class VpnPlugin :
             resolveConnect(false, "Could not start the VPN service: ${e.message}")
             return
         }
+        scheduleConnectTimeout(ctx)
+    }
 
+    private fun connectIntent(
+        ctx: Context,
+        call: MethodCall,
+        dnsOnly: Boolean,
+    ): Intent =
+        Intent(ctx, BlackoutVpnService::class.java).apply {
+            action = BlackoutVpnService.ACTION_CONNECT
+            putExtra(BlackoutVpnService.EXTRA_PROTOCOL, call.argument<String>("protocol"))
+            putExtra(BlackoutVpnService.EXTRA_DISPLAY_NAME, call.argument<String>("displayName"))
+            putExtra(
+                BlackoutVpnService.EXTRA_SOCKS_PORT,
+                call.argument<Int>("socksPort") ?: BlackoutVpnService.DEFAULT_SOCKS_PORT,
+            )
+            putExtra(BlackoutVpnService.EXTRA_DNS, call.argument<String>("dns"))
+            putStringArrayListExtra(
+                BlackoutVpnService.EXTRA_DNS_SERVERS,
+                ArrayList(call.argument<List<String>>("dnsServers") ?: emptyList()),
+            )
+            putExtra(
+                BlackoutVpnService.EXTRA_HOLD_ON_ENGINE_FAILURE,
+                call.argument<Boolean>("holdTunnelOnEngineFailure") ?: false,
+            )
+            // Present only for Xray-family protocols; its presence is what
+            // selects the in-process core over the subprocess runner.
+            putExtra(
+                BlackoutVpnService.EXTRA_XRAY_CONFIG,
+                call.argument<String>("xrayConfig"),
+            )
+            putExtra(
+                BlackoutVpnService.EXTRA_SINGBOX_CONFIG,
+                call.argument<String>("singboxConfig"),
+            )
+            putExtra(
+                BlackoutVpnService.EXTRA_LIBBOX_CONFIG,
+                call.argument<String>("libboxConfig"),
+            )
+            putStringArrayListExtra(
+                BlackoutVpnService.EXTRA_ALLOWED_APPS,
+                ArrayList(call.argument<List<String>>("allowedApps") ?: emptyList()),
+            )
+            putStringArrayListExtra(
+                BlackoutVpnService.EXTRA_DISALLOWED_APPS,
+                ArrayList(call.argument<List<String>>("disallowedApps") ?: emptyList()),
+            )
+            putExtra(BlackoutVpnService.EXTRA_NATIVE_TUNNEL_CONFIG, call.argument<String>("nativeTunnelConfig"))
+            putExtra(BlackoutVpnService.EXTRA_MIHOMO_CONFIG, call.argument<String>("mihomoConfig"))
+            putExtra(BlackoutVpnService.EXTRA_DNS_ONLY, dnsOnly)
+        }
+
+    private fun scheduleConnectTimeout(ctx: Context) {
         val timeout =
             Runnable {
                 if (pendingConnect != null) {
@@ -699,9 +717,10 @@ class VpnPlugin :
             val code = conn.responseCode
             if (code !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
                 Log.w(TAG, "Tunnel fetch returned HTTP $code")
-                return null
+                null
+            } else {
+                conn.inputStream.bufferedReader().use { it.readText() }
             }
-            conn.inputStream.bufferedReader().use { it.readText() }
         } catch (e: Exception) {
             // A failed probe must never surface as an error to the UI: the
             // status row simply stays hidden, which is the honest degradation.
@@ -1159,22 +1178,22 @@ class VpnPlugin :
     }
 
     /** True for an IPv4 literal (or a colon-separated IPv6 literal). */
-    private fun looksLikeIp(value: String): Boolean {
-        if (value.isEmpty()) return false
-        if (Patterns.IP_ADDRESS.matcher(value).matches()) return true
-        // IPv6 from the echo service on a v6-only exit: hex groups joined by
-        // colons. Deliberately narrow — no zone ids, no embedded IPv4.
-        if (!value.contains(':')) return false
+    private fun looksLikeIp(value: String): Boolean =
+        value.isNotEmpty() &&
+            (Patterns.IP_ADDRESS.matcher(value).matches() || looksLikeIpv6(value))
+
+    // Preserve the existing narrow IPv6 fallback (no zone ids or embedded IPv4).
+    private fun looksLikeIpv6(value: String): Boolean {
         val groups = value.split(':')
-        if (groups.size !in MIN_IPV6_TEXT_GROUPS..MAX_IPV6_GROUPS) return false
-        return groups.all { group ->
-            (group.isEmpty() && value.contains("::")) ||
-                (
-                    group.isNotEmpty() &&
-                        group.length <= MAX_IPV6_GROUP_LENGTH &&
-                        group.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
-                )
-        }
+        return groups.size in MIN_IPV6_TEXT_GROUPS..MAX_IPV6_GROUPS &&
+            groups.all { group ->
+                (group.isEmpty() && value.contains("::")) ||
+                    (
+                        group.isNotEmpty() &&
+                            group.length <= MAX_IPV6_GROUP_LENGTH &&
+                            group.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
+                    )
+            }
     }
 
     /**

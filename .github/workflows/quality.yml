@@ -21,6 +21,19 @@ jobs:
       - name: Check tracked shell scripts
         run: bash tool/check_shell_quality.sh
 
+  native-launcher:
+    name: Native launcher parent guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test parent exit behavior on Linux
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Iandroid/app/src/main/cpp tool/test_parent_guard.c -o /tmp/blackout-parent-guard-test
+          /tmp/blackout-parent-guard-test
+
   kotlin:
     name: Kotlin static analysis and formatting
     runs-on: ubuntu-latest

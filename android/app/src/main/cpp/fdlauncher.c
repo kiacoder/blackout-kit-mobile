@@ -32,6 +32,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <unistd.h>
+#include "parent_guard.h"
 
 #define LOG_TAG "fdlauncher"
 #define LOGF(fmt, ...) \
@@ -46,8 +47,10 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
         jint fd, jstring jLogPath) {
     (void) thiz;
     const char *path = (*env)->GetStringUTFChars(env, jPath, NULL);
+    if (path == NULL) return -1;
     const char *logPath = jLogPath ? (*env)->GetStringUTFChars(env, jLogPath, NULL) : NULL;
-    if (path == NULL) {
+    if (jLogPath && !logPath) {
+        (*env)->ReleaseStringUTFChars(env, jPath, path);
         return -1;
     }
 
@@ -63,19 +66,35 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
     int slot = 1;
     for (jsize i = 0; i < argCount; i++) {
         jstring arg = (jstring) (*env)->GetObjectArrayElement(env, jArgs, i);
-        const char *utf = (*env)->GetStringUTFChars(env, arg, NULL);
-        argv[slot++] = utf ? strdup(utf) : strdup("");
+        const char *utf = arg ? (*env)->GetStringUTFChars(env, arg, NULL) : NULL;
+        char *copy = utf ? strdup(utf) : NULL;
         if (utf) (*env)->ReleaseStringUTFChars(env, arg, utf);
-        (*env)->DeleteLocalRef(env, arg);
+        if (arg) (*env)->DeleteLocalRef(env, arg);
+        if (!copy) {
+            for (int k = 1; k < slot; k++) free(argv[k]);
+            free(argv);
+            (*env)->ReleaseStringUTFChars(env, jPath, path);
+            if (logPath) (*env)->ReleaseStringUTFChars(env, jLogPath, logPath);
+            return -1;
+        }
+        argv[slot++] = copy;
     }
     argv[slot] = NULL;
 
     /* Open the log before forking so both sides agree on the descriptor. */
     int logFd = -1;
     if (logPath != NULL) {
-        logFd = open(logPath, O_WRONLY | O_CREAT | O_APPEND, 0600);
+        logFd = open(logPath, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+        if (logFd < 0) {
+            for (int i = 1; i < slot; i++) free(argv[i]);
+            free(argv);
+            (*env)->ReleaseStringUTFChars(env, jPath, path);
+            (*env)->ReleaseStringUTFChars(env, jLogPath, logPath);
+            return -1;
+        }
     }
 
+    pid_t expected_parent = getpid();
     pid_t pid = fork();
     if (pid < 0) {
         LOGF("fork failed: %s", strerror(errno));
@@ -88,7 +107,10 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
     }
 
     if (pid == 0) {
-        /* Child. */
+        /* Child: never keep the TUN alive beyond its launcher owner. */
+        if (arm_parent_guard(expected_parent) != 0) {
+            _exit(126);
+        }
         /*
          * First, duplicate the VPN tunnel descriptor to a safe high slot so
          * stdout/stderr redirection and logFd manipulation cannot clobber it
@@ -96,12 +118,16 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
          */
         int vpnFd = fcntl(fd, F_DUPFD_CLOEXEC, 100);
         if (vpnFd < 0) {
-            vpnFd = fd;
+            _exit(126);
         }
 
         if (logFd >= 0) {
-            dup2(logFd, STDOUT_FILENO);
-            dup2(logFd, STDERR_FILENO);
+            if (dup2(logFd, STDOUT_FILENO) < 0 ||
+                dup2(logFd, STDERR_FILENO) < 0 ||
+                fcntl(STDOUT_FILENO, F_SETFD, 0) < 0 ||
+                fcntl(STDERR_FILENO, F_SETFD, 0) < 0) {
+                _exit(126);
+            }
             if (logFd != STDOUT_FILENO && logFd != STDERR_FILENO) {
                 close(logFd);
             }
@@ -111,8 +137,7 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
          * The engine reads the tunnel from fd 3. Copy the descriptor there.
          */
         if (dup2(vpnFd, 3) < 0) {
-            /* Report through the log fd; the parent sees exit code 126. */
-            LOGF("dup2(vpnFd=%d, 3) failed: %s", vpnFd, strerror(errno));
+            /* Avoid non-async-signal-safe logging after fork. */
             _exit(126);
         }
 
@@ -124,7 +149,7 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
          * then closed fd 3, causing tun2socks to immediately crash with:
          * "unix.SetNonblock(3) failed: bad file descriptor (EBADF)".
          */
-        fcntl(3, F_SETFD, 0);
+        if (fcntl(3, F_SETFD, 0) < 0) _exit(126);
 
         /* Keep the child from holding the parent's other descriptors. */
         for (int d = 4; d < 128; d++) {
@@ -132,7 +157,6 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
         }
         execv(path, argv);
         /* execv only returns on failure; 127 tells the caller so. */
-        LOGF("execv(\"%s\") failed: %s", path, strerror(errno));
         _exit(127);
     }
 

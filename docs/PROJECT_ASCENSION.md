@@ -669,3 +669,26 @@ Full ktlint/Detekt, 578 Flutter tests, 67 Android JVM tests, strict
 Android lint and 12 binary checks passed locally. Existing AGP metadata
 diagnostics remain pending toolchain upgrade; fresh CI and device
 acceptance remain outstanding. No current MobSF score or release.
+
+
+## Phase 3 native launcher parent-death and provenance review (2026-11-25)
+
+Added Linux parent-death guard for JNI-launched tun2socks: install
+PR_SET_PDEATHSIG before exec and reject mismatched parent PID. This
+protects the launcher's direct child, not Java ProcessBuilder children
+or arbitrary descendants. Linux parent-thread lifetime semantics
+require an enduring service worker; Android device validation remains
+open. Native setup now fails closed on JNI argument allocation, log
+open, fd duplication and close-on-exec setup failures. Avoid Android
+logging in the child between fork and exec. Added a Linux regression
+for parent exit and mismatched parent; passed under Ubuntu WSL and
+wired into pinned GitHub quality workflow. Existing higher-descriptor
+inheritance, PID reuse/reaping race, older orphans and crash-residue
+cleanup remain separate tasks.
+
+Read-only Go module metadata and public checksum database review
+identified tun2socks v2.7.0 and corroborated three upstream module
+checksums; merged libbox still lacks exact source revision. See
+NATIVE_ARTIFACTS.md. No binary hashes or engine versions changed.
+Fresh hosted tests, Android device checks and MobSF/VirusTotal score
+remain open; no production merge or release.

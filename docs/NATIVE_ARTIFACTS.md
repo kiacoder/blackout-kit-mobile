@@ -228,3 +228,23 @@ upgrade, independently verified archive, fresh builds and repeat
 module/stdlib scans still required. Zero version matches does not
 prove vulnerability absence or runtime reachability. No native
 binary promotion; Android device acceptance still outstanding.
+
+
+## Go 1.27.4 patched rebuild path (2026-11-25)
+
+Official go.dev download metadata lists Windows archive SHA256
+178ab98950ac69ab25069307dc6ade79f3816e414cce95b4da166a115cde1e7e
+and Linux amd64 archive SHA256
+7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840.
+Windows official archive endpoints returned HTTP404 and Go toolchain
+module proxy returned HTTP403. No compiler was installed or replaced.
+New --patched mode requires exact Go1.27.4, immutable candidate
+go.mod/go.sum snapshots, readonly compilation, exact linked dependency
+graph, module cache verification, fresh build cache, and live OSV
+module plus stdlib screening. Any findings or incomplete scan block
+candidate publication. New workflow uses two independent Linux runners
+per engine, checksum-verified official Go archive, pinned NDK revision
+and fresh module caches. Artifact hashes are recorded for later
+comparison; independent reproducibility not yet demonstrated.
+NDK package authenticity beyond SDK manager/revision not established.
+No production binaries changed.

@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
+import tempfile
 import unittest
 
 from tool.build_pinned_go_engines import (
     ENGINES, decode_module_downloads, dependency_diff, validate_lock,
-    verify_build_info, verify_source,
+    prepare_patched_workspace, verify_build_info, verify_patched_workspace, verify_source,
 )
 
 
@@ -88,3 +89,17 @@ class PinnedGoEngineTests(unittest.TestCase):
         for bad in (good + good, '{"Path":"one","Error":"missing"}'):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 decode_module_downloads(bad)
+
+    def test_patched_snapshots_are_consistent_and_detect_mutation(self):
+        for engine, pin in ENGINES.items():
+            with self.subTest(engine=engine), tempfile.TemporaryDirectory() as directory:
+                workspace = Path(directory)
+                modules, digests = prepare_patched_workspace(engine, pin, workspace)
+                info = "\n".join("\tdep\t" + name + "\t" + "\t".join(value)
+                                 for name, value in sorted(modules.items()))
+                verify_patched_workspace(workspace, info, modules, digests)
+                with self.assertRaisesRegex(ValueError, "dependency graph differs"):
+                    verify_patched_workspace(workspace, info + "\n\tdep\textra\tv1.0.0\th1:new", modules, digests)
+                (workspace / "go.sum").write_text("changed")
+                with self.assertRaisesRegex(ValueError, "inputs changed"):
+                    verify_patched_workspace(workspace, info, modules, digests)

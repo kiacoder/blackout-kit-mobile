@@ -898,3 +898,16 @@ Python/Flutter tests needed for snapshot-only changes; previous
 74 Python and 578 Flutter tests remain last runs. Runtime
 acceptance and source provenance for merged AAR still pending.
 No main merge or release.
+
+
+## Phase 3 patched compiler rebuild automation (2026-11-25)
+
+Official Go1.27.4 Windows archive unavailable (404), module zip
+blocked (403). Existing compiler unchanged. Strict patched builder
+rejects old compiler, snapshot mutation, unexpected dependencies,
+findings or incomplete fresh OSV scan including stdlib. Added clean
+Linux replica workflow with archive SHA256 pin and independent caches.
+75/75 Linux Python tests, 12 tracked binary checks and real negative
+compiler gate passed. Hosted clean builds and hash comparison not
+yet verified; no new patched binaries claimed. No device acceptance
+or main merge/release.

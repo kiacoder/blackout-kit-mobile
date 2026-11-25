@@ -54,8 +54,7 @@ def request_batch(queries):
     raise RuntimeError("Unreachable retry state")
 
 
-def audit(root, fetch=request_batch):
-    owners, hashes = load_queries(root)
+def query_findings(owners, fetch=request_batch):
     findings = []
     keys = sorted(owners)
     for start in range(0, len(keys), 50):
@@ -81,10 +80,16 @@ def audit(root, fetch=request_batch):
                 findings.append({"module": name, "version": version,
                                  "engines": owners[(name, version)], "id": identifier,
                                  "modified": advisory.get("modified")})
+    return findings
+
+
+def audit(root, fetch=request_batch):
+    owners, hashes = load_queries(root)
+    findings = query_findings(owners, fetch)
     return {"schema": 1, "source": URL,
             "checked_at": datetime.now(timezone.utc).isoformat(),
             "scope": "linked-module-version-only; no reachability or standard-library assessment",
-            "lock_sha256": hashes, "unique_module_versions": len(keys),
+            "lock_sha256": hashes, "unique_module_versions": len(owners),
             "findings": findings}
 
 

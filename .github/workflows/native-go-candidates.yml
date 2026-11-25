@@ -1,0 +1,62 @@
+name: Patched native Go candidate builds
+on:
+  workflow_dispatch:
+  push:
+    branches: ['arena/**', main]
+    paths:
+      - 'tool/build_pinned_go_engines.py'
+      - 'tool/audit_go_engine_locks.py'
+      - 'tool/go_engine_candidates/**'
+      - '.github/workflows/native-go-candidates.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'tool/build_pinned_go_engines.py'
+      - 'tool/audit_go_engine_locks.py'
+      - 'tool/go_engine_candidates/**'
+      - '.github/workflows/native-go-candidates.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Clean candidate (${{ matrix.engine }}, replica ${{ matrix.replica }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [tun2socks, singbox]
+        replica: [1, 2]
+    env:
+      ENGINE: ${{ matrix.engine }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Verify and extract pinned Go archive
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/go1.27.4.linux-amd64.tar.gz"
+          curl --fail --location --retry 3 --max-time 300 --output "$archive" https://go.dev/dl/go1.27.4.linux-amd64.tar.gz
+          echo "7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840  $archive" | sha256sum --check
+          mkdir "$RUNNER_TEMP/verified-go"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/verified-go"
+          echo "$RUNNER_TEMP/verified-go/go/bin" >> "$GITHUB_PATH"
+      - name: Install pinned Android NDK revision
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+      - name: Build patched snapshots in fresh module and compiler caches
+        run: |
+          python tool/build_pinned_go_engines.py --engine "$ENGINE" --patched --ndk "$ANDROID_HOME/ndk/28.2.13676358" --output ".cache/patched-$ENGINE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-go-${{ matrix.engine }}-${{ matrix.replica }}
+          path: .cache/patched-${{ matrix.engine }}/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

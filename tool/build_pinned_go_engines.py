@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build isolated Android candidates from pinned Go modules; never stage into app."""
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -12,11 +13,14 @@ import tempfile
 
 if __package__:
     from .check_android_artifact import validate
+    from .audit_go_engine_locks import query_findings
 else:
     from check_android_artifact import validate
+    from audit_go_engine_locks import query_findings
 
 ROOT = Path(__file__).resolve().parents[1]
 GO_VERSION = "go1.27.0"
+PATCHED_GO_VERSION = "go1.27.4"
 NDK_VERSION = "28.2.13676358"
 ENGINES = {
     "tun2socks": {
@@ -175,6 +179,34 @@ def prepare_locked_workspace(engine, pin, go, env, workspace):
     return sha(lock_path)
 
 
+def prepare_patched_workspace(engine, pin, workspace):
+    """Use only the committed candidate inputs; never update the dependency graph."""
+    folder = ROOT / "tool/go_engine_candidates" / engine
+    audit_path = folder / "AUDIT.json"
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    modules = audit["modules"].copy()
+    if audit["findings"] or modules.pop(pin["module"], None) != [pin["version"], pin["sum"]]:
+        raise ValueError("Candidate snapshot has findings or an unexpected main module")
+    if not modules or any(len(value) != 2 or not value[1].startswith("h1:")
+                          for value in modules.values()):
+        raise ValueError("Malformed candidate dependency snapshot")
+    digests = {}
+    for name in ("go.mod", "go.sum"):
+        source = folder / (name + ".snapshot")
+        # Normalize checkout line endings for stable snapshot evidence.
+        content = source.read_text(encoding="utf-8").encode("utf-8")
+        (workspace / name).write_bytes(content)
+        digests[name] = hashlib.sha256(content).hexdigest()
+    return modules, digests
+
+
+def verify_patched_workspace(workspace, info, expected_modules, digests):
+    if dependency_records(info) != expected_modules:
+        raise ValueError("Patched linked dependency graph differs from candidate snapshot")
+    if any(sha(workspace / name) != digest for name, digest in digests.items()):
+        raise ValueError("Patched dependency inputs changed during readonly build")
+
+
 def build(args):
     pin = ENGINES[args.engine]
     cache = ROOT / ".cache"
@@ -202,10 +234,15 @@ def build(args):
                GOPROXY="https://proxy.golang.org", GOSUMDB="sum.golang.org",
                GONOSUMDB="", GOPRIVATE="", GONOPROXY="", GOINSECURE="")
     version = run([go, "version"], env, ROOT, True).strip()
-    if version.split()[2] != GO_VERSION:
+    required_version = PATCHED_GO_VERSION if args.patched else GO_VERSION
+    if version.split()[2] != required_version:
         raise ValueError("Wrong Go version: " + version)
     if args.module_cache:
         env["GOMODCACHE"] = str(args.module_cache.resolve())
+    if args.patched:
+        # Go module integrity remains enforced with sumdb even when the
+        # official module proxy cannot serve an archive.
+        env["GOPROXY"] = "https://proxy.golang.org|direct"
     with tempfile.TemporaryDirectory(prefix="go-engine-", dir=cache) as work:
         workspace = Path(work)
         env["GOPATH"] = str(workspace / "gopath")
@@ -217,7 +254,11 @@ def build(args):
                                   env, workspace, True))
         verify_source(metadata, pin)
         lock_digest = None
-        if args.locked:
+        expected_modules, snapshot_hashes = None, None
+        if args.patched:
+            expected_modules, snapshot_hashes = prepare_patched_workspace(args.engine, pin, workspace)
+            env["GOCACHE"] = str(workspace / "build-cache")
+        elif args.locked:
             lock_digest = prepare_locked_workspace(args.engine, pin, go, env, workspace)
         else:
             (workspace / "go.mod").write_text(
@@ -234,6 +275,7 @@ def build(args):
             "go_sha256": sha(Path(go)), "clang_sha256": sha(clang),
             "module_origin": metadata.get("Origin"),
             "lock_sha256": lock_digest,
+            "candidate_snapshot_sha256": snapshot_hashes,
             "artifacts": [],
         }
         for abi in args.abi or ABIS:
@@ -250,7 +292,7 @@ def build(args):
             if pin["tags"]:
                 common.append("-tags=" + pin["tags"])
             print("Building", args.engine, abi, flush=True)
-            if args.locked:
+            if args.locked or args.patched:
                 run([go, "build", "-mod=readonly", *common, "-o", str(destination),
                      pin["package"]], target_env, workspace)
             else:
@@ -264,6 +306,10 @@ def build(args):
             build_info = run([go, "version", "-m", str(destination)], env, workspace, True)
             expected = "\tmod\t" + pin["module"] + "\t" + pin["version"] + "\t" + pin["sum"]
             verify_build_info(build_info, expected, arch)
+            if args.patched:
+                if not build_info.splitlines()[0].endswith(": " + PATCHED_GO_VERSION):
+                    raise ValueError("Candidate binary reports unexpected compiler version")
+                verify_patched_workspace(workspace, build_info, expected_modules, snapshot_hashes)
             (staging / abi / "BUILD_INFO.txt").write_text(build_info, encoding="utf-8")
             baseline = ROOT / "android/app/src/main/jniLibs" / abi / destination.name
             baseline_info = run([go, "version", "-m", str(baseline)], env, workspace, True)
@@ -278,7 +324,21 @@ def build(args):
                 "dependency_match": not differences,
             })
         run([go, "mod", "verify"], env, workspace)
-        if args.locked:
+        if args.patched:
+            verify_patched_workspace(workspace, build_info, expected_modules, snapshot_hashes)
+            owners = {(name, value[0]): [args.engine] for name, value in expected_modules.items()}
+            owners[(pin["module"], pin["version"])] = [args.engine]
+            owners[("stdlib", PATCHED_GO_VERSION.removeprefix("go"))] = [args.engine]
+            findings = query_findings(owners)
+            evidence["osv"] = {
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "module_versions_including_stdlib": len(owners),
+                "findings": findings,
+                "scope": "version matches only, not reachability",
+            }
+            if findings:
+                raise ValueError("Patched candidate OSV matches: " + json.dumps(findings))
+        if args.locked or args.patched:
             for name in ("go.mod", "go.sum"):
                 shutil.copyfile(workspace / name, staging / name)
         shutil.copyfile(Path(metadata["Dir"]) / "LICENSE", staging / "LICENSE")
@@ -296,8 +356,11 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--module-cache", type=Path)
     parser.add_argument("--abi", action="append", choices=ABIS)
-    parser.add_argument("--locked", action="store_true",
-                        help="Use the verified bundled linked-module snapshot; enforce exact match")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--locked", action="store_true",
+                      help="Use the verified bundled linked-module snapshot; enforce exact match")
+    mode.add_argument("--patched", action="store_true",
+                      help="Build the patched snapshot using the pinned patched Go compiler")
     parser.add_argument("--require-matching-dependencies", action="store_true",
                         help="Reject any dependency difference from the bundled binary")
     args = parser.parse_args()

@@ -180,7 +180,7 @@ jobs:
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0"
           fi
           test -x "$signer"
-          python3 tool/release_security.py --apk-dir dist --apksigner "$signer"
+          python3 tool/release_security.py --apk-dir dist --apksigner "$signer" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt"
 
       - name: Install antivirus and refresh signatures
         run: |

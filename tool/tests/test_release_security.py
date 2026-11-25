@@ -3,7 +3,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from tool.release_security import inventory, scanner_summary, signer_digest, verify_apks
+from tool.release_security import inventory, package_identity, scanner_summary, signer_digest, verify_apks
 
 class ReleaseSecurityTests(unittest.TestCase):
     def apk(self, folder, abi='arm64-v8a', extra=None):
@@ -46,6 +46,19 @@ class ReleaseSecurityTests(unittest.TestCase):
                   'Signer #1 certificate #1 SHA-256 digest: ' + 'AB'*32 + '\n'
                   'Signer #1 public key SHA-256 digest: ' + 'cd'*32 + '\n')
         self.assertEqual(signer_digest(report), 'ab'*32)
+
+    def test_distribution_package_identity(self):
+        report = "package: name='com.blackoutkit.vpn' versionCode='123' versionName='1.2.3'"
+        self.assertEqual(package_identity(report), {
+            'package': 'com.blackoutkit.vpn', 'version_code': '123', 'version_name': '1.2.3'})
+
+    def test_distribution_rejects_experiment_and_debuggable(self):
+        report = "package: name='com.blackoutkit.vpn' versionCode='123' versionName='1.2.3'"
+        for invalid in (report.replace('.vpn', '.vpn.nativetest'),
+                        report + '\napplication-debuggable',
+                        report + '\n' + report, 'no package'):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                package_identity(invalid)
 
     def test_tag_requires_existing_certificate(self):
         with tempfile.TemporaryDirectory() as d:

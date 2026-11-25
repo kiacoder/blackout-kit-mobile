@@ -1411,3 +1411,22 @@ checks and diff check passed; hosted YAML/workflow execution pending.
 Local artifact transfer stalled initially, then reached 53,870,592
 bytes of 149,917,261 at inspection; audit not yet completed locally.
 No production code, native binaries, release or device acceptance changed.
+
+## Phase 3 independent APK audit accepted; distribution identity gate (2026-11-25)
+
+Local download from 45619237138 completed; independent audit passed
+for 151821556-byte debug candidate, SHA256
+ed07f0501c22e0f2206d1550b4e8fa665ef96cbc2fa77622fa724915fc9bc578.
+Hosted independent audit jobs 45623469089 and 45623452983 passed;
+all four native hashes match local evidence. All f1cdef6 hosted
+workflow runs succeeded. No runtime/device acceptance implied.
+Fresh normal APK report from 45623452943: MobSF 46/100 (4 high,
+10 warning), ClamAV zero detections across three APKs, VirusTotal
+three unknown-file statuses. Test-only signing; no malware-free claim.
+Added normal release-build APK identity validation using pinned aapt:
+reject experimental application IDs, debuggable manifests, malformed
+package output and mismatched variant version names. Split variant
+version codes may legitimately differ. Python 113/113, 12 binary/action
+checks and diff check passed; actual hosted gate validation pending.
+No changes to storage dependency, native binaries or minSDK. No physical
+ADB device attached, production release or main merge.

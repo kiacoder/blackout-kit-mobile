@@ -56,9 +56,23 @@ def signer_digest(output):
         raise ValueError('Expected exactly one verified APK signer')
     return fingerprints[0].lower()
 
-def verify_apks(folder, signer, tagged, expected):
+def package_identity(output):
+    lines = [line for line in output.splitlines() if line.startswith('package:')]
+    if len(lines) != 1:
+        raise ValueError('Expected one APK package identity')
+    match = re.match(r"^package: name='([^']+)' versionCode='([0-9]+)' versionName='([^']*)'", lines[0])
+    if not match or match[1] != 'com.blackoutkit.vpn':
+        raise ValueError('Unexpected APK application identity')
+    if 'application-debuggable' in output.splitlines():
+        raise ValueError('Debuggable APK cannot be distributed as a release build')
+    return {'package': match[1], 'version_code': match[2], 'version_name': match[3]}
+
+
+def verify_apks(folder, signer, tagged, expected, aapt=None):
     if tagged and not HEX.fullmatch(expected):
         raise ValueError('Set ANDROID_RELEASE_CERT_SHA256 to the existing published signing certificate')
+    if not aapt:
+        raise ValueError('Provide aapt for APK application identity verification')
     apks = sorted(folder.glob('*.apk'))
     if len(apks) != 3:
         raise ValueError('Expected exactly three APKs')
@@ -82,8 +96,14 @@ def verify_apks(folder, signer, tagged, expected):
             raise
         if tagged and cert != expected:
             raise ValueError('Release certificate differs from pinned publisher certificate')
+        badging = subprocess.check_output([aapt, 'dump', 'badging', str(apk)],
+                                          text=True, timeout=60)
+        identity = package_identity(badging)
         records.append({'name': apk.name, 'bytes': apk.stat().st_size, 'sha256': digest(apk),
-                        'signer_sha256': cert, 'native_libraries': inventory(apk, ABIS if abi == 'universal' else {abi})})
+                        'signer_sha256': cert, 'identity': identity,
+                        'native_libraries': inventory(apk, ABIS if abi == 'universal' else {abi})})
+    if len({x['identity']['version_name'] for x in records}) != 1:
+        raise ValueError('APK variants use different version names')
     if len({x['signer_sha256'] for x in records}) != 1:
         raise ValueError('APK variants use different signing certificates')
     (folder / 'APK_INVENTORY.json').write_text(json.dumps({
@@ -197,11 +217,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--apk-dir', type=Path)
     parser.add_argument('--apksigner')
+    parser.add_argument('--aapt')
     parser.add_argument('--report-dir', type=Path)
     args = parser.parse_args()
     if args.apk_dir and args.apksigner:
         verify_apks(args.apk_dir, args.apksigner, os.getenv('GITHUB_REF', '').startswith('refs/tags/v'),
-                    os.getenv('EXPECTED_CERT_SHA256', '').lower().strip())
+                    os.getenv('EXPECTED_CERT_SHA256', '').lower().strip(), args.aapt)
     elif args.report_dir:
         make_report(args.report_dir)
     else:

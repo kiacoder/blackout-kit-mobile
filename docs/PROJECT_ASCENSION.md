@@ -584,3 +584,22 @@ both iOS builds, Tests, host, Rust, OSV and supply-chain jobs passed.
 Kotlin cleanup complete; Phase 3 still has broader toolchain, existing
 lint warnings and quality work. Fresh full CI and physical-device
 validation remain open. No main merge/release.
+
+
+## Phase 3 refreshed toolchain and scan review (2026-11-25)
+
+Both 0638ded full Kotlin CI checks passed. Retrieved and verified all
+three earlier toolchain candidate APK hashes, inventory and six
+evidence hashes. ClamAV zero detections; MobSF score 46/100, four
+high findings and ten warnings; VirusTotal not configured for that
+run. See ANDROID_TOOLCHAIN_SECURITY_REVIEW.md for dispositions and
+unresolved findings. Removed unused non-loopback cleartext exception
+for the TUN address and added a regression assertion. Preserved
+backup protections and launcher branding; six lint warnings remain.
+Full Kotlin gate, 576 Flutter tests, 60 Android JVM tests, lint
+0 errors/6 warnings and 12 binary checks passed locally.
+Refreshed isolated AGP 8.5.2 / Kotlin 2.0.21 / Gradle 8.7 candidate
+at f6925ca against 0638ded; Tests 45562485870 and build 45562490487
+dispatched and in progress at inspection. Revalidate this policy
+change on candidate before promoting. Main and PR toolchain pins
+unchanged. Phase 3 remains open; no release.

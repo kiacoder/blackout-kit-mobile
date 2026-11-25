@@ -468,182 +468,223 @@ class BlackoutVpnService : VpnService() {
         request: StartRequest,
         ticket: VpnSessionExecutor.Ticket,
     ): Boolean {
-        val protocol = request.protocol
-        val displayName = request.displayName
-        val socksPort = request.socksPort
-        val dnsServers = request.dnsServers
-        val allowed = request.allowed
-        val disallowed = request.disallowed
         lastError = null
-        if (protocol == "mihomo" && allowed.contains(packageName)) {
+        if (request.protocol == "mihomo" && request.allowed.contains(packageName)) {
             lastError = "Mihomo's subprocess must remain outside its VPN. Remove Blackout from the allowed-app list."
             return false
         }
-
         return try {
-            val builder =
-                Builder()
-                    .setSession(displayName)
-                    .setMtu(VPN_MTU)
-                    .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
-                    .addRoute("0.0.0.0", 0)
-                    // IPv6 blackhole (kill switch for v6): route ::/0 into the TUN
-                    // WITHOUT giving the interface an IPv6 address. v6 packets
-                    // enter the tunnel, find no v6 netstack on the other side, and
-                    // are dropped — nothing bypasses the tunnel on dual-stack
-                    // networks. Apps fall back to IPv4 per Happy Eyeballs and that
-                    // traffic is proxied normally. Adding a real v6 address
-                    // instead would require the core's tun inbound to be verified
-                    // v6-capable on hardware first; leaking was not an option.
-                    .addRoute("::", 0)
-
-            // DNS leak prevention: every resolver the tunnel advertises is one
-            // we control. The system resolver is never offered, so queries
-            // cannot silently fall back to the carrier.
-            var acceptedDns = 0
-            for (server in dnsServers) {
-                try {
-                    builder.addDnsServer(server)
-                    acceptedDns++
-                } catch (e: Exception) {
-                    Log.w(TAG, "rejected DNS server '$server': ${e.message}")
-                }
-            }
-            // Every server was refused. Establishing anyway would give Android
-            // an interface with no DNS at all, and the system would quietly
-            // fall back to the carrier's resolver while the UI still says leak
-            // prevention is on — a silent leak is worse than a failed connect.
-            if (dnsServers.isNotEmpty() && acceptedDns == 0) {
-                lastError = "Every DNS server was rejected by Android " +
-                    "($dnsServers). Refusing to build a tunnel that would " +
-                    "silently fall back to the carrier resolver."
-                Log.e(TAG, lastError!!)
-                ticket.publish { notifyStatus("error") }
-                return false
-            }
-
-            // NOTE: deliberately no setBlocking(). The Xray tun inbound reads
-            // the fd through Go's runtime poller, which requires the descriptor
-            // to stay in its default (non-blocking) mode. Forcing blocking mode
-            // here makes the core start and then never see a packet.
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                builder.setMetered(false)
-            }
-
-            // Split tunneling. Android rejects a uid that appears in both lists,
-            // so allowed takes precedence and disallowed is ignored when it is set.
-            val appList = if (allowed.isNotEmpty()) allowed else disallowed
-            val useAllowedList = allowed.isNotEmpty()
-            for (pkg in appList) {
-                try {
-                    if (useAllowedList) {
-                        builder.addAllowedApplication(pkg)
-                    } else {
-                        builder.addDisallowedApplication(pkg)
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "split tunneling rejected $pkg: ${e.message}")
-                }
-            }
-
-            // In allowed-list mode this call is illegal: Android documents
-            // addAllowedApplication and addDisallowedApplication as mutually
-            // exclusive and throws on the second one. It was wrapped in a
-            // catch, so it only logged - but the exception is thrown on the
-            // main thread inside establish(), and on stricter builds it
-            // aborts the whole tunnel. The app is already outside the allowed
-            // list, so there is nothing to exclude.
-            if (!useAllowedList) {
-                try {
-                    builder.addDisallowedApplication(packageName)
-                } catch (e: Exception) {
-                    Log.w(TAG, "could not exclude self: ${e.message}")
-                }
-            }
-
-            val fd = builder.establish()
-            if (fd == null) {
-                lastError = "establish() returned null - VPN consent missing or revoked"
-                Log.e(TAG, lastError!!)
-                ticket.publish { notifyStatus("error") }
-                return false
-            }
-            tun = fd
-            // A previous attempt's engine copy must not survive this one.
-            try {
-                engineTunFd?.close()
-            } catch (_: Exception) {
-            }
-            engineTunFd = null
-
-            // Arm the kill switch before the engine starts, so a crash during
-            // startup is caught too.
-            holdTunnelOnFailure = request.holdOnFailure
-            XrayEngine.unexpectedStopListener = { reason -> onEngineDied(reason, ticket) }
-            EngineRunner.onUnexpectedExit = { reason -> onEngineDied(reason, ticket) }
-
-            // The Xray tun inbound takes OWNERSHIP of the fd it is handed and
-            // closes it when the core stops. Handing it the raw fd of `tun`
-            // means teardown()'s later close() targets a recycled descriptor.
-            // The engine gets its own dup and closes only that.
-            val engineFd =
-                try {
-                    // dup(), NOT fromFd(): fromFd wraps the SAME descriptor without
-                    // duplicating it, so the engine's close() and teardown()'s
-                    // close() would hit one descriptor twice - and the second close
-                    // would land on whatever descriptor number the kernel had since
-                    // recycled.
-                    fd.dup()
-                } catch (e: Exception) {
-                    Log.e(TAG, "could not duplicate the tun fd: ${e.message}")
-                    lastError = "Could not duplicate the tun fd: ${e.message}"
-                    ticket.publish { notifyStatus("error") }
-                    return false
-                }
-
-            // The engine must be up before we claim success, otherwise all
-            // traffic would be black-holed by the default route just installed.
-            engineTunFd = engineFd
-            val engineOk =
-                startEngine(request, engineFd.fd)
-            if (!engineOk) {
-                // The engine sets its own lastError with the REAL reason
-                // ("Xray core rejected the configuration: ..."). It used to
-                // stay trapped in XrayEngine while the UI got this generic
-                // fallback, making remote debugging impossible.
-                lastError = lastError ?: when {
-                    protocol.lowercase() in XRAY_PROTOCOLS -> XrayEngine.lastError
-                    protocol == "mihomo" -> EngineRunner.lastError
-                    else -> LibboxEngine.lastError ?: EngineRunner.lastError
-                } ?: "Engine failed to start for protocol '$protocol'"
-                Log.e(TAG, lastError!!)
-                // The engine never took the descriptor; close our dup so it
-                // does not leak across reconnect attempts.
-                try {
-                    engineFd.close()
-                } catch (_: Exception) {
-                }
-                ticket.publish { notifyStatus("error") }
-                return false
-            }
-
-            if (!ticket.isCurrent()) return false
-            activeProtocol = protocol
-            activeName = displayName
-            isRunning = true
-            activeProtocolId = protocol
-            activeDisplayName = displayName
-            connectedAtMs = System.currentTimeMillis()
-            lastError = null
-            Log.i(TAG, "tunnel up: $displayName ($protocol) tun=${fd.fd} socks=$socksPort")
-            ticket.publish { notifyStatus("connected") }
-            true
+            val builder = configureProxyBuilder(request, ticket)
+            if (builder == null) false else openProxyTunnel(builder, request, ticket)
         } catch (e: Exception) {
             lastError = "establish failed: ${e.message}"
             Log.e(TAG, lastError, e)
             ticket.publish { notifyStatus("error") }
             false
+        }
+    }
+
+    private fun configureProxyBuilder(
+        request: StartRequest,
+        ticket: VpnSessionExecutor.Ticket,
+    ): Builder? {
+        val displayName = request.displayName
+        val dnsServers = request.dnsServers
+        val allowed = request.allowed
+        val disallowed = request.disallowed
+        val builder =
+            Builder()
+                .setSession(displayName)
+                .setMtu(VPN_MTU)
+                .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
+                .addRoute("0.0.0.0", 0)
+                // IPv6 blackhole (kill switch for v6): route ::/0 into the TUN
+                // WITHOUT giving the interface an IPv6 address. v6 packets
+                // enter the tunnel, find no v6 netstack on the other side, and
+                // are dropped — nothing bypasses the tunnel on dual-stack
+                // networks. Apps fall back to IPv4 per Happy Eyeballs and that
+                // traffic is proxied normally. Adding a real v6 address
+                // instead would require the core's tun inbound to be verified
+                // v6-capable on hardware first; leaking was not an option.
+                .addRoute("::", 0)
+
+        // DNS leak prevention: every resolver the tunnel advertises is one
+        // we control. The system resolver is never offered, so queries
+        // cannot silently fall back to the carrier.
+        val acceptedDns = addDnsServers(builder, dnsServers)
+        // Every server was refused. Establishing anyway would give Android
+        // an interface with no DNS at all, and the system would quietly
+        // fall back to the carrier's resolver while the UI still says leak
+        // prevention is on — a silent leak is worse than a failed connect.
+        if (dnsServers.isNotEmpty() && acceptedDns == 0) {
+            lastError = "Every DNS server was rejected by Android " +
+                "($dnsServers). Refusing to build a tunnel that would " +
+                "silently fall back to the carrier resolver."
+            Log.e(TAG, lastError!!)
+            ticket.publish { notifyStatus("error") }
+            return null
+        }
+
+        // NOTE: deliberately no setBlocking(). The Xray tun inbound reads
+        // the fd through Go's runtime poller, which requires the descriptor
+        // to stay in its default (non-blocking) mode. Forcing blocking mode
+        // here makes the core start and then never see a packet.
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            builder.setMetered(false)
+        }
+
+        configureProxyAppRouting(builder, allowed, disallowed)
+
+        return builder
+    }
+
+    private fun openProxyTunnel(
+        builder: Builder,
+        request: StartRequest,
+        ticket: VpnSessionExecutor.Ticket,
+    ): Boolean {
+        val fd = builder.establish()
+        if (fd == null) {
+            lastError = "establish() returned null - VPN consent missing or revoked"
+            Log.e(TAG, lastError!!)
+            ticket.publish { notifyStatus("error") }
+            return false
+        }
+        return activateProxyTunnel(fd, request, ticket) && publishProxyConnected(fd, request, ticket)
+    }
+
+    private fun activateProxyTunnel(
+        fd: ParcelFileDescriptor,
+        request: StartRequest,
+        ticket: VpnSessionExecutor.Ticket,
+    ): Boolean {
+        val protocol = request.protocol
+        tun = fd
+        // A previous attempt's engine copy must not survive this one.
+        try {
+            engineTunFd?.close()
+        } catch (_: java.io.IOException) {
+            Log.w(TAG, "Could not close previous engine descriptor")
+        }
+        engineTunFd = null
+
+        // Arm the kill switch before the engine starts, so a crash during
+        // startup is caught too.
+        holdTunnelOnFailure = request.holdOnFailure
+        XrayEngine.unexpectedStopListener = { reason -> onEngineDied(reason, ticket) }
+        EngineRunner.onUnexpectedExit = { reason -> onEngineDied(reason, ticket) }
+
+        // The Xray tun inbound takes OWNERSHIP of the fd it is handed and
+        // closes it when the core stops. Handing it the raw fd of `tun`
+        // means teardown()'s later close() targets a recycled descriptor.
+        // The engine gets its own dup and closes only that.
+        val engineFd =
+            try {
+                // dup(), NOT fromFd(): fromFd wraps the SAME descriptor without
+                // duplicating it, so the engine's close() and teardown()'s
+                // close() would hit one descriptor twice - and the second close
+                // would land on whatever descriptor number the kernel had since
+                // recycled.
+                fd.dup()
+            } catch (e: java.io.IOException) {
+                Log.e(TAG, "could not duplicate the tun fd: ${e.message}")
+                lastError = "Could not duplicate the tun fd: ${e.message}"
+                ticket.publish { notifyStatus("error") }
+                return false
+            }
+
+        // The engine must be up before we claim success, otherwise all
+        // traffic would be black-holed by the default route just installed.
+        engineTunFd = engineFd
+        val engineOk =
+            startEngine(request, engineFd.fd)
+        if (!engineOk) {
+            // The engine sets its own lastError with the REAL reason
+            // ("Xray core rejected the configuration: ..."). It used to
+            // stay trapped in XrayEngine while the UI got this generic
+            // fallback, making remote debugging impossible.
+            lastError = lastError ?: when {
+                protocol.lowercase() in XRAY_PROTOCOLS -> XrayEngine.lastError
+                protocol == "mihomo" -> EngineRunner.lastError
+                else -> LibboxEngine.lastError ?: EngineRunner.lastError
+            } ?: "Engine failed to start for protocol '$protocol'"
+            Log.e(TAG, lastError!!)
+            // The engine never took the descriptor; close our dup so it
+            // does not leak across reconnect attempts.
+            try {
+                engineFd.close()
+            } catch (_: java.io.IOException) {
+            }
+            ticket.publish { notifyStatus("error") }
+            return false
+        }
+
+        return true
+    }
+
+    private fun publishProxyConnected(
+        fd: ParcelFileDescriptor,
+        request: StartRequest,
+        ticket: VpnSessionExecutor.Ticket,
+    ): Boolean {
+        val protocol = request.protocol
+        val displayName = request.displayName
+        val socksPort = request.socksPort
+        if (!ticket.isCurrent()) return false
+        activeProtocol = protocol
+        activeName = displayName
+        isRunning = true
+        activeProtocolId = protocol
+        activeDisplayName = displayName
+        connectedAtMs = System.currentTimeMillis()
+        lastError = null
+        Log.i(TAG, "tunnel up: $displayName ($protocol) tun=${fd.fd} socks=$socksPort")
+        ticket.publish { notifyStatus("connected") }
+        return true
+    }
+
+    private fun addDnsServers(
+        builder: Builder,
+        servers: List<String>,
+    ): Int {
+        var accepted = 0
+        for (server in servers) {
+            try {
+                builder.addDnsServer(server)
+                accepted++
+            } catch (_: IllegalArgumentException) {
+                Log.w(TAG, "Android rejected a DNS server")
+            }
+        }
+        return accepted
+    }
+
+    private fun configureProxyAppRouting(
+        builder: Builder,
+        allowed: List<String>,
+        disallowed: List<String>,
+    ) {
+        // Android prohibits mixing allow and deny lists; allow takes precedence.
+        val useAllowedList = allowed.isNotEmpty()
+        val appList = if (useAllowedList) allowed else disallowed
+        for (pkg in appList) {
+            try {
+                if (useAllowedList) {
+                    builder.addAllowedApplication(pkg)
+                } else {
+                    builder.addDisallowedApplication(pkg)
+                }
+            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                Log.w(TAG, "Split tunneling package not installed")
+            }
+        }
+        if (!useAllowedList) {
+            try {
+                builder.addDisallowedApplication(packageName)
+            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                Log.w(TAG, "Could not exclude self from VPN")
+            }
         }
     }
 
@@ -658,36 +699,52 @@ class BlackoutVpnService : VpnService() {
     private fun startEngine(
         request: StartRequest,
         tunFd: Int,
+    ): Boolean =
+        when {
+            request.protocol == "mihomo" -> startMihomo(request, tunFd)
+            request.protocol.lowercase() in XRAY_PROTOCOLS -> startXray(request, tunFd)
+            else -> startSingbox(request, tunFd)
+        }
+
+    private fun startMihomo(
+        request: StartRequest,
+        tunFd: Int,
     ): Boolean {
         val protocol = request.protocol
-        val xrayConfig = request.xrayConfig
-        val singboxConfig = request.singboxConfig
-        val libboxConfig = request.libboxConfig
-        val socksPort = request.socksPort
         val mihomoConfig = request.mihomoConfig
-        if (protocol == "mihomo") {
-            if (!BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO || mihomoConfig.isNullOrBlank()) {
+        return when {
+            !BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO || mihomoConfig.isNullOrBlank() -> {
                 lastError = "Mihomo is experimental and disabled, or its configuration is missing."
-                return false
+                false
             }
-            if (!EngineRunner.writeConfig(this, mihomoConfig, protocol)) {
+            !EngineRunner.writeConfig(this, mihomoConfig, protocol) -> {
                 lastError = "Could not store the Mihomo configuration."
-                return false
+                false
             }
-            return EngineRunner.start(this, tunFd, socksPort, protocol)
+            else -> EngineRunner.start(this, tunFd, request.socksPort, protocol)
         }
-        val isXrayFamily = protocol.lowercase() in XRAY_PROTOCOLS
+    }
 
-        if (isXrayFamily) {
-            if (xrayConfig.isNullOrBlank()) {
-                lastError = "No Xray config was supplied for protocol '$protocol'"
-                Log.e(TAG, lastError!!)
-                return false
-            }
-            return XrayEngine.start(this, xrayConfig, tunFd)
+    private fun startXray(
+        request: StartRequest,
+        tunFd: Int,
+    ): Boolean {
+        val xrayConfig = request.xrayConfig
+        if (xrayConfig.isNullOrBlank()) {
+            lastError = "No Xray config was supplied for protocol '${request.protocol}'"
+            Log.e(TAG, lastError!!)
+            return false
         }
+        return XrayEngine.start(this, xrayConfig, tunFd)
+    }
 
-        if (!xrayConfig.isNullOrBlank()) {
+    private fun startSingbox(
+        request: StartRequest,
+        tunFd: Int,
+    ): Boolean {
+        val protocol = request.protocol
+        val libboxConfig = request.libboxConfig
+        if (!request.xrayConfig.isNullOrBlank()) {
             Log.w(TAG, "ignoring an Xray config supplied for non-Xray '$protocol'")
         }
 
@@ -719,24 +776,36 @@ class BlackoutVpnService : VpnService() {
             Log.w(TAG, "LibboxEngine failed, falling back to EngineRunner: ${LibboxEngine.lastError}")
         }
 
-        if (singboxConfig.isNullOrBlank()) {
-            lastError =
-                "No sing-box config was supplied for protocol '$protocol'; " +
-                "refusing to start an engine on a stale config file."
-            Log.e(TAG, lastError!!)
-            return false
+        return startSingboxSubprocess(request, tunFd)
+    }
+
+    private fun startSingboxSubprocess(
+        request: StartRequest,
+        tunFd: Int,
+    ): Boolean {
+        val protocol = request.protocol
+        val singboxConfig = request.singboxConfig
+        return when {
+            singboxConfig.isNullOrBlank() -> {
+                lastError =
+                    "No sing-box config was supplied for protocol '$protocol'; " +
+                    "refusing to start an engine on a stale config file."
+                Log.e(TAG, lastError!!)
+                false
+            }
+            !EngineRunner.writeConfig(this, singboxConfig) -> {
+                lastError = EngineRunner.lastError ?: "Could not write the sing-box config."
+                Log.e(TAG, lastError!!)
+                false
+            }
+            else ->
+                EngineRunner.start(
+                    context = this,
+                    tunFd = tunFd,
+                    socksPort = request.socksPort,
+                    protocol = protocol,
+                )
         }
-        if (!EngineRunner.writeConfig(this, singboxConfig)) {
-            lastError = EngineRunner.lastError ?: "Could not write the sing-box config."
-            Log.e(TAG, lastError!!)
-            return false
-        }
-        return EngineRunner.start(
-            context = this,
-            tunFd = tunFd,
-            socksPort = socksPort,
-            protocol = protocol,
-        )
     }
 
     /**
@@ -764,15 +833,7 @@ class BlackoutVpnService : VpnService() {
                     .setMtu(VPN_MTU)
                     .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
 
-            var accepted = 0
-            for (server in dnsServers) {
-                try {
-                    builder.addDnsServer(server)
-                    accepted++
-                } catch (e: Exception) {
-                    Log.w(TAG, "rejected DNS server '$server': ${e.message}")
-                }
-            }
+            val accepted = addDnsServers(builder, dnsServers)
             // Without a resolver this would be a VPN that changes nothing while
             // telling the user it changed something.
             if (accepted == 0) {

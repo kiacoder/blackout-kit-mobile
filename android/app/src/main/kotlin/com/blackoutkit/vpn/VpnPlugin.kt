@@ -376,9 +376,20 @@ class VpnPlugin :
             result.success(false)
             return
         }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            result.success(true)
+        } else {
+            requestNotificationPermission(act, result)
+        }
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun requestNotificationPermission(
+        act: Activity,
+        result: MethodChannel.Result,
+    ) {
         val granted =
-            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
-                act.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            act.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) {
             result.success(true)

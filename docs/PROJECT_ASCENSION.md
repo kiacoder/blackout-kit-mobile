@@ -366,3 +366,23 @@ Remaining 33 broad catches, 11 return counts, 9 long methods, 7
 complexity, 11 other findings. No new suppressions. Old toolchain
 metadata diagnostics, native device validation and fresh CI remain
 open. Phase 3 remains incomplete; no main merge or release.
+
+
+## Phase 3 VPN service decomposition batch 6 (2026-11-25)
+
+Prior df9af21 hosted Kotlin, host and supply-chain checks passed;
+Tests/APK/iOS jobs pending at inspection. Split proxy interface setup,
+engine activation, connected-state publication and engine-family dispatch.
+Shared DNS setup across proxy/DNS-only paths; narrowed expected invalid
+DNS, missing package and descriptor IO failures. Unexpected exceptions
+now reach the outer setup failure handler. Preserved session tickets,
+kill-switch listener ordering, DNS refusal, split-list exclusivity and
+fresh-config requirement. Fixed API 33 permission warning with explicit
+SDK guard and annotated helper. Updated stale-config source assertion
+for when branch and ordering. Detekt 71 -> 61 weighted findings; strict
+scope remains 25 files. Full ktlint, scoped Detekt, 575 Flutter tests,
+46 Android JVM tests, lint 0 errors/6 pre-existing warnings, 12 binary
+checks and diff checks passed. No new suppressions. Remaining 28 broad
+catches, 10 return counts, 7 long methods, 6 complexity, 10 other
+findings. Larger class responsibilities remain to be extracted; device
+validation, toolchain promotion and fresh CI pending. No merge/release.

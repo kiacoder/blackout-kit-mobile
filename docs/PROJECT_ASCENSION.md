@@ -536,3 +536,22 @@ EmbeddedCoreOwner 1); strict scope 39 files. Full ktlint, scoped Detekt,
 12 binary checks and 15 shell syntax checks passed. No new suppressions.
 Fresh CI, physical-device verification and toolchain promotion remain
 open. No main merge or production release.
+
+
+## Phase 3 VPN setup paths batch 14 (2026-11-25)
+
+Prior 09f02ca hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; APK/iOS/Tests pending at inspection. Separated native builder,
+activation and status publication; split DNS-only interface opening
+from DNS validation and retained no-route behavior. Simplified proxy
+activation result handling and narrowed expected platform/network
+exceptions in service and plugin. Redacted setup failure diagnostics.
+Strengthened native routing structural test for resolver-before-TUN
+ordering and app inclusion. Full Detekt 14 -> 6 weighted findings:
+service class size/function count, plugin class size/function count/
+dispatch complexity, one required checked native ABI boundary.
+No new suppressions; strict scope remains 39 files. Full ktlint, scoped
+Detekt, 575 Flutter tests, 60 Android JVM tests, Android lint, and 12
+binary checks passed. Fresh CI, physical-device verification, cross-
+engine admission and toolchain promotion remain outstanding. No main
+merge or production release.

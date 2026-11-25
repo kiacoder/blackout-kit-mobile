@@ -407,67 +407,91 @@ class BlackoutVpnService : VpnService() {
         raw: String,
         ticket: VpnSessionExecutor.Ticket,
     ): Boolean {
-        val protocol = request.protocol
-        val displayName = request.displayName
-        val allowed = request.allowed
-        val disallowed = request.disallowed
         lastError = null
         return try {
-            if (!NativeTunnelEngine.available(protocol)) {
-                lastError = NativeTunnelEngine.lastError ?: "Native tunnel library is unavailable or incompatible"
-                ticket.publish { notifyStatus("error") }
-                return false
-            }
-            // Native IP engines protect their transport sockets individually.
-            // Keep our app in the VPN so explicitly network-bound HTTPS probes
-            // can actually exercise its TUN, not the underlying connection.
-            // Resolve endpoints before establishing routes.
-            val config = NativeTunnelConfig.parse(raw, protocol == "amneziawg")
-            val settings = config.userspace() // resolve endpoints BEFORE TUN routes
-            if (!ticket.isCurrent()) return false
-            val builder = Builder().setSession(displayName).setMtu(config.mtu)
-            config.addresses.forEach { builder.addAddress(it.address, it.prefix) }
-            config.routes.forEach { builder.addRoute(it.address, it.prefix) }
-            // Reject uncovered DNS rather than allowing carrier fallback.
-            config.routedDns(request.dnsServers).forEach { builder.addDnsServer(it) }
-            if (allowed.isNotEmpty()) {
-                (allowed + packageName).distinct().forEach {
-                    builder.addAllowedApplication(it)
-                }
+            if (!NativeTunnelEngine.available(request.protocol)) {
+                setupFailure(
+                    ticket,
+                    NativeTunnelEngine.lastError ?: "Native tunnel library is unavailable or incompatible",
+                )
             } else {
-                disallowed.distinct().forEach { builder.addDisallowedApplication(it) }
+                // Resolve endpoints before establishing routes.
+                val config = NativeTunnelConfig.parse(raw, request.protocol == "amneziawg")
+                val settings = config.userspace()
+                ticket.isCurrent() && activateNative(request, config, settings, ticket)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
-            val fd = builder.establish() ?: error("No TUN")
-            tun = fd
-            holdTunnelOnFailure = request.holdOnFailure
-            if (!NativeTunnelEngine.start(this, protocol, fd, settings)) {
-                lastError = NativeTunnelEngine.lastError
-                ticket.publish { notifyStatus("error") }
-                return false
-            }
-            if (!ticket.isCurrent()) return false
-            activeNativeTunnel = true
-            activeProtocol = protocol
-            activeName = displayName
-            activeProtocolId = protocol
-            activeDisplayName = displayName
-            connectedAtMs = System.currentTimeMillis()
-            isRunning = true
-            ticket.publish {
-                startNativeMonitor(ticket)
-                notifyStatus("connected")
-            }
-            true
         } catch (_: Exception) {
-            lastError = "Native tunnel setup failed: check profile, routed DNS, app exclusions and VPN consent"
-            ticket.publish { notifyStatus("error") }
-            false
+            setupFailure(
+                ticket,
+                "Native tunnel setup failed: check profile, routed DNS, app exclusions and VPN consent",
+            )
         } catch (_: LinkageError) {
-            lastError = "Native tunnel library is unavailable or incompatible"
-            ticket.publish { notifyStatus("error") }
-            false
+            setupFailure(ticket, "Native tunnel library is unavailable or incompatible")
         }
+    }
+
+    private fun nativeBuilder(
+        request: StartRequest,
+        config: NativeTunnelConfig,
+    ): Builder {
+        val builder = Builder().setSession(request.displayName).setMtu(config.mtu)
+        config.addresses.forEach { builder.addAddress(it.address, it.prefix) }
+        config.routes.forEach { builder.addRoute(it.address, it.prefix) }
+        // Reject uncovered DNS rather than allowing carrier fallback.
+        config.routedDns(request.dnsServers).forEach { builder.addDnsServer(it) }
+        // Native IP engines protect their transport sockets individually.
+        if (request.allowed.isNotEmpty()) {
+            (request.allowed + packageName).distinct().forEach { builder.addAllowedApplication(it) }
+        } else {
+            request.disallowed.distinct().forEach { builder.addDisallowedApplication(it) }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
+        return builder
+    }
+
+    private fun activateNative(
+        request: StartRequest,
+        config: NativeTunnelConfig,
+        settings: String,
+        ticket: VpnSessionExecutor.Ticket,
+    ): Boolean {
+        val fd = nativeBuilder(request, config).establish() ?: error("No TUN")
+        tun = fd
+        holdTunnelOnFailure = request.holdOnFailure
+        return if (!NativeTunnelEngine.start(this, request.protocol, fd, settings)) {
+            setupFailure(ticket, NativeTunnelEngine.lastError ?: "Native engine failed to start")
+        } else {
+            publishNativeConnected(request, ticket)
+        }
+    }
+
+    private fun publishNativeConnected(
+        request: StartRequest,
+        ticket: VpnSessionExecutor.Ticket,
+    ): Boolean {
+        if (!ticket.isCurrent()) return false
+        activeNativeTunnel = true
+        activeProtocol = request.protocol
+        activeName = request.displayName
+        activeProtocolId = request.protocol
+        activeDisplayName = request.displayName
+        connectedAtMs = System.currentTimeMillis()
+        isRunning = true
+        ticket.publish {
+            startNativeMonitor(ticket)
+            notifyStatus("connected")
+        }
+        return true
+    }
+
+    private fun setupFailure(
+        ticket: VpnSessionExecutor.Ticket,
+        message: String,
+    ): Boolean {
+        lastError = message
+        Log.w(TAG, message)
+        ticket.publish { notifyStatus("error") }
+        return false
     }
 
     private fun establish(
@@ -482,11 +506,14 @@ class BlackoutVpnService : VpnService() {
         return try {
             val builder = configureProxyBuilder(request, ticket)
             if (builder == null) false else openProxyTunnel(builder, request, ticket)
-        } catch (e: Exception) {
-            lastError = "establish failed: ${e.message}"
-            Log.e(TAG, lastError, e)
-            ticket.publish { notifyStatus("error") }
-            false
+        } catch (_: IllegalArgumentException) {
+            setupFailure(ticket, "VPN configuration rejected.")
+        } catch (_: IllegalStateException) {
+            setupFailure(ticket, lastError ?: "VPN setup or engine cleanup failed.")
+        } catch (_: SecurityException) {
+            setupFailure(ticket, "VPN permission denied.")
+        } catch (_: java.io.IOException) {
+            setupFailure(ticket, "VPN setup I/O failed.")
         }
     }
 
@@ -600,7 +627,7 @@ class BlackoutVpnService : VpnService() {
         engineTunFd = engineFd
         val engineOk =
             startEngine(request, engineFd.fd)
-        if (!engineOk) {
+        return if (!engineOk) {
             // The engine sets its own lastError with the REAL reason
             // ("Xray core rejected the configuration: ..."). It used to
             // stay trapped in XrayEngine while the UI got this generic
@@ -614,10 +641,10 @@ class BlackoutVpnService : VpnService() {
             // Startup failure does not prove the native engine released the fd.
             // The session executor stops the engine before releasing descriptors.
             ticket.publish { notifyStatus("error") }
-            return false
+            false
+        } else {
+            true
         }
-
-        return true
     }
 
     private fun publishProxyConnected(
@@ -822,40 +849,36 @@ class BlackoutVpnService : VpnService() {
         dnsServers: List<String>,
         displayName: String,
         ticket: VpnSessionExecutor.Ticket,
-    ): Boolean {
-        return try {
+    ): Boolean =
+        try {
             val builder =
                 Builder()
                     .setSession(displayName)
                     .setMtu(VPN_MTU)
                     .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
-
-            val accepted = addDnsServers(builder, dnsServers)
-            // Without a resolver this would be a VPN that changes nothing while
-            // telling the user it changed something.
-            if (accepted == 0) {
-                lastError = "No usable DNS server was accepted ($dnsServers)."
-                Log.e(TAG, lastError!!)
-                ticket.publish { notifyStatus("error") }
-                return false
+            if (addDnsServers(builder, dnsServers) == 0) {
+                setupFailure(ticket, "No usable DNS server was accepted.")
+            } else {
+                openDnsInterface(builder, displayName, ticket)
             }
+        } catch (_: IllegalArgumentException) {
+            setupFailure(ticket, "DNS-only configuration was rejected.")
+        } catch (_: IllegalStateException) {
+            setupFailure(ticket, "DNS-only interface could not be established.")
+        } catch (_: SecurityException) {
+            setupFailure(ticket, "VPN consent is missing or revoked.")
+        }
 
-            // Deliberately NO addRoute(). Anything routed would be captured by
-            // an interface nothing reads, and the device would go dark.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                builder.setMetered(false)
-            }
-
-            val fd = builder.establish()
-            if (fd == null) {
-                lastError = "establish() returned null - VPN consent missing or revoked"
-                Log.e(TAG, lastError!!)
-                ticket.publish { notifyStatus("error") }
-                return false
-            }
-            tun = fd
-
-            if (!ticket.isCurrent()) return false
+    private fun openDnsInterface(
+        builder: Builder,
+        displayName: String,
+        ticket: VpnSessionExecutor.Ticket,
+    ): Boolean {
+        // Deliberately NO addRoute(): DNS-only is not a traffic tunnel.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
+        val fd = builder.establish() ?: return setupFailure(ticket, "VPN consent missing or revoked")
+        tun = fd
+        return if (ticket.isCurrent()) {
             activeProtocol = "dns"
             activeName = displayName
             isRunning = true
@@ -863,13 +886,9 @@ class BlackoutVpnService : VpnService() {
             activeDisplayName = displayName
             connectedAtMs = System.currentTimeMillis()
             lastError = null
-            Log.i(TAG, "DNS-only up: ${dnsServers.joinToString()} tun=${fd.fd}")
             ticket.publish { notifyStatus("connected") }
             true
-        } catch (e: Exception) {
-            lastError = "DNS-only establish failed: ${e.message}"
-            Log.e(TAG, lastError, e)
-            ticket.publish { notifyStatus("error") }
+        } else {
             false
         }
     }

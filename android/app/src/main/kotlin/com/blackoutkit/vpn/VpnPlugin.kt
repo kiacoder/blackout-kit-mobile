@@ -374,8 +374,11 @@ class VpnPlugin :
             } else {
                 ctx.startService(intent)
             }
-        } catch (e: Exception) {
-            resolveConnect(false, "Could not start the VPN service: ${e.message}")
+        } catch (_: IllegalStateException) {
+            resolveConnect(false, "Could not start the VPN service in the current application state.")
+            return
+        } catch (_: SecurityException) {
+            resolveConnect(false, "VPN service start permission denied.")
             return
         }
         scheduleConnectTimeout(ctx)
@@ -447,8 +450,10 @@ class VpnPlugin :
                                 action = BlackoutVpnService.ACTION_DISCONNECT
                             },
                         )
-                    } catch (e: Exception) {
-                        Log.w(TAG, "could not stop the service after the connect timeout: ${e.message}")
+                    } catch (_: IllegalStateException) {
+                        Log.w(TAG, "VPN service stop unavailable after connection timeout")
+                    } catch (_: SecurityException) {
+                        Log.w(TAG, "VPN service stop denied after connection timeout")
                     }
                     resolveConnect(false, "Timed out waiting for the tunnel to come up")
                 }
@@ -625,10 +630,14 @@ class VpnPlugin :
             } else {
                 conn.inputStream.bufferedReader().use { it.readText() }
             }
-        } catch (e: Exception) {
-            // A failed probe must never surface as an error to the UI: the
-            // status row simply stays hidden, which is the honest degradation.
-            Log.w(TAG, "Tunnel fetch failed: ${e.javaClass.simpleName}")
+        } catch (_: java.io.IOException) {
+            Log.w(TAG, "Tunnel fetch I/O failed")
+            null
+        } catch (_: IllegalArgumentException) {
+            null
+        } catch (_: ClassCastException) {
+            null
+        } catch (_: SecurityException) {
             null
         } finally {
             conn?.disconnect()

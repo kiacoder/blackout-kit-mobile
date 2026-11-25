@@ -58,6 +58,9 @@ android {
         }
     }
     namespace = "com.blackoutkit.vpn"
+    buildFeatures {
+        buildConfig = true
+    }
     compileSdkVersion 34
 
     lint {

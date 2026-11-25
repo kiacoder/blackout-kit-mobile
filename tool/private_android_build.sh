@@ -30,7 +30,7 @@ java -version
 javac -version
 flutter --version
 # Compare versions with the project pins before accepting results: Flutter3.24.0,
-# Dart3.5+, Java17, compileSdk34, minSdk24, AGP7.4.2, Gradle7.6.6.
+# Dart3.5+, Java17, compileSdk34, minSdk24, AGP8.5.2, Gradle8.7, Kotlin2.0.21.
 [[ "$mode" == --build ]] || { echo 'Preflight tools found; dependencies/versions still require build verification.'; exit 0; }
 mkdir -p .buildlog/private-build
 run() {

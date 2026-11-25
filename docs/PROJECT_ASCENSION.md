@@ -1307,3 +1307,23 @@ and diff check passed. Hosted API24 portability not yet verified.
 This is post-key-return interruption, not interruption within
 the native migration itself. Native replacement/physical device
 acceptance remains open. No shipping dependency changes.
+
+
+## Phase 3 Android toolchain bridge integrated into draft PR (2026-11-25)
+
+Promoted only the three reviewed Android build-file edits from
+the independently tested toolchain and successful combined
+application experiment (45606227849, 45613036461). AGP 8.5.2,
+Gradle 8.7 bin with official SHA256, Kotlin 2.0.21, explicit
+BuildConfig generation. Flutter 3.24.0, Java17, min/compile/target
+24/34/34, signing, feature flags, dependencies and native artifacts
+unchanged. No storage plugin promotion; migration retry 45616889661
+still running at inspection. Storage experiment now recognizes
+exact promoted pins idempotently and rejects mixed pins before
+writing. Private preflight and migration docs updated.
+Python 99/99, shell syntax, 12 binary/action checks and diff
+check passed. Local offline Gradle failed to resolve AGP8.5.2
+plugin artifact, consistent with previous cache blocker; no local
+Android test success claimed. Fresh hosted tests/build/security
+scans and physical acceptance required. PR remains draft, not
+merged or released. Bridge versions are not latest-stack claims.

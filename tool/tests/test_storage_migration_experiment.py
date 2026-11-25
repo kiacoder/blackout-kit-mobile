@@ -76,5 +76,11 @@ class StorageMigrationExperimentTests(unittest.TestCase):
             self.assertIn('version "8.5.2"', (root / "android/settings.gradle").read_text())
             self.assertIn("buildConfig = true", (root / "android/app/build.gradle").read_text())
             self.assertIn("gradle-8.7-bin.zip", (root / "android/gradle/wrapper/gradle-wrapper.properties").read_text())
-            with self.assertRaises(ValueError):
+            promoted = {name: (root / name).read_bytes() for name in inputs}
+            app_toolchain(root)
+            self.assertEqual(promoted, {name: (root / name).read_bytes() for name in inputs})
+            settings = root / "android/settings.gradle"
+            settings.write_text(settings.read_text().replace('version "8.5.2"', 'version "7.4.2"'))
+            with self.assertRaisesRegex(ValueError, "Mixed application toolchain"):
                 app_toolchain(root)
+            self.assertIn('version "7.4.2"', settings.read_text())

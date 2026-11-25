@@ -1,8 +1,15 @@
 # Android toolchain migration — Ascension Phase 3
 
-Status: isolated toolchain CI tests and APK/iOS packaging passed (2026-11-25). PR20 build pins unchanged.
+Status: tested bridge toolchain integrated into draft PR20 (2026-11-25). Fresh PR20 CI and physical acceptance pending. The earlier checkpoints below are historical.
 
 Candidate run 45443595453 completed successfully: APK build, signature and inventory checks, antivirus, SBOM, VirusTotal hash lookup, MobSF analysis and provenance steps succeeded. iOS unsigned IPA built. No release signing or publication was requested. Scanner execution success is not a clean security verdict; artifact findings and device behavior remain to be reviewed before promotion. Latest PR20 ShellCheck jobs also passed.
+
+## Integration checkpoint (2026-11-25)
+
+- Promoted only the three reviewed build-file edits, independently of storage migration.
+- Combined experiment runs 45606227849 and 45613036461 passed full-app dependency resolution, Dart tests, Android tests/lint/debug assembly. Earlier isolated toolchain APK/iOS build also passed.
+- Flutter, Java, SDK levels, signing, feature flags, native libraries and pubspec/lockfile are unchanged. The storage experiment recognizes the exact promoted pins and rejects mixed configurations.
+- Fresh build/scan and physical-device testing remain required before main merge or release. This is an intermediate compatible stack, not a claim of latest supported versions.
 
 ## GitHub acceptance checkpoint
 

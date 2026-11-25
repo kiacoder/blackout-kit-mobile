@@ -46,7 +46,7 @@ def fixture_toolchain(folder):
 
 
 def app_toolchain(root):
-    """Apply the separately tested toolchain only in a disposable CI checkout."""
+    """Apply the tested toolchain in an experiment, or verify the promoted pins."""
     edits = {
         "android/settings.gradle": [
             ('version "7.4.2"', 'version "8.5.2"'),
@@ -62,16 +62,24 @@ def app_toolchain(root):
         ],
     }
     changed = {}
+    states = set()
     for name, replacements in edits.items():
         path = root / name
         source = path.read_text(encoding="utf-8")
         for old, new in replacements:
+            if source.count(new) == 1 and old not in source.replace(new, "", 1):
+                states.add("modern")
+                continue
             if source.count(old) != 1 or new in source:
                 raise ValueError("Unexpected application toolchain: " + name)
+            states.add("legacy")
             source = source.replace(old, new)
         changed[path] = source
-    for path, source in changed.items():
-        path.write_text(source, encoding="utf-8")
+    if len(states) != 1:
+        raise ValueError("Mixed application toolchain pins; review required")
+    if states == {"legacy"}:
+        for path, source in changed.items():
+            path.write_text(source, encoding="utf-8")
 
 
 def candidate_source(source, backup=False):

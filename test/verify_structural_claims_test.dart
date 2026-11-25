@@ -208,7 +208,8 @@ void main() {
 
     test('engine catalogue is passive and never loads a Go runtime', () {
       final plugin = source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
-      final catalogue = plugin.split('private fun engineInfoMap()').last.split('private fun statusMap()').first;
+      final catalogue = source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCatalogue.kt');
+      expect(plugin, contains('EngineCatalogue('));
       expect(catalogue, contains('bundled("libgojni.so")'));
       expect(catalogue, contains('bundled("libblackout-tunnels.so")'));
       for (final forbidden in ['XrayEngine.version(', 'LibboxEngine.version(',

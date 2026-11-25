@@ -498,3 +498,21 @@ scoped Detekt, 575 Flutter tests, 56 JVM tests, Android lint, 12 binary
 checks and 15 shell syntax checks passed. No new suppressions. Plugin
 decomposition deferred to next batch. Fresh CI and toolchain promotion
 pending; no production merge or release.
+
+
+## Phase 3 passive capability catalogue batch 12 (2026-11-25)
+
+Prior 5f3ab78 hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; Tests/APK/iOS pending at inspection. Extracted EngineCatalogue
+from the Flutter plugin. It reads packaged files and runtime ownership
+without claiming or loading a native runtime. Preserved protocol lists,
+restart requirements and experimental feature flags; absent native
+directory no longer falls back to relative executable paths. Split
+validation admission and asynchronous config checking. Added four JVM
+catalogue tests and updated source checks and optional Android compile
+source list. Detekt 23 -> 20 weighted findings (VpnPlugin 12, service 7,
+EmbeddedCoreOwner 1); strict scope 38 files. Full ktlint, scoped Detekt,
+575 Flutter tests, 60 Android JVM tests, Android lint, 12 binary checks
+and 15 shell syntax checks passed. No new suppressions. Probe lifecycle
+and service decomposition still pending, along with fresh CI, device
+validation and toolchain promotion. No production merge or release.

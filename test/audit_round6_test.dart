@@ -68,7 +68,7 @@ void main() {
   group('BKM-001 the capability report matches what Dart can build', () {
     test('the native list advertises only buildable sing-box protocols', () {
       final kt = _source(
-        'android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt',
+        'android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCatalogue.kt',
       );
       final advertised = RegExp(
         r'val singboxProtocols\s*=\s*listOf\(([^)]*)\)',

@@ -170,24 +170,6 @@ class VpnPlugin :
         }
     }
 
-    /**
-     * Reports which engine is actually available on this build.
-     *
-     * The UI uses this so it can stop advertising protocols that have no
-     * bundled engine — a config list full of protocols that can never connect
-     * is worse than an honest shorter list.
-     *
-     * `wireguard` is listed under the Xray core rather than as unavailable:
-     * the bundled `libgojni.so` contains `xray.proxy.wireguard`, so a
-     * WireGuard profile is served in-process by the same core that carries
-     * VLESS/VMess/Trojan/Shadowsocks. It does not need the sing-box binary,
-     * and therefore does not pull in sing-box's GPL-3.0 licence.
-     *
-     * `warp` stays unavailable. Cloudflare WARP is WireGuard underneath, so a
-     * `wgcf`-generated profile works once imported as a WireGuard `.conf`, but
-     * [WarpConfig] itself has no registration flow and cannot mint the key
-     * pair WARP requires.
-     */
     private fun handleValidateEngineConfig(
         call: MethodCall,
         result: MethodChannel.Result,
@@ -211,6 +193,15 @@ class VpnPlugin :
             result.error("BAD_ARGS", "Choose a supported checker and a configuration under 1 MiB", null)
             return
         }
+        validateConfigAsync(context, spec, text, result)
+    }
+
+    private fun validateConfigAsync(
+        context: Context,
+        spec: EngineCommands,
+        text: String,
+        result: MethodChannel.Result,
+    ) {
         if (!validationBusy.compareAndSet(false, true)) {
             result.error("BUSY", "A configuration check is already running", null)
             return
@@ -249,98 +240,13 @@ class VpnPlugin :
         }, "blackout-config-check").start()
     }
 
-    private fun engineInfoMap(): Map<String, Any?> {
-        // A catalogue query must never load a native runtime. The previous
-        // version probe initialized both Go libraries merely by opening Settings.
-        // Package presence is a candidate capability, not a successful start.
-        val dir = appContext?.applicationInfo?.nativeLibraryDir?.let { File(it) }
-
-        fun bundled(name: String) = dir?.let { File(it, name).isFile } == true
-        val owner = GoRuntimeAdmission.process.current()
-        val embeddedAllowed = owner != GoRuntimeAdmission.Family.NATIVE_TUNNELS
-        val nativeAllowed = owner != GoRuntimeAdmission.Family.EMBEDDED
-        val embeddedBundled = bundled("libgojni.so")
-        val xrayAvailable = embeddedAllowed && embeddedBundled
-        val singboxSubprocess =
-            bundled("libsingbox.so") &&
-                bundled("libtun2socks.so") &&
-                bundled("libfdlauncher.so")
-        val singboxAvailable = xrayAvailable || singboxSubprocess
-        val nativeBundled =
-            BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS &&
-                bundled("libblackout-tunnels.so")
-        val nativeCandidate = nativeBundled && nativeAllowed
-        val xrayProtocols = listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard")
-        val singboxProtocols = listOf("hysteria2", "tuic", "anytls")
-        val restartRequired =
-            buildList {
-                if (nativeBundled && !nativeAllowed) {
-                    add("amneziawg")
-                    // WireGuard can still use the embedded Xray runtime.
-                    if (!xrayAvailable) add("wireguard")
-                }
-                if (embeddedBundled && !embeddedAllowed) {
-                    addAll(xrayProtocols.filter { it != "wireguard" || !nativeCandidate })
-                    if (!singboxSubprocess) addAll(singboxProtocols)
-                }
-            }
-        return mapOf(
-            "nativeWireguardAvailable" to nativeCandidate,
-            "nativeAmneziawgAvailable" to nativeCandidate,
-            "runtimeRestartRequired" to (nativeBundled && embeddedBundled && owner != null),
-            "restartRequiredProtocols" to restartRequired,
-            "capabilitySource" to "packaged",
-            "mihomoAvailable" to (
-                BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO &&
-                    listOf("libmihomo.so", "libtun2socks.so", "libfdlauncher.so").all {
-                        File(appContext?.applicationInfo?.nativeLibraryDir ?: "", it).canExecute()
-                    }
-            ),
-            "xrayAvailable" to xrayAvailable,
-            "xrayVersion" to null,
-            "xrayProtocols" to xrayProtocols,
-            "singboxAvailable" to singboxAvailable,
-            "singboxVersion" to null,
-            // amneziawg is NOT here on purpose: the bundled libsingbox.so is a
-            // vanilla build (no `amnezia` option anywhere in the binary), so an
-            // AmneziaWG profile is rejected at config decode time. Advertising
-            // it produced a cryptic "unknown field amnezia" from sing-box
-            // instead of an honest "this build cannot dial it". The desktop CLI
-            // serves AWG through its own native core; mobile does not.
-            // Only the protocols the DART side can actually describe.
-            //
-            // shadowtls and warp used to be listed here because libsingbox.so
-            // contains the outbound types, but Dart cannot build a config for
-            // either: a shadowtls outbound is only a TLS camouflage layer and
-            // needs an inner proxy as its `detour`, which a shadowtls:// link
-            // does not carry, and there is no warp:// parser at all. Listing
-            // them made a shadowtls config parse, validate, show as available
-            // and "connect" - while startEngine received no config document
-            // and simply ran whatever singbox.json was left over from the
-            // previous session. That is a false tunnel state, not a failure.
-            "singboxProtocols" to
-                if (singboxAvailable) {
-                    singboxProtocols
-                } else {
-                    emptyList<String>()
-                },
-            "unavailableProtocols" to
-                (
-                    listOf("openvpn", "psiphon", "shadowtls", "warp", "sni", "mhrv") +
-                        (if (nativeCandidate) emptyList() else listOf("amneziawg")) +
-                        if (singboxAvailable) {
-                            emptyList()
-                        } else {
-                            listOf("hysteria2", "tuic", "anytls")
-                        }
-                ),
-            // These are accepted as editable configuration profiles, not
-            // connectable engines in this build. Keep the distinction explicit
-            // so the catalogue can show setup readiness without a false green.
-            "configurableProtocols" to listOf("sni", "mhrv"),
-            "endpointGatedProtocols" to listOf("sni", "mhrv"),
-        )
-    }
+    private fun engineInfoMap(): Map<String, Any?> =
+        EngineCatalogue(
+            appContext?.applicationInfo?.nativeLibraryDir?.let(::File),
+            GoRuntimeAdmission.process.current(),
+            BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS,
+            BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO,
+        ).report()
 
     private fun statusMap(): Map<String, Any?> =
         mapOf(

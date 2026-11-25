@@ -1397,3 +1397,17 @@ PR20 lock contains curve25519-dalek 4.1.3 and ring 0.17.14, at or above
 reported patched versions 4.1.3 and 0.17.12; default branch still contains
 4.0.0-rc.3 and ring 0.16.20. Do not close alerts manually or claim
 production remediation before merge and rescanning. No ADB device attached.
+
+## Phase 3 independent hosted artifact audit gate (2026-11-25)
+
+Native candidate run 45621739751 at d5361df passed all four builds,
+replica comparison and APK packaging with hardened verifier. Previous
+normal APK/iOS run 45619219014 also passed (publication skipped).
+Added a separate clean runner job after compare/package to download
+both same-run artifacts and execute the independent APK auditor,
+with an uploaded machine-readable report. Auditor/test changes now
+trigger the candidate workflow. Python 111/111, 12 binary/action
+checks and diff check passed; hosted YAML/workflow execution pending.
+Local artifact transfer stalled initially, then reached 53,870,592
+bytes of 149,917,261 at inspection; audit not yet completed locally.
+No production code, native binaries, release or device acceptance changed.

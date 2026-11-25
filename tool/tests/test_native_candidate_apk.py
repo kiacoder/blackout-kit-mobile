@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from tool.verify_native_candidate_apk import stage, verify_apk
+from tool.verify_native_candidate_apk import PREFIX, stage, verify_apk
 from tool.build_pinned_go_engines import ABIS, ENGINES
 
 
@@ -49,6 +49,31 @@ class CandidateApkTests(unittest.TestCase):
         self.write_apk({**self.files, "lib/x86/libexample.so": b"extra"})
         with self.assertRaisesRegex(ValueError, "Unexpected native ABI"):
             verify_apk(self.apk, self.records)
+
+    def test_unknown_abi_rejected(self):
+        self.write_apk({**self.files, "lib/riscv64/libexample.so": b"extra"})
+        with self.assertRaisesRegex(ValueError, "Unexpected native ABI"):
+            verify_apk(self.apk, self.records)
+
+    @patch.dict("os.environ", {"GITHUB_ACTIONS": "true", "RUNNER_OS": "Linux"})
+    @patch("tool.verify_native_candidate_apk.subprocess.check_output", return_value="")
+    def test_tampered_last_candidate_leaves_all_slots_unchanged(self, _status):
+        replicas = self.root / "replicas"
+        slots = []
+        for member, data in self.files.items():
+            _, abi, name = member.split("/")
+            slot = self.root / PREFIX / abi / name
+            slot.parent.mkdir(parents=True, exist_ok=True)
+            slot.write_bytes(b"baseline")
+            slots.append(slot)
+            source = replicas / f"native-go-{name[3:-3]}-1" / abi / name
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(data)
+        source.write_bytes(b"tampered")
+        with patch("tool.verify_native_candidate_apk.expected", return_value=self.records):
+            with self.assertRaisesRegex(ValueError, "changed after comparison"):
+                stage(self.root, replicas)
+        self.assertTrue(all(slot.read_bytes() == b"baseline" for slot in slots))
 
     @patch.dict("os.environ", {"GITHUB_ACTIONS": "false"}, clear=True)
     def test_non_ci_stage_refused(self):

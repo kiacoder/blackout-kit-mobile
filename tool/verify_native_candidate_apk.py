@@ -37,6 +37,7 @@ def stage(root, replicas):
         _, abi, name = member.split("/")
         if abi not in ABIS or not (root / PREFIX / abi / name).is_file():
             raise ValueError("Expected historical native slot missing")
+    verified = {}
     for member, digest in records.items():
         _, abi, name = member.split("/")
         engine = name[3:-3]
@@ -44,7 +45,8 @@ def stage(root, replicas):
         data = source.read_bytes()
         if hashlib.sha256(data).hexdigest() != digest:
             raise ValueError("Candidate changed after comparison")
-        destination = root / PREFIX / abi / name
+        verified[root / PREFIX / abi / name] = data
+    for destination, data in verified.items():
         destination.write_bytes(data)
     return records
 
@@ -57,7 +59,10 @@ def verify_apk(apk, records):
         names = archive.namelist()
         if len(names) != len(set(names)):
             raise ValueError("Duplicate APK members")
-        if any(name.startswith(("lib/x86/", "lib/x86_64/")) for name in names):
+        native_abis = {name.split("/")[1] for name in names
+                       if name.startswith("lib/") and not name.endswith("/")
+                       and len(name.split("/")) >= 3}
+        if native_abis - set(ABIS):
             raise ValueError("Unexpected native ABI in candidate APK")
         for name, digest in records.items():
             if name not in names:

@@ -1348,3 +1348,19 @@ Four synthetic packaging tests added, Python 103/103 passed,
 12 binary/action checks passed. Hosted packaging not yet verified.
 Combined JNI archive source and physical traffic acceptance remain
 open; standalone replacement candidates are not release-approved.
+
+
+## Phase 3 candidate packaging verifier hardening (2026-11-25)
+
+Reject every unexpected packaged native ABI, not just x86 variants.
+Read and revalidate all four candidate byte buffers before modifying
+any historical JNI slot; a hash mismatch during staging leaves every
+slot unchanged. This is preflight validation, not transactional recovery
+from filesystem write failures. Added unknown-ABI and late-tamper
+regressions: targeted 6/6 passed; Ubuntu WSL full Python 105/105 passed;
+12 binary/action checks and diff check passed. Windows Python lacks
+PyYAML and does not model POSIX mode bits; Ubuntu validation is authoritative
+for these tests. Local Ruff unavailable; hosted check still required.
+At inspection run 45619237138 had both tun2socks replicas successful,
+both singbox replicas running. No physical device attached; no native
+binary/dependency promotion, release or main merge.

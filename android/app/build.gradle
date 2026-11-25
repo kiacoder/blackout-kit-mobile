@@ -202,6 +202,10 @@ android {
         // APK. If you ever need them back, delete the two `exclude` lines below.
         // Extract to nativeLibraryDir at install time (see the comment above).
         jniLibs.useLegacyPackaging = true
+        // Exact candidate byte comparison in the isolated native test APK.
+        if (project.findProperty("nativeTestPackage") == "true") {
+            jniLibs.keepDebugSymbols += ["**/libsingbox.so", "**/libtun2socks.so"]
+        }
 
         exclude 'lib/x86/**'
         exclude 'lib/x86_64/**'

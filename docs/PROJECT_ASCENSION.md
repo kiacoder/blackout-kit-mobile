@@ -1327,3 +1327,24 @@ plugin artifact, consistent with previous cache blocker; no local
 Android test success claimed. Fresh hosted tests/build/security
 scans and physical acceptance required. PR remains draft, not
 merged or released. Bridge versions are not latest-stack claims.
+
+
+## Phase 3 standalone native candidate packaging experiment (2026-11-25)
+
+Portable migration run 45616889661 passed standard migration,
+post-key-return interruption, ciphertext equality and restart
+on API24 and API34; backup-enabled mode failed at read_key on
+both. Combined full-app experiment passed. Keep storage dependency
+unchanged pending native migration interruption and ARM acceptance.
+Integrated toolchain CI 45617975152 pending at inspection.
+New native candidate packaging job consumes four independently
+verified replica sets in a disposable Linux CI checkout, verifies
+tracked baseline first, stages exactly four standalone engine
+files, builds isolated .nativetest debug APK and verifies signature,
+package identity, ABI inventory and exact packaged candidate bytes.
+Debug-symbol preservation only enabled for the test property.
+No release credentials or deployment; no tracked binary changes.
+Four synthetic packaging tests added, Python 103/103 passed,
+12 binary/action checks passed. Hosted packaging not yet verified.
+Combined JNI archive source and physical traffic acceptance remain
+open; standalone replacement candidates are not release-approved.

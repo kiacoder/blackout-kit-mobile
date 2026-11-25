@@ -60,8 +60,9 @@ class StorageAcceptanceTests(unittest.TestCase):
     @patch("tool.run_storage_migration_acceptance.run")
     def test_both_upgrades_and_restarts(self, run):
         active = "legacy"
+        gate = False
         def fake(*args, **kwargs):
-            nonlocal active
+            nonlocal active, gate
             command = args[3:]
             if command == ("get-state",):
                 return "device"
@@ -80,19 +81,33 @@ class StorageAcceptanceTests(unittest.TestCase):
                 return "Status: ok"
             if command[:2] == ("shell", "pidof"):
                 return "1234"
+            if command[:3] == ("shell", "run-as", "com.blackoutkit.storagefixture"):
+                if command[3] == "sha256sum":
+                    return "a" * 64 + "  app_flutter/configs_v2.hive"
+                if command[3] == "touch":
+                    gate = True
+                if command[3] == "rm":
+                    gate = False
             if command[0] == "logcat":
+                if gate:
+                    return "STORAGE_KEY_READY"
                 return "STORAGE_LEGACY_PASS" if active == "legacy" else "STORAGE_MIGRATION_PASS"
             return "Success"
         run.side_effect = fake
         result = accept(self.folder, "adb", "emulator-5554")
         self.assertEqual(result["results"], {
-            "candidate": "upgrade-and-restart-passed",
+            "candidate": "upgrade-interruption-and-restart-passed",
             "backup": "upgrade-and-restart-passed",
         })
         commands = [call.args[3:] for call in run.call_args_list]
-        self.assertEqual(sum(command[:3] == ("shell", "am", "start") for command in commands), 6)
+        self.assertEqual(sum(command[:3] == ("shell", "am", "start") for command in commands), 7)
         self.assertEqual(sum(command[0] == "uninstall" for command in commands), 2)
-        self.assertEqual(sum(command == ("logcat", "-c") for command in commands), 6)
+        self.assertEqual(sum(command == ("logcat", "-c") for command in commands), 7)
+
+        self.assertEqual(sum(command[-2:] == ("touch", "app_flutter/hold_after_key")
+                             for command in commands), 1)
+        self.assertEqual(sum(command[-2:] == ("sha256sum", "app_flutter/configs_v2.hive")
+                             for command in commands), 5)
 
         run.reset_mock()
         result = accept(self.folder, "adb", "emulator-5554", "backup")
@@ -110,4 +125,16 @@ class StorageAcceptanceTests(unittest.TestCase):
         result = accept(self.folder, "adb", "emulator-5554", "backup")
         self.assertEqual(result["results"], {
             "backup": "failed at upgrade-launch: Fixture reported migration failure at read_key",
+        })
+
+
+        def changed_file(*args, **kwargs):
+            if args[-2:] == ("sha256sum", "app_flutter/configs_v2.hive") and active == "candidate":
+                return "b" * 64 + "  app_flutter/configs_v2.hive"
+            return fake(*args, **kwargs)
+
+        run.side_effect = changed_file
+        result = accept(self.folder, "adb", "emulator-5554", "candidate")
+        self.assertEqual(result["results"], {
+            "candidate": "failed at interrupt-after-key: Encrypted file changed at interruption boundary",
         })

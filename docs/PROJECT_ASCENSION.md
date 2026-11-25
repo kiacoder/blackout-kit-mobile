@@ -1269,3 +1269,21 @@ Python 99/99, 12 binary/action checks and diff check passed.
 This combined app build remains unverified; no shipping dependency
 changes, no installation, no publication. ARM physical acceptance
 and interrupted migration recovery remain mandatory review items.
+
+
+## Phase 3 combined application build and interruption boundary (2026-11-25)
+
+Run 45606227849 full-app candidate dependency/toolchain job
+139177667107 passed complete Flutter analysis/tests and Android
+unit/lint/debug assembly. Both non-backup emulator tests passed
+again; both backup tests failed at read_key. Normal production
+APK/iOS build 45606227779 passed. Added synthetic-only gate after
+key retrieval but before opening the encrypted box, process
+force-stop at that gate, SHA256 comparison of the original
+Hive fixture file before upgrade, after interruption and after
+restart. This verifies application-boundary interruption, NOT
+interruption inside the native plugin migration itself. Mock
+coverage rejects modified ciphertext. Python 99/99, 12 binary
+checks and local legacy fixture analyzer passed. New emulator
+acceptance still pending, ARM real-device acceptance pending.
+No production dependency or toolchain changes, no release.

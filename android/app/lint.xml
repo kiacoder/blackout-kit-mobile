@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Android 12+ backup exclusion is intentional. Older Android uses
+         allowBackup=false and fullBackupContent=false. Keep the protection. -->
+    <issue id="UnusedAttribute">
+        <ignore regexp=".*dataExtractionRules.*API level 31 and higher.*"/>
+    </issue>
+</lint>

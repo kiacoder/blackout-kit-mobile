@@ -14,6 +14,15 @@ Config vless(String host, String name) => ConfigParser.parse(
       'vless://11111111-1111-1111-1111-111111111111@$host:443?security=none&type=tcp#$name',
     )!;
 
+class UnavailableKeyStore implements KeyStore {
+  @override
+  Future<String?> read(String key) async => throw StateError('keystore unavailable');
+
+  @override
+  Future<void> write(String key, String value) async =>
+      throw StateError('keystore unavailable');
+}
+
 void main() {
   late Directory dir;
 
@@ -64,6 +73,36 @@ void main() {
     expect(await vault.getOrCreateKey(), isNull,
         reason: 'a fresh key could never open the existing boxes');
     expect(await vault.state(), VaultState.locked);
+  });
+
+  test('unavailable keystore reports existing encrypted data as locked', () async {
+    final first = ConfigService(keyStore: MemoryKeyStore());
+    await first.initialize();
+    await first.saveConfig(vless('d.example.com', 'D'));
+    await Hive.close();
+    Hive.init(dir.path);
+
+    final vault = SecureVault(store: UnavailableKeyStore());
+    expect(await vault.state(), VaultState.locked);
+    expect(await vault.getOrCreateKey(), isNull);
+    expect((await vault.migrate()).locked, isTrue);
+    expect(await Hive.boxExists('configs_v2'), isTrue);
+  });
+
+  test('malformed key cannot replace a key for existing encrypted data', () async {
+    final first = ConfigService(keyStore: MemoryKeyStore());
+    await first.initialize();
+    await first.saveConfig(vless('e.example.com', 'E'));
+    await Hive.close();
+    Hive.init(dir.path);
+
+    final store = MemoryKeyStore();
+    await store.write('blackout_config_vault_key', 'abcd');
+    final vault = SecureVault(store: store);
+    expect(await vault.getOrCreateKey(), isNull);
+    expect(await vault.state(), VaultState.locked);
+    expect((await vault.migrate()).locked, isTrue);
+    expect(await store.read('blackout_config_vault_key'), 'abcd');
   });
 
   test('restoring the key brings the library back', () async {

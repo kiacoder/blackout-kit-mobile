@@ -603,3 +603,29 @@ at f6925ca against 0638ded; Tests 45562485870 and build 45562490487
 dispatched and in progress at inspection. Revalidate this policy
 change on candidate before promoting. Main and PR toolchain pins
 unchanged. Phase 3 remains open; no release.
+
+
+## Phase 3 strict Android lint and vault recovery (2026-11-25)
+
+All five legacy launcher PNGs regenerated from existing app artwork
+with transparent padding and rounded silhouette, preserving original
+color artwork and source/iOS assets. One narrow UnusedAttribute message
+exception in app/lint.xml preserves intentional API31 dataExtractionRules;
+allowBackup=false and fullBackupContent=false unchanged. No lint
+baseline or global disabled checks. warningsAsErrors enabled. Local
+:app:lintDebug exits 0 and reports No issues found. Old analyzer Kotlin
+metadata diagnostic remains until AGP promotion.
+
+Fixed vault state when keystore read fails: existing encrypted data
+reports locked, not absent. Strictly validate 32-byte hex keys; do not
+replace malformed key when encrypted data exists. Two new regression
+tests; full Flutter suite 578/578 passed. Full ktlint/Detekt and 12
+binary checks passed. Prior local JVM suite (60) passed on icon changes.
+
+Isolated secure-storage migration worktree created at 5ec7b51; proposed
+10.3.4 upgrade (9.x encrypted preferences migration must precede newer
+versions which drop that backend). Local flutter pub get returned 69
+with pub.dev authorization failure. No resolved lockfile, build or
+key migration evidence; do not promote. Remaining MobSF findings
+require a fresh scan, dependency mapping, device acceptance and
+review; no claimed score improvement or production release.

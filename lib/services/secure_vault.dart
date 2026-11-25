@@ -166,15 +166,15 @@ class SecureVault {
 
   /// Whether the vault is usable, locked, or absent.
   Future<VaultState> state() async {
+    final hasData = await hasEncryptedData();
+    if (!hasData) return VaultState.absent;
     try {
       final stored = await _store.read(_keyName);
-      final hasKey = stored != null && stored.isNotEmpty;
-      final hasData = await hasEncryptedData();
-      if (hasKey && hasData) return VaultState.active;
-      if (!hasKey && hasData) return VaultState.locked;
-      return VaultState.absent;
+      final hasKey = stored != null && _decode(stored) != null;
+      return hasKey ? VaultState.active : VaultState.locked;
     } catch (_) {
-      return VaultState.absent;
+      // A temporary keystore failure is not evidence that the library is absent.
+      return VaultState.locked;
     }
   }
 
@@ -275,6 +275,10 @@ class SecureVault {
   }
 
   Uint8List? _decode(String value) {
+    // The persisted encoding is exactly 32 bytes of hexadecimal AES key material.
+    if (value.length != 64 || !RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(value)) {
+      return null;
+    }
     try {
       final bytes = <int>[];
       for (var i = 0; i < value.length; i += 2) {

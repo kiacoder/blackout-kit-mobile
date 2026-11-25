@@ -62,7 +62,6 @@ class VpnPlugin :
     companion object {
         private const val MAX_VALIDATION_CONFIG_BYTES = 1024 * 1024
         private const val DISCONNECT_TIMEOUT_MS = 8000L
-        private const val PROBE_READY_TIMEOUT_MS = 8000
         private const val MAX_PORT = 65535
         private const val HTTP_SUCCESS_MIN = 200
         private const val HTTP_SUCCESS_MAX = 299
@@ -668,194 +667,51 @@ class VpnPlugin :
         }.start()
     }
 
-    // ── Headless probe engine (site check) ────────────────────────────────
-    //
-    // A candidate config is judged by more than a TCP handshake: Dart builds
-    // a SOCKS-only Xray config (no tun inbound), this side runs it in the
-    // bundled core with tunFd = 0, and the check URLs are then fetched
-    // THROUGH the core's loopback SOCKS inbound. The core never touches the
-    // device's routing — no VpnService, no consent dialog, no interface.
-
-    /** One headless core instance at a time; guarded against the live tunnel. */
-    private val probeLock = Any()
-
-    /** The headless sing-box instance started by [handleProbeStart], if any. */
-    private var probeProcess: Process? = null
-
-    /**
-     * Runs a sing-box config with no TUN, for the site check.
-     *
-     * The probe used to be Xray-only: `probeStart` accepted an `xrayConfig` and
-     * called `XrayEngine.startProxyOnly`, so a hysteria2/tuic/anytls config had
-     * nothing to send and the site check reported it "unsupported". That is
-     * why scanning and pinging only ever worked for the Xray-family protocols.
-     *
-     * The sing-box document this app builds already has only a loopback
-     * `mixed` inbound - tun2socks bridges the real tunnel to it - so running
-     * it here needs no tun descriptor and no second process.
-     */
-    private fun startSingboxProbe(
-        ctx: Context,
-        configJson: String,
-        socksPort: Int,
-    ): String? {
-        val enginePath = File(ctx.applicationInfo.nativeLibraryDir, "libsingbox.so")
-        if (!enginePath.exists()) {
-            return "libsingbox.so is not bundled in this build, so this protocol " +
-                "cannot be probed here"
-        }
-        val dir = EngineRunner.configDirectory(ctx)
-        val configFile = File(dir, "singbox-probe.json")
-        try {
-            configFile.writeText(configJson)
-        } catch (e: Exception) {
-            return "Could not write the probe config: ${e.message}"
-        }
-
-        // Share the bounded checker with the VPN path. Its output is discarded:
-        // native parse errors can echo passwords or complete configuration lines.
-        val validation =
-            try {
-                NativeConfigValidator().validate(EngineCommands.SING_BOX, enginePath, configFile)
-            } catch (_: Exception) {
-                return "Could not validate the probe configuration"
-            }
-        if (!validation.valid) return validation.message
-
-        val process =
-            try {
-                ProcessCompat.startQuietly(
-                    listOf(enginePath.absolutePath, "run", "-c", configFile.absolutePath),
-                )
-            } catch (e: Exception) {
-                return "Could not start sing-box: ${e.message}"
-            }
-        probeProcess = process
-
-        // Poll until it binds, the process dies, or the deadline passes.
-        val ready = LocalSocksReadiness.await("127.0.0.1", socksPort, PROBE_READY_TIMEOUT_MS)
-        if (!ready) {
-            val died = !ProcessCompat.isAlive(process)
-            try {
-                stopSingboxProbe()
-            } catch (_: Exception) {
-                return "Probe cleanup did not complete within its deadline."
-            }
-            return if (died) {
-                "sing-box exited during startup. Native diagnostics are withheld."
-            } else {
-                "sing-box did not open the local SOCKS listener within 8s."
-            }
-        }
-        return null
-    }
-
-    private fun stopSingboxProbe() {
-        val process = probeProcess ?: return
-        SubprocessLifecycle().stop(listOf(process), graceMs = 500)
-        if (ProcessCompat.isAlive(process)) {
-            // Keep the handle: do not start another core on an occupied port.
-            error("Probe cleanup did not complete within its deadline.")
-        }
-        probeProcess = null
-    }
-
     private fun handleProbeStart(
         call: MethodCall,
         result: MethodChannel.Result,
     ) {
         val ctx = appContext
-        if (ctx == null) {
-            result.error("NO_CONTEXT", "Plugin is not attached to a Flutter engine", null)
-            return
-        }
-        if (BlackoutVpnService.isRunning) {
-            result.error(
-                "BUSY",
-                "The VPN tunnel is up - the site check needs the core exclusively. " +
-                    "Disconnect first, or skip the site check.",
-                null,
-            )
-            return
-        }
         val xrayConfig = call.argument<String>("xrayConfig")
         val singboxConfig = call.argument<String>("singboxConfig")
         val socksPort = call.argument<Int>("socksPort") ?: DEFAULT_PROBE_PORT
-        if (xrayConfig.isNullOrBlank() && singboxConfig.isNullOrBlank()) {
-            result.error(
-                "BAD_ARGS",
-                "xrayConfig or singboxConfig is required",
-                null,
-            )
-            return
-        }
-
-        Thread {
-            // One probe at a time. handleProbeStop already held probeLock, but
-            // this did not, so two concurrent site checks could each spawn a
-            // core on the same port: the second failed to bind, or worse, the
-            // first one's stop tore down the second one's core.
-            synchronized(probeLock) {
-                if (probeProcess != null || XrayEngine.hasOwnedCore) {
-                    // A previous probe was never stopped (the caller crashed or
-                    // timed out); clear it rather than refusing forever.
-                    try {
-                        stopSingboxProbe()
-                        XrayEngine.stop()
-                    } catch (_: Exception) {
-                        main.post { result.error("PROBE_STOP_FAILED", "Previous probe cleanup failed.", null) }
-                        return@synchronized
-                    }
-                }
-                if (!singboxConfig.isNullOrBlank()) {
-                    val error = startSingboxProbe(ctx, singboxConfig, socksPort)
-                    main.post {
-                        if (error == null) {
-                            result.success(true)
-                        } else {
-                            result.error("PROBE_START_FAILED", error, null)
-                        }
-                    }
-                    return@synchronized
-                }
-                // startLoop blocks until the core is up or has thrown; off the
-                // main thread, same as the service path.
-                val ok =
-                    try {
-                        XrayEngine.startProxyOnly(ctx, xrayConfig!!)
-                    } catch (_: IllegalStateException) {
-                        main.post { result.error("PROBE_STOP_FAILED", "Native core cleanup failed.", null) }
-                        return@synchronized
-                    }
-                main.post {
-                    if (ok) {
-                        result.success(true)
-                    } else {
-                        result.error(
-                            "PROBE_START_FAILED",
-                            XrayEngine.lastError ?: "The Xray core failed to start",
-                            null,
-                        )
-                    }
-                }
+        when {
+            ctx == null -> result.error("NO_CONTEXT", "Plugin is detached", null)
+            BlackoutVpnService.isRunning ->
+                result.error(
+                    "BUSY",
+                    "Disconnect the VPN before starting a headless probe.",
+                    null,
+                )
+            socksPort !in 1..MAX_PORT -> result.error("BAD_ARGS", "socksPort is out of range", null)
+            xrayConfig.isNullOrBlank() && singboxConfig.isNullOrBlank() ->
+                result.error("BAD_ARGS", "xrayConfig or singboxConfig is required", null)
+            else -> {
+                val request = ProbeEngineRequest(ctx, xrayConfig, singboxConfig, socksPort)
+                Thread {
+                    val failure = ProbeEngineController.start(request)
+                    main.post { completeProbe(result, failure) }
+                }.start()
             }
-        }.start()
+        }
     }
 
     private fun handleProbeStop(result: MethodChannel.Result) {
-        // Startup may hold probeLock while waiting for readiness. Neither
-        // waiting for that lock nor bounded process cleanup belongs on UI.
         Thread {
-            synchronized(probeLock) {
-                try {
-                    stopSingboxProbe()
-                    XrayEngine.stop()
-                    main.post { result.success(true) }
-                } catch (t: Throwable) {
-                    main.post { result.error("PROBE_STOP_FAILED", t.message, null) }
-                }
-            }
+            val failure = ProbeEngineController.stop()
+            main.post { completeProbe(result, failure) }
         }.start()
+    }
+
+    private fun completeProbe(
+        result: MethodChannel.Result,
+        failure: ProbeEngineFailure?,
+    ) {
+        if (failure == null) {
+            result.success(true)
+        } else {
+            result.error(failure.code, failure.message, null)
+        }
     }
 
     private fun handleProbeSites(

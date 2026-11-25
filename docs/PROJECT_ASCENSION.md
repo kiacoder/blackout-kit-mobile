@@ -516,3 +516,23 @@ EmbeddedCoreOwner 1); strict scope 38 files. Full ktlint, scoped Detekt,
 and 15 shell syntax checks passed. No new suppressions. Probe lifecycle
 and service decomposition still pending, along with fresh CI, device
 validation and toolchain promotion. No production merge or release.
+
+
+## Phase 3 headless probe lifecycle batch 13 (2026-11-25)
+
+Prior 703020d hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; APK/iOS/Tests pending at inspection. Extracted process-wide
+ProbeEngineController from VpnPlugin, retaining the subprocess handle
+on unsuccessful cleanup and serializing headless starts/stops. Added
+worker-side live-VPN checks, port/config-size validation and child
+liveness confirmation after SOCKS readiness. Native diagnostics remain
+redacted. Updated structural assertion and optional API compile list.
+Cross-engine admission between service and probe remains unresolved;
+readiness is not proof of device traffic or listener ownership.
+
+Detekt 20 -> 14 weighted findings (VpnPlugin 6, service 7,
+EmbeddedCoreOwner 1); strict scope 39 files. Full ktlint, scoped Detekt,
+575 Flutter tests, 60 Android JVM tests, Android lint 0 errors/6 warnings,
+12 binary checks and 15 shell syntax checks passed. No new suppressions.
+Fresh CI, physical-device verification and toolchain promotion remain
+open. No main merge or production release.

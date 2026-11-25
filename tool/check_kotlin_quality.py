@@ -59,6 +59,7 @@ GATED = [
     "android/app/src/test/kotlin/com/blackoutkit/vpn/TunnelCleanupTest.kt",
     "android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCatalogue.kt",
     "android/app/src/test/kotlin/com/blackoutkit/vpn/EngineCatalogueTest.kt",
+    "android/app/src/main/kotlin/com/blackoutkit/vpn/ProbeEngineController.kt",
 ]
 
 

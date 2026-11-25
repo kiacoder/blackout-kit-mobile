@@ -1138,3 +1138,24 @@ cleartext exceptions retained pending runtime acceptance rather
 than changing behavior for a score. No score increase claimed.
 Storage retry 45595704614 still building at inspection; no
 production dependency or native binary changes.
+
+
+## Phase 3 updater package and private path hardening (2026-11-25)
+
+Require exact nonempty signer-set equality before handing an APK
+to the Android installer; partial signer overlap is insufficient.
+Only nonempty regular APK files directly in private updates storage
+are accepted, with canonical path checks; remove obsolete external
+FileProvider mapping. Existing external cached updates must be
+redownloaded. Strict release tag parsing permits numeric semver and
+legacy beta.N only, with validation at download too. Signer mismatch
+message no longer recommends uninstalling the existing app.
+Three JVM policy tests and one Dart malformed-tag regression added.
+Flutter 585/585 passed; Android unit tests and lint passed;
+strict Kotlin checks and 12 binary/action checks passed. Targeted
+Dart analysis 5 informational findings, no warnings/errors.
+Platform installer confirmation retained; no on-device install or
+key-rotation acceptance, no MobSF score improvement claimed.
+Hosted storage workflow 45595704614 both fixture builds passed
+and emulator jobs were in progress at inspection. No production
+binary replacement or main merge.

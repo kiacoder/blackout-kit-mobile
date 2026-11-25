@@ -56,7 +56,7 @@ class AppUpdate {
     // Accept both the v1.12.x scheme and the old beta numbering. Matching
     // only `beta.(\d+)$` meant every release after the version scheme changed
     // parsed as null, so the updater could never see an update at all.
-    final m = RegExp(r'v?(\d+)\.(\d+)\.(\d+)').firstMatch(tag);
+    final m = RegExp(r'^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.\d+)?$').firstMatch(tag);
     if (m == null) return null;
     final assets =
         (json['assets'] as List? ?? []).whereType<Map<String, dynamic>>().toList();
@@ -206,6 +206,10 @@ class UpdateService extends GetxService {
 
   /// Downloads the APK into the FileProvider-mapped internal updates dir.
   Future<String> downloadApk(AppUpdate update) async {
+    if (!RegExp(r'^v?\d+\.\d+\.\d+(?:-beta\.\d+)?$')
+        .hasMatch(update.tagName)) {
+      throw const FormatException('Invalid update release tag');
+    }
     // getApplicationSupportDirectory() is filesDir on Android, which is what
     // <files-path> in file_paths.xml maps. No permissions involved.
     final base = await getApplicationSupportDirectory();

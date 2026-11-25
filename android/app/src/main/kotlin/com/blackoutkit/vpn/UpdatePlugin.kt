@@ -75,9 +75,9 @@ class UpdatePlugin(
             result.error("INVALID_ARGS", "path is required", null)
             return
         }
-        val file = File(path)
-        if (!file.exists() || file.length() == 0L) {
-            result.error("NOT_FOUND", "The downloaded APK is missing or empty ($path)", null)
+        val file = UpdateArchivePolicy.resolve(File(appContext.filesDir, "updates"), File(path))
+        if (file == null) {
+            result.error("BAD_APK_PATH", "The update must be a nonempty APK in private update storage.", null)
             return
         }
 
@@ -278,11 +278,10 @@ private class ApkSignerVerifier(
             mine.isEmpty() || theirs.isEmpty() ->
                 "Could not read the signing certificate of the update or of the " +
                     "installed app, so it cannot be verified. Nothing was installed."
-            mine.intersect(theirs).isEmpty() ->
+            !UpdateArchivePolicy.sameSigners(mine, theirs) ->
                 "This update is signed with a different key than the app you " +
                     "have installed, so Android cannot apply it in place. " +
-                    "Uninstalling the current app would erase your saved " +
-                    "configs - do that only if you are willing to re-import them."
+                    "Keep your existing app and contact support."
             else -> null
         }
     }
@@ -291,4 +290,33 @@ private class ApkSignerVerifier(
         val md = java.security.MessageDigest.getInstance("SHA-256")
         return md.digest(bytes).joinToString("") { "%02x".format(it) }
     }
+}
+
+/** Narrow policy for files passed to the package installer. */
+internal object UpdateArchivePolicy {
+    fun resolve(
+        root: File,
+        candidate: File,
+    ): File? =
+        try {
+            val directory = root.canonicalFile
+            val file = candidate.canonicalFile
+            file.takeIf {
+                directory == File(root.parentFile?.canonicalFile, root.name) &&
+                    candidate.absoluteFile.parentFile in setOf(root.absoluteFile, directory) &&
+                    file == File(directory, candidate.name) &&
+                    file.extension == "apk" &&
+                    file.isFile &&
+                    file.length() > 0L
+            }
+        } catch (_: java.io.IOException) {
+            null
+        } catch (_: SecurityException) {
+            null
+        }
+
+    fun sameSigners(
+        installed: Set<String>,
+        archive: Set<String>,
+    ): Boolean = installed.isNotEmpty() && installed == archive
 }

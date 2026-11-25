@@ -73,6 +73,19 @@ void main() {
       );
     });
 
+    test('rejects malformed and path-bearing release tags', () {
+      for (final tag in [
+        'prefix-v1.0.0',
+        'v1.0.0/../../other',
+        'v1.0.0-beta.42/extra',
+        'v1.0.0-suffix',
+      ]) {
+        expect(AppUpdate.fromReleaseJson(
+          releaseWith({'app-arm64-v8a-release.apk': 1}, tag: tag),
+        ), isNull, reason: tag);
+      }
+    });
+
     test('ignores a release with no apk asset', () {
       expect(AppUpdate.fromReleaseJson(releaseWith({})), isNull);
     });

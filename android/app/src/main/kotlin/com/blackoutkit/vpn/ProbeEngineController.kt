@@ -24,28 +24,44 @@ internal object ProbeEngineController {
     private const val MAX_PROBE_CONFIG_BYTES = 8 * 1024 * 1024
     private var probeProcess: Process? = null
     private val configOwner = TransientEngineConfig()
+    private val sessionOwner = Any()
 
     @Synchronized
     fun start(request: ProbeEngineRequest): ProbeEngineFailure? {
-        if (BlackoutVpnService.isRunning) {
-            return ProbeEngineFailure("BUSY", "Disconnect the VPN before starting a headless probe.")
-        }
         val cleanup = stop()
-        return cleanup ?: if (!request.singboxConfig.isNullOrBlank()) {
-            startSingboxProbe(request)
+        return cleanup ?: if (EngineSessionAdmission.process.claim(sessionOwner)) {
+            startOwned(request)
         } else {
-            startXrayProbe(request)
+            ProbeEngineFailure("BUSY", "Disconnect the VPN or finish pending engine cleanup before probing.")
         }
+    }
+
+    private fun startOwned(request: ProbeEngineRequest): ProbeEngineFailure? {
+        var completed = false
+        val failure =
+            try {
+                val result =
+                    if (!request.singboxConfig.isNullOrBlank()) {
+                        startSingboxProbe(request)
+                    } else {
+                        startXrayProbe(request)
+                    }
+                completed = true
+                result
+            } finally {
+                if (!completed) stop()
+            }
+        // Keep the lease if cleanup fails. A later stop can retry it.
+        return if (failure == null) null else stop() ?: failure
     }
 
     @Synchronized
     fun stop(): ProbeEngineFailure? {
-        if (BlackoutVpnService.isRunning) {
-            return ProbeEngineFailure("BUSY", "A live VPN must be disconnected through its service.")
-        }
+        if (!EngineSessionAdmission.process.owns(sessionOwner)) return null
         return try {
             stopSingboxProbe()
             XrayEngine.stop()
+            EngineSessionAdmission.process.release(sessionOwner)
             null
         } catch (_: IllegalStateException) {
             cleanupFailure()
@@ -150,6 +166,6 @@ internal object ProbeEngineController {
         }
 
     private fun cleanupFailure() = ProbeEngineFailure("PROBE_STOP_FAILED", "Previous probe cleanup failed.")
-
-    private fun startFailure(message: String) = ProbeEngineFailure("PROBE_START_FAILED", message)
 }
+
+private fun startFailure(message: String) = ProbeEngineFailure("PROBE_START_FAILED", message)

@@ -648,3 +648,24 @@ legacy/crash residue, checker child ownership, cross-engine admission,
 dependency and native provenance review, fresh CI, device validation
 and current MobSF score remain open. See security review for details.
 No main merge or release.
+
+
+## Phase 3 engine admission and retired configuration cleanup (2026-11-25)
+
+Process-wide EngineSessionAdmission now provides an identity-based
+lease across foreground VPN and headless probe startup, operation and
+cleanup. Foreign teardown never stops shared engines; failed cleanup
+retains ownership and denies a competing start. Probe stop without
+a probe lease is an idempotent no-op. Service instance destruction
+with unsuccessful cleanup may require process recovery; no claim of
+cross-process or physical-device validation. Added two concurrency
+and identity admission tests. Engine config staging removes only
+three obsolete fixed filenames (singbox.json, mihomo.json and
+singbox-probe.json) in its private engine directory; refuses directory
+or redirected-file cleanup and leaves current session and unrelated
+files alone. Added two cleanup tests. Old process orphan detection,
+unique crash residue and checker child ownership remain open.
+Full ktlint/Detekt, 578 Flutter tests, 67 Android JVM tests, strict
+Android lint and 12 binary checks passed locally. Existing AGP metadata
+diagnostics remain pending toolchain upgrade; fresh CI and device
+acceptance remain outstanding. No current MobSF score or release.

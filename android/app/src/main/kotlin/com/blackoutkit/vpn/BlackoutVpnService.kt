@@ -184,6 +184,7 @@ class BlackoutVpnService : VpnService() {
         private val mainHandler = Handler(Looper.getMainLooper())
     }
 
+    private val sessionOwner = Any()
     private val sessions = VpnSessionExecutor(dispatch = { action -> mainHandler.post { action() } })
     private val native = NativeSetup()
     private val proxy = ProxySetup()
@@ -310,6 +311,11 @@ class BlackoutVpnService : VpnService() {
         val completion = connectResultCallback
         sessions.start(cleanup = ::teardown, start = { ticket ->
             when {
+                !EngineSessionAdmission.process.claim(sessionOwner) ->
+                    setupFailure(
+                        ticket,
+                        "Another engine session is active or awaiting cleanup. Stop it before connecting.",
+                    )
                 request.dnsOnly -> dns.establishDnsOnly(request.dnsServers, request.displayName, ticket)
                 request.nativeConfig != null -> native.establishNative(request, request.nativeConfig, ticket)
                 else -> proxy.establish(request, ticket)
@@ -359,6 +365,7 @@ class BlackoutVpnService : VpnService() {
     }
 
     private fun teardown() {
+        if (!EngineSessionAdmission.process.owns(sessionOwner)) return
         monitor.cancel()
         XrayEngine.unexpectedStopListener = null
         EngineRunner.onUnexpectedExit = null
@@ -394,6 +401,7 @@ class BlackoutVpnService : VpnService() {
         activeProtocolId = null
         activeDisplayName = null
         connectedAtMs = 0L
+        EngineSessionAdmission.process.release(sessionOwner)
     }
 
     private fun releaseTunnelDescriptors() {

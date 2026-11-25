@@ -1,0 +1,50 @@
+// Synthetic fixture only. Built in a separate package, never in the VPN app.
+import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'secure_vault.dart';
+
+const seed = bool.fromEnvironment('SEED_LEGACY');
+const fixture = 'synthetic-storage-fixture-v1';
+const boxName = 'configs_v2';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  var result = 'STORAGE_MIGRATION_FAIL';
+  try {
+    await Hive.initFlutter();
+    final vault = SecureVault();
+    final exists = await Hive.boxExists(boxName);
+    if (!seed && !exists) throw StateError('Legacy fixture missing');
+    if (seed && !exists) {
+      final key = await vault.getOrCreateKey();
+      if (key == null) throw StateError('Could not persist fixture key');
+      final box = await openPreservingBox<Map>(
+        boxName,
+        cipher: HiveAesCipher(key),
+      );
+      await box.put('fixture', {'value': fixture});
+      await box.flush();
+      await box.close();
+    }
+    // Existing encrypted data must be read with its original key; never
+    // generate a replacement key or write a new marker in verification mode.
+    final key = await vault.getOrCreateKey();
+    if (key == null) throw StateError('Fixture key unavailable');
+    final box = await openPreservingBox<Map>(
+      boxName,
+      cipher: HiveAesCipher(key),
+    );
+    try {
+      if (box.length != 1 || box.get('fixture')?['value'] != fixture) {
+        throw StateError('Fixture record did not survive');
+      }
+    } finally {
+      await box.close();
+    }
+    result = seed ? 'STORAGE_LEGACY_PASS' : 'STORAGE_MIGRATION_PASS';
+  } catch (_) {
+    // Never display key material or raw plugin exceptions.
+  }
+  debugPrint(result);
+  runApp(MaterialApp(home: Scaffold(body: Center(child: Text(result)))));
+}

@@ -991,3 +991,21 @@ storage experiment worktree: pub.dev insufficient permissions, exit
 selection is session-local and does not access persisted settings.
 No physical-device upgrade verified; embedded source recovery and
 security scans remain outstanding. No main merge or release.
+
+
+## Phase 3 isolated secure-storage migration experiment (2026-11-25)
+
+Added hosted dependency-resolution and isolated fixture-build jobs
+for flutter_secure_storage 9.2.4 to 10.3.4. Actual app dependency
+resolution happens only in a disposable CI checkout. Fixture package
+com.blackoutkit.storagefixture uses the real vault code and random
+synthetic key, writes one encrypted record on v9 and verifies it
+on v10 without creating a replacement. Backup-on and backup-off
+variants have identical package/signing identity checked at build
+time. Automatic reset disabled. Upstream issue 1289 reports a
+backup-enabled legacy migration problem; no settings approved yet.
+Local legacy fixture dependency resolution and Dart analysis passed.
+Full Linux Python suite 84/84 passed; binary and action-pin checks
+12/12 passed. Hosted experiment build and device migration remain
+unverified. Main pubspec, lockfile, and runtime vault options unchanged.
+No production package installation or release.

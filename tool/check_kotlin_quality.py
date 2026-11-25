@@ -84,7 +84,16 @@ def main():
     parser.add_argument("--audit", action="store_true", help="Compatibility alias; full audit is always enforced")
     parser.parse_args()
     java = str(Path(os.environ["JAVA_HOME"]) / "bin" / "java") if "JAVA_HOME" in os.environ else "java"
-    lint_inputs = ["android/app/src/**/*.kt", "tool/kotlin/**/*.kt"]
+    # Explicit paths prevent ktlint's recursive glob matching from including
+    # generated fixture projects under .cache.
+    lint_inputs = sorted(
+        path.relative_to(ROOT).as_posix()
+        for directory in DETEKT_INPUTS
+        for path in (ROOT / directory).rglob("*.kt")
+        if path.is_file()
+    )
+    if not lint_inputs:
+        raise RuntimeError("No Kotlin sources found")
     detekt_inputs = DETEKT_INPUTS
     lint = subprocess.run(
         [java, "-jar", str(jar("ktlint")), "--relative", *lint_inputs],

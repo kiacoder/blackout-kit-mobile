@@ -72,7 +72,7 @@ object LibboxEngine {
                 null
             }
         } catch (e: LinkageError) {
-            Log.w(TAG, "libbox version probe failed: ${e.javaClass.simpleName}: ${e.message}")
+            Log.w(TAG, "libbox version probe failed: ${e.javaClass.simpleName}")
             null
         }
 
@@ -82,7 +82,7 @@ object LibboxEngine {
             GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED) &&
                 Libbox.version() != null
         } catch (e: LinkageError) {
-            Log.w(TAG, "libbox availability probe failed: ${e.javaClass.simpleName}: ${e.message}")
+            Log.w(TAG, "libbox availability probe failed: ${e.javaClass.simpleName}")
             false
         }
 
@@ -267,7 +267,8 @@ private class LibboxPlatform(
         }
 
     override fun writeLog(message: String?) {
-        Log.i("Libbox", message ?: "")
+        // Native diagnostics can contain destinations, identifiers or secrets.
+        // Lifecycle status is reported separately; never forward raw messages.
     }
 }
 

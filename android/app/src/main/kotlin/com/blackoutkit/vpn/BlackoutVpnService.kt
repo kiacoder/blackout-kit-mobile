@@ -616,7 +616,7 @@ class BlackoutVpnService : VpnService() {
                 ticket.publish { notifyStatus("error") }
                 return false
             }
-            return activateProxyTunnel(fd, request, ticket) && publishProxyConnected(fd, request, ticket)
+            return activateProxyTunnel(fd, request, ticket) && publishProxyConnected(request, ticket)
         }
 
         private fun activateProxyTunnel(
@@ -648,8 +648,8 @@ class BlackoutVpnService : VpnService() {
                     // recycled.
                     fd.dup()
                 } catch (e: java.io.IOException) {
-                    Log.e(TAG, "could not duplicate the tun fd: ${e.message}")
-                    lastError = "Could not duplicate the tun fd: ${e.message}"
+                    Log.e(TAG, "Could not duplicate the tunnel descriptor")
+                    lastError = "Could not duplicate the tunnel descriptor"
                     ticket.publish { notifyStatus("error") }
                     return false
                 }
@@ -680,13 +680,11 @@ class BlackoutVpnService : VpnService() {
         }
 
         private fun publishProxyConnected(
-            fd: ParcelFileDescriptor,
             request: StartRequest,
             ticket: VpnSessionExecutor.Ticket,
         ): Boolean {
             val protocol = request.protocol
             val displayName = request.displayName
-            val socksPort = request.socksPort
             if (!ticket.isCurrent()) return false
             activeProtocol = protocol
             activeName = displayName
@@ -695,7 +693,7 @@ class BlackoutVpnService : VpnService() {
             activeDisplayName = displayName
             connectedAtMs = System.currentTimeMillis()
             lastError = null
-            Log.i(TAG, "tunnel up: $displayName ($protocol) tun=${fd.fd} socks=$socksPort")
+            Log.i(TAG, "Proxy tunnel connected")
             ticket.publish { notifyStatus("connected") }
             return true
         }

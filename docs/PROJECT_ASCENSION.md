@@ -1064,3 +1064,22 @@ checks passed; historical locally downloaded scan evidence accepted
 by the new validator. No production dependency or binary changed.
 Hosted storage migration run 45591441880 was still in progress
 at inspection. Actual migration/device acceptance remains open.
+
+
+## Phase 3 native diagnostic privacy hardening (2026-11-25)
+
+Code review identified libbox raw native callback messages forwarded
+to logcat, connection display names and descriptor/port details in
+success logs, and raw exception/reason text in several diagnostics.
+Removed raw callback forwarding and replaced those logs with fixed
+lifecycle messages or exception class names. UI error delivery is
+otherwise retained. No native engine or protocol behavior changed.
+Ktlint now receives explicit source paths inside android/app/src
+and tool/kotlin; generated .cache fixture sources no longer leak
+into glob matching. Strict Kotlin quality passed; Android unit
+test and lint Gradle tasks passed, Linux Python 96/96, 12 tracked
+binary checks passed. Existing Kotlin metadata diagnostic remains
+in Gradle output. Newest detailed MobSF artifact download still
+unverified; source privacy findings are not a claim that the
+scanner's warnings disappeared. Storage emulator jobs still running
+at inspection. No production binary replacement or release.

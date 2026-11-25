@@ -460,7 +460,7 @@ class VpnPlugin :
                     message
                         ?: BlackoutVpnService.lastError
                         ?: "The tunnel failed to come up"
-                Log.w(TAG, "connect failed: $reason")
+                Log.w(TAG, "Connection failed")
                 result.error("CONNECT_FAILED", reason, null)
             }
         }

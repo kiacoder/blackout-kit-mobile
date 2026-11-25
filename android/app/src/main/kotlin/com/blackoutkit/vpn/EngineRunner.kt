@@ -78,7 +78,7 @@ object EngineRunner {
             nativeLoaded = true
         } catch (e: UnsatisfiedLinkError) {
             nativeLoaded = false
-            Log.w(TAG, "fdlauncher native library unavailable: ${e.message}")
+            Log.w(TAG, "fdlauncher native library unavailable: ${e.javaClass.simpleName}")
         }
     }
 
@@ -252,7 +252,7 @@ object EngineRunner {
             return if (startupError != null) {
                 failLaunch(startupError)
             } else {
-                verifyReadiness(context, files, tunFd, socksPort)
+                verifyReadiness(context, files, socksPort)
             }
         }
 
@@ -311,7 +311,6 @@ object EngineRunner {
         private fun verifyReadiness(
             context: Context,
             files: LaunchFiles,
-            tunFd: Int,
             socksPort: Int,
         ): Boolean {
             val readinessPort =
@@ -332,11 +331,7 @@ object EngineRunner {
                 )
             }
             startMonitor()
-            Log.i(
-                TAG,
-                "engine processes remained alive and accepted a local SOCKS5 handshake: " +
-                    "${files.spec.binary}, socks=127.0.0.1:$readinessPort, tunFd=$tunFd",
-            )
+            Log.i(TAG, "Native processes passed local SOCKS5 readiness")
             return true
         }
 

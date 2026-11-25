@@ -848,3 +848,21 @@ Windows-specific permission/PyYAML issues avoided, not suppressed.
 Fresh CI, reviewed dependency lock, independent reproducibility,
 merged AAR provenance, secure-storage migration and physical-device
 acceptance remain open. No main merge or release.
+
+
+## Phase 3 reconstructed native linked dependency locks (2026-11-25)
+
+Reconstructed both ABI-consistent linked-module snapshots from
+bundled engine metadata, verified 22 tun2socks and 81 sing-box
+module entries and go.mod checksums, and added strict --locked
+candidate build mode. Both engines built for both Android ARM ABIs
+with exact linked dependency matches and API24 metadata. Recomputed
+all four candidate SHA256 hashes. No replacement of tracked binaries.
+Three added regression tests; Linux Python suite 70/70 and 12 binary
+checks passed. Previous hosted Kotlin checks both passed after the
+retry changes. Other hosted jobs still pending at inspection. Full
+optional module archive download blocked by HTTP403; targeted
+readonly builds completed. Vulnerability assessment, independent
+clean locked rebuilds, AAR provenance, secure-storage migration,
+scanner results and device acceptance remain open. No main merge
+or release.

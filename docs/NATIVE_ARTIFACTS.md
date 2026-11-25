@@ -129,3 +129,35 @@ A real tun2socks ARM64 mismatch was correctly rejected with no output
 directory published. All candidates remain separate from app binaries.
 Same-host repeats use shared caches, not independent reproduction.
 Reviewed lock reconstruction and vulnerability assessment remain open.
+
+
+## Reconstructed linked-module locks (2026-11-25)
+
+The bundled ARM64 and ARMv7 metadata agree for each engine. New
+tool/go_engine_locks/{tun2socks,singbox}.json snapshots record the
+main module and 21/80 linked dependencies respectively, including
+module and go.mod checksums and both bundled binary hashes. All 103
+module entries were checked against Go module download metadata
+with sumdb enabled. No replacement directives in these snapshots.
+The --locked build mode checks the snapshots against both existing
+binaries, uses pinned requirements and checksums with -mod=readonly,
+verifies module content, and rejects any linked dependency drift.
+It records the lock hash and preserves the generated go.mod/go.sum.
+
+Four isolated candidate builds passed API24 ELF and exact linked
+module comparison; output SHA256:
+
+- tun2socks ARM64: a170ab634024dcd80c9adc5721e2507f37712e0fcff5da121b13c37656c01ef0
+- tun2socks ARMv7: 09deff64ce7fd4c78ced30d345f21f1e61500a8b91041c70e40ab9c9b310dcac
+- sing-box ARM64: 627d0942ac5c63db8f9dc1ff3620bc7827d4c82c5b91c0849fc98e889b735ba0
+- sing-box ARMv7: 83649ecccb7606131b1a27cc5ddf173f5a8552ad60fc0d11850ef4d434e89c16
+
+The lock represents linked dependencies, not the complete optional
+/test module graph. A trial go mod download all received HTTP403
+for google.golang.org/api v0.274.0; readonly targeted builds
+succeeded without downloading that unused archive. A matching
+dependency graph is not evidence of vulnerability absence, historical
+binary reproduction, verified toolchain origin or Android execution.
+Candidates remain in ignored .cache/*-locked-final; no bundled
+artifacts replaced. Advisory review and independent clean builds
+remain required before promotion.

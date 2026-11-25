@@ -1,6 +1,11 @@
+import json
+from pathlib import Path
 import unittest
 
-from tool.build_pinned_go_engines import ENGINES, dependency_diff, verify_build_info, verify_source
+from tool.build_pinned_go_engines import (
+    ENGINES, decode_module_downloads, dependency_diff, validate_lock,
+    verify_build_info, verify_source,
+)
 
 
 class PinnedGoEngineTests(unittest.TestCase):
@@ -56,3 +61,30 @@ class PinnedGoEngineTests(unittest.TestCase):
         for invalid in ("", old + "\n" + old, "\t=>\tb\tv1.0.0"):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 dependency_diff(old, invalid)
+
+    def test_tracked_locks_have_pinned_main_and_unique_modules(self):
+        root = Path(__file__).resolve().parents[2]
+        for engine, expected in (("tun2socks", 22), ("singbox", 81)):
+            with self.subTest(engine=engine):
+                lock = json.loads((root / "tool/go_engine_locks" / (engine + ".json")).read_text())
+                records = validate_lock(lock, engine, ENGINES[engine])
+                self.assertEqual(len(records), expected)
+                self.assertEqual(set(lock["baseline_sha256"]), {"arm64-v8a", "armeabi-v7a"})
+                self.assertTrue(all(len(value) == 64 for value in lock["baseline_sha256"].values()))
+
+    def test_lock_rejects_duplicate_and_mismatched_main(self):
+        record = {"path": self.pin["module"], "version": self.pin["version"],
+                  "sum": self.pin["sum"], "mod_sum": self.pin["mod_sum"]}
+        lock = {"schema": 1, "engine": "tun2socks", "modules": [record]}
+        validate_lock(lock, "tun2socks", self.pin)
+        for bad in ([record, record], [record | {"sum": "h1:wrong"}],
+                    [record, record | {"path": "-unexpected"}]):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                validate_lock(lock | {"modules": bad}, "tun2socks", self.pin)
+
+    def test_module_download_parser_rejects_duplicate_or_error(self):
+        good = '{"Path":"one","Version":"v1.0.0"}'
+        self.assertEqual(set(decode_module_downloads(good + '\n{"Path":"two"}')), {"one", "two"})
+        for bad in (good + good, '{"Path":"one","Error":"missing"}'):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                decode_module_downloads(bad)

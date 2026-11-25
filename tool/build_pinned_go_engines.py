@@ -106,6 +106,75 @@ def dependency_diff(baseline, candidate):
             for name in sorted(old.keys() | new.keys()) if old.get(name) != new.get(name)]
 
 
+def decode_module_downloads(raw):
+    decoder = json.JSONDecoder()
+    records = {}
+    while raw.strip():
+        raw = raw.lstrip()
+        record, end = decoder.raw_decode(raw)
+        raw = raw[end:]
+        name = record["Path"]
+        if name in records or record.get("Error"):
+            raise ValueError("Duplicate or failed module download")
+        records[name] = record
+    return records
+
+
+def validate_lock(lock, engine, pin):
+    if lock.get("schema") != 1 or lock.get("engine") != engine:
+        raise ValueError("Unexpected engine lock schema or identity")
+    records = {}
+    for record in lock["modules"]:
+        name, version = record["path"], record["version"]
+        if (not name or any(c.isspace() for c in name + version)
+                or name.startswith("-") or "@" in name
+                or not version.startswith("v") or name in records
+                or not all(record[key].startswith("h1:") for key in ("sum", "mod_sum"))):
+            raise ValueError("Invalid locked module")
+        records[name] = record
+    main = records.get(pin["module"])
+    if not main or (main["version"], main["sum"], main["mod_sum"]) != (
+            pin["version"], pin["sum"], pin["mod_sum"]):
+        raise ValueError("Locked main module does not match source pin")
+    return records
+
+
+def prepare_locked_workspace(engine, pin, go, env, workspace):
+    lock_path = ROOT / "tool/go_engine_locks" / (engine + ".json")
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    records = validate_lock(lock, engine, pin)
+    linked = {name: [record["version"], record["sum"]]
+              for name, record in records.items() if name != pin["module"]}
+    for abi in ABIS:
+        baseline = ROOT / "android/app/src/main/jniLibs" / abi / ("lib" + engine + ".so")
+        info = run([go, "version", "-m", str(baseline)], env, workspace, True)
+        if sha(baseline) != lock["baseline_sha256"][abi] or dependency_records(info) != linked:
+            raise ValueError("Bundled binary does not match the reviewed lock snapshot")
+    # Download only modules linked into the baseline binaries, not the
+    # unrelated test and optional dependency archives in the full graph.
+    specs = [name + "@" + record["version"] for name, record in sorted(records.items())]
+    downloads = decode_module_downloads(run([go, "mod", "download", "-json", *specs],
+                                            env, workspace, True))
+    if downloads.keys() != records.keys():
+        raise ValueError("Unexpected downloaded module set")
+    for name, record in records.items():
+        actual = downloads[name]
+        if (actual["Version"], actual["Sum"], actual["GoModSum"]) != (
+                record["version"], record["sum"], record["mod_sum"]):
+            raise ValueError("Locked dependency checksum mismatch: " + name)
+    verify_source(downloads[pin["module"]], pin)
+    requirements = "".join(f"\t{name} {record['version']}\n"
+                           for name, record in sorted(records.items()))
+    sums = "".join(f"{name} {record['version']} {record['sum']}\n"
+                   f"{name} {record['version']}/go.mod {record['mod_sum']}\n"
+                   for name, record in sorted(records.items()))
+    (workspace / "go.mod").write_text(
+        "module blackout-rebuild-audit\n\ngo 1.27.0\n\nrequire (\n" + requirements + ")\n",
+        encoding="utf-8", newline="\n")
+    (workspace / "go.sum").write_text(sums, encoding="utf-8", newline="\n")
+    return sha(lock_path)
+
+
 def build(args):
     pin = ENGINES[args.engine]
     cache = ROOT / ".cache"
@@ -147,12 +216,16 @@ def build(args):
         metadata = json.loads(run([go, "mod", "download", "-json", spec],
                                   env, workspace, True))
         verify_source(metadata, pin)
-        (workspace / "go.mod").write_text(
-            "module blackout-rebuild-audit\n\ngo 1.27.0\n\nrequire "
-            + pin["module"] + " " + pin["version"] + "\n", encoding="utf-8")
-        # Download and verify the pinned source module, not just its cached hash.
-        run([go, "mod", "download", spec], env, workspace)
-        run([go, "mod", "verify"], env, workspace)
+        lock_digest = None
+        if args.locked:
+            lock_digest = prepare_locked_workspace(args.engine, pin, go, env, workspace)
+        else:
+            (workspace / "go.mod").write_text(
+                "module blackout-rebuild-audit\n\ngo 1.27.0\n\nrequire "
+                + pin["module"] + " " + pin["version"] + "\n", encoding="utf-8")
+            # Download and verify the pinned source module, not just its cached hash.
+            run([go, "mod", "download", spec], env, workspace)
+            run([go, "mod", "verify"], env, workspace)
         staging = workspace / "output"
         staging.mkdir()
         evidence = {
@@ -160,6 +233,7 @@ def build(args):
             "pin": pin, "go": version, "ndk": NDK_VERSION,
             "go_sha256": sha(Path(go)), "clang_sha256": sha(clang),
             "module_origin": metadata.get("Origin"),
+            "lock_sha256": lock_digest,
             "artifacts": [],
         }
         for abi in args.abi or ABIS:
@@ -170,19 +244,22 @@ def build(args):
             }
             target_env["GOARM" if arch == "arm" else "GOARM64"] = (
                 "7" if arch == "arm" else "v8.0")
-            command = [go, "install", "-trimpath", "-buildvcs=false",
-                       "-buildmode=pie", "-ldflags=-s -w"]
-            if pin["tags"]:
-                command.append("-tags=" + pin["tags"])
-            command.append(pin["package"] + "@" + pin["version"])
-            print("Building", args.engine, abi, flush=True)
-            run(command, target_env, workspace)
-            source = workspace / "gopath" / "bin" / f"android_{arch}" / pin["executable"]
-            if not source.is_file():
-                raise ValueError("Expected cross-compiled executable missing")
             destination = staging / abi / ("lib" + args.engine + ".so")
             destination.parent.mkdir()
-            shutil.copyfile(source, destination)
+            common = ["-trimpath", "-buildvcs=false", "-buildmode=pie", "-ldflags=-s -w"]
+            if pin["tags"]:
+                common.append("-tags=" + pin["tags"])
+            print("Building", args.engine, abi, flush=True)
+            if args.locked:
+                run([go, "build", "-mod=readonly", *common, "-o", str(destination),
+                     pin["package"]], target_env, workspace)
+            else:
+                run([go, "install", *common, pin["package"] + "@" + pin["version"]],
+                    target_env, workspace)
+                source = workspace / "gopath" / "bin" / f"android_{arch}" / pin["executable"]
+                if not source.is_file():
+                    raise ValueError("Expected cross-compiled executable missing")
+                shutil.copyfile(source, destination)
             elf = validate(destination.read_bytes(), abi, 24)
             build_info = run([go, "version", "-m", str(destination)], env, workspace, True)
             expected = "\tmod\t" + pin["module"] + "\t" + pin["version"] + "\t" + pin["sum"]
@@ -191,7 +268,7 @@ def build(args):
             baseline = ROOT / "android/app/src/main/jniLibs" / abi / destination.name
             baseline_info = run([go, "version", "-m", str(baseline)], env, workspace, True)
             differences = dependency_diff(baseline_info, build_info)
-            if differences and args.require_matching_dependencies:
+            if differences and (args.locked or args.require_matching_dependencies):
                 raise ValueError("Dependency graph differs from bundled binary")
             evidence["artifacts"].append({
                 "abi": abi, "sha256": sha(destination),
@@ -201,6 +278,9 @@ def build(args):
                 "dependency_match": not differences,
             })
         run([go, "mod", "verify"], env, workspace)
+        if args.locked:
+            for name in ("go.mod", "go.sum"):
+                shutil.copyfile(workspace / name, staging / name)
         shutil.copyfile(Path(metadata["Dir"]) / "LICENSE", staging / "LICENSE")
         (staging / "PROVENANCE.json").write_text(json.dumps(evidence, indent=2) + "\n",
                                                  encoding="utf-8")
@@ -216,6 +296,8 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--module-cache", type=Path)
     parser.add_argument("--abi", action="append", choices=ABIS)
+    parser.add_argument("--locked", action="store_true",
+                        help="Use the verified bundled linked-module snapshot; enforce exact match")
     parser.add_argument("--require-matching-dependencies", action="store_true",
                         help="Reject any dependency difference from the bundled binary")
     args = parser.parse_args()

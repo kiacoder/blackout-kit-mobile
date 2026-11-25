@@ -121,6 +121,7 @@ class SecureVault {
   // Queue reads/creation so a second caller cannot overwrite a newly minted
   // key before the first caller has confirmed that it was persisted.
   static Future<void> _keyQueue = Future<void>.value();
+  static Future<void> _migrationQueue = Future<void>.value();
   final KeyStore _store;
 
   SecureVault({KeyStore? store}) : _store = store ?? SecureKeyStore();
@@ -215,6 +216,20 @@ class SecureVault {
   ///
   /// Returns a report; `active` is false when the store is unavailable.
   Future<MigrationReport> migrate() async {
+    // Key serialization alone does not protect the copy/delete transaction.
+    // Serialize migrations within this isolate before inspecting either box.
+    final previous = _migrationQueue;
+    final completion = Completer<void>();
+    _migrationQueue = completion.future;
+    await previous;
+    try {
+      return await _migrate();
+    } finally {
+      completion.complete();
+    }
+  }
+
+  Future<MigrationReport> _migrate() async {
     final key = await getOrCreateKey();
     if (key == null) {
       final locked = await state() == VaultState.locked;

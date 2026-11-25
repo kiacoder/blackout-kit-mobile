@@ -111,6 +111,36 @@ void main() {
     expect(await healthy, hasLength(32));
   });
 
+  test('concurrent migrations copy legacy records exactly once', () async {
+    final store = MemoryKeyStore();
+    final legacy = await Hive.openBox<Map>('configs');
+    await legacy.put('fixture', {'value': 'preserve me'});
+    await legacy.close();
+
+    final first = SecureVault(store: store);
+    final second = SecureVault(store: store);
+    final reports = await Future.wait([first.migrate(), second.migrate()]);
+    expect(reports.every((report) => report.active && !report.locked), isTrue);
+    expect(reports.map((report) => report.recordsMoved), [1, 0]);
+    expect(await Hive.boxExists('configs'), isFalse);
+    final key = await first.getOrCreateKey();
+    final encrypted = await openPreservingBox<Map>('configs_v2',
+        cipher: HiveAesCipher(key!));
+    expect(encrypted.length, 1);
+    expect(encrypted.get('fixture'), {'value': 'preserve me'});
+    await encrypted.close();
+  });
+
+  test('a failed migration does not block the next migration', () async {
+    final store = MemoryKeyStore();
+    final reports = await Future.wait([
+      SecureVault(store: UnavailableKeyStore()).migrate(),
+      SecureVault(store: store).migrate(),
+    ]);
+    expect(reports.first.active, isFalse);
+    expect(reports.last.active, isTrue);
+  });
+
   test('a lost key keeps the data and reports a locked vault', () async {
     // First run: key created, config saved, boxes encrypted.
     final store = MemoryKeyStore();

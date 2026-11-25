@@ -1444,3 +1444,15 @@ zero issues, 12 binary/action checks and diff check passed.
 This does not provide cross-isolate or cross-process locking, nor does
 it modernize the storage plugin. Legacy migration backup mode and
 physical device acceptance still pending; no MobSF improvement claimed.
+
+## Phase 3 vault migration transaction serialization (2026-11-25)
+
+Serialize SecureVault migrations across instances within the same Dart
+isolate, independently of key lookup/creation. Keep the queue held for
+the entire migration and release it in finally. Regression tests verify
+that concurrent requests move legacy records exactly once, preserve the
+encrypted payload, and allow a later migration after a failed request.
+Local vault suite 13/13, full Flutter suite 593/593, and 12 tracked
+binary/workflow action reference checks passed. This is not cross-isolate
+or cross-process locking. Storage plugin modernization, MobSF findings,
+and physical-device acceptance remain pending.

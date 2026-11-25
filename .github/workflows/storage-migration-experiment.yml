@@ -75,12 +75,14 @@ jobs:
             folder=".cache/storage-$mode"
             python3 tool/prepare_storage_migration_experiment.py --create --mode "$mode" --folder "$folder"
             seed=false
+            interrupt=false
+            if [ "$mode" = candidate ]; then interrupt=true; fi
             if [ "$mode" = legacy ]; then seed=true; fi
             (
               cd "$folder"
               flutter pub get
               flutter analyze lib
-              flutter build apk --debug --dart-define=SEED_LEGACY="$seed"
+              flutter build apk --debug --dart-define=SEED_LEGACY="$seed" --dart-define=INTERRUPT_AFTER_KEY="$interrupt"
             )
             cp "$folder/build/app/outputs/flutter-apk/app-debug.apk" ".cache/storage-fixtures-output/$mode.apk"
             cp "$folder/pubspec.lock" ".cache/storage-fixtures-output/$mode.lock"

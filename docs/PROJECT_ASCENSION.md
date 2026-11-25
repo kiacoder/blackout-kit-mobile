@@ -1287,3 +1287,23 @@ coverage rejects modified ciphertext. Python 99/99, 12 binary
 checks and local legacy fixture analyzer passed. New emulator
 acceptance still pending, ARM real-device acceptance pending.
 No production dependency or toolchain changes, no release.
+
+
+## Phase 3 API24 fixture portability (2026-11-25)
+
+Run 45613036461: full-app combined candidate build passed again;
+API34 non-backup passed key-return interruption, restart and
+ciphertext comparison. Both API24 jobs failed before migration
+when run-as sha256sum exited 243; API34 backup failed at read_key.
+Replace shell run-as dependence with fixture-only SHA256 markers
+computed after closing the synthetic Hive box, and a flushed
+one-time private sentinel at the candidate key-return boundary.
+The harness requires valid digest markers for each launch and
+compares against the original legacy digest; mismatches fail.
+No raw data or key values emitted; no production logging changes.
+Mock tests verify mismatch rejection and no run-as calls. Python
+99/99, 12 binary/action checks, local legacy fixture analyzer
+and diff check passed. Hosted API24 portability not yet verified.
+This is post-key-return interruption, not interruption within
+the native migration itself. Native replacement/physical device
+acceptance remains open. No shipping dependency changes.

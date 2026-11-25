@@ -103,7 +103,7 @@ def prepare_fixture(folder, mode):
         "environment:\n  sdk: '>=3.5.0 <4.0.0'\n"
         "dependencies:\n  flutter:\n    sdk: flutter\n"
         f"  flutter_secure_storage: {version}\n"
-        "  hive_flutter: 1.1.0\n  hive: 2.2.3\n  path_provider: 2.1.5\n"
+        "  hive_flutter: 1.1.0\n  hive: 2.2.3\n  path_provider: 2.1.5\n  crypto: 3.0.7\n"
     )
     (folder / "pubspec.yaml").write_text(manifest, encoding="utf-8")
     vault = (ROOT / "lib/services/secure_vault.dart").read_text(encoding="utf-8")

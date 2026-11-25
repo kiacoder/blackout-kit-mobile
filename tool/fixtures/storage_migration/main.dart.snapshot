@@ -1,12 +1,14 @@
 // Synthetic fixture only. Built in a separate package, never in the VPN app.
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'secure_vault.dart';
 
 const seed = bool.fromEnvironment('SEED_LEGACY');
+const interrupt = bool.fromEnvironment('INTERRUPT_AFTER_KEY');
 const fixture = 'synthetic-storage-fixture-v1';
 const boxName = 'configs_v2';
 
@@ -42,21 +44,17 @@ Future<void> main() async {
     // the application has not opened or written the encrypted library.
     stage = 'interrupt_gate';
     final root = await getApplicationDocumentsDirectory();
-    final gate = File('${root.path}/hold_after_key');
-    if (!seed && await gate.exists()) {
+    final encrypted = File('${root.path}/$boxName.hive');
+    final gate = File('${root.path}/interruption_started');
+    if (!seed && interrupt && !await gate.exists()) {
+      await gate.writeAsString('fixture-v1', flush: true);
+      final digest = await sha256.bind(encrypted.openRead()).first;
       runApp(const MaterialApp(home: Scaffold(body: Center(
         child: Text('STORAGE_KEY_READY'),
       ))));
-      debugPrint('STORAGE_KEY_READY');
-      final timer = Stopwatch()..start();
-      while (await gate.exists()) {
-        if (timer.elapsed >= const Duration(seconds: 60)) {
-          throw StateError('Fixture interruption gate timed out');
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
-      // A successful harness must kill this process, not release the gate.
-      throw StateError('Fixture interruption gate released without restart');
+      debugPrint('STORAGE_KEY_READY:$digest');
+      await Future<void>.delayed(const Duration(seconds: 60));
+      throw StateError('Fixture was not stopped at interruption gate');
     }
     stage = 'open_box';
     final box = await openPreservingBox<Map>(
@@ -71,7 +69,9 @@ Future<void> main() async {
     } finally {
       await box.close();
     }
-    result = seed ? 'STORAGE_LEGACY_PASS' : 'STORAGE_MIGRATION_PASS';
+    stage = 'file_digest';
+    final digest = await sha256.bind(encrypted.openRead()).first;
+    result = seed ? 'STORAGE_LEGACY_PASS:$digest' : 'STORAGE_MIGRATION_PASS:$digest';
   } catch (_) {
     // Fixed stage identifiers only; no key material or raw exceptions.
     result = 'STORAGE_MIGRATION_FAIL:$stage';

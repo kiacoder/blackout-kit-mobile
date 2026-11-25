@@ -9,8 +9,6 @@ import subprocess
 import time
 
 PACKAGE = "com.blackoutkit.storagefixture"
-BOX_FILE = "app_flutter/configs_v2.hive"
-GATE_FILE = "app_flutter/hold_after_key"
 MODES = {"legacy": "1", "candidate": "2", "backup": "2"}
 
 
@@ -79,21 +77,15 @@ def accept(folder, adb, serial, mode=None):
                 pid = ""
             if re.fullmatch(r"\d+", pid):
                 log = device("logcat", "-d", "--pid=" + pid, "-v", "brief", "-s", "flutter:I")
-                failure = re.search(r"STORAGE_MIGRATION_FAIL:(init|check_existing|seed_key|seed_box|read_key|interrupt_gate|open_box|check_record)\b", log)
+                failure = re.search(r"STORAGE_MIGRATION_FAIL:(init|check_existing|seed_key|seed_box|read_key|interrupt_gate|open_box|check_record|file_digest)\b", log)
                 if "STORAGE_MIGRATION_FAIL" in log:
                     stage = failure[1] if failure else "unspecified"
                     raise ValueError("Fixture reported migration failure at " + stage)
-                if marker in log:
-                    return
+                match = re.search(re.escape(marker) + r":([a-f0-9]{64})\b", log)
+                if match:
+                    return match[1]
             time.sleep(2)
         raise ValueError("Missing expected fixture marker: " + marker)
-
-    def box_digest():
-        output = device("shell", "run-as", PACKAGE, "sha256sum", BOX_FILE)
-        match = re.fullmatch(r"([a-f0-9]{64})\s+" + re.escape(BOX_FILE), output)
-        if not match:
-            raise ValueError("Could not verify synthetic encrypted file digest")
-        return match[1]
 
     results = {}
     for mode in ((mode,) if mode else ("candidate", "backup")):
@@ -104,29 +96,24 @@ def accept(folder, adb, serial, mode=None):
                 raise ValueError("Legacy fixture install failed")
             installed = True
             stage = "legacy-launch"
-            launch("STORAGE_LEGACY_PASS")
+            original_digest = launch("STORAGE_LEGACY_PASS")
             device("shell", "am", "force-stop", PACKAGE)
-            stage = "legacy-file-hash"
-            original_digest = box_digest()
             stage = "candidate-install"
             if device("install", "-r", "-t", str(folder / (mode + ".apk")), timeout=240).splitlines()[-1:] != ["Success"]:
                 raise ValueError("Candidate update failed")
             if mode == "candidate":
                 stage = "interrupt-after-key"
-                device("shell", "run-as", PACKAGE, "touch", GATE_FILE)
-                launch("STORAGE_KEY_READY")
+                digest = launch("STORAGE_KEY_READY")
                 device("shell", "am", "force-stop", PACKAGE)
-                if box_digest() != original_digest:
+                if digest != original_digest:
                     raise ValueError("Encrypted file changed at interruption boundary")
-                device("shell", "run-as", PACKAGE, "rm", GATE_FILE)
             stage = "upgrade-launch"
-            launch("STORAGE_MIGRATION_PASS")
-            stage = "restart-launch"
-            launch("STORAGE_MIGRATION_PASS")
-            device("shell", "am", "force-stop", PACKAGE)
-            stage = "final-file-hash"
-            if box_digest() != original_digest:
+            if launch("STORAGE_MIGRATION_PASS") != original_digest:
                 raise ValueError("Encrypted fixture file changed during upgrade")
+            stage = "restart-launch"
+            if launch("STORAGE_MIGRATION_PASS") != original_digest:
+                raise ValueError("Encrypted fixture file changed during restart")
+            device("shell", "am", "force-stop", PACKAGE)
             results[mode] = ("upgrade-interruption-and-restart-passed"
                              if mode == "candidate" else "upgrade-and-restart-passed")
         except (ValueError, subprocess.SubprocessError) as error:

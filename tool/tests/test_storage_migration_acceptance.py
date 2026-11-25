@@ -76,22 +76,18 @@ class StorageAcceptanceTests(unittest.TestCase):
                 return ""
             if command[0] == "install":
                 active = Path(command[-1]).stem
+                gate = active == "candidate"
                 return "Performing Streamed Install\nSuccess"
             if command[:3] == ("shell", "am", "start"):
                 return "Status: ok"
             if command[:2] == ("shell", "pidof"):
                 return "1234"
-            if command[:3] == ("shell", "run-as", "com.blackoutkit.storagefixture"):
-                if command[3] == "sha256sum":
-                    return "a" * 64 + "  app_flutter/configs_v2.hive"
-                if command[3] == "touch":
-                    gate = True
-                if command[3] == "rm":
-                    gate = False
-            if command[0] == "logcat":
+            if command[:2] == ("logcat", "-d"):
                 if gate:
-                    return "STORAGE_KEY_READY"
-                return "STORAGE_LEGACY_PASS" if active == "legacy" else "STORAGE_MIGRATION_PASS"
+                    gate = False
+                    return "STORAGE_KEY_READY:" + "a" * 64
+                marker = "STORAGE_LEGACY_PASS" if active == "legacy" else "STORAGE_MIGRATION_PASS"
+                return marker + ":" + "a" * 64
             return "Success"
         run.side_effect = fake
         result = accept(self.folder, "adb", "emulator-5554")
@@ -104,10 +100,7 @@ class StorageAcceptanceTests(unittest.TestCase):
         self.assertEqual(sum(command[0] == "uninstall" for command in commands), 2)
         self.assertEqual(sum(command == ("logcat", "-c") for command in commands), 7)
 
-        self.assertEqual(sum(command[-2:] == ("touch", "app_flutter/hold_after_key")
-                             for command in commands), 1)
-        self.assertEqual(sum(command[-2:] == ("sha256sum", "app_flutter/configs_v2.hive")
-                             for command in commands), 5)
+        self.assertFalse(any(command[:2] == ("shell", "run-as") for command in commands))
 
         run.reset_mock()
         result = accept(self.folder, "adb", "emulator-5554", "backup")
@@ -129,8 +122,8 @@ class StorageAcceptanceTests(unittest.TestCase):
 
 
         def changed_file(*args, **kwargs):
-            if args[-2:] == ("sha256sum", "app_flutter/configs_v2.hive") and active == "candidate":
-                return "b" * 64 + "  app_flutter/configs_v2.hive"
+            if args[3:5] == ("logcat", "-d") and active == "candidate":
+                return "STORAGE_KEY_READY:" + "b" * 64
             return fake(*args, **kwargs)
 
         run.side_effect = changed_file

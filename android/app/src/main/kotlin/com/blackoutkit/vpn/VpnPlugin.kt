@@ -890,7 +890,7 @@ class VpnPlugin :
             // core on the same port: the second failed to bind, or worse, the
             // first one's stop tore down the second one's core.
             synchronized(probeLock) {
-                if (probeProcess != null || XrayEngine.isRunning) {
+                if (probeProcess != null || XrayEngine.hasOwnedCore) {
                     // A previous probe was never stopped (the caller crashed or
                     // timed out); clear it rather than refusing forever.
                     try {
@@ -914,7 +914,13 @@ class VpnPlugin :
                 }
                 // startLoop blocks until the core is up or has thrown; off the
                 // main thread, same as the service path.
-                val ok = XrayEngine.startProxyOnly(ctx, xrayConfig!!)
+                val ok =
+                    try {
+                        XrayEngine.startProxyOnly(ctx, xrayConfig!!)
+                    } catch (_: IllegalStateException) {
+                        main.post { result.error("PROBE_STOP_FAILED", "Native core cleanup failed.", null) }
+                        return@synchronized
+                    }
                 main.post {
                     if (ok) {
                         result.success(true)

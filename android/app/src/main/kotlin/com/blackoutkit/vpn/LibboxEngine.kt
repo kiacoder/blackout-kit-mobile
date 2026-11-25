@@ -17,7 +17,6 @@ import libbox.Notification
 import libbox.PlatformInterface
 import libbox.TunOptions
 import libbox.WIFIState
-import java.util.concurrent.atomic.AtomicBoolean
 
 private const val LIBBOX_OTHER_INTERFACE = 4
 
@@ -51,8 +50,14 @@ object LibboxEngine {
         lastError = null
     }
 
-    private var service: BoxService? = null
-    private val running = AtomicBoolean(false)
+    private val owner =
+        EmbeddedCoreOwner<BoxService> { current ->
+            embeddedCall { current.close() }.getOrElse { failure ->
+                lastError = "Embedded sing-box cleanup failed; retry cleanup before starting another core"
+                Log.w(TAG, "libbox close failed: ${failure.javaClass.simpleName}")
+                error(lastError!!)
+            }
+        }
 
     /**
      * A version is returned only when the generated bindings respond. Do not
@@ -91,17 +96,15 @@ object LibboxEngine {
         tunFd: Int,
         configJson: String,
     ): Boolean {
-        if (running.get()) {
-            Log.w(TAG, "start() while already running - stopping the old service first")
-            stop()
-        }
         lastError = null
-        return if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
+        if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
             lastError = GoRuntimeAdmission.RESTART_REQUIRED
-            false
-        } else {
-            createService(vpnService, tunFd, configJson)?.let(::startService) ?: false
+            return false
         }
+        return owner.start(
+            create = { createService(vpnService, tunFd, configJson) },
+            activate = ::startService,
+        )
     }
 
     private fun createService(
@@ -109,50 +112,35 @@ object LibboxEngine {
         tunFd: Int,
         configJson: String,
     ): BoxService? =
-        try {
-            Libbox.newService(configJson, LibboxPlatform(vpnService, tunFd))
-        } catch (e: LinkageError) {
-            lastError = "Embedded sing-box runtime is unavailable or incompatible"
-            Log.w(TAG, "libbox entry point unavailable: ${e.javaClass.simpleName}")
-            null
-        } catch (e: Exception) {
-            lastError = "libbox config rejected"
-            Log.w(TAG, "libbox config rejected: ${e.javaClass.simpleName}")
+        embeddedCall { Libbox.newService(configJson, LibboxPlatform(vpnService, tunFd)) }.getOrElse { failure ->
+            lastError =
+                if (failure is LinkageError) {
+                    "Embedded sing-box runtime is unavailable or incompatible"
+                } else {
+                    "libbox config rejected"
+                }
+            Log.w(TAG, "libbox creation failed: ${failure.javaClass.simpleName}")
             null
         }
 
-    private fun startService(svc: BoxService): Boolean {
-        try {
-            svc.start()
-        } catch (e: Exception) {
-            lastError = "libbox core failed to start"
-            Log.w(TAG, "libbox core start failed: ${e.javaClass.simpleName}")
-            try {
-                svc.close()
-            } catch (closeError: Exception) {
-                Log.w(TAG, "closing a failed core also failed: ${closeError.javaClass.simpleName}")
-            }
-            return false
-        }
-        service = svc
-        running.set(true)
-        Log.i(TAG, "libbox core started (version ${version()})")
-        return true
-    }
+    private fun startService(svc: BoxService): Boolean =
+        embeddedCall { svc.start() }.fold(
+            onSuccess = {
+                Log.i(TAG, "libbox core started")
+                true
+            },
+            onFailure = { failure ->
+                lastError = "libbox core failed to start"
+                Log.w(TAG, "libbox core start failed: ${failure.javaClass.simpleName}")
+                false
+            },
+        )
 
     fun stop() {
-        val svc = service ?: return
-        service = null
-        running.set(false)
-        try {
-            svc.close()
-        } catch (e: Exception) {
-            Log.w(TAG, "libbox close error: ${e.javaClass.simpleName}")
-        }
-        Log.i(TAG, "libbox core stopped")
+        owner.stop()
     }
 
-    fun isRunning(): Boolean = running.get()
+    fun isRunning(): Boolean = owner.running
 }
 
 /**

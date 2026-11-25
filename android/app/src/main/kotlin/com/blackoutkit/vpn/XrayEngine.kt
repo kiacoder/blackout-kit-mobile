@@ -55,10 +55,6 @@ object XrayEngine {
     var lastError: String? = null
         private set
 
-    @Volatile
-    var lastConfigJson: String? = null
-        private set
-
     /**
      * Fired when the core stops without [stop] being called — i.e. it crashed
      * or shut itself down. The service uses this to decide whether to hold the
@@ -69,12 +65,19 @@ object XrayEngine {
 
     private val envInitialized = AtomicBoolean(false)
 
-    // Written from the establish worker thread, cleared from the main thread
-    // (teardown / onRevoke / onDestroy). Without @Volatile the main thread can
-    // observe a stale null and skip stopLoop(), leaving the core running
-    // against a closed TUN fd.
-    @Volatile
-    private var controller: CoreController? = null
+    private val owner =
+        EmbeddedCoreOwner<CoreController> { current ->
+            stoppingIntentionally = true
+            try {
+                embeddedCall { current.stopLoop() }.getOrElse { failure ->
+                    lastError = "Xray core cleanup failed; retry cleanup before starting another core"
+                    Log.w(TAG, "Core stop failed: ${failure.javaClass.simpleName}")
+                    error(lastError!!)
+                }
+            } finally {
+                stoppingIntentionally = false
+            }
+        }
 
     /** Set immediately before an intentional stop so the callback can tell the difference. */
     @Volatile
@@ -115,7 +118,9 @@ object XrayEngine {
 
     /** True when the core has been brought up and not yet torn down. */
     val isRunning: Boolean
-        get() = controller?.isRunning == true
+        get() = owner.current?.isRunning == true
+
+    internal val hasOwnedCore: Boolean get() = owner.current != null
 
     /**
      * One-time environment setup.
@@ -221,58 +226,28 @@ object XrayEngine {
     private fun startInitializedCore(
         configJson: String,
         tunFd: Int,
-    ): Boolean {
-        stop()
-
-        // The controller handle must outlive the try below: the catch needs it
-        // to stop a core that threw half-way through startLoop. Declaring it
-        // inside the try would make it invisible to the catch.
-        val created =
-            try {
-                Libv2ray.newCoreController(CoreCallback)
-            } catch (t: LinkageError) {
-                lastError = "Could not create the Xray core controller"
-                Log.w(TAG, "Core creation failed: ${t.javaClass.simpleName}")
-                return false
-            }
-
-        return try {
-            lastConfigJson = configJson
-            created.startLoop(configJson, tunFd)
-
-            if (created.isRunning) {
-                controller = created
-                lastError = null
-                Log.i(TAG, "core running, tunFd=$tunFd")
-                true
-            } else {
-                stopFailedStart(created)
-                lastError = "Xray core reported that it failed to start"
-                Log.e(TAG, lastError!!)
-                false
-            }
-        } catch (t: Throwable) {
-            // Native config errors can contain credentials. Report the failure
-            // category without the raw exception message.
-            lastError = "Xray core rejected the configuration"
-            Log.w(TAG, "Core startup failed: ${t.javaClass.simpleName}")
-            // startLoop can throw AFTER the core has partially started. The
-            // non-throwing failure path above stops the half-started
-            // controller explicitly; this path used to return without doing
-            // so, leaving a running core with no owner — nothing would ever
-            // call stopLoop on it, and the next connect started a second one.
-            stopFailedStart(created)
-            false
-        }
-    }
-
-    private fun stopFailedStart(created: CoreController) {
-        try {
-            created.stopLoop()
-        } catch (stopError: Throwable) {
-            Log.w(TAG, "stopLoop after failed start: ${stopError.javaClass.simpleName}")
-        }
-    }
+    ): Boolean =
+        owner.start(
+            create = {
+                embeddedCall { Libv2ray.newCoreController(CoreCallback) }.getOrElse { failure ->
+                    lastError = "Could not create the Xray core controller"
+                    Log.w(TAG, "Core creation failed: ${failure.javaClass.simpleName}")
+                    null
+                }
+            },
+            activate = { created ->
+                val started =
+                    embeddedCall {
+                        created.startLoop(configJson, tunFd)
+                        created.isRunning
+                    }.getOrElse { failure ->
+                        Log.w(TAG, "Core startup failed: ${failure.javaClass.simpleName}")
+                        false
+                    }
+                lastError = if (started) null else "Xray core rejected the configuration or failed to start"
+                started
+            },
+        )
 
     /**
      * Starts the core in "no tunnel" mode so it can serve the loopback SOCKS
@@ -286,19 +261,7 @@ object XrayEngine {
 
     /** Tears the core down. Safe to call when nothing is running. */
     fun stop() {
-        synchronized(this) {
-            val current = controller ?: return
-            controller = null
-            stoppingIntentionally = true
-            try {
-                current.stopLoop()
-                Log.i(TAG, "core stopped")
-            } catch (t: Throwable) {
-                Log.w(TAG, "error stopping core: ${t.javaClass.simpleName}")
-            } finally {
-                stoppingIntentionally = false
-            }
-        }
+        owner.stop()
     }
 
     /** True when this device can actually run the bundled core. */

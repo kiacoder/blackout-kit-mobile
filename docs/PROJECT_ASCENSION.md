@@ -452,3 +452,28 @@ Strict scope 31 of 36 files. Full ktlint, scoped Detekt, 575 Flutter
 tests, 48 Android JVM tests, Android lint 0 errors/6 warnings,
 12 binary checks and diff checks passed. Fresh CI, toolchain promotion
 and physical-device validation remain pending. No production merge/release.
+
+
+## Phase 3 embedded ownership batch 10 (2026-11-25)
+
+Prior 3434811 hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; Tests/APK/iOS pending at inspection. Shared EmbeddedCoreOwner
+assigns native handles before activation, retains them on failed close,
+blocks replacement until cleanup succeeds, and serializes same-owner
+operations. Xray probe cleanup checks ownership even when not running.
+Libbox startup failure cannot fall back when native cleanup throws.
+Removed unused Xray config retention; native failure categories remain
+redacted. Centralized declared gomobile checked exceptions in embeddedCall
+with interrupt restoration and no catch of fatal JVM errors (other than
+expected linkage failures). One broad checked exception remains explicitly
+flagged, not suppressed. Five new JVM tests cover owner retention, retry,
+partial startup, interruption and error propagation. Service-level TUN
+descriptor lifetime on failed native close and cross-engine concurrency
+still require review; real-device behavior unverified.
+
+Detekt 33 -> 27 weighted findings: VpnPlugin 15, BlackoutVpnService 11,
+EmbeddedCoreOwner 1. Strict scope 34 of 38 Kotlin files; both embedded
+engine files clean. Full ktlint, scoped Detekt, 575 Flutter tests, 53
+Android JVM tests, Android lint, 12 binary checks and 15 shell syntax
+checks passed. No additional suppressions. Fresh CI, toolchain promotion
+and real-device tests pending; no main merge or release.

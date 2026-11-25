@@ -21,7 +21,7 @@ class ReleaseSecurityTests(unittest.TestCase):
 
     def test_experimental_library_rejected(self):
         with tempfile.TemporaryDirectory() as d:
-            for name in ('libblackout-tunnels.so', 'libprocess_guard.so'):
+            for name in ('libblackout-tunnels.so', 'libprocess_guard.so', 'libprocess_guard_fixture.so'):
                 with self.subTest(name=name), self.assertRaises(ValueError):
                     inventory(self.apk(Path(d), extra=f'lib/arm64-v8a/{name}'), {'arm64-v8a'})
 

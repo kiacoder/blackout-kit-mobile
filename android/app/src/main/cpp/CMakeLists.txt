@@ -13,6 +13,13 @@ if(BLACKOUT_PROCESS_GUARD_EXPERIMENT)
         LINK_FLAGS "-Wl,-z,relro,-z,now,-z,noexecstack")
     target_compile_options(process_guard PRIVATE -fstack-protector-strong -Wformat -Werror=format-security)
     target_compile_definitions(process_guard PRIVATE _FORTIFY_SOURCE=2)
+    add_executable(process_guard_fixture process_guard_fixture.c)
+    set_target_properties(process_guard_fixture PROPERTIES
+        OUTPUT_NAME "libprocess_guard_fixture.so"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+        LINK_FLAGS "-Wl,-z,relro,-z,now,-z,noexecstack")
+    target_compile_options(process_guard_fixture PRIVATE -fstack-protector-strong -Wformat -Werror=format-security)
+    target_compile_definitions(process_guard_fixture PRIVATE _FORTIFY_SOURCE=2)
 endif ()
 
 # Explicit C hardening. Do not manufacture unused fortified symbol references.

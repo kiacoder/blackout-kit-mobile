@@ -76,6 +76,9 @@ android {
 
     defaultConfig {
         applicationId "com.blackoutkit.vpn"
+        if (project.findProperty("enableProcessGuardExperiment") == "true") {
+            testInstrumentationRunner "com.blackoutkit.vpn.ProcessGuardAcceptance"
+        }
         // Opt-in development adapter, NOT a shipped/verified engine. No binary
         // is downloaded at runtime. Supply reviewed GPL-compliant artifacts.
         buildConfigField "boolean", "ENABLE_EXPERIMENTAL_MIHOMO",
@@ -149,7 +152,10 @@ android {
             }
             // Explicit test-distribution mode: install beside the production app
             // instead of replacing a release-signed com.blackoutkit.vpn build.
-            if (project.findProperty("nativeTestPackage") == "true") {
+            if (project.findProperty("enableProcessGuardExperiment") == "true") {
+                applicationIdSuffix ".guardtest"
+                versionNameSuffix "-guard-test"
+            } else if (project.findProperty("nativeTestPackage") == "true") {
                 applicationIdSuffix ".nativetest"
                 versionNameSuffix "-native-test.7"
             }

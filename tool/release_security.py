@@ -11,7 +11,7 @@ from pathlib import Path
 
 ABIS = {'arm64-v8a', 'armeabi-v7a'}
 EXPERIMENTAL = {'libblackout-tunnels.so', 'libblackout-wireguard.so',
-                'libblackout-awg.so', 'libprocess_guard.so'}
+                'libblackout-awg.so', 'libprocess_guard.so', 'libprocess_guard_fixture.so'}
 HEX = re.compile(r'[a-f0-9]{64}')
 
 def digest(path):

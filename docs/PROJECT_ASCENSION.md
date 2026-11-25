@@ -786,3 +786,27 @@ production engine launches. Android extraction/execution and lifetime
 behavior must be tested before activation. Force-kill does not itself
 prove descendants are reaped, and old crash residue remains open.
 No production merge or release.
+
+
+## Phase 3 supervisor device acceptance harness (2026-11-25)
+
+Added platform Instrumentation runner and synthetic C child fixture
+using a cross-process POSIX lock to prove child cleanup independently
+of supervisor exit. Cases: propagated exit status, lifetime-pipe EOF,
+TERM, launch-thread turnover, forcible stop (API26+). Fixture includes
+a 30-second independent bound. No VPN credentials or network needed.
+Opt-in debug build has distinct com.blackoutkit.vpn.guardtest package
+and companion .test package. Windows acceptance script builds by
+default; device execution requires explicit -RunOnDevice -DeviceSerial
+and validates package identities, ARM ABI, API and exact pass marker.
+Both APKs compiled, package identities verified with aapt, and both
+ARM ABIs contain guard and fixture ELF entries. APKs retained under
+ignored .cache/process-guard-acceptance/. Default APK rebuilt and
+verified to exclude both executables. Release inventory rejects both;
+six release-security tests and 12 tracked artifact checks passed.
+69 JVM tests and strict lint passed; old AGP metadata diagnostics
+remain. Prior hosted supervisor and Ruff checks passed. No device
+attached, so instrumentation execution is NOT verified. Production
+activation, actual app-process-death test on Android, crash residue,
+secure-storage migration and fresh security scan remain open.
+No main merge or release.

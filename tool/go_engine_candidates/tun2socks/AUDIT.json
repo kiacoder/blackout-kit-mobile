@@ -1,0 +1,120 @@
+{
+  "scope": "linked module versions only",
+  "findings": [],
+  "modules": {
+    "github.com/xjasonlyu/tun2socks/v2": [
+      "v2.7.0",
+      "h1:fYEN0Q1sSanuoID8xvUTsMODbKLJJH/J5ywYoMRxIPw="
+    ],
+    "github.com/ajg/form": [
+      "v1.7.1",
+      "h1:OsnBDzTkrWdrxvEnO68I72ZVGJGNaMwPhoAm0V+llgc="
+    ],
+    "github.com/docker/go-units": [
+      "v0.5.0",
+      "h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4="
+    ],
+    "github.com/go-chi/chi/v5": [
+      "v5.4.0",
+      "h1:+ufzvFTGKyin26Or5DLrlIDq4ygIDBVcj7oVNeeaYFE="
+    ],
+    "github.com/go-chi/cors": [
+      "v1.2.2",
+      "h1:Jmey33TE+b+rB7fT8MUy1u0I4L+NARQlK6LhzKPSyQE="
+    ],
+    "github.com/go-chi/render": [
+      "v1.0.3",
+      "h1:AsXqd2a1/INaIfUSKq3G5uA8weYx20FOsM7uSoCyyt4="
+    ],
+    "github.com/go-gost/relay": [
+      "v0.6.1",
+      "h1:7SqnHFbY8x/DzvjpK03a5zcVH9+TbJAcnW/RT6s1ecc="
+    ],
+    "github.com/google/btree": [
+      "v1.1.3",
+      "h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg="
+    ],
+    "github.com/google/shlex": [
+      "v0.0.0-20191202100458-e7afc7fbc510",
+      "h1:El6M4kTTCOh6aBiKaUGG7oYTSPP8MxqL4YI3kZKwcP4="
+    ],
+    "github.com/google/uuid": [
+      "v1.6.0",
+      "h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0="
+    ],
+    "github.com/gorilla/schema": [
+      "v1.4.1",
+      "h1:jUg5hUjCSDZpNGLuXQOgIWGdlgrIdYvgQ0wZtdK1M3E="
+    ],
+    "github.com/gorilla/websocket": [
+      "v1.5.4-0.20240701034025-d67f41855da4",
+      "h1:PYKzliEgITjLJoJqbV90S0YRaG8LNAsICH6fp6MApC0="
+    ],
+    "github.com/spf13/pflag": [
+      "v1.0.10",
+      "h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk="
+    ],
+    "go.uber.org/atomic": [
+      "v1.11.0",
+      "h1:ZvwS0R+56ePWxUNi+Atn9dWONBPp/AUETXlHW0DxSjE="
+    ],
+    "go.uber.org/multierr": [
+      "v1.11.0",
+      "h1:blXXJkSxSSfBVBlC76pxqeO+LN3aDfLQo+309xJstO0="
+    ],
+    "go.uber.org/zap": [
+      "v1.28.0",
+      "h1:IZzaP1Fv73/T/pBMLk4VutPl36uNC+OSUh3JLG3FIjo="
+    ],
+    "golang.org/x/crypto": [
+      "v0.58.1-0.20261009181718-2f1f834330b2",
+      "h1:zGDaB+/Mus2mScKvZ23k+W9NAUbP56sNM9SptgvWI5A="
+    ],
+    "golang.org/x/exp": [
+      "v0.0.0-20260611194520-c48552f49976",
+      "h1:X8Hz2ImujgbmetVuW+w2YkyZChE3cBpZi2P158rTG9M="
+    ],
+    "golang.org/x/net": [
+      "v0.62.0",
+      "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY="
+    ],
+    "golang.org/x/sys": [
+      "v0.49.0",
+      "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA="
+    ],
+    "golang.org/x/time": [
+      "v0.15.0",
+      "h1:bbrp8t3bGUeFOx08pvsMYRTCVSMk89u4tKbNOZbp88U="
+    ],
+    "gopkg.in/yaml.v3": [
+      "v3.0.1",
+      "h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA="
+    ],
+    "gvisor.dev/gvisor": [
+      "v0.0.0-20260701204157-69c2d17aea96",
+      "h1:LZXOf4NwvAwUy/eI8P+Y3DUdYLyaCEDNPEjsL2OP2ro="
+    ]
+  },
+  "artifacts": [
+    {
+      "abi": "arm64-v8a",
+      "sha256": "0e67f38aaf2a10d9a57163b40cbd26d876239c42c080fc204bdda2612a389b8e",
+      "elf": {
+        "machine": 183,
+        "type": 3,
+        "bits": 64,
+        "androidApi": 24
+      }
+    },
+    {
+      "abi": "armeabi-v7a",
+      "sha256": "a68f86074afd502d53cf7a42e88db2382bb4acb6aa6eedb175e1da2d9612482a",
+      "elf": {
+        "machine": 40,
+        "type": 3,
+        "bits": 32,
+        "androidApi": 24
+      }
+    }
+  ]
+}

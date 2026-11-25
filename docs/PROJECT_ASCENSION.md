@@ -866,3 +866,17 @@ readonly builds completed. Vulnerability assessment, independent
 clean locked rebuilds, AAR provenance, secure-storage migration,
 scanner results and device acceptance remain open. No main merge
 or release.
+
+
+## Phase 3 linked Go advisory audit and tun2socks patch candidates (2026-11-25)
+
+Live OSV: 92 historical module versions, 26 module/advisory
+matches across 9 packages. Added repeatable informational CI report
+with strict CLI option; 4 new unit tests, full Linux Python 74/74
+and 12 binary checks passed. Strict live scan rejected findings.
+Two tun2socks patch attempts, second resolves all reported linked
+module matches: 23 module versions queried, zero matches; both
+ARM ABIs pass build, ELF API24 and module verification. Snapshot
+inputs/evidence retained; no bundled binary change. Sing-box patch
+archive HTTP403, pending. No independent rebuild, stdlib or
+reachability assessment, Android device acceptance, or main merge.

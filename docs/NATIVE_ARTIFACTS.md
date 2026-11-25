@@ -161,3 +161,47 @@ binary reproduction, verified toolchain origin or Android execution.
 Candidates remain in ignored .cache/*-locked-final; no bundled
 artifacts replaced. Advisory review and independent clean builds
 remain required before promotion.
+
+
+## Linked Go advisory assessment (2026-11-25)
+
+OSV querybatch returned 26 module/advisory matches across 92
+distinct linked module versions (9 affected packages). Sing-box
+25 matches, tun2socks 6, 5 shared; alias-equivalent records may
+be counted separately. This is version-based screening, not
+reachability analysis or standard-library assessment.
+
+| Module | Historical version | Proposed fixed-version candidate |
+| --- | --- | --- |
+| github.com/andybalholm/brotli | v1.1.0 | v1.2.7 |
+| github.com/go-chi/chi/v5 | v5.3.0 | v5.4.0 |
+| github.com/gorilla/websocket | v1.5.3 | v1.5.4-0.20240701034025-d67f41855da4 |
+| github.com/klauspost/compress | v1.19.1 | v1.20.2 |
+| golang.org/x/crypto | v0.54.0 | v0.58.1-0.20261009181718-2f1f834330b2 |
+| golang.org/x/mod | v0.37.0 | v0.40.0 |
+| golang.org/x/net | v0.57.0 | v0.62.0 |
+| golang.org/x/text | v0.40.0 | v0.41.0 |
+| google.golang.org/grpc | v1.80.0 | v1.83.2 |
+
+All nine proposed versions returned zero targeted OSV matches;
+eight downloaded with sumdb enabled. compress archive HTTP403.
+New audit script deduplicates module/version queries, records lock
+hashes and engine attribution, rejects incomplete responses and
+supports strict exit 1 for findings. CI reports findings explicitly
+and uploads evidence, informational until remediation; not a release
+gate. Strict live query returned exit 1. Raw advisory details are
+under ignored .cache/go-lock-audit/.
+
+Tun2socks patch trial initially introduced two x/net v0.60.0
+findings via transitive selection. Explicit x/net v0.62.0 and
+x/text v0.41.0 requirements resolved these in the second trial.
+Both ARM ABIs built, same linked graph (23 entries including main),
+API24 ELF metadata and go mod verify passed. OSV query of all 23
+linked module versions returned zero matches on 2026-11-25.
+Candidate dependency inputs and evidence are recorded under
+tool/go_engine_candidates/tun2socks/ as snapshots, not active
+Go module manifests. Candidate binaries remain ignored under
+.cache/tun2socks-patched-v2. No production binary changed.
+Independent rebuild, runtime compatibility, standard library and
+symbol reachability analysis are pending. Sing-box patch build
+remains blocked by compress archive retrieval. No release approval.

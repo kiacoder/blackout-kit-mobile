@@ -24,6 +24,26 @@ jobs:
       - run: python3 -m unittest tool.tests.test_supply_chain -v
       - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
+  native-go-advisory-report:
+    name: Native Go advisory report (module versions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Query OSV for the bundled linked-module locks
+        run: python3 tool/audit_go_engine_locks.py --output native-go-osv.json
+      - name: Report advisory matches explicitly
+        run: |
+          python3 -c 'import json; r=json.load(open("native-go-osv.json")); n=len(r["findings"]); print(f"::warning::{n} native Go module/advisory matches; review required, not release approval") if n else print("No module-version matches returned; reachability and standard library not assessed")'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-go-osv-report
+          path: native-go-osv.json
+          if-no-files-found: error
+          retention-days: 14
+
   dependency-review:
     if: github.event_name == 'pull_request'
     name: Dependency review

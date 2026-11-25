@@ -108,7 +108,7 @@ object XrayEngine {
             code: Long,
             message: String?,
         ): Long {
-            Log.i(TAG, "core status [$code] $message")
+            Log.i(TAG, "core status [$code]")
             return 0
         }
     }
@@ -164,38 +164,20 @@ object XrayEngine {
             envInitialized.set(true)
             Log.i(TAG, "core env initialised, ${version()}")
             true
-        } catch (t: Throwable) {
-            lastError = "Could not initialise the Xray core environment: ${t.message}"
-            Log.e(TAG, lastError, t)
-            false
+        } catch (t: LinkageError) {
+            environmentFailure(t)
+        } catch (t: IllegalStateException) {
+            environmentFailure(t)
+        } catch (t: SecurityException) {
+            environmentFailure(t)
+        } catch (t: ClassCastException) {
+            environmentFailure(t)
         }
 
-    /**
-     * XUDP reads this setting as unpadded URL-safe Base64 and decodes it to a
-     * 32-byte per-install key. URL-safe Base64 remains ASCII across gomobile's
-     * Java-to-Go string conversion.
-     */
-    private fun xudpBaseKey(context: Context): String {
-        // Called under the initialization lock. Persist an independent random
-        // key instead of deriving one from a device ID or a public fallback.
-        val preferences = context.getSharedPreferences("xudp_private", Context.MODE_PRIVATE)
-        val flags = Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
-        val existing = preferences.getString("base_key", null)
-        if (existing != null) {
-            val decoded =
-                try {
-                    Base64.decode(existing, flags)
-                } catch (_: IllegalArgumentException) {
-                    null
-                }
-            if (decoded?.size == XUDP_KEY_BYTES) return existing
-        }
-        val key = ByteArray(XUDP_KEY_BYTES).apply { SecureRandom().nextBytes(this) }
-        val encoded = Base64.encodeToString(key, flags)
-        check(preferences.edit().putString("base_key", encoded).commit()) {
-            "Could not persist the XUDP installation key"
-        }
-        return encoded
+    private fun environmentFailure(failure: Throwable): Boolean {
+        lastError = "Could not initialise the Xray core environment"
+        Log.w(TAG, "Core environment failure: ${failure.javaClass.simpleName}")
+        return false
     }
 
     /** Human-readable core version, or null if the AAR is missing. */
@@ -206,8 +188,8 @@ object XrayEngine {
             } else {
                 null
             }
-        } catch (t: Throwable) {
-            Log.w(TAG, "checkVersionX failed: ${t.javaClass.name}: ${t.message}", t)
+        } catch (t: LinkageError) {
+            Log.w(TAG, "checkVersionX failed: ${t.javaClass.simpleName}")
             null
         }
 
@@ -248,9 +230,9 @@ object XrayEngine {
         val created =
             try {
                 Libv2ray.newCoreController(CoreCallback)
-            } catch (t: Throwable) {
-                lastError = "Could not create the Xray core controller: ${t.message}"
-                Log.e(TAG, lastError, t)
+            } catch (t: LinkageError) {
+                lastError = "Could not create the Xray core controller"
+                Log.w(TAG, "Core creation failed: ${t.javaClass.simpleName}")
                 return false
             }
 
@@ -270,10 +252,10 @@ object XrayEngine {
                 false
             }
         } catch (t: Throwable) {
-            // A config parse error surfaces here as an exception from
-            // startLoop; the message is the most useful thing we can show.
-            lastError = "Xray core rejected the configuration: ${t.message}"
-            Log.e(TAG, lastError, t)
+            // Native config errors can contain credentials. Report the failure
+            // category without the raw exception message.
+            lastError = "Xray core rejected the configuration"
+            Log.w(TAG, "Core startup failed: ${t.javaClass.simpleName}")
             // startLoop can throw AFTER the core has partially started. The
             // non-throwing failure path above stops the half-started
             // controller explicitly; this path used to return without doing
@@ -312,7 +294,7 @@ object XrayEngine {
                 current.stopLoop()
                 Log.i(TAG, "core stopped")
             } catch (t: Throwable) {
-                Log.w(TAG, "error stopping core: ${t.message}")
+                Log.w(TAG, "error stopping core: ${t.javaClass.simpleName}")
             } finally {
                 stoppingIntentionally = false
             }
@@ -321,4 +303,32 @@ object XrayEngine {
 
     /** True when this device can actually run the bundled core. */
     fun isSupported(): Boolean = version() != null
+}
+
+/**
+ * XUDP reads this setting as unpadded URL-safe Base64 and decodes it to a
+ * 32-byte per-install key. URL-safe Base64 remains ASCII across gomobile's
+ * Java-to-Go string conversion.
+ */
+private fun xudpBaseKey(context: Context): String {
+    // Called under the initialization lock. Persist an independent random
+    // key instead of deriving one from a device ID or a public fallback.
+    val preferences = context.getSharedPreferences("xudp_private", Context.MODE_PRIVATE)
+    val flags = Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
+    val existing = preferences.getString("base_key", null)
+    if (existing != null) {
+        val decoded =
+            try {
+                Base64.decode(existing, flags)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+        if (decoded?.size == XUDP_KEY_BYTES) return existing
+    }
+    val key = ByteArray(XUDP_KEY_BYTES).apply { SecureRandom().nextBytes(this) }
+    val encoded = Base64.encodeToString(key, flags)
+    check(preferences.edit().putString("base_key", encoded).commit()) {
+        "Could not persist the XUDP installation key"
+    }
+    return encoded
 }

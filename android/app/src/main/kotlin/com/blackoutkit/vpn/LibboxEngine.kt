@@ -66,7 +66,7 @@ object LibboxEngine {
             } else {
                 null
             }
-        } catch (e: Throwable) {
+        } catch (e: LinkageError) {
             Log.w(TAG, "libbox version probe failed: ${e.javaClass.simpleName}: ${e.message}")
             null
         }
@@ -76,7 +76,7 @@ object LibboxEngine {
         try {
             GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED) &&
                 Libbox.version() != null
-        } catch (e: Throwable) {
+        } catch (e: LinkageError) {
             Log.w(TAG, "libbox availability probe failed: ${e.javaClass.simpleName}: ${e.message}")
             false
         }
@@ -96,30 +96,41 @@ object LibboxEngine {
             stop()
         }
         lastError = null
-        if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
+        return if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
             lastError = GoRuntimeAdmission.RESTART_REQUIRED
-            return false
+            false
+        } else {
+            createService(vpnService, tunFd, configJson)?.let(::startService) ?: false
         }
-        val svc =
-            try {
-                Libbox.newService(configJson, LibboxPlatform(vpnService, tunFd))
-            } catch (e: LinkageError) {
-                lastError = "Embedded sing-box runtime is unavailable or incompatible"
-                return false
-            } catch (e: Exception) {
-                lastError = "libbox config rejected: ${e.message}"
-                Log.e(TAG, lastError!!, e)
-                return false
-            }
+    }
+
+    private fun createService(
+        vpnService: BlackoutVpnService,
+        tunFd: Int,
+        configJson: String,
+    ): BoxService? =
+        try {
+            Libbox.newService(configJson, LibboxPlatform(vpnService, tunFd))
+        } catch (e: LinkageError) {
+            lastError = "Embedded sing-box runtime is unavailable or incompatible"
+            Log.w(TAG, "libbox entry point unavailable: ${e.javaClass.simpleName}")
+            null
+        } catch (e: Exception) {
+            lastError = "libbox config rejected"
+            Log.w(TAG, "libbox config rejected: ${e.javaClass.simpleName}")
+            null
+        }
+
+    private fun startService(svc: BoxService): Boolean {
         try {
             svc.start()
         } catch (e: Exception) {
-            lastError = "libbox core failed to start: ${e.message}"
-            Log.e(TAG, lastError!!, e)
+            lastError = "libbox core failed to start"
+            Log.w(TAG, "libbox core start failed: ${e.javaClass.simpleName}")
             try {
                 svc.close()
             } catch (closeError: Exception) {
-                Log.w(TAG, "closing a failed core also failed: ${closeError.message}")
+                Log.w(TAG, "closing a failed core also failed: ${closeError.javaClass.simpleName}")
             }
             return false
         }
@@ -136,7 +147,7 @@ object LibboxEngine {
         try {
             svc.close()
         } catch (e: Exception) {
-            Log.w(TAG, "libbox close error: ${e.message}")
+            Log.w(TAG, "libbox close error: ${e.javaClass.simpleName}")
         }
         Log.i(TAG, "libbox core stopped")
     }
@@ -154,7 +165,7 @@ object LibboxEngine {
 private class LibboxPlatform(
     private val vpnService: BlackoutVpnService,
     private val tunFd: Int,
-) : PlatformInterface {
+) : LibboxPlatformPolicy() {
     private val cm = vpnService.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     override fun openTun(options: TunOptions): Int {
@@ -193,8 +204,10 @@ private class LibboxPlatform(
                 }
             monitorCallback = callback
             cm.registerDefaultNetworkCallback(callback)
-        } catch (e: Exception) {
-            Log.w("LibboxPlatform", "default interface monitor unavailable: ${e.message}")
+        } catch (_: SecurityException) {
+            Log.w("LibboxPlatform", "Default interface monitoring denied")
+        } catch (_: IllegalArgumentException) {
+            Log.w("LibboxPlatform", "Default interface monitor rejected")
         }
     }
 
@@ -216,8 +229,10 @@ private class LibboxPlatform(
                     -1
                 }
             listener.updateDefaultInterface(name, idx, false, false)
-        } catch (e: Exception) {
-            Log.w("LibboxPlatform", "interface report failed: ${e.message}")
+        } catch (_: SecurityException) {
+            Log.w("LibboxPlatform", "Interface reporting denied")
+        } catch (_: LinkageError) {
+            Log.w("LibboxPlatform", "Native interface listener unavailable")
         }
     }
 
@@ -246,6 +261,30 @@ private class LibboxPlatform(
         return InterfaceIterator(list)
     }
 
+    override fun packageNameByUid(uid: Int): String = vpnService.packageManager.getNameForUid(uid) ?: ""
+
+    @Suppress("DEPRECATION")
+    override fun uidByPackageName(packageName: String): Int =
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                vpnService.packageManager.getPackageUid(packageName, PackageManager.PackageInfoFlags.of(0))
+            } else {
+                // The pre-33 overload is required on the supported API 24-32 range.
+                vpnService.packageManager.getPackageUid(packageName, 0)
+            }
+        } catch (_: PackageManager.NameNotFoundException) {
+            -1
+        } catch (_: SecurityException) {
+            -1
+        }
+
+    override fun writeLog(message: String?) {
+        Log.i("Libbox", message ?: "")
+    }
+}
+
+/** Fixed platform policy, separate from Android network and package queries. */
+private abstract class LibboxPlatformPolicy : PlatformInterface {
     override fun underNetworkExtension(): Boolean = false
 
     override fun includeAllNetworks(): Boolean = false
@@ -269,27 +308,6 @@ private class LibboxPlatform(
         destinationAddress: String?,
         destinationPort: Int,
     ): Int = -1
-
-    override fun packageNameByUid(uid: Int): String = vpnService.packageManager.getNameForUid(uid) ?: ""
-
-    @Suppress("DEPRECATION")
-    override fun uidByPackageName(packageName: String): Int =
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                vpnService.packageManager.getPackageUid(packageName, PackageManager.PackageInfoFlags.of(0))
-            } else {
-                // The pre-33 overload is required on the supported API 24-32 range.
-                vpnService.packageManager.getPackageUid(packageName, 0)
-            }
-        } catch (_: PackageManager.NameNotFoundException) {
-            -1
-        } catch (_: SecurityException) {
-            -1
-        }
-
-    override fun writeLog(message: String?) {
-        Log.i("Libbox", message ?: "")
-    }
 }
 
 /** Describe only an internet-capable network with a named interface. */

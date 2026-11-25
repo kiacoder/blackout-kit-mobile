@@ -427,3 +427,28 @@ scope now 30 of 36 files. Full ktlint, scoped Detekt, 575 Flutter tests,
 exceptions, 3 complexity, 2 long methods, 1 large class. Fresh CI,
 physical-device VPN traffic verification, and toolchain promotion
 remain pending. Phase 3 open; no production merge or release.
+
+
+## Phase 3 native engine boundaries batch 9 (2026-11-25)
+
+Prior 2fc03c6 hosted Kotlin, host, Rust and supply-chain checks passed;
+Tests/APK/iOS were pending at inspection. Extracted EngineRunner launch
+coordinator while preserving JNI names and runner-owned process handles.
+Centralized failed-launch cleanup in finally; handle IO, permission,
+interruption and linkage failures explicitly. Unexpected failures propagate
+after attempted cleanup. EngineRunner now passes strict Detekt. Separated
+libbox platform policy from Android queries, split native service startup,
+and extracted Xray installation key handling. Removed several raw native
+error and status messages from logs/UI to reduce credential exposure.
+Verified actual bundled Java declarations with javap: libbox newService,
+start and close, and Xray startLoop/stopLoop declare checked Exception.
+Seven broad native-boundary catches remain flagged for review; no new
+suppressions. Existing embedded-engine failed-stop ownership behavior
+still needs explicit review and real-device tests.
+
+Full Detekt audit 45 -> 33 weighted findings; four files remain:
+VpnPlugin 15, BlackoutVpnService 11, LibboxEngine 4, XrayEngine 3.
+Strict scope 31 of 36 files. Full ktlint, scoped Detekt, 575 Flutter
+tests, 48 Android JVM tests, Android lint 0 errors/6 warnings,
+12 binary checks and diff checks passed. Fresh CI, toolchain promotion
+and physical-device validation remain pending. No production merge/release.

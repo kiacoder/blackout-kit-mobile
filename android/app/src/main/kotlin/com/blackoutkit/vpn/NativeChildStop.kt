@@ -12,10 +12,10 @@ internal class NativeChildStop(
     private val now: () -> Long = System::nanoTime,
 ) {
     fun stop(
-        pid: Int,
+        token: Int,
         graceMs: Long = 500,
     ): Boolean {
-        require(pid > 0 && graceMs > 0)
+        require(token > 0 && graceMs > 0)
         // Clear an existing interrupt while draining; restore it on every exit.
         var interrupted = Thread.interrupted()
 
@@ -30,23 +30,23 @@ internal class NativeChildStop(
 
         fun awaitExit(): Boolean {
             val deadline = now() + graceMs * CHILD_NANOS_PER_MILLI
-            while (poll(pid) == -1) {
+            while (poll(token) == -1) {
                 val remaining = deadline - now()
                 if (remaining <= 0 || !pause(remaining)) return false
             }
             return true
         }
         return try {
-            if (poll(pid) != -1) return true // Do not signal an already-reaped PID.
+            if (poll(token) != -1) return true // Do not signal an already-reaped child.
             try {
-                terminate(pid)
+                terminate(token)
             } catch (_: Exception) {
             }
             if (awaitExit()) {
                 true
             } else {
                 try {
-                    kill(pid)
+                    kill(token)
                 } catch (_: Exception) {
                 }
                 awaitExit()

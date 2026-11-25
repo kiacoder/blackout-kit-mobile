@@ -692,3 +692,26 @@ checksums; merged libbox still lacks exact source revision. See
 NATIVE_ARTIFACTS.md. No binary hashes or engine versions changed.
 Fresh hosted tests, Android device checks and MobSF/VirusTotal score
 remain open; no production merge or release.
+
+
+## Phase 3 native child identity and reaping (2026-11-25)
+
+Replaced JNI-facing raw bridge PIDs with monotonic opaque tokens.
+A native mutex serializes registration, polling/reaping and signaling;
+exit status is cached, stale tokens are rejected, and only a confirmed
+direct child may receive SIGTERM/SIGKILL. Removed unused blocking JNI
+wait export. The ownership check assumes the launcher is the sole
+reaper of its JNI child; arbitrary external waitpid callers and
+platform behavior require device acceptance. Monitor captures its own
+child token, Process handles, callback and cancellation flag; startup
+rechecks child liveness after SOCKS readiness. Linux regression covers
+stale token, invalid signal, cached status and non-child rejection.
+Both prior parent-guard CI jobs passed. Local native lifecycle test,
+Android debug CMake build, JNI export inspection, 578 Flutter tests,
+67 JVM tests, strict lint (no issues), full ktlint/Detekt and 12 binary
+checks passed. Existing test-environment Hive/wakelock diagnostics
+and old AGP metadata messages remain. Native descriptor close loop
+still stops at 128; defer full descriptor enumeration to a tested
+follow-up. Java subprocess lifetime, crash residue, reproducible
+builds, fresh scanner results and device acceptance remain open.
+No main merge or release.

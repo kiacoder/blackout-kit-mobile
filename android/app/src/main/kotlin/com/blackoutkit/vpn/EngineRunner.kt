@@ -55,11 +55,11 @@ object EngineRunner {
     ): Int
 
     /** -1 while the child runs, otherwise its exit code. */
-    private external fun nativePollPid(pid: Int): Int
+    private external fun nativePollChild(token: Int): Int
 
     /** Sends a signal to a launcher-started child (SIGTERM/SIGKILL). */
-    private external fun nativeKillPid(
-        pid: Int,
+    private external fun nativeSignalChild(
+        token: Int,
         signal: Int,
     ): Int
 
@@ -100,12 +100,12 @@ object EngineRunner {
 
     private var tun2socksProcess: Process? = null
 
-    /** Pid of the tun2socks child started through the native launcher (-1: none). */
+    /** Opaque native launcher token, never an OS PID (-1: none). */
     @Volatile
-    private var tun2socksPid: Int = -1
+    private var tun2socksToken: Int = -1
     private var engineProcess: Process? = null
     private var monitorThread: Thread? = null
-    private val intentionalStop = AtomicBoolean(false)
+    private var monitorCancelled = AtomicBoolean(true)
 
     @Volatile
     var onUnexpectedExit: ((String) -> Unit)? = null
@@ -164,7 +164,6 @@ object EngineRunner {
             if (files == null) {
                 false
             } else {
-                intentionalStop.set(false)
                 launcher.validateAndLaunch(context, files, tunFd, socksPort).also { started = it }
             }
         } catch (_: java.io.IOException) {
@@ -264,7 +263,7 @@ object EngineRunner {
         ) {
             // ProcessBuilder cannot deliver the TUN descriptor; the launcher duplicates it.
             val engineLog = File("/dev/null")
-            tun2socksPid =
+            tun2socksToken =
                 nativeSpawnWithFd(
                     tun2socksPath.absolutePath,
                     arrayOf(
@@ -292,7 +291,7 @@ object EngineRunner {
         }
 
         private fun bridgeStartupError(): String? {
-            if (tun2socksPid <= 0) {
+            if (tun2socksToken <= 0) {
                 return "Could not start tun2socks (native launcher refused). " + NATIVE_LOG_WITHHELD
             }
             // Poll before and after the Process-only startup wait.
@@ -321,11 +320,15 @@ object EngineRunner {
                 } else {
                     readinessPortProvider(context, files.configFile.readText())
                 }
-            if (readinessPort !in 1..MAX_SOCKS_PORT ||
-                !readinessProbe("127.0.0.1", readinessPort, SOCKS_READY_TIMEOUT_MS)
+            val ready =
+                readinessPort in 1..MAX_SOCKS_PORT &&
+                    readinessProbe("127.0.0.1", readinessPort, SOCKS_READY_TIMEOUT_MS)
+            if (!ready ||
+                anyChildDied() ||
+                lifecycle.exitedProcess(listOfNotNull(engineProcess, tun2socksProcess)) != null
             ) {
                 return failLaunch(
-                    "The selected engine did not accept a local SOCKS5 readiness handshake." + NATIVE_LOG_WITHHELD,
+                    "Native process exited or the local SOCKS5 readiness handshake failed." + NATIVE_LOG_WITHHELD,
                 )
             }
             startMonitor()
@@ -343,28 +346,30 @@ object EngineRunner {
         }
 
         private fun startMonitor() {
+            val cancelled = AtomicBoolean(false)
+            monitorCancelled = cancelled
+            val children = listOfNotNull(engineProcess, tun2socksProcess)
+            val token = tun2socksToken
+            val listener = onUnexpectedExit
             monitorThread =
                 Thread({
-                    while (!intentionalStop.get()) {
-                        val childrenNow = listOfNotNull(engineProcess, tun2socksProcess)
-                        val exited = lifecycle.exitedProcess(childrenNow)
+                    while (!cancelled.get() && !Thread.currentThread().isInterrupted) {
+                        val exited = lifecycle.exitedProcess(children)
                         if (exited != null) {
                             val reason = "Engine process exited unexpectedly (code ${runCatching {
                                 exited.exitValue()
                             }.getOrNull() ?: "unknown"})."
-                            lastError = reason
-                            if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
+                            if (!cancelled.get()) listener?.invoke(reason)
                             return@Thread
                         }
                         // tun2socks was started through the native launcher, so it
                         // is not a Process the lifecycle helper can see.
                         if (nativeLoaded &&
-                            tun2socksPid > 0 &&
-                            nativePollPid(tun2socksPid) != -1
+                            token > 0 &&
+                            nativePollChild(token) != -1
                         ) {
-                            val reason = "tun2socks exited unexpectedly (code ${tun2socksExitCode()})."
-                            lastError = reason
-                            if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
+                            val reason = "tun2socks exited unexpectedly (code ${nativePollChild(token)})."
+                            if (!cancelled.get()) listener?.invoke(reason)
                             return@Thread
                         }
                         try {
@@ -381,16 +386,24 @@ object EngineRunner {
 
         /**
          * True when the launcher-started tun2socks child has exited. -1 from
-         * [nativePollPid] means "still running", anything else is a status.
+         * [nativePollChild] means "still running", anything else is a status.
          */
-        private fun anyChildDied(): Boolean = nativeLoaded && tun2socksPid > 0 && nativePollPid(tun2socksPid) != -1
+        private fun anyChildDied(): Boolean =
+            nativeLoaded && tun2socksToken > 0 && nativePollChild(tun2socksToken) != -1
 
         /** Exit code of the launcher-started tun2socks child, reaped if needed. */
-        private fun tun2socksExitCode(): Int = if (nativeLoaded && tun2socksPid > 0) nativePollPid(tun2socksPid) else -1
+        private fun tun2socksExitCode(): Int =
+            if (nativeLoaded &&
+                tun2socksToken > 0
+            ) {
+                nativePollChild(tun2socksToken)
+            } else {
+                -1
+            }
     }
 
     fun stop() {
-        intentionalStop.set(true)
+        monitorCancelled.set(true)
         monitorThread?.interrupt()
         monitorThread = null
         var failed = false
@@ -405,32 +418,31 @@ object EngineRunner {
         } catch (_: Exception) {
             failed = true
         }
-        // Poll reaps with WNOHANG. Never call blocking nativeWaitPid here:
-        // a failed signal used to wedge the sole VPN lifecycle worker forever.
-        if (nativeLoaded && tun2socksPid > 0) {
-            val pid = tun2socksPid
+        // Poll reaps with WNOHANG; shutdown must not block the sole VPN worker.
+        if (nativeLoaded && tun2socksToken > 0) {
+            val token = tun2socksToken
             val stopped =
                 try {
                     NativeChildStop(
-                        poll = ::nativePollPid,
+                        poll = ::nativePollChild,
                         terminate = {
-                            nativeKillPid(it, android.system.OsConstants.SIGTERM)
+                            nativeSignalChild(it, android.system.OsConstants.SIGTERM)
                             Unit
                         },
                         kill = {
-                            nativeKillPid(it, android.system.OsConstants.SIGKILL)
+                            nativeSignalChild(it, android.system.OsConstants.SIGKILL)
                             Unit
                         },
-                    ).stop(pid)
+                    ).stop(token)
                 } catch (_: Exception) {
                     false
                 } catch (_: LinkageError) {
                     false
                 }
-            if (stopped) tun2socksPid = -1 else failed = true
+            if (stopped) tun2socksToken = -1 else failed = true
         }
         if (failed) {
-            // Retain unresolved process/PID handles for the next cleanup attempt.
+            // Retain unresolved process/token handles for the next cleanup attempt.
             lastError = "Native child cleanup did not complete within its deadline."
             throw IllegalStateException(lastError)
         }

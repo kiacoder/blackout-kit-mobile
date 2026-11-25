@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "parent_guard.h"
+#include "owned_child.h"
 #include <assert.h>
 #include <errno.h>
 #include <sys/wait.h>
@@ -41,11 +42,40 @@ static void test_parent_exit(void) {
     assert(child == guarded_child && WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
 }
 
+static void test_owned_child(void) {
+    pid_t child = fork();
+    assert(child >= 0);
+    if (child == 0) {
+        for (;;) pause();
+    }
+    owned_child owner = {child, 42, CHILD_UNKNOWN};
+    assert(owned_child_poll(&owner, 41) == CHILD_UNKNOWN);
+    assert(owned_child_signal(&owner, 41, SIGKILL) == -1);
+    assert(owned_child_signal(&owner, 42, SIGUSR1) == -1);
+    assert(owned_child_poll(&owner, 42) == CHILD_PENDING);
+    assert(owned_child_signal(&owner, 42, SIGTERM) == 0);
+    int status;
+    do {
+        status = owned_child_poll(&owner, 42);
+        if (status == CHILD_PENDING) usleep(1000);
+    } while (status == CHILD_PENDING);
+    assert(status == 128 + SIGTERM);
+    assert(owned_child_poll(&owner, 42) == status);
+    assert(owned_child_signal(&owner, 42, SIGKILL) == -1);
+
+    /* A foreign PID cannot be authorized, even with the current token. */
+    owner = (owned_child){getpid(), 43, CHILD_UNKNOWN};
+    assert(owned_child_signal(&owner, 43, SIGKILL) == -1);
+    assert(owned_child_poll(&owner, 43) == CHILD_UNKNOWN);
+    assert(owned_child_poll(&owner, 42) == CHILD_UNKNOWN);
+}
+
 int main(void) {
     alarm(10);
     assert(prctl(PR_SET_CHILD_SUBREAPER, 1UL, 0UL, 0UL, 0UL) == 0);
     assert(arm_parent_guard(-1) == -1);
     assert(prctl(PR_SET_PDEATHSIG, 0UL, 0UL, 0UL, 0UL) == 0);
     test_parent_exit();
+    test_owned_child();
     return 0;
 }

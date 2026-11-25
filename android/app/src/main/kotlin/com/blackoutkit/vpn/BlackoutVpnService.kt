@@ -194,6 +194,9 @@ class BlackoutVpnService : VpnService() {
      */
     private var engineTunFd: ParcelFileDescriptor? = null
 
+    @Volatile
+    private var cleanupPending = false
+
     @Volatile private var nativeMonitor: Runnable? = null
     private var activeProtocol: String? = null
     private var activeName: String? = null
@@ -391,7 +394,10 @@ class BlackoutVpnService : VpnService() {
         }, complete = { ok ->
             clearConnectResultCallback(completion)
             completion?.invoke(ok)
-            if (!ok) finishService(startId)
+            if (!ok) {
+                notifyStatus("error")
+                if (!cleanupPending) finishService(startId)
+            }
         })
     }
 
@@ -561,13 +567,8 @@ class BlackoutVpnService : VpnService() {
     ): Boolean {
         val protocol = request.protocol
         tun = fd
-        // A previous attempt's engine copy must not survive this one.
-        try {
-            engineTunFd?.close()
-        } catch (_: java.io.IOException) {
-            Log.w(TAG, "Could not close previous engine descriptor")
-        }
-        engineTunFd = null
+        // The serialized session executor must finish old ownership cleanup first.
+        check(engineTunFd == null) { "Previous engine descriptor is still owned" }
 
         // Arm the kill switch before the engine starts, so a crash during
         // startup is caught too.
@@ -610,12 +611,8 @@ class BlackoutVpnService : VpnService() {
                 else -> LibboxEngine.lastError ?: EngineRunner.lastError
             } ?: "Engine failed to start for protocol '$protocol'"
             Log.e(TAG, lastError!!)
-            // The engine never took the descriptor; close our dup so it
-            // does not leak across reconnect attempts.
-            try {
-                engineFd.close()
-            } catch (_: java.io.IOException) {
-            }
+            // Startup failure does not prove the native engine released the fd.
+            // The session executor stops the engine before releasing descriptors.
             ticket.publish { notifyStatus("error") }
             return false
         }
@@ -907,38 +904,26 @@ class BlackoutVpnService : VpnService() {
         XrayEngine.unexpectedStopListener = null
         EngineRunner.onUnexpectedExit = null
         holdTunnelOnFailure = false
-        var cleanupFailed = false
-        for (stopEngine in listOf<() -> Unit>(
-            XrayEngine::stop,
-            EngineRunner::stop,
-            BlackoutCoreEngine::stop,
-            LibboxEngine::stop,
-            NativeTunnelEngine::stop,
-        )) {
-            try {
-                stopEngine()
-            } catch (_: Exception) {
-                cleanupFailed = true
-            } catch (_: LinkageError) {
-                cleanupFailed = true
-            }
-        }
-        try {
-            engineTunFd?.close()
-        } catch (e: Exception) {
-            cleanupFailed = true
-            Log.w(TAG, "Could not close engine TUN descriptor")
-        }
-        engineTunFd = null
-        try {
-            tun?.close()
-        } catch (e: Exception) {
-            cleanupFailed = true
-            Log.w(TAG, "Could not close TUN descriptor")
-        }
-        tun = null
+        cleanupPending = true
         isRunning = false
         activeNativeTunnel = false
+        val stopped =
+            stopEnginesBeforeRelease(
+                stops =
+                    listOf(
+                        XrayEngine::stop,
+                        EngineRunner::stop,
+                        BlackoutCoreEngine::stop,
+                        LibboxEngine::stop,
+                        NativeTunnelEngine::stop,
+                    ),
+                release = ::releaseTunnelDescriptors,
+            )
+        if (!stopped) {
+            lastError = "A native engine could not be stopped cleanly. Retry disconnect before reconnecting."
+            error(lastError!!)
+        }
+        cleanupPending = false
         // The held-blocking marker describes a live tunnel; once the interface
         // is gone the state is "stopped" again, not "blocked".
         getSharedPreferences(PREFS, MODE_PRIVATE)
@@ -950,9 +935,29 @@ class BlackoutVpnService : VpnService() {
         activeProtocolId = null
         activeDisplayName = null
         connectedAtMs = 0L
-        if (cleanupFailed) {
-            lastError = "A native engine could not be stopped cleanly."
-            throw IllegalStateException(lastError)
+    }
+
+    private fun releaseTunnelDescriptors() {
+        var failed = false
+        try {
+            engineTunFd?.close()
+        } catch (e: java.io.IOException) {
+            failed = true
+            Log.w(TAG, "Engine descriptor close failed: ${e.javaClass.simpleName}")
+        } finally {
+            engineTunFd = null
+        }
+        try {
+            tun?.close()
+        } catch (e: java.io.IOException) {
+            failed = true
+            Log.w(TAG, "Tunnel descriptor close failed: ${e.javaClass.simpleName}")
+        } finally {
+            tun = null
+        }
+        if (failed) {
+            lastError = "A VPN descriptor could not be closed cleanly."
+            error(lastError!!)
         }
     }
 

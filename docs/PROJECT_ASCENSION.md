@@ -477,3 +477,24 @@ engine files clean. Full ktlint, scoped Detekt, 575 Flutter tests, 53
 Android JVM tests, Android lint, 12 binary checks and 15 shell syntax
 checks passed. No additional suppressions. Fresh CI, toolchain promotion
 and real-device tests pending; no main merge or release.
+
+
+## Phase 3 service descriptor cleanup batch 11 (2026-11-25)
+
+Prior bf8384e Tests, both iOS builds, Kotlin, host, Rust and supply-chain
+checks passed; APK job pending at inspection. TunnelCleanup attempts
+all engine stops before releasing TUN descriptors; failed engine stop
+retains service-owned descriptors for retry. Removed premature close on
+failed activation, report startup failure and retain foreground service
+if cleanup is pending. IOException handling is specific and redacted;
+three JVM regressions cover stop order, retry and linkage failure.
+This is an ordering improvement, not proof of descriptor ownership
+across native ABI, Android service destruction or process restart. Cross-
+engine concurrency and real device checks remain outstanding.
+
+Detekt 27 -> 23 weighted findings (VpnPlugin 15, BlackoutVpnService 7,
+EmbeddedCoreOwner 1); strict scope 36 of 40 Kotlin files. Full ktlint,
+scoped Detekt, 575 Flutter tests, 56 JVM tests, Android lint, 12 binary
+checks and 15 shell syntax checks passed. No new suppressions. Plugin
+decomposition deferred to next batch. Fresh CI and toolchain promotion
+pending; no production merge or release.

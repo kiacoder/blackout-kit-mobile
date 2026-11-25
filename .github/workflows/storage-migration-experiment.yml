@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   resolve:
-    name: Resolve candidate against existing app SDK
+    name: Resolve candidate with compatible package-info dependency
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -26,16 +26,14 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          from tool.prepare_storage_migration_experiment import candidate_source
+          from tool.prepare_storage_migration_experiment import candidate_manifest, candidate_source
           p = Path('pubspec.yaml')
-          s = p.read_text()
-          assert s.count('flutter_secure_storage: ^9.0.0') == 1
-          p.write_text(s.replace('flutter_secure_storage: ^9.0.0', 'flutter_secure_storage: 10.3.4'))
+          p.write_text(candidate_manifest(p.read_text()))
           p = Path('lib/services/secure_vault.dart')
           p.write_text(candidate_source(p.read_text()))
           PY
           flutter pub get
-          flutter analyze --no-fatal-infos lib/services/secure_vault.dart
+          flutter analyze --no-fatal-infos lib/services/secure_vault.dart lib/services/update_service.dart lib/services/debug_service.dart lib/screens/settings_screen.dart
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: storage-experiment-lock

@@ -1009,3 +1009,23 @@ Full Linux Python suite 84/84 passed; binary and action-pin checks
 12/12 passed. Hosted experiment build and device migration remain
 unverified. Main pubspec, lockfile, and runtime vault options unchanged.
 No production package installation or release.
+
+
+## Phase 3 storage experiment dependency and compiler compatibility (2026-11-25)
+
+Hosted run 45588690573 failed both jobs: package_info_plus 5.0.1
+requires web <0.5.0 while secure storage 10.3.4 selects web
+>=0.5.0, and the generated legacy fixture used Kotlin 1.7.10
+with Kotlin 1.9 metadata dependencies. The candidate-only manifest
+now pins package_info_plus 8.3.1 (published Dart >=3.3, Flutter
+>=3.19, web >=0.5 <2 constraints), and analyzes its actual app
+call sites. Fixture-only toolchain pins AGP 8.5.2, Kotlin 2.0.21,
+Java 17 and Gradle 8.7 archive SHA256. These versions were
+previously tested in the isolated Android toolchain experiment;
+not yet verified with secure storage 10.3.4. Two new tests cover
+manifest constraints and generated build-tool pins. Linux Python
+86/86 and 12 binary integrity/action checks passed. Local upstream
+package archive request returned HTTP403; no local v10 build.
+No authorized ADB device attached. Main app dependencies,
+lockfile, runtime options and tracked native binaries unchanged.
+Hosted retry pending; no migration acceptance or release.

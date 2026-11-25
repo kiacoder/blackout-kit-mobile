@@ -9,6 +9,40 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSIONS = {"legacy": "9.2.4", "candidate": "10.3.4", "backup": "10.3.4"}
 PACKAGE = "com.blackoutkit.storagefixture"
 OLD_OPTIONS = "encryptedSharedPreferences: true,"
+PACKAGE_INFO_CANDIDATE = "8.3.1"
+GRADLE_SHA = "544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d"
+
+
+def candidate_manifest(source):
+    replacements = {
+        "flutter_secure_storage: ^9.0.0": "flutter_secure_storage: 10.3.4",
+        "package_info_plus: 5.0.1": "package_info_plus: " + PACKAGE_INFO_CANDIDATE,
+    }
+    for old, new in replacements.items():
+        if source.count(old) != 1:
+            raise ValueError("Unexpected app dependency constraint: " + old)
+        source = source.replace(old, new)
+    return source
+
+
+def fixture_toolchain(folder):
+    settings = folder / "android/settings.gradle"
+    source = settings.read_text(encoding="utf-8")
+    for old, new in (
+        ('id "com.android.application" version "7.3.0"', 'id "com.android.application" version "8.5.2"'),
+        ('id "org.jetbrains.kotlin.android" version "1.7.10"', 'id "org.jetbrains.kotlin.android" version "2.0.21"'),
+    ):
+        if source.count(old) != 1 and source.count(new) != 1:
+            raise ValueError("Unexpected generated Gradle plugin version")
+        source = source.replace(old, new)
+    settings.write_text(source, encoding="utf-8")
+    wrapper = folder / "android/gradle/wrapper/gradle-wrapper.properties"
+    source = wrapper.read_text(encoding="utf-8")
+    lines = [line for line in source.splitlines()
+             if not line.startswith(("distributionUrl=", "distributionSha256Sum="))]
+    lines.extend([r"distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip",
+                  "distributionSha256Sum=" + GRADLE_SHA])
+    wrapper.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def candidate_source(source, backup=False):
@@ -29,7 +63,10 @@ def prepare_fixture(folder, mode):
     if f'applicationId = "{PACKAGE}"' not in source:
         raise ValueError("Refusing to edit a non-fixture Android package")
     source = source.replace("flutter.minSdkVersion", "24")
+    source = source.replace('id "kotlin-android"', 'id "org.jetbrains.kotlin.android"')
+    source = source.replace("JavaVersion.VERSION_1_8", "JavaVersion.VERSION_17")
     gradle.write_text(source, encoding="utf-8")
+    fixture_toolchain(folder)
     version = VERSIONS[mode]
     manifest = (
         "name: storagefixture\npublish_to: none\n"

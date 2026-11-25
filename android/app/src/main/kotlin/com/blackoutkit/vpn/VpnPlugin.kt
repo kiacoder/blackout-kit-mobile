@@ -3,14 +3,10 @@ package com.blackoutkit.vpn
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.util.Log
 import android.util.Patterns
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -70,18 +66,10 @@ class VpnPlugin :
         private const val MAX_PORT = 65535
         private const val HTTP_SUCCESS_MIN = 200
         private const val HTTP_SUCCESS_MAX = 299
-        private const val HTTP_STATUS_MIN = 100
-        private const val HTTP_STATUS_MAX = 599
         private const val DEFAULT_SITE_TIMEOUT_MS = 10_000
         private const val MIN_SITE_TIMEOUT_MS = 1_000
         private const val MAX_SITE_TIMEOUT_MS = 30_000
         private const val DEFAULT_PROBE_PORT = 10809
-        private const val MAX_PARALLEL_SITE_CHECKS = 8
-        private const val SITE_FUTURE_GRACE_MS = 2_000L
-        private const val VPN_NETWORK_WAIT_MS = 3_000L
-        private const val VPN_NETWORK_POLL_MS = 100L
-        private const val MAX_DNS_HOST_LENGTH = 253
-        private const val MAX_DNS_LABEL_LENGTH = 63
         private const val MIN_IPV6_TEXT_GROUPS = 3
         private const val MAX_IPV6_GROUPS = 8
         private const val MAX_IPV6_GROUP_LENGTH = 4
@@ -967,225 +955,30 @@ class VpnPlugin :
         val timeoutMs =
             (call.argument<Int>("timeoutMs") ?: DEFAULT_SITE_TIMEOUT_MS)
                 .coerceIn(MIN_SITE_TIMEOUT_MS, MAX_SITE_TIMEOUT_MS)
-
-        if (socksPort <= 0 || socksPort > MAX_PORT) {
-            result.error("BAD_ARGS", "socksPort is out of range", null)
+        if (socksPort !in 1..MAX_PORT || urls.isEmpty()) {
+            val reason =
+                if (urls.isEmpty() &&
+                    socksPort in 1..MAX_PORT
+                ) {
+                    "urls must not be empty"
+                } else {
+                    "socksPort is out of range"
+                }
+            result.error("BAD_ARGS", reason, null)
             return
         }
-        if (urls.isEmpty()) {
-            result.error("BAD_ARGS", "urls must not be empty", null)
-            return
-        }
-
         val native = BlackoutVpnService.isRunning && BlackoutVpnService.activeNativeTunnel
         val session = BlackoutVpnService.connectedAtMs
+        val worker = SiteProbeRunner(appContext)
         if (BlackoutVpnService.isRunning && BlackoutVpnService.activeProtocolId == "dns") {
-            result.success(urls.map { failedSite(it, "DNS-only is not a VPN traffic test") })
+            result.success(urls.map { worker.failedSite(it, "DNS-only is not a VPN traffic test") })
             return
         }
-
         Thread {
-            // Never use the system default connection as a fallback for an IP
-            // tunnel. Only an explicit VPN Network can prove tunnel traffic.
-            val network =
-                if (native) {
-                    try {
-                        awaitNativeProbeNetwork(session)
-                    } catch (_: Exception) {
-                        null
-                    }
-                } else {
-                    null
-                }
-            if (native && network == null) {
-                main.post { result.success(urls.map { failedSite(it, "VPN network not accessible for verification") }) }
-                return@Thread
-            }
-            // Fetch the hosts in parallel: sequential fetching made the site
-            // check cost N x timeout (8 hosts x 10 s = 80 s per candidate),
-            // which across a batched scan of hundreds of candidates turned a
-            // minute of work into an hour. Parallel, the whole set costs
-            // about one host's time.
-            val pool =
-                java.util.concurrent.Executors.newFixedThreadPool(
-                    minOf(urls.size, MAX_PARALLEL_SITE_CHECKS),
-                )
-            val outcomes =
-                try {
-                    val futures =
-                        urls.map { url ->
-                            pool.submit(
-                                java.util.concurrent.Callable {
-                                    if (network != null) {
-                                        probeSite(url, timeoutMs) { target ->
-                                            check(nativeSessionCurrent(session))
-                                            network.openConnection(
-                                                target,
-                                                Proxy.NO_PROXY,
-                                            ) as javax.net.ssl.HttpsURLConnection
-                                        }.let { outcome ->
-                                            if (nativeSessionCurrent(session)) {
-                                                outcome
-                                            } else {
-                                                failedSite(url, "VPN session changed during verification")
-                                            }
-                                        }
-                                    } else {
-                                        probeSiteThroughSocks(url, socksPort, timeoutMs)
-                                    }
-                                },
-                            )
-                        }
-                    futures.map { future ->
-                        try {
-                            future.get(
-                                timeoutMs + SITE_FUTURE_GRACE_MS,
-                                java.util.concurrent.TimeUnit.MILLISECONDS,
-                            )
-                        } catch (e: Exception) {
-                            mapOf(
-                                "host" to "",
-                                "ok" to false,
-                                "statusCode" to null,
-                                "latencyMs" to null,
-                                "error" to (e.message ?: e.javaClass.simpleName),
-                            )
-                        }
-                    }
-                } finally {
-                    pool.shutdownNow()
-                }
-            main.post {
-                result.success(
-                    if (native && !nativeSessionCurrent(session)) {
-                        urls.map { failedSite(it, "VPN session changed during verification") }
-                    } else {
-                        outcomes
-                    },
-                )
-            }
+            val request = SiteProbeRequest(urls, socksPort, timeoutMs, native, session)
+            val outcomes = worker.run(request)
+            main.post { result.success(worker.currentOutcomes(request, outcomes)) }
         }.start()
-    }
-
-    private fun nativeSessionCurrent(session: Long): Boolean =
-        BlackoutVpnService.isRunning &&
-            BlackoutVpnService.activeNativeTunnel &&
-            BlackoutVpnService.connectedAtMs == session
-
-    /** Android may publish the VPN Network just after establish() returns. */
-    private fun awaitNativeProbeNetwork(session: Long): Network? {
-        val cm =
-            appContext?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-                ?: return null
-        val deadline = SystemClock.elapsedRealtime() + VPN_NETWORK_WAIT_MS
-        while (nativeSessionCurrent(session)) {
-            val network = cm.activeNetwork
-            val caps = network?.let { cm.getNetworkCapabilities(it) }
-            if (network != null && caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true) {
-                return network
-            }
-            if (SystemClock.elapsedRealtime() >= deadline) return null
-            try {
-                Thread.sleep(VPN_NETWORK_POLL_MS)
-            } catch (_: InterruptedException) {
-                return null
-            }
-        }
-        return null
-    }
-
-    private fun failedSite(
-        host: String,
-        reason: String,
-    ): Map<String, Any?> =
-        mapOf(
-            "host" to host,
-            "ok" to false,
-            "statusCode" to null,
-            "latencyMs" to null,
-            "error" to reason,
-        )
-
-    /**
-     * Fetches one URL through the loopback SOCKS inbound.
-     *
-     * Any HTTP response counts as a pass — the point of the check is whether
-     * traffic *flows through the config*, and even a 403 or a captive-portal
-     * 302 proves the round trip completed through the remote exit. Only
-     * connect failures and timeouts count as failures, because those are the
-     * cases where the config demonstrably cannot carry traffic.
-     */
-    private fun probeSiteThroughSocks(
-        host: String,
-        socksPort: Int,
-        timeoutMs: Int,
-    ): Map<String, Any?> =
-        probeSite(host, timeoutMs) { target ->
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
-            target.openConnection(proxy) as javax.net.ssl.HttpsURLConnection
-        }
-
-    private fun probeSite(
-        host: String,
-        timeoutMs: Int,
-        open: (URL) -> javax.net.ssl.HttpsURLConnection,
-    ): Map<String, Any?> {
-        var conn: javax.net.ssl.HttpsURLConnection? = null
-        val startedAt = SystemClock.elapsedRealtime()
-        return try {
-            // User-selected public destinations have no stable application-
-            // controlled pin set. Keep Android's system CA and hostname
-            // validation; never install a custom trust-all manager or verifier.
-            require(
-                host.length <= MAX_DNS_HOST_LENGTH &&
-                    host.contains('.') &&
-                    host.split('.').all { label ->
-                        label.length in 1..MAX_DNS_LABEL_LENGTH &&
-                            label.matches(Regex("[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"))
-                    },
-            )
-            conn =
-                open(URL("https://$host")).apply {
-                    connectTimeout = timeoutMs
-                    readTimeout = timeoutMs
-                    requestMethod = "GET"
-                    doInput = true
-                    instanceFollowRedirects = false
-                    useCaches = false
-                    setRequestProperty("Connection", "close")
-                }
-            val code = conn.responseCode
-            if (code !in HTTP_STATUS_MIN..HTTP_STATUS_MAX) return failedSite(host, "No valid HTTP response")
-            // Drain a little so the connection is fully established and the
-            // timing reflects a real round trip, then release it.
-            try {
-                conn.inputStream.use { it.read() }
-            } catch (_: Throwable) {
-                // Error-stream bodies (403 pages and the like) are fine too.
-                try {
-                    conn.errorStream?.use { it.read() }
-                } catch (_: Throwable) {
-                }
-            }
-            mapOf(
-                "host" to host,
-                "ok" to true,
-                "statusCode" to code,
-                "latencyMs" to (SystemClock.elapsedRealtime() - startedAt),
-                "error" to null,
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Site check failed for $host: ${e.javaClass.simpleName}: ${e.message}")
-            mapOf(
-                "host" to host,
-                "ok" to false,
-                "statusCode" to null,
-                "latencyMs" to null,
-                "error" to (e.message ?: e.javaClass.simpleName),
-            )
-        } finally {
-            conn?.disconnect()
-        }
     }
 
     /** True for an IPv4 literal (or a colon-separated IPv6 literal). */

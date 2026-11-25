@@ -406,3 +406,24 @@ class. No additional suppressions. Verified full ktlint, scoped Detekt,
 575 Flutter tests, 46 Android JVM tests, Android lint and 12 binary
 checks locally. Fresh Linux execution and CI, physical-device checks
 and toolchain promotion remain pending. Phase 3 open; no merge/release.
+
+
+## Phase 3 site verification decomposition batch 8 (2026-11-25)
+
+Prior 53290a7 hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; Tests/APK/iOS were pending at inspection. Extracted SiteProbeRunner
+from VpnPlugin, preserving native VPN Network binding, session checks
+before and after requests and at result delivery, no native SOCKS fallback,
+TLS validation, no redirects, bounded parallelism and HTTP status semantics.
+Narrowed expected IO/argument/state/security and future exceptions,
+restored thread interruption and cancel timed-out futures. Added two
+JVM tests (missing native network fails without fallback, non-native
+results unchanged), updated structural assertions and optional plugin
+API compile source list. Detekt 52 -> 45 weighted findings; strict
+scope now 30 of 36 files. Full ktlint, scoped Detekt, 575 Flutter tests,
+48 Android JVM tests, lint 0 errors/6 warnings, binary inventory and
+15 shell syntax checks passed. No additional suppressions. Remaining
+25 broad catches, 7 return counts, 4 function counts, 3 swallowed
+exceptions, 3 complexity, 2 long methods, 1 large class. Fresh CI,
+physical-device VPN traffic verification, and toolchain promotion
+remain pending. Phase 3 open; no production merge or release.

@@ -24,7 +24,7 @@ KOTLIN
 EXTRA_SOURCES=()
 if [[ "${CHECK_FLUTTER_PLUGIN:-false}" == true ]]; then
   python3 tool/fetch_flutter_compile_api.py
-  EXTRA_SOURCES+=(android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt)
+  EXTRA_SOURCES+=(android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt android/app/src/main/kotlin/com/blackoutkit/vpn/SiteProbeRunner.kt)
   while IFS= read -r -d '' file; do EXTRA_SOURCES+=("$file"); done < <(find .cache/flutter-api-source -name '*.java' -print0)
 fi
 "$KOTLINC" \

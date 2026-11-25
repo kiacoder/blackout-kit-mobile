@@ -46,7 +46,9 @@ def verify_fixtures(folder, aapt, signer):
     return hashes
 
 
-def accept(folder, adb, serial):
+def accept(folder, adb, serial, mode=None):
+    if mode not in (None, "candidate", "backup"):
+        raise ValueError("Invalid migration mode")
     def device(*args, timeout=60):
         return run(adb, "-s", serial, *args, timeout=timeout)
 
@@ -62,6 +64,8 @@ def accept(folder, adb, serial):
 
     def launch(marker):
         device("shell", "am", "force-stop", PACKAGE)
+        # Disposable emulator only: remove stale markers before this launch.
+        device("logcat", "-c")
         result = device("shell", "am", "start", "-W", "-n", PACKAGE + "/.MainActivity")
         if "Status: ok" not in result:
             raise ValueError("Fixture failed to launch")
@@ -73,29 +77,36 @@ def accept(folder, adb, serial):
                 pid = ""
             if re.fullmatch(r"\d+", pid):
                 log = device("logcat", "-d", "--pid=" + pid, "-v", "brief", "-s", "flutter:I")
+                failure = re.search(r"STORAGE_MIGRATION_FAIL:(init|check_existing|seed_key|seed_box|read_key|open_box|check_record)\b", log)
                 if "STORAGE_MIGRATION_FAIL" in log:
-                    raise ValueError("Fixture reported migration failure")
+                    stage = failure[1] if failure else "unspecified"
+                    raise ValueError("Fixture reported migration failure at " + stage)
                 if marker in log:
                     return
             time.sleep(2)
         raise ValueError("Missing expected fixture marker: " + marker)
 
     results = {}
-    for mode in ("candidate", "backup"):
+    for mode in ((mode,) if mode else ("candidate", "backup")):
         installed = False
+        stage = "legacy-install"
         try:
-            if device("install", "-t", str(folder / "legacy.apk"), timeout=120).splitlines()[-1:] != ["Success"]:
+            if device("install", "-t", str(folder / "legacy.apk"), timeout=240).splitlines()[-1:] != ["Success"]:
                 raise ValueError("Legacy fixture install failed")
             installed = True
+            stage = "legacy-launch"
             launch("STORAGE_LEGACY_PASS")
             device("shell", "am", "force-stop", PACKAGE)
-            if device("install", "-r", "-t", str(folder / (mode + ".apk")), timeout=120).splitlines()[-1:] != ["Success"]:
+            stage = "candidate-install"
+            if device("install", "-r", "-t", str(folder / (mode + ".apk")), timeout=240).splitlines()[-1:] != ["Success"]:
                 raise ValueError("Candidate update failed")
+            stage = "upgrade-launch"
             launch("STORAGE_MIGRATION_PASS")
+            stage = "restart-launch"
             launch("STORAGE_MIGRATION_PASS")
             results[mode] = "upgrade-and-restart-passed"
         except (ValueError, subprocess.SubprocessError) as error:
-            results[mode] = "failed: " + str(error)
+            results[mode] = "failed at " + stage + ": " + str(error)
         finally:
             if installed and device("uninstall", PACKAGE) != "Success":
                 raise ValueError("Disposable fixture cleanup failed")
@@ -110,6 +121,7 @@ def main():
     parser.add_argument("--apksigner", required=True)
     parser.add_argument("--adb")
     parser.add_argument("--serial")
+    parser.add_argument("--mode", choices=("candidate", "backup"))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     hashes = verify_fixtures(args.folder, args.aapt, args.apksigner)
@@ -117,7 +129,7 @@ def main():
     if args.adb or args.serial:
         if not args.adb or not args.serial:
             raise ValueError("Provide both adb and emulator serial")
-        report.update(accept(args.folder, args.adb, args.serial))
+        report.update(accept(args.folder, args.adb, args.serial, args.mode))
     else:
         report["results"] = "artifact-verification-only"
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

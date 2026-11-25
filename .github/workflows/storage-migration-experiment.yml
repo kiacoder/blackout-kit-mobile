@@ -98,7 +98,7 @@ jobs:
           retention-days: 14
 
   acceptance:
-    name: Synthetic migration on Android API ${{ matrix.api }}
+    name: Synthetic migration on Android API ${{ matrix.api }} (${{ matrix.mode }})
     needs: fixture
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -106,8 +106,10 @@ jobs:
       fail-fast: false
       matrix:
         api: [24, 34]
+        mode: [candidate, backup]
     env:
       API: ${{ matrix.api }}
+      MODE: ${{ matrix.mode }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -121,18 +123,18 @@ jobs:
           name: isolated-storage-fixtures
           path: .cache/storage-fixtures-output
       - name: Verify artifacts and run on a fresh disposable emulator
-        run: bash tool/run_storage_emulator_ci.sh "$API"
+        run: bash tool/run_storage_emulator_ci.sh "$API" "$MODE"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: storage-migration-result-api-${{ matrix.api }}
+          name: storage-migration-result-api-${{ matrix.api }}-${{ matrix.mode }}
           path: migration-result.json
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
-          name: storage-emulator-diagnostics-api-${{ matrix.api }}
+          name: storage-emulator-diagnostics-api-${{ matrix.api }}-${{ matrix.mode }}
           path: |
             ${{ runner.temp }}/storage-emulator.log
             ${{ runner.temp }}/storage-emulator-preflight.log

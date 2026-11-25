@@ -1233,3 +1233,19 @@ No finding waived or marked fixed merely from source inspection.
 Storage retry 45597592902 fixture compilation/resolution passed,
 emulator jobs still running. No production dependency or native
 binary replacement, no main merge or publication.
+
+
+## Phase 3 storage migration acceptance split (2026-11-25)
+
+Run 45597592902: candidate (backup disabled) passed upgrade and
+restart on both API24 and API34 x86_64 emulators. Backup mode
+API24 timed out installing the legacy APK; API34 reported fixture
+failure without a stage marker. Both emulators booted successfully.
+Separate fresh CI emulator per API/mode, bounded 240-second APK
+install timeout, stale log reset on disposable emulators, fixed
+fixture failure-stage markers without keys/raw exceptions and
+harness stage reporting. Mock regression covers isolated backup
+mode and failed key-read reporting. Python 98/98 and 12 binary
+checks passed. New hosted matrix not yet verified. Candidate
+results are synthetic, not real-device production acceptance.
+No production dependency or binary replacement.

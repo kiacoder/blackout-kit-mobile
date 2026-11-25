@@ -9,6 +9,8 @@ fi
 : "${RUNNER_TEMP:?Runner temp required}"
 api="${1:?API level required}"
 case "$api" in 24|34) ;; *) echo "Unsupported fixture API" >&2; exit 2 ;; esac
+mode="${2:?Migration mode required}"
+case "$mode" in candidate|backup) ;; *) echo "Unsupported migration mode" >&2; exit 2 ;; esac
 sdk="$ANDROID_HOME/cmdline-tools/latest/bin"
 tools="$ANDROID_HOME/build-tools/34.0.0"
 adb="$ANDROID_HOME/platform-tools/adb"
@@ -77,4 +79,4 @@ if (( SECONDS >= deadline )); then
   exit 1
 fi
 "$adb" -s "$serial" shell input keyevent 82
-python3 tool/run_storage_migration_acceptance.py --folder .cache/storage-fixtures-output --aapt "$tools/aapt" --apksigner "$tools/apksigner" --adb "$adb" --serial "$serial" --output migration-result.json
+python3 tool/run_storage_migration_acceptance.py --folder .cache/storage-fixtures-output --aapt "$tools/aapt" --apksigner "$tools/apksigner" --adb "$adb" --serial "$serial" --mode "$mode" --output migration-result.json

@@ -92,3 +92,22 @@ class StorageAcceptanceTests(unittest.TestCase):
         commands = [call.args[3:] for call in run.call_args_list]
         self.assertEqual(sum(command[:3] == ("shell", "am", "start") for command in commands), 6)
         self.assertEqual(sum(command[0] == "uninstall" for command in commands), 2)
+        self.assertEqual(sum(command == ("logcat", "-c") for command in commands), 6)
+
+        run.reset_mock()
+        result = accept(self.folder, "adb", "emulator-5554", "backup")
+        self.assertEqual(result["results"], {"backup": "upgrade-and-restart-passed"})
+        commands = [call.args[3:] for call in run.call_args_list]
+        self.assertEqual(sum(command[0] == "install" for command in commands), 2)
+        self.assertEqual(sum(command[0] == "uninstall" for command in commands), 1)
+
+        def failed_key(*args, **kwargs):
+            if args[3:5] == ("logcat", "-d") and active == "backup":
+                return "STORAGE_MIGRATION_FAIL:read_key"
+            return fake(*args, **kwargs)
+
+        run.side_effect = failed_key
+        result = accept(self.folder, "adb", "emulator-5554", "backup")
+        self.assertEqual(result["results"], {
+            "backup": "failed at upgrade-launch: Fixture reported migration failure at read_key",
+        })

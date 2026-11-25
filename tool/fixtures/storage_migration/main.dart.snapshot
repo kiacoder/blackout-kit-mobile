@@ -10,14 +10,18 @@ const boxName = 'configs_v2';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   var result = 'STORAGE_MIGRATION_FAIL';
+  var stage = 'init';
   try {
     await Hive.initFlutter();
     final vault = SecureVault();
+    stage = 'check_existing';
     final exists = await Hive.boxExists(boxName);
     if (!seed && !exists) throw StateError('Legacy fixture missing');
     if (seed && !exists) {
+      stage = 'seed_key';
       final key = await vault.getOrCreateKey();
       if (key == null) throw StateError('Could not persist fixture key');
+      stage = 'seed_box';
       final box = await openPreservingBox<Map>(
         boxName,
         cipher: HiveAesCipher(key),
@@ -28,13 +32,16 @@ Future<void> main() async {
     }
     // Existing encrypted data must be read with its original key; never
     // generate a replacement key or write a new marker in verification mode.
+    stage = 'read_key';
     final key = await vault.getOrCreateKey();
     if (key == null) throw StateError('Fixture key unavailable');
+    stage = 'open_box';
     final box = await openPreservingBox<Map>(
       boxName,
       cipher: HiveAesCipher(key),
     );
     try {
+      stage = 'check_record';
       if (box.length != 1 || box.get('fixture')?['value'] != fixture) {
         throw StateError('Fixture record did not survive');
       }
@@ -43,7 +50,8 @@ Future<void> main() async {
     }
     result = seed ? 'STORAGE_LEGACY_PASS' : 'STORAGE_MIGRATION_PASS';
   } catch (_) {
-    // Never display key material or raw plugin exceptions.
+    // Fixed stage identifiers only; no key material or raw exceptions.
+    result = 'STORAGE_MIGRATION_FAIL:$stage';
   }
   debugPrint(result);
   runApp(MaterialApp(home: Scaffold(body: Center(child: Text(result)))));

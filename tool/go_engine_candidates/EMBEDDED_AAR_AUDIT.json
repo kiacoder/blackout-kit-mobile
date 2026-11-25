@@ -1,0 +1,999 @@
+{
+    "scope":  "effective linked module versions and Go stdlib; unresolved sources excluded; not reachability",
+    "aar_sha256":  "6061c5f55786b0d7916f9a8721b5824fc9fe9ce44ccb67c7d8cd42f4c386bcb0",
+    "members":  {
+                    "arm64-v8a":  {
+                                      "sha256":  "4dd807a2ac500274a5f3ac10d0db57ce9a7604883a6b65079fd6415e2c70558c",
+                                      "go":  "go1.27.0",
+                                      "dependencies":  {
+                                                           "github.com/ajg/form":  [
+                                                                                       "v1.5.1",
+                                                                                       "h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU="
+                                                                                   ],
+                                                           "github.com/andybalholm/brotli":  [
+                                                                                                 "v1.2.3",
+                                                                                                 "h1:8H1qwOkl2LPfjf3YezB90JnCliZb6SInJ/OJkEbA5NQ="
+                                                                                             ],
+                                                           "github.com/apernet/quic-go":  [
+                                                                                              "v0.61.1-0.20260806010916-184d081eef3e",
+                                                                                              "h1:5mgtR5gwIgBKMiGI1QdXldZZ+SNor06Nbu1wCBulQBg="
+                                                                                          ],
+                                                           "github.com/cretz/bine":  [
+                                                                                         "v0.2.0",
+                                                                                         "h1:8GiDRGlTgz+o8H9DSnsl+5MeBK4HsExxgl6WgzOCuZo="
+                                                                                     ],
+                                                           "github.com/fsnotify/fsnotify":  [
+                                                                                                "v1.9.0",
+                                                                                                "h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k="
+                                                                                            ],
+                                                           "github.com/ghodss/yaml":  [
+                                                                                          "v1.0.1-0.20220118164431-d8423dcdf344",
+                                                                                          "h1:Arcl6UOIS/kgO2nW3A65HN+7CMjSDP/gofXL4CZt1V4="
+                                                                                      ],
+                                                           "github.com/go-chi/chi/v5":  [
+                                                                                            "v5.2.1",
+                                                                                            "h1:KOIHODQj58PmL80G2Eak4WdvUzjSJSm0vG72crDCqb8="
+                                                                                        ],
+                                                           "github.com/go-chi/render":  [
+                                                                                            "v1.0.3",
+                                                                                            "h1:AsXqd2a1/INaIfUSKq3G5uA8weYx20FOsM7uSoCyyt4="
+                                                                                        ],
+                                                           "github.com/gobwas/httphead":  [
+                                                                                              "v0.1.0",
+                                                                                              "h1:exrUm0f4YX0L7EBwZHuCF4GDp8aJfVeBrlLQrs6NqWU="
+                                                                                          ],
+                                                           "github.com/gobwas/pool":  [
+                                                                                          "v0.2.1",
+                                                                                          "h1:xfeeEhW7pwmX8nuLVlqbzVc7udMDrwetjEv+TZIz1og="
+                                                                                      ],
+                                                           "github.com/gofrs/uuid/v5":  [
+                                                                                            "v5.5.1",
+                                                                                            "h1:z1Ce19/JwNidXpy3tOQc3241lnJLKdKyq/xlNvlD4Ng="
+                                                                                        ],
+                                                           "github.com/google/btree":  [
+                                                                                           "v1.1.3",
+                                                                                           "h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg="
+                                                                                       ],
+                                                           "github.com/google/gopacket":  [
+                                                                                              "v1.1.19",
+                                                                                              "h1:ves8RnFZPGiFnTS0uPQStjwru6uO6h+nlr9j6fL7kF8="
+                                                                                          ],
+                                                           "github.com/google/uuid":  [
+                                                                                          "v1.6.0",
+                                                                                          "h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0="
+                                                                                      ],
+                                                           "github.com/gorilla/websocket":  [
+                                                                                                "v1.5.3",
+                                                                                                "h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg="
+                                                                                            ],
+                                                           "github.com/hashicorp/yamux":  [
+                                                                                              "v0.1.2",
+                                                                                              "h1:XtB8kyFOyHXYVFnwT5C3+Bdo8gArse7j2AQ0DA0Uey8="
+                                                                                          ],
+                                                           "github.com/huin/goupnp":  [
+                                                                                          "v1.2.0",
+                                                                                          "h1:uOKW26NG1hsSSbXIZ1IR7XP9Gjd1U8pnLaCMgntmkmY="
+                                                                                      ],
+                                                           "github.com/jackpal/go-nat-pmp":  [
+                                                                                                 "v1.0.2",
+                                                                                                 "h1:KzKSgb7qkJvOUTqYl9/Hg/me3pWgBmERKrTGD7BdWus="
+                                                                                             ],
+                                                           "github.com/juju/ratelimit":  [
+                                                                                             "v1.0.2",
+                                                                                             "h1:sRxmtRiajbvrcLQT7S+JbqU0ntsb9W2yhSdNN8tWfaI="
+                                                                                         ],
+                                                           "github.com/klauspost/compress":  [
+                                                                                                 "v1.20.0",
+                                                                                                 "h1:a3C1ke2ohxFymNlb2HWAHjDeKCI90scRskErZkR0ezA="
+                                                                                             ],
+                                                           "github.com/klauspost/cpuid/v2":  [
+                                                                                                 "v2.4.1",
+                                                                                                 "h1:I9KxadAkvo+QjtcEE2f2tyfEvmIla/T0m+14PrZNl0U="
+                                                                                             ],
+                                                           "github.com/koron/go-ssdp":  [
+                                                                                            "v0.0.4",
+                                                                                            "h1:1IDwrghSKYM7yLf7XCzbByg2sJ/JcNOZRXS2jczTwz0="
+                                                                                        ],
+                                                           "github.com/libp2p/go-nat":  [
+                                                                                            "v1.0.1-0.20250821073202-01afc089f138",
+                                                                                            "h1:YohuNPT/1k3VcThCQlBZ43PCPWPfMRS1zcxWBF2SLK8="
+                                                                                        ],
+                                                           "github.com/libp2p/go-netroute":  [
+                                                                                                 "v0.2.1",
+                                                                                                 "h1:V8kVrpD8GK0Riv15/7VN6RbUQ3URNZVosw7H2v9tksU="
+                                                                                             ],
+                                                           "github.com/logrusorgru/aurora":  [
+                                                                                                 "v2.0.3+incompatible",
+                                                                                                 "h1:tOpm7WcpBTn4fjmVfgpQq0EfczGlG91VSDkswnjF5A8="
+                                                                                             ],
+                                                           "github.com/mdlayher/netlink":  [
+                                                                                               "v1.11.2",
+                                                                                               "h1:HKh2jqe+omdSWcQ88nrT7INE61B0NXfiSPFdgL4YbNI="
+                                                                                           ],
+                                                           "github.com/mdlayher/socket":  [
+                                                                                              "v0.6.0",
+                                                                                              "h1:ScZPaAGyO1icQnbFrhPM8mnXyMu9qukC1K4ZoM2IQKU="
+                                                                                          ],
+                                                           "github.com/metacubex/tfo-go":  [
+                                                                                               "v0.0.0-20241231083714-66613d49c422",
+                                                                                               "h1:zGeQt3UyNydIVrMRB97AA5WsYEau/TyCnRtTf1yUmJY="
+                                                                                           ],
+                                                           "github.com/miekg/dns":  [
+                                                                                        "v1.1.73",
+                                                                                        "h1:uhT8nJxmTrPJYClxVxTCX+CVn6qnzSiybRk72Z6DgrE="
+                                                                                    ],
+                                                           "github.com/oschwald/maxminddb-golang":  [
+                                                                                                        "v1.12.0",
+                                                                                                        "h1:9FnTOD0YOhP7DGxGsq4glzpGy5+w7pq50AS6wALUMYs="
+                                                                                                    ],
+                                                           "github.com/pelletier/go-toml":  [
+                                                                                                "v1.9.5",
+                                                                                                "h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8="
+                                                                                            ],
+                                                           "github.com/pion/dtls/v3":  [
+                                                                                           "v3.1.5",
+                                                                                           "h1:9xJtVsHwMYeSjPp5Hh1FTis4DchnQWtnOa5o+6ygqfc="
+                                                                                       ],
+                                                           "github.com/pion/logging":  [
+                                                                                           "v0.2.4",
+                                                                                           "h1:tTew+7cmQ+Mc1pTBLKH2puKsOvhm32dROumOZ655zB8="
+                                                                                       ],
+                                                           "github.com/pion/stun/v3":  [
+                                                                                           "v3.1.7",
+                                                                                           "h1:uRXMTlGLf89WgItGNyZ6aR5jMTX0NBbybXADpQCzn+E="
+                                                                                       ],
+                                                           "github.com/pion/transport/v4":  [
+                                                                                                "v4.1.0",
+                                                                                                "h1:8S+nF2reM2cJuqC6g78OVy2BBgmbdns+acx3jA97BvQ="
+                                                                                            ],
+                                                           "github.com/pires/go-proxyproto":  [
+                                                                                                  "v0.16.0",
+                                                                                                  "h1:9KYT/fM3wpjT8bdMEj/7FBcoiUG1KyzEjRYnPu+vz7A="
+                                                                                              ],
+                                                           "github.com/quic-go/qpack":  [
+                                                                                            "v0.6.0",
+                                                                                            "h1:g7W+BMYynC1LbYLSqRt8PBg5Tgwxn214ZZR34VIOjz8="
+                                                                                        ],
+                                                           "github.com/refraction-networking/utls":  [
+                                                                                                         "v1.8.3-0.20260301010127-aa6edf4b11af",
+                                                                                                         "h1:er2acxbi3N1nvEq6HXHUAR1nTWEJmQfqiGR8EVT9rfs="
+                                                                                                     ],
+                                                           "github.com/robfig/cron/v3":  [
+                                                                                             "v3.0.1",
+                                                                                             "h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs="
+                                                                                         ],
+                                                           "github.com/sagernet/bbolt":  [
+                                                                                             "v0.0.0-20231014093535-ea5cb2fe9f0a",
+                                                                                             "h1:+NkI2670SQpQWvkkD2QgdTuzQG263YZ+2emfpeyGqW0="
+                                                                                         ],
+                                                           "github.com/sagernet/cors":  [
+                                                                                            "v1.2.1",
+                                                                                            "h1:Cv5Z8y9YSD6Gm+qSpNrL3LO4lD3eQVvbFYJSG7JCMHQ="
+                                                                                        ],
+                                                           "github.com/sagernet/fswatch":  [
+                                                                                               "v0.1.1",
+                                                                                               "h1:YqID+93B7VRfqIH3PArW/XpJv5H4OLEVWDfProGoRQs="
+                                                                                           ],
+                                                           "github.com/sagernet/gomobile":  [
+                                                                                                "v0.1.4",
+                                                                                                "=\u003e",
+                                                                                                "github.com/sagernet/gomobile",
+                                                                                                "v0.1.13",
+                                                                                                "h1:foTOGKJetah9VwaJl1XJx5TswIAVg8NfYmHOhrOc95I="
+                                                                                            ],
+                                                           "github.com/sagernet/gvisor":  [
+                                                                                              "v0.0.0-20241123041152-536d05261cff",
+                                                                                              "h1:mlohw3360Wg1BNGook/UHnISXhUx4Gd/3tVLs5T0nSs="
+                                                                                          ],
+                                                           "github.com/sagernet/netlink":  [
+                                                                                               "v0.0.0-20240612041022-b9a21c07ac6a",
+                                                                                               "h1:ObwtHN2VpqE0ZNjr6sGeT00J8uU7JF4cNUdb44/Duis="
+                                                                                           ],
+                                                           "github.com/sagernet/nftables":  [
+                                                                                                "v0.3.0-mod.4",
+                                                                                                "h1:vnOtcDYeSXv2e5RoRuGH0lrpttQFJ8iC4ICS2nhlDSo="
+                                                                                            ],
+                                                           "github.com/sagernet/sing":  [
+                                                                                            "v0.6.1",
+                                                                                            "h1:mJ6e7Ir2wtCoGLbdnnXWBsNJu5YHtbXmv66inoE0zFA="
+                                                                                        ],
+                                                           "github.com/sagernet/sing-box":  [
+                                                                                                "v0.0.0-00010101000000-000000000000",
+                                                                                                "=\u003e",
+                                                                                                "../sing-box",
+                                                                                                "(devel)",
+                                                                                                ""
+                                                                                            ],
+                                                           "github.com/sagernet/sing-dns":  [
+                                                                                                "v0.4.0",
+                                                                                                "h1:+mNoOuR3nljjouCH+qMg4zHI1+R9T2ReblGFkZPEndc="
+                                                                                            ],
+                                                           "github.com/sagernet/sing-mux":  [
+                                                                                                "v0.3.1",
+                                                                                                "h1:kvCc8HyGAskDHDQ0yQvoTi/7J4cZPB/VJMsAM3MmdQI="
+                                                                                            ],
+                                                           "github.com/sagernet/sing-shadowsocks":  [
+                                                                                                        "v0.2.7",
+                                                                                                        "h1:zaopR1tbHEw5Nk6FAkM05wCslV6ahVegEZaKMv9ipx8="
+                                                                                                    ],
+                                                           "github.com/sagernet/sing-shadowsocks2":  [
+                                                                                                         "v0.2.0",
+                                                                                                         "h1:wpZNs6wKnR7mh1wV9OHwOyUr21VkS3wKFHi+8XwgADg="
+                                                                                                     ],
+                                                           "github.com/sagernet/sing-shadowtls":  [
+                                                                                                      "v0.2.0",
+                                                                                                      "h1:cLKe4OAOFwuhmAIuPLj//CIL7Q9js+pIDardhJ+/osk="
+                                                                                                  ],
+                                                           "github.com/sagernet/sing-tun":  [
+                                                                                                "v0.6.1",
+                                                                                                "h1:4l0+gnEKcGjlWfUVTD+W0BRApqIny/lU2ZliurE+VMo="
+                                                                                            ],
+                                                           "github.com/sagernet/sing-vmess":  [
+                                                                                                  "v0.2.0",
+                                                                                                  "h1:pCMGUXN2k7RpikQV65/rtXtDHzb190foTfF9IGTMZrI="
+                                                                                              ],
+                                                           "github.com/sagernet/smux":  [
+                                                                                            "v0.0.0-20231208180855-7041f6ea79e7",
+                                                                                            "h1:DImB4lELfQhplLTxeq2z31Fpv8CQqqrUwTbrIRumZqQ="
+                                                                                        ],
+                                                           "github.com/sagernet/ws":  [
+                                                                                          "v0.0.0-20231204124109-acfe8907c854",
+                                                                                          "h1:6uUiZcDRnZSAegryaUGwPC/Fj13JSHwiTftrXhMmYOc="
+                                                                                      ],
+                                                           "github.com/vishvananda/netlink":  [
+                                                                                                  "v1.3.1",
+                                                                                                  "h1:3AEMt62VKqz90r0tmNhog0r/PpWKmrEShJU0wJW6bV0="
+                                                                                              ],
+                                                           "github.com/vishvananda/netns":  [
+                                                                                                "v0.0.5",
+                                                                                                "h1:DfiHV+j8bA32MFM7bfEunvT8IAqQ/NzSJHtcmW5zdEY="
+                                                                                            ],
+                                                           "github.com/wlynxg/anet":  [
+                                                                                          "v0.0.5",
+                                                                                          "h1:J3VJGi1gvo0JwZ/P1/Yc/8p63SoW98B5dHkYDmpgvvU="
+                                                                                      ],
+                                                           "github.com/xtls/reality":  [
+                                                                                           "v0.0.0-20261014101318-83f621788ca8",
+                                                                                           "h1:RjLnVvlzK4q6zWaSBPNRGsrgx2fbJDeUWffjw574uzs="
+                                                                                       ],
+                                                           "github.com/xtls/xray-core":  [
+                                                                                             "v1.260327.1-0.20261031132019-a4a3dff5b20c",
+                                                                                             "h1:XijTasBJ2fImHZo1GoAgSfHuDqloQGYHEADLy9CgrJ8="
+                                                                                         ],
+                                                           "github.com/yuin/gopher-lua":  [
+                                                                                              "v1.1.2",
+                                                                                              "h1:yF/FjE3hD65tBbt0VXLE13HWS9h34fdzJmrWRXwobGA="
+                                                                                          ],
+                                                           "go4.org/netipx":  [
+                                                                                  "v0.0.0-20231129151722-fdeea329fbba",
+                                                                                  "h1:0b9z3AuHCjxk0x/opv64kcgZLBseWJUpBw5I82+2U4M="
+                                                                              ],
+                                                           "golang.org/x/crypto":  [
+                                                                                       "v0.58.0",
+                                                                                       "h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54="
+                                                                                   ],
+                                                           "golang.org/x/crypto/x509roots/fallback":  [
+                                                                                                          "v0.0.0-20261020153306-9f2b28d4331a",
+                                                                                                          "h1:V5oicZXS0oqZx30gY/apgSVD7YvNBfrIOdcMnlelJY4="
+                                                                                                      ],
+                                                           "golang.org/x/exp":  [
+                                                                                    "v0.0.0-20250711185948-6ae5c78190dc",
+                                                                                    "h1:TS73t7x3KarrNd5qAipmspBDS1rkMcgVG/fS1aRb4Rc="
+                                                                                ],
+                                                           "golang.org/x/mobile":  [
+                                                                                       "v0.0.0-20261011034528-197770444867",
+                                                                                       "h1:rav73cdd7OQUPgt1aIFbZQTiPNnjfueKXvfOiLCY0Ss="
+                                                                                   ],
+                                                           "golang.org/x/mod":  [
+                                                                                    "v0.42.0",
+                                                                                    "h1:ICeL3t2L30ljSPHHxDnR4fqVcBt/zR2zJAb9juavmQg="
+                                                                                ],
+                                                           "golang.org/x/net":  [
+                                                                                    "v0.61.0",
+                                                                                    "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw="
+                                                                                ],
+                                                           "golang.org/x/sync":  [
+                                                                                     "v0.24.0",
+                                                                                     "h1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA="
+                                                                                 ],
+                                                           "golang.org/x/sys":  [
+                                                                                    "v0.49.0",
+                                                                                    "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA="
+                                                                                ],
+                                                           "golang.org/x/text":  [
+                                                                                     "v0.43.0",
+                                                                                     "h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc="
+                                                                                 ],
+                                                           "golang.org/x/time":  [
+                                                                                     "v0.15.0",
+                                                                                     "h1:bbrp8t3bGUeFOx08pvsMYRTCVSMk89u4tKbNOZbp88U="
+                                                                                 ],
+                                                           "golang.zx2c4.com/wireguard":  [
+                                                                                              "v0.0.0-20250521234502-f333402bd9cb",
+                                                                                              "h1:whnFRlWMcXI9d+ZbWg+4sHnLp52d5yiIPUxMBSt4X9A="
+                                                                                          ],
+                                                           "google.golang.org/genproto/googleapis/rpc":  [
+                                                                                                             "v0.0.0-20260706201446-f0a921348800",
+                                                                                                             "h1:qEHAMpSaUhtD0p3NbEEI83HwNGFxEwaSJ1G9PLnCBZE="
+                                                                                                         ],
+                                                           "google.golang.org/grpc":  [
+                                                                                          "v1.84.0",
+                                                                                          "h1:soMyaPJ8pAak5PIQ0DGBUir0XRo2fRoMqhNWMLlLxO0="
+                                                                                      ],
+                                                           "google.golang.org/protobuf":  [
+                                                                                              "v1.36.12",
+                                                                                              "h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc="
+                                                                                          ],
+                                                           "gopkg.in/yaml.v2":  [
+                                                                                    "v2.4.0",
+                                                                                    "h1:D8xgwECY7CYvx+Y2n4sBz93Jn9JRvxdiyyo8CTfuKaY="
+                                                                                ],
+                                                           "layeh.com/gopher-luar":  [
+                                                                                         "v1.0.11",
+                                                                                         "h1:8zJudpKI6HWkoh9eyyNFaTM79PY6CAPcIr6X/KTiliw="
+                                                                                     ],
+                                                           "lukechampine.com/blake3":  [
+                                                                                           "v1.4.1",
+                                                                                           "h1:I3Smz7gso8w4/TunLKec6K2fn+kyKtDxr/xcQEN84Wg="
+                                                                                       ]
+                                                       }
+                                  },
+                    "armeabi-v7a":  {
+                                        "sha256":  "ff7ca3e6698059685852c04f8582fa3d233b1d4acd05f220e075aa2b38188e6f",
+                                        "go":  "go1.27.0",
+                                        "dependencies":  {
+                                                             "github.com/ajg/form":  [
+                                                                                         "v1.5.1",
+                                                                                         "h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU="
+                                                                                     ],
+                                                             "github.com/andybalholm/brotli":  [
+                                                                                                   "v1.2.3",
+                                                                                                   "h1:8H1qwOkl2LPfjf3YezB90JnCliZb6SInJ/OJkEbA5NQ="
+                                                                                               ],
+                                                             "github.com/apernet/quic-go":  [
+                                                                                                "v0.61.1-0.20260806010916-184d081eef3e",
+                                                                                                "h1:5mgtR5gwIgBKMiGI1QdXldZZ+SNor06Nbu1wCBulQBg="
+                                                                                            ],
+                                                             "github.com/cretz/bine":  [
+                                                                                           "v0.2.0",
+                                                                                           "h1:8GiDRGlTgz+o8H9DSnsl+5MeBK4HsExxgl6WgzOCuZo="
+                                                                                       ],
+                                                             "github.com/fsnotify/fsnotify":  [
+                                                                                                  "v1.9.0",
+                                                                                                  "h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k="
+                                                                                              ],
+                                                             "github.com/ghodss/yaml":  [
+                                                                                            "v1.0.1-0.20220118164431-d8423dcdf344",
+                                                                                            "h1:Arcl6UOIS/kgO2nW3A65HN+7CMjSDP/gofXL4CZt1V4="
+                                                                                        ],
+                                                             "github.com/go-chi/chi/v5":  [
+                                                                                              "v5.2.1",
+                                                                                              "h1:KOIHODQj58PmL80G2Eak4WdvUzjSJSm0vG72crDCqb8="
+                                                                                          ],
+                                                             "github.com/go-chi/render":  [
+                                                                                              "v1.0.3",
+                                                                                              "h1:AsXqd2a1/INaIfUSKq3G5uA8weYx20FOsM7uSoCyyt4="
+                                                                                          ],
+                                                             "github.com/gobwas/httphead":  [
+                                                                                                "v0.1.0",
+                                                                                                "h1:exrUm0f4YX0L7EBwZHuCF4GDp8aJfVeBrlLQrs6NqWU="
+                                                                                            ],
+                                                             "github.com/gobwas/pool":  [
+                                                                                            "v0.2.1",
+                                                                                            "h1:xfeeEhW7pwmX8nuLVlqbzVc7udMDrwetjEv+TZIz1og="
+                                                                                        ],
+                                                             "github.com/gofrs/uuid/v5":  [
+                                                                                              "v5.5.1",
+                                                                                              "h1:z1Ce19/JwNidXpy3tOQc3241lnJLKdKyq/xlNvlD4Ng="
+                                                                                          ],
+                                                             "github.com/google/btree":  [
+                                                                                             "v1.1.3",
+                                                                                             "h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg="
+                                                                                         ],
+                                                             "github.com/google/gopacket":  [
+                                                                                                "v1.1.19",
+                                                                                                "h1:ves8RnFZPGiFnTS0uPQStjwru6uO6h+nlr9j6fL7kF8="
+                                                                                            ],
+                                                             "github.com/google/uuid":  [
+                                                                                            "v1.6.0",
+                                                                                            "h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0="
+                                                                                        ],
+                                                             "github.com/gorilla/websocket":  [
+                                                                                                  "v1.5.3",
+                                                                                                  "h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg="
+                                                                                              ],
+                                                             "github.com/hashicorp/yamux":  [
+                                                                                                "v0.1.2",
+                                                                                                "h1:XtB8kyFOyHXYVFnwT5C3+Bdo8gArse7j2AQ0DA0Uey8="
+                                                                                            ],
+                                                             "github.com/huin/goupnp":  [
+                                                                                            "v1.2.0",
+                                                                                            "h1:uOKW26NG1hsSSbXIZ1IR7XP9Gjd1U8pnLaCMgntmkmY="
+                                                                                        ],
+                                                             "github.com/jackpal/go-nat-pmp":  [
+                                                                                                   "v1.0.2",
+                                                                                                   "h1:KzKSgb7qkJvOUTqYl9/Hg/me3pWgBmERKrTGD7BdWus="
+                                                                                               ],
+                                                             "github.com/juju/ratelimit":  [
+                                                                                               "v1.0.2",
+                                                                                               "h1:sRxmtRiajbvrcLQT7S+JbqU0ntsb9W2yhSdNN8tWfaI="
+                                                                                           ],
+                                                             "github.com/klauspost/compress":  [
+                                                                                                   "v1.20.0",
+                                                                                                   "h1:a3C1ke2ohxFymNlb2HWAHjDeKCI90scRskErZkR0ezA="
+                                                                                               ],
+                                                             "github.com/klauspost/cpuid/v2":  [
+                                                                                                   "v2.4.1",
+                                                                                                   "h1:I9KxadAkvo+QjtcEE2f2tyfEvmIla/T0m+14PrZNl0U="
+                                                                                               ],
+                                                             "github.com/koron/go-ssdp":  [
+                                                                                              "v0.0.4",
+                                                                                              "h1:1IDwrghSKYM7yLf7XCzbByg2sJ/JcNOZRXS2jczTwz0="
+                                                                                          ],
+                                                             "github.com/libp2p/go-nat":  [
+                                                                                              "v1.0.1-0.20250821073202-01afc089f138",
+                                                                                              "h1:YohuNPT/1k3VcThCQlBZ43PCPWPfMRS1zcxWBF2SLK8="
+                                                                                          ],
+                                                             "github.com/libp2p/go-netroute":  [
+                                                                                                   "v0.2.1",
+                                                                                                   "h1:V8kVrpD8GK0Riv15/7VN6RbUQ3URNZVosw7H2v9tksU="
+                                                                                               ],
+                                                             "github.com/logrusorgru/aurora":  [
+                                                                                                   "v2.0.3+incompatible",
+                                                                                                   "h1:tOpm7WcpBTn4fjmVfgpQq0EfczGlG91VSDkswnjF5A8="
+                                                                                               ],
+                                                             "github.com/mdlayher/netlink":  [
+                                                                                                 "v1.11.2",
+                                                                                                 "h1:HKh2jqe+omdSWcQ88nrT7INE61B0NXfiSPFdgL4YbNI="
+                                                                                             ],
+                                                             "github.com/mdlayher/socket":  [
+                                                                                                "v0.6.0",
+                                                                                                "h1:ScZPaAGyO1icQnbFrhPM8mnXyMu9qukC1K4ZoM2IQKU="
+                                                                                            ],
+                                                             "github.com/metacubex/tfo-go":  [
+                                                                                                 "v0.0.0-20241231083714-66613d49c422",
+                                                                                                 "h1:zGeQt3UyNydIVrMRB97AA5WsYEau/TyCnRtTf1yUmJY="
+                                                                                             ],
+                                                             "github.com/miekg/dns":  [
+                                                                                          "v1.1.73",
+                                                                                          "h1:uhT8nJxmTrPJYClxVxTCX+CVn6qnzSiybRk72Z6DgrE="
+                                                                                      ],
+                                                             "github.com/oschwald/maxminddb-golang":  [
+                                                                                                          "v1.12.0",
+                                                                                                          "h1:9FnTOD0YOhP7DGxGsq4glzpGy5+w7pq50AS6wALUMYs="
+                                                                                                      ],
+                                                             "github.com/pelletier/go-toml":  [
+                                                                                                  "v1.9.5",
+                                                                                                  "h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8="
+                                                                                              ],
+                                                             "github.com/pion/dtls/v3":  [
+                                                                                             "v3.1.5",
+                                                                                             "h1:9xJtVsHwMYeSjPp5Hh1FTis4DchnQWtnOa5o+6ygqfc="
+                                                                                         ],
+                                                             "github.com/pion/logging":  [
+                                                                                             "v0.2.4",
+                                                                                             "h1:tTew+7cmQ+Mc1pTBLKH2puKsOvhm32dROumOZ655zB8="
+                                                                                         ],
+                                                             "github.com/pion/stun/v3":  [
+                                                                                             "v3.1.7",
+                                                                                             "h1:uRXMTlGLf89WgItGNyZ6aR5jMTX0NBbybXADpQCzn+E="
+                                                                                         ],
+                                                             "github.com/pion/transport/v4":  [
+                                                                                                  "v4.1.0",
+                                                                                                  "h1:8S+nF2reM2cJuqC6g78OVy2BBgmbdns+acx3jA97BvQ="
+                                                                                              ],
+                                                             "github.com/pires/go-proxyproto":  [
+                                                                                                    "v0.16.0",
+                                                                                                    "h1:9KYT/fM3wpjT8bdMEj/7FBcoiUG1KyzEjRYnPu+vz7A="
+                                                                                                ],
+                                                             "github.com/quic-go/qpack":  [
+                                                                                              "v0.6.0",
+                                                                                              "h1:g7W+BMYynC1LbYLSqRt8PBg5Tgwxn214ZZR34VIOjz8="
+                                                                                          ],
+                                                             "github.com/refraction-networking/utls":  [
+                                                                                                           "v1.8.3-0.20260301010127-aa6edf4b11af",
+                                                                                                           "h1:er2acxbi3N1nvEq6HXHUAR1nTWEJmQfqiGR8EVT9rfs="
+                                                                                                       ],
+                                                             "github.com/robfig/cron/v3":  [
+                                                                                               "v3.0.1",
+                                                                                               "h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs="
+                                                                                           ],
+                                                             "github.com/sagernet/bbolt":  [
+                                                                                               "v0.0.0-20231014093535-ea5cb2fe9f0a",
+                                                                                               "h1:+NkI2670SQpQWvkkD2QgdTuzQG263YZ+2emfpeyGqW0="
+                                                                                           ],
+                                                             "github.com/sagernet/cors":  [
+                                                                                              "v1.2.1",
+                                                                                              "h1:Cv5Z8y9YSD6Gm+qSpNrL3LO4lD3eQVvbFYJSG7JCMHQ="
+                                                                                          ],
+                                                             "github.com/sagernet/fswatch":  [
+                                                                                                 "v0.1.1",
+                                                                                                 "h1:YqID+93B7VRfqIH3PArW/XpJv5H4OLEVWDfProGoRQs="
+                                                                                             ],
+                                                             "github.com/sagernet/gomobile":  [
+                                                                                                  "v0.1.4",
+                                                                                                  "=\u003e",
+                                                                                                  "github.com/sagernet/gomobile",
+                                                                                                  "v0.1.13",
+                                                                                                  "h1:foTOGKJetah9VwaJl1XJx5TswIAVg8NfYmHOhrOc95I="
+                                                                                              ],
+                                                             "github.com/sagernet/gvisor":  [
+                                                                                                "v0.0.0-20241123041152-536d05261cff",
+                                                                                                "h1:mlohw3360Wg1BNGook/UHnISXhUx4Gd/3tVLs5T0nSs="
+                                                                                            ],
+                                                             "github.com/sagernet/netlink":  [
+                                                                                                 "v0.0.0-20240612041022-b9a21c07ac6a",
+                                                                                                 "h1:ObwtHN2VpqE0ZNjr6sGeT00J8uU7JF4cNUdb44/Duis="
+                                                                                             ],
+                                                             "github.com/sagernet/nftables":  [
+                                                                                                  "v0.3.0-mod.4",
+                                                                                                  "h1:vnOtcDYeSXv2e5RoRuGH0lrpttQFJ8iC4ICS2nhlDSo="
+                                                                                              ],
+                                                             "github.com/sagernet/sing":  [
+                                                                                              "v0.6.1",
+                                                                                              "h1:mJ6e7Ir2wtCoGLbdnnXWBsNJu5YHtbXmv66inoE0zFA="
+                                                                                          ],
+                                                             "github.com/sagernet/sing-box":  [
+                                                                                                  "v0.0.0-00010101000000-000000000000",
+                                                                                                  "=\u003e",
+                                                                                                  "../sing-box",
+                                                                                                  "(devel)",
+                                                                                                  ""
+                                                                                              ],
+                                                             "github.com/sagernet/sing-dns":  [
+                                                                                                  "v0.4.0",
+                                                                                                  "h1:+mNoOuR3nljjouCH+qMg4zHI1+R9T2ReblGFkZPEndc="
+                                                                                              ],
+                                                             "github.com/sagernet/sing-mux":  [
+                                                                                                  "v0.3.1",
+                                                                                                  "h1:kvCc8HyGAskDHDQ0yQvoTi/7J4cZPB/VJMsAM3MmdQI="
+                                                                                              ],
+                                                             "github.com/sagernet/sing-shadowsocks":  [
+                                                                                                          "v0.2.7",
+                                                                                                          "h1:zaopR1tbHEw5Nk6FAkM05wCslV6ahVegEZaKMv9ipx8="
+                                                                                                      ],
+                                                             "github.com/sagernet/sing-shadowsocks2":  [
+                                                                                                           "v0.2.0",
+                                                                                                           "h1:wpZNs6wKnR7mh1wV9OHwOyUr21VkS3wKFHi+8XwgADg="
+                                                                                                       ],
+                                                             "github.com/sagernet/sing-shadowtls":  [
+                                                                                                        "v0.2.0",
+                                                                                                        "h1:cLKe4OAOFwuhmAIuPLj//CIL7Q9js+pIDardhJ+/osk="
+                                                                                                    ],
+                                                             "github.com/sagernet/sing-tun":  [
+                                                                                                  "v0.6.1",
+                                                                                                  "h1:4l0+gnEKcGjlWfUVTD+W0BRApqIny/lU2ZliurE+VMo="
+                                                                                              ],
+                                                             "github.com/sagernet/sing-vmess":  [
+                                                                                                    "v0.2.0",
+                                                                                                    "h1:pCMGUXN2k7RpikQV65/rtXtDHzb190foTfF9IGTMZrI="
+                                                                                                ],
+                                                             "github.com/sagernet/smux":  [
+                                                                                              "v0.0.0-20231208180855-7041f6ea79e7",
+                                                                                              "h1:DImB4lELfQhplLTxeq2z31Fpv8CQqqrUwTbrIRumZqQ="
+                                                                                          ],
+                                                             "github.com/sagernet/ws":  [
+                                                                                            "v0.0.0-20231204124109-acfe8907c854",
+                                                                                            "h1:6uUiZcDRnZSAegryaUGwPC/Fj13JSHwiTftrXhMmYOc="
+                                                                                        ],
+                                                             "github.com/vishvananda/netlink":  [
+                                                                                                    "v1.3.1",
+                                                                                                    "h1:3AEMt62VKqz90r0tmNhog0r/PpWKmrEShJU0wJW6bV0="
+                                                                                                ],
+                                                             "github.com/vishvananda/netns":  [
+                                                                                                  "v0.0.5",
+                                                                                                  "h1:DfiHV+j8bA32MFM7bfEunvT8IAqQ/NzSJHtcmW5zdEY="
+                                                                                              ],
+                                                             "github.com/wlynxg/anet":  [
+                                                                                            "v0.0.5",
+                                                                                            "h1:J3VJGi1gvo0JwZ/P1/Yc/8p63SoW98B5dHkYDmpgvvU="
+                                                                                        ],
+                                                             "github.com/xtls/reality":  [
+                                                                                             "v0.0.0-20261014101318-83f621788ca8",
+                                                                                             "h1:RjLnVvlzK4q6zWaSBPNRGsrgx2fbJDeUWffjw574uzs="
+                                                                                         ],
+                                                             "github.com/xtls/xray-core":  [
+                                                                                               "v1.260327.1-0.20261031132019-a4a3dff5b20c",
+                                                                                               "h1:XijTasBJ2fImHZo1GoAgSfHuDqloQGYHEADLy9CgrJ8="
+                                                                                           ],
+                                                             "github.com/yuin/gopher-lua":  [
+                                                                                                "v1.1.2",
+                                                                                                "h1:yF/FjE3hD65tBbt0VXLE13HWS9h34fdzJmrWRXwobGA="
+                                                                                            ],
+                                                             "go4.org/netipx":  [
+                                                                                    "v0.0.0-20231129151722-fdeea329fbba",
+                                                                                    "h1:0b9z3AuHCjxk0x/opv64kcgZLBseWJUpBw5I82+2U4M="
+                                                                                ],
+                                                             "golang.org/x/crypto":  [
+                                                                                         "v0.58.0",
+                                                                                         "h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54="
+                                                                                     ],
+                                                             "golang.org/x/crypto/x509roots/fallback":  [
+                                                                                                            "v0.0.0-20261020153306-9f2b28d4331a",
+                                                                                                            "h1:V5oicZXS0oqZx30gY/apgSVD7YvNBfrIOdcMnlelJY4="
+                                                                                                        ],
+                                                             "golang.org/x/exp":  [
+                                                                                      "v0.0.0-20250711185948-6ae5c78190dc",
+                                                                                      "h1:TS73t7x3KarrNd5qAipmspBDS1rkMcgVG/fS1aRb4Rc="
+                                                                                  ],
+                                                             "golang.org/x/mobile":  [
+                                                                                         "v0.0.0-20261011034528-197770444867",
+                                                                                         "h1:rav73cdd7OQUPgt1aIFbZQTiPNnjfueKXvfOiLCY0Ss="
+                                                                                     ],
+                                                             "golang.org/x/mod":  [
+                                                                                      "v0.42.0",
+                                                                                      "h1:ICeL3t2L30ljSPHHxDnR4fqVcBt/zR2zJAb9juavmQg="
+                                                                                  ],
+                                                             "golang.org/x/net":  [
+                                                                                      "v0.61.0",
+                                                                                      "h1:RR+6j/BTBCrggOLugxa+66R8FvoN6MHlzDlZIbN9YFw="
+                                                                                  ],
+                                                             "golang.org/x/sync":  [
+                                                                                       "v0.24.0",
+                                                                                       "h1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA="
+                                                                                   ],
+                                                             "golang.org/x/sys":  [
+                                                                                      "v0.49.0",
+                                                                                      "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA="
+                                                                                  ],
+                                                             "golang.org/x/text":  [
+                                                                                       "v0.43.0",
+                                                                                       "h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc="
+                                                                                   ],
+                                                             "golang.org/x/time":  [
+                                                                                       "v0.15.0",
+                                                                                       "h1:bbrp8t3bGUeFOx08pvsMYRTCVSMk89u4tKbNOZbp88U="
+                                                                                   ],
+                                                             "golang.zx2c4.com/wireguard":  [
+                                                                                                "v0.0.0-20250521234502-f333402bd9cb",
+                                                                                                "h1:whnFRlWMcXI9d+ZbWg+4sHnLp52d5yiIPUxMBSt4X9A="
+                                                                                            ],
+                                                             "google.golang.org/genproto/googleapis/rpc":  [
+                                                                                                               "v0.0.0-20260706201446-f0a921348800",
+                                                                                                               "h1:qEHAMpSaUhtD0p3NbEEI83HwNGFxEwaSJ1G9PLnCBZE="
+                                                                                                           ],
+                                                             "google.golang.org/grpc":  [
+                                                                                            "v1.84.0",
+                                                                                            "h1:soMyaPJ8pAak5PIQ0DGBUir0XRo2fRoMqhNWMLlLxO0="
+                                                                                        ],
+                                                             "google.golang.org/protobuf":  [
+                                                                                                "v1.36.12",
+                                                                                                "h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc="
+                                                                                            ],
+                                                             "gopkg.in/yaml.v2":  [
+                                                                                      "v2.4.0",
+                                                                                      "h1:D8xgwECY7CYvx+Y2n4sBz93Jn9JRvxdiyyo8CTfuKaY="
+                                                                                  ],
+                                                             "layeh.com/gopher-luar":  [
+                                                                                           "v1.0.11",
+                                                                                           "h1:8zJudpKI6HWkoh9eyyNFaTM79PY6CAPcIr6X/KTiliw="
+                                                                                       ],
+                                                             "lukechampine.com/blake3":  [
+                                                                                             "v1.4.1",
+                                                                                             "h1:I3Smz7gso8w4/TunLKec6K2fn+kyKtDxr/xcQEN84Wg="
+                                                                                         ]
+                                                         }
+                                    }
+                },
+    "unknown":  [
+                    {
+                        "abi":  "arm64-v8a",
+                        "module":  "bkcores",
+                        "reason":  "development main module"
+                    },
+                    {
+                        "abi":  "arm64-v8a",
+                        "module":  "github.com/sagernet/sing-box",
+                        "reason":  "unversioned or unresolved replacement",
+                        "metadata":  [
+                                         "v0.0.0-00010101000000-000000000000",
+                                         "=\u003e",
+                                         "../sing-box",
+                                         "(devel)",
+                                         ""
+                                     ]
+                    },
+                    {
+                        "abi":  "armeabi-v7a",
+                        "module":  "bkcores",
+                        "reason":  "development main module"
+                    },
+                    {
+                        "abi":  "armeabi-v7a",
+                        "module":  "github.com/sagernet/sing-box",
+                        "reason":  "unversioned or unresolved replacement",
+                        "metadata":  [
+                                         "v0.0.0-00010101000000-000000000000",
+                                         "=\u003e",
+                                         "../sing-box",
+                                         "(devel)",
+                                         ""
+                                     ]
+                    }
+                ],
+    "unique_module_versions":  81,
+    "findings":  [
+                     {
+                         "module":  "github.com/andybalholm/brotli",
+                         "version":  "v1.2.3",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6888",
+                         "modified":  "2026-11-05T23:25:49.434824Z"
+                     },
+                     {
+                         "module":  "github.com/go-chi/chi/v5",
+                         "version":  "v5.2.1",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GHSA-3fxj-6jh8-hvhx",
+                         "modified":  "2026-11-04T04:00:03.945179Z"
+                     },
+                     {
+                         "module":  "github.com/go-chi/chi/v5",
+                         "version":  "v5.2.1",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GHSA-j6qf-3m9c-vwj3",
+                         "modified":  "2026-10-23T21:15:03.935320Z"
+                     },
+                     {
+                         "module":  "github.com/go-chi/chi/v5",
+                         "version":  "v5.2.1",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GHSA-vrw8-fxc6-2r93",
+                         "modified":  "2026-10-02T23:30:06.689984Z"
+                     },
+                     {
+                         "module":  "github.com/go-chi/chi/v5",
+                         "version":  "v5.2.1",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2025-3770",
+                         "modified":  "2026-08-15T05:19:10.246790Z"
+                     },
+                     {
+                         "module":  "github.com/go-chi/chi/v5",
+                         "version":  "v5.2.1",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-5774",
+                         "modified":  "2026-08-15T05:18:57.642465Z"
+                     },
+                     {
+                         "module":  "github.com/go-chi/chi/v5",
+                         "version":  "v5.2.1",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-5775",
+                         "modified":  "2026-08-15T05:19:13.029024Z"
+                     },
+                     {
+                         "module":  "github.com/go-chi/chi/v5",
+                         "version":  "v5.2.1",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-5777",
+                         "modified":  "2026-08-15T05:19:15.756579Z"
+                     },
+                     {
+                         "module":  "github.com/gorilla/websocket",
+                         "version":  "v1.5.3",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6278",
+                         "modified":  "2026-11-23T20:30:10.450913Z"
+                     },
+                     {
+                         "module":  "github.com/klauspost/compress",
+                         "version":  "v1.20.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6865",
+                         "modified":  "2026-11-05T23:15:14.472777Z"
+                     },
+                     {
+                         "module":  "golang.org/x/crypto",
+                         "version":  "v0.58.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-5932",
+                         "modified":  "2026-11-02T22:15:06.677088Z"
+                     },
+                     {
+                         "module":  "golang.org/x/net",
+                         "version":  "v0.61.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6860",
+                         "modified":  "2026-10-27T21:30:04.890809Z"
+                     },
+                     {
+                         "module":  "golang.org/x/net",
+                         "version":  "v0.61.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6866",
+                         "modified":  "2026-10-27T21:45:08.978077Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6599",
+                         "modified":  "2026-11-23T21:12:28.554776Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6600",
+                         "modified":  "2026-11-23T21:12:30.134491Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6603",
+                         "modified":  "2026-11-23T21:12:29.903950Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6604",
+                         "modified":  "2026-10-16T09:55:42.275912Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6605",
+                         "modified":  "2026-11-23T21:12:29.041759Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6607",
+                         "modified":  "2026-11-23T21:12:29.766445Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6608",
+                         "modified":  "2026-11-23T21:12:28.786217Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6609",
+                         "modified":  "2026-11-23T21:12:28.207134Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6610",
+                         "modified":  "2026-11-23T21:12:29.831892Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6611",
+                         "modified":  "2026-11-23T21:12:29.007257Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6612",
+                         "modified":  "2026-11-23T21:12:28.295006Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6613",
+                         "modified":  "2026-11-23T21:12:29.108905Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6617",
+                         "modified":  "2026-11-23T21:12:28.960393Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6809",
+                         "modified":  "2026-11-23T21:12:29.378627Z"
+                     },
+                     {
+                         "module":  "stdlib",
+                         "version":  "1.27.0",
+                         "engines":  [
+                                         "arm64-v8a",
+                                         "armeabi-v7a"
+                                     ],
+                         "id":  "GO-2026-6859",
+                         "modified":  "2026-11-23T21:12:30.057470Z"
+                     }
+                 ],
+    "audit_date":  "2026-11-25",
+    "source":  "https://api.osv.dev/v1/querybatch"
+}

@@ -911,3 +911,19 @@ Linux replica workflow with archive SHA256 pin and independent caches.
 compiler gate passed. Hosted clean builds and hash comparison not
 yet verified; no new patched binaries claimed. No device acceptance
 or main merge/release.
+
+
+## Phase 3 hosted compiler builds and embedded Go audit (2026-11-25)
+
+Hosted run 45584510998 succeeded on four independent Linux runners
+with verified Go1.27.4 and both ARM ABIs, exact patched module
+graph and zero fresh OSV version matches including stdlib.
+Added independent artifact comparison CLI and CI job; three
+regression tests, full Linux Python 78/78 and 12 tracked binary
+checks passed. Local artifact retrieval not yet verified; byte
+equality remains pending. Embedded AAR version scan 81 queries,
+28 advisory matches including 15 stdlib; local sing-box replacement
+and bkcores main wrapper source identity unknown. Audit snapshot
+recorded, no replacement. Further embedded source recovery,
+compatibility/device acceptance and fresh APK security scans open.
+No main merge or release.

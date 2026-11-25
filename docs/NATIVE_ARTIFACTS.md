@@ -248,3 +248,29 @@ and fresh module caches. Artifact hashes are recorded for later
 comparison; independent reproducibility not yet demonstrated.
 NDK package authenticity beyond SDK manager/revision not established.
 No production binaries changed.
+
+
+## Hosted patched compiler builds and embedded AAR screening (2026-11-25)
+
+GitHub Actions run 45584510998 completed successfully: four
+separate Linux jobs, both ARM ABIs each, official Go1.27.4 archive
+checksum verified, pinned NDK installed, immutable dependency
+snapshot matched and fresh module/stdlib OSV gate passed.
+Eight candidate binary builds succeeded; no byte equality claim
+until artifacts are downloaded and independently compared.
+New compare_go_candidate_replicas.py checks actual SHA256, sizes,
+ELF metadata, engine/compiler identity, OSV evidence and matching
+build input records; new CI comparison job fails on mismatches.
+
+Read-only libcores.aar inspection audited effective linked module
+versions and Go1.27.0 stdlib in both JNI members. Resolved gomobile
+replacement to v0.1.13; unknown bkcores development main module
+and ../sing-box development replacement remain explicitly excluded
+from coverage (two unresolved identities per ABI). OSV returned
+28 module/advisory matches across 81 distinct version queries:
+15 stdlib, 7 chi, 2 x/net, 1 each brotli, websocket, compress and
+x/crypto. Snapshot includes binary digests, metadata, advisory IDs
+and unknown identities in EMBEDDED_AAR_AUDIT.json. Module matches
+are not reachability findings. Existing wrapper/source revision
+not found in tracked mobile repository; original source required
+before trusted merged rebuild. No production binary change.

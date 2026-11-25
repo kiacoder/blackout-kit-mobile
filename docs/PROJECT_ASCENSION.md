@@ -1207,3 +1207,29 @@ no errors/warnings. No physical installation tested. Hosted
 although local suite passed; investigate before accepting CI.
 Storage retry 45597592902 still compiling at inspection.
 Production dependencies and native binaries unchanged.
+
+
+## Phase 3 vault regression cleanup and MobSF high-findings review (2026-11-25)
+
+Hosted APK run 45596888547 failed during synthetic vault test
+teardown with PathNotFoundException, after the security assertions.
+Inspected installed Hive 2.2.3 source: _openBox catch calls
+newBox?.close() without awaiting; backend close deletes its lock
+file asynchronously. Test teardown and wrong-key recovery retry
+now wait for the isolated fixture lock files to disappear within
+5 seconds. Persistent locks still fail; no assertion or production
+behavior changed. Local vault suite 9/9 and Flutter full suite
+589/589 passed; 12 binary/action checks passed. Linux hosted
+confirmation pending. Production failed-open cleanup remains a
+separate dependency/lifecycle concern; no runtime workaround claimed.
+Downloaded finding-level report from completed run 45596213241:
+MobSF 46/100, 4 high, 10 warning, 1 info, 2 secure, 1 hotspot.
+High findings: debug signing (test artifacts only; release signing
+gate remains); loopback cleartext (requires live traffic acceptance
+before tightening); minSDK24 (support policy decision, not silently
+raising minimum); CBC/PKCS padding (previous full report attributes
+this to secure-storage plugin; isolated migration remains blocked).
+No finding waived or marked fixed merely from source inspection.
+Storage retry 45597592902 fixture compilation/resolution passed,
+emulator jobs still running. No production dependency or native
+binary replacement, no main merge or publication.

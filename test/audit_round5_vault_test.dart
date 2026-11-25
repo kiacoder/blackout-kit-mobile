@@ -31,6 +31,24 @@ class NonPersistingKeyStore implements KeyStore {
   Future<void> write(String key, String value) async {}
 }
 
+// Hive 2.2.3 does not await the backend close after a failed open.
+// Wait for its lock-file cleanup before deleting the synthetic directory
+// or reopening a failed box. Do not suppress persistent locks or IO errors.
+Future<void> awaitFixtureLocksReleased(Directory directory) async {
+  final deadline = Stopwatch()..start();
+  while (true) {
+    final locks = await directory
+        .list()
+        .where((entry) => entry.path.endsWith('.lock'))
+        .toList();
+    if (locks.isEmpty) return;
+    if (deadline.elapsed >= const Duration(seconds: 5)) {
+      fail('Hive fixture still has open lock files after cleanup deadline');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
 void main() {
   late Directory dir;
 
@@ -42,6 +60,7 @@ void main() {
 
   tearDown(() async {
     await Hive.close();
+    await awaitFixtureLocksReleased(dir);
     await dir.delete(recursive: true);
   });
 
@@ -150,6 +169,7 @@ void main() {
     expect(await file.readAsBytes(), before);
     expect(await Hive.boxExists('configs'), isFalse);
     await Hive.close();
+    await awaitFixtureLocksReleased(dir);
     final restored = ConfigService(keyStore: store);
     await restored.initialize();
     expect(restored.getAllConfigs().map((c) => c.displayName), contains('WrongKey'));

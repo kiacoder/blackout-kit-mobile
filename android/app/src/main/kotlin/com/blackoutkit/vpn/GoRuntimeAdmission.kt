@@ -23,6 +23,7 @@ internal class GoRuntimeAdmission {
 
     companion object {
         val process = GoRuntimeAdmission()
-        const val RESTART_REQUIRED = "Another VPN runtime is loaded. Fully restart the app before switching runtime families."
+        const val RESTART_REQUIRED =
+            "Another VPN runtime is loaded. Fully restart the app before switching runtime families."
     }
 }

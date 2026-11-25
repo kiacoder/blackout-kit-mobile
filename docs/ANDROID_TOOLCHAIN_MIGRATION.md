@@ -1,6 +1,8 @@
 # Android toolchain migration — Ascension Phase 3
 
-Status: isolated toolchain CI tests passed (2026-11-24). PR20 build pins unchanged.
+Status: isolated toolchain CI tests and APK/iOS packaging passed (2026-11-25). PR20 build pins unchanged.
+
+Candidate run 45443595453 completed successfully: APK build, signature and inventory checks, antivirus, SBOM, VirusTotal hash lookup, MobSF analysis and provenance steps succeeded. iOS unsigned IPA built. No release signing or publication was requested. Scanner execution success is not a clean security verdict; artifact findings and device behavior remain to be reviewed before promotion. Latest PR20 ShellCheck jobs also passed.
 
 ## GitHub acceptance checkpoint
 

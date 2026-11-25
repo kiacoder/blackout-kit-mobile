@@ -238,3 +238,19 @@ script in an isolated test repository was correctly rejected (exit 2).
 ShellCheck is not installed locally; hosted check still pending. Runner
 ShellCheck version is logged; warning/style debt remains open. No build
 pins changed in this PR, and no APK release or merge performed.
+
+
+## Phase 3 Kotlin quality introduction (2026-11-25)
+
+ShellCheck correctness jobs passed. Experimental toolchain APK and iOS
+workflow 45443595453 passed, including APK signature/inventory checks and
+security scanner execution; report review/device validation remain open.
+Added standalone SHA-256-pinned ktlint 1.5.0 and Detekt 1.23.8 CLI tools,
+with Python 3.11+ runner and dedicated Code quality CI job. Initial full
+source audit found 1313 ktlint findings and 337 Detekt weighted issues.
+Strict gate covers OneShotCallbackSlot.kt and GoRuntimeAdmission.kt after
+formatting-only remediation; local strict checks passed. Full audit is
+available with --audit and fails on outstanding findings. No baseline or
+blanket suppression added. Expand strict scope in tested batches. Local
+Ruff unavailable; CI validation and Android regression recheck pending.
+No production merge or release. See ANDROID_TOOLCHAIN_MIGRATION.md.

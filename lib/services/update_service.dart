@@ -169,6 +169,7 @@ class UpdateService extends GetxService {
   final status = RxString('');
   final progress = RxDouble(0.0);
   bool _downloading = false;
+  bool _installing = false;
 
   /// The ABI the native side reports, used to choose the right APK asset.
   Future<String> deviceAbi() async {
@@ -258,7 +259,9 @@ class UpdateService extends GetxService {
   /// Downloads the APK into the FileProvider-mapped internal updates dir.
   Future<String> downloadApk(AppUpdate update) async {
     UpdateDownloadPolicy.validate(update);
-    if (_downloading) throw StateError('Update download already running');
+    if (_downloading || _installing) {
+      throw StateError('An update operation is already running');
+    }
     _downloading = true;
     Directory? staging;
     Dio? client;
@@ -306,7 +309,18 @@ class UpdateService extends GetxService {
   }
 
   /// Hands the APK to Android's package installer (user confirms the install).
-  Future<void> installApk(String path) async {
-    await _channel.invokeMethod('installApk', {'path': path});
+  Future<void> installApk(String path, AppUpdate update) async {
+    if (_downloading || _installing) {
+      throw StateError('An update operation is already running');
+    }
+    _installing = true;
+    try {
+      // Permission retries may happen long after the original download.
+      // Verify the actual bytes again before handing the APK to Android.
+      await UpdateDownloadPolicy.verify(File(path), update);
+      await _channel.invokeMethod('installApk', {'path': path});
+    } finally {
+      _installing = false;
+    }
   }
 }

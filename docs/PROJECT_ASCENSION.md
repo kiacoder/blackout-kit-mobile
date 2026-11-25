@@ -1185,3 +1185,25 @@ explicit job-owned ANDROID_USER_HOME, ANDROID_AVD_HOME and AVD
 path, checks ini/config existence and emulator listing before boot.
 Root cause of path disagreement not yet verified; retry pending.
 No production dependency/native binary replacement or main merge.
+
+
+## Phase 3 cached update verification and recovery safety (2026-11-25)
+
+Every installer attempt now rechecks the actual cached APK size
+and SHA256 against the release metadata, including permission
+retries; prevents overlapping download/install operations within
+the service. On missing/corrupt cached file the settings UI clears
+its reference so the next attempt can download again. Native
+PlatformException codes preserved. English/Persian/Chinese signer
+mismatch recovery now advises preserving installed app and saved
+configs, not uninstalling. New mocked channel regression verifies
+permission refusal, same-size corruption rejected before installer,
+and successful retry after restoring valid bytes. Full Flutter
+589/589 passed twice, targeted updater 18/18, 12 binary/action
+checks passed. Targeted analyzer before translation edit had
+13 existing informational findings across updater/settings/tests,
+no errors/warnings. No physical installation tested. Hosted
+45596888547 failed one vault regression (584 passed/1 failed)
+although local suite passed; investigate before accepting CI.
+Storage retry 45597592902 still compiling at inspection.
+Production dependencies and native binaries unchanged.

@@ -9,6 +9,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:blackout_kit_mobile/services/update_service.dart';
 
 Map<String, dynamic> releaseWith(Map<String, int> assets, {String tag = 'v1.0.0-beta.42'}) => {
@@ -25,6 +26,7 @@ Map<String, dynamic> releaseWith(Map<String, int> assets, {String tag = 'v1.0.0-
     };
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('Update download integrity', () {
     AppUpdate update({
       String url = 'https://github.com/kiacoder/blackout-kit-mobile/releases/download/v1.2.3/test.apk',
@@ -69,6 +71,36 @@ void main() {
       await file.writeAsBytes([42]);
       await expectLater(UpdateDownloadPolicy.verify(file, update(digest: expected)),
           throwsFormatException);
+    });
+
+    test('permission retry rechecks bytes and preserves platform error code', () async {
+      final folder = await Directory.systemTemp.createTemp('update-retry-');
+      addTearDown(() => folder.delete(recursive: true));
+      final file = File('${folder.path}/fixture.apk');
+      await file.writeAsBytes(data);
+      const channel = MethodChannel('com.blackoutkit.vpn/update');
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      var installerCalls = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'installApk');
+        expect(call.arguments['path'], file.path);
+        installerCalls++;
+        if (installerCalls == 1) {
+          throw PlatformException(code: 'ALLOW_UNKNOWN_SOURCES');
+        }
+        return true;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final service = UpdateService();
+      final release = update(digest: expected);
+      await expectLater(service.installApk(file.path, release),
+          throwsA(isA<PlatformException>().having((e) => e.code, 'code', 'ALLOW_UNKNOWN_SOURCES')));
+      await file.writeAsBytes(List<int>.filled(data.length, 43));
+      await expectLater(service.installApk(file.path, release), throwsFormatException);
+      expect(installerCalls, 1);
+      await file.writeAsBytes(data);
+      await service.installApk(file.path, release);
+      expect(installerCalls, 2);
     });
 
     test('parses official GitHub SHA-256 metadata', () {

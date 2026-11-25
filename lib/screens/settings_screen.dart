@@ -1590,12 +1590,19 @@ class _UpdateSectionState extends State<_UpdateSection> {
   /// Hands the downloaded APK to Android's installer.
   Future<void> _startInstaller() async {
     final path = _apkPath;
-    if (path == null) return;
-    await _service.installApk(path).catchError((Object e) {
+    final update = _update;
+    if (path == null || update == null) return;
+    await _service.installApk(path, update).catchError((Object e) {
       if (!mounted) return;
       final code = e is PlatformException ? e.code : '';
       setState(() {
-        if (code == 'SIGNER_MISMATCH') {
+        if (e is FormatException || e is FileSystemException) {
+          // Do not retry a damaged or missing cached APK. The next download
+          // will replace it only after integrity verification succeeds.
+          _apkPath = null;
+          _phase = 'error';
+          _error = 'installer_failed'.tr + e.toString();
+        } else if (code == 'SIGNER_MISMATCH') {
           // The native check refused BEFORE the installer ran: the update is
           // keyed differently (debug-signed install taking a release-signed
           // update, or the reverse). Retry loops forever, so show recovery.
@@ -1713,8 +1720,8 @@ class _UpdateSectionState extends State<_UpdateSection> {
               ),
             'error' when _signerMismatch => TextButton(
                 onPressed: () async {
-                  // Recovery is manual (uninstall + fresh install); hand the
-                  // user the release page instead of a Retry that cannot work.
+                  // Provide the release page for support to identify the
+                  // correct signing key. Preserve the installed app and data.
                   await Clipboard.setData(const ClipboardData(
                       text:
                           'https://github.com/kiacoder/blackout-kit-mobile/releases/latest'));

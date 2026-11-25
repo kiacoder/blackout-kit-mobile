@@ -3,19 +3,6 @@ package com.blackoutkit.vpn
 private const val TEST_KEY_BYTES = 32
 
 fun main() {
-    val key = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
-    val config =
-        """
-        [Interface]
-        PrivateKey = $key
-        Address = 10.0.0.2/32, fd00::2/128
-        DNS = 10.0.0.1
-        [Peer]
-        PublicKey = $key
-        Endpoint = example.invalid:51820
-        AllowedIPs = 0.0.0.0/0, ::/0
-        PersistentKeepalive = 25
-        """.trimIndent()
     var passed = 0
 
     fun test(
@@ -27,26 +14,49 @@ fun main() {
         println("PASS $name")
     }
 
-    fun reject(
-        text: String,
-        awg: Boolean = false,
+    validConfigCases(::test)
+    invalidConfigCases(::test)
+    peerIdentityCases(::test)
+    dnsCases(::test)
+    println("$passed parser checks passed; not Android integration tests")
+}
+
+private const val TEST_KEY = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE="
+private val config =
+    """
+    [Interface]
+    PrivateKey = $TEST_KEY
+    Address = 10.0.0.2/32, fd00::2/128
+    DNS = 10.0.0.1
+    [Peer]
+    PublicKey = $TEST_KEY
+    Endpoint = example.invalid:51820
+    AllowedIPs = 0.0.0.0/0, ::/0
+    PersistentKeepalive = 25
+    """.trimIndent()
+
+private fun reject(
+    text: String,
+    awg: Boolean = false,
+) {
+    try {
+        NativeTunnelConfig.parse(text, awg)
+        error("Accepted invalid config")
+    } catch (
+        e: IllegalArgumentException,
     ) {
-        try {
-            NativeTunnelConfig.parse(text, awg)
-            error("Accepted invalid config")
-        } catch (
-            e: IllegalArgumentException,
-        ) {
-            check(!e.message.orEmpty().contains(key))
-        }
+        check(!e.message.orEmpty().contains(TEST_KEY))
     }
+}
+
+private fun validConfigCases(test: (String, () -> Unit) -> Unit) {
     test("dual-stack config and endpoint resolution") {
         val parsed = NativeTunnelConfig.parse(config, false)
         val uapi = parsed.userspace { NativeTunnelConfig.numericAddress("192.0.2.1") }
         check(parsed.addresses.size == 2 && parsed.routes.size == 2)
         check("endpoint=192.0.2.1:51820\n" in uapi)
         check("private_key=${"01".repeat(TEST_KEY_BYTES)}\n" in uapi)
-        check(!parsed.toString().contains(key))
+        check(!parsed.toString().contains(TEST_KEY))
     }
     test("IPv6 endpoint bracketing") {
         check(
@@ -62,10 +72,13 @@ fun main() {
                 NativeTunnelConfig.parse(awg, true).userspace { NativeTunnelConfig.numericAddress("192.0.2.1") },
         )
     }
+}
+
+private fun invalidConfigCases(test: (String, () -> Unit) -> Unit) {
     test("hooks rejected") { reject(config.replace("Address =", "PostUp = run-command\nAddress =")) }
-    test("duplicate keys rejected") { reject(config.replace("Address =", "PrivateKey = $key\nAddress =")) }
-    test("bad key rejected") { reject(config.replace(key, "invalid")) }
-    test("noncanonical key rejected") { reject(config.replace(key, key.dropLast(2) + "B=")) }
+    test("duplicate keys rejected") { reject(config.replace("Address =", "PrivateKey = $TEST_KEY\nAddress =")) }
+    test("bad key rejected") { reject(config.replace(TEST_KEY, "invalid")) }
+    test("noncanonical key rejected") { reject(config.replace(TEST_KEY, TEST_KEY.dropLast(2) + "B=")) }
     test("hostname address rejected") { reject(config.replace("10.0.0.2/32", "host.invalid/32")) }
     test("hostname DNS rejected") { reject(config.replace("DNS = 10.0.0.1", "DNS = host.invalid")) }
     test("prefix bounds") { reject(config.replace("10.0.0.2/32", "10.0.0.2/33")) }
@@ -78,16 +91,19 @@ fun main() {
         check(route.contains(NativeTunnelConfig.numericAddress("10.0.0.2")))
         check(!route.contains(NativeTunnelConfig.numericAddress("10.0.0.3")))
     }
+}
+
+private fun peerIdentityCases(test: (String, () -> Unit) -> Unit) {
     val zero = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     test("zero private key cannot clear the interface identity") {
-        reject(config.replace("PrivateKey = $key", "PrivateKey = $zero"))
+        reject(config.replace("PrivateKey = $TEST_KEY", "PrivateKey = $zero"))
     }
-    test("zero public key rejected") { reject(config.replace("PublicKey = $key", "PublicKey = $zero")) }
+    test("zero public key rejected") { reject(config.replace("PublicKey = $TEST_KEY", "PublicKey = $zero")) }
     test("zero preshared key still represents disabled PSK") {
         NativeTunnelConfig.parse(config + "\nPresharedKey = $zero", false)
     }
     test("duplicate peer cannot overwrite earlier allowed IPs") {
-        reject(config + "\n[Peer]\nPublicKey = $key\nAllowedIPs = 192.0.2.0/24")
+        reject(config + "\n[Peer]\nPublicKey = $TEST_KEY\nAllowedIPs = 192.0.2.0/24")
     }
     test("route host bits masked without changing interface address") {
         val parsed = NativeTunnelConfig.parse(config.replace("0.0.0.0/0", "192.0.2.129/24"), false)
@@ -98,6 +114,9 @@ fun main() {
     test("signed numeric fields rejected") {
         reject(config.replace("PersistentKeepalive = 25", "PersistentKeepalive = +25"))
     }
+}
+
+private fun dnsCases(test: (String, () -> Unit) -> Unit) {
     test("dual-stack routed DNS accepted") {
         val parsed = NativeTunnelConfig.parse(config, false)
         check(parsed.routedDns(listOf("10.0.0.1", "2001:db8::1")).size == 2)
@@ -123,5 +142,4 @@ fun main() {
             }
         }
     }
-    println("$passed parser checks passed; not Android integration tests")
 }

@@ -49,6 +49,14 @@ fun main() {
         count++
         println("PASS $name")
     }
+    descriptorCases(::test)
+    protectionCases(::test)
+    restartCases(::test)
+    healthCases(::test)
+    println("$count native ownership checks passed; fake backend, not JNI execution")
+}
+
+private fun descriptorCases(test: (String, () -> Unit) -> Unit) {
     test("protect both sockets; close exactly once") {
         val owner = NativeTunnelLifecycle()
         val native = FakeNative()
@@ -88,6 +96,9 @@ fun main() {
         owner.stop()
         check(native.calls.size == 2)
     }
+}
+
+private fun protectionCases(test: (String, () -> Unit) -> Unit) {
     test("no sockets fails closed") {
         val owner = NativeTunnelLifecycle()
         val native = FakeNative().apply { sockets = listOf(-1, -1) }
@@ -124,6 +135,9 @@ fun main() {
         owner.stop()
         check(native.calls.count { it == "off:7" } == 2)
     }
+}
+
+private fun restartCases(test: (String, () -> Unit) -> Unit) {
     test("restart switches backend only after stop") {
         val owner = NativeTunnelLifecycle()
         val wg = FakeNative()
@@ -142,6 +156,9 @@ fun main() {
         check(!owner.lastError.orEmpty().contains("secret"))
         check(native.calls.last() == "off:7")
     }
+}
+
+private fun healthCases(test: (String, () -> Unit) -> Unit) {
     test("health reports close without implicitly releasing ownership") {
         val owner = NativeTunnelLifecycle()
         val native = FakeNative()
@@ -170,5 +187,4 @@ fun main() {
         check(native.calls == listOf("on:30", "off:7"))
         check(owner.isClosed())
     }
-    println("$count native ownership checks passed; fake backend, not JNI execution")
 }

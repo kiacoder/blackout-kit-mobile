@@ -386,3 +386,23 @@ checks and diff checks passed. No new suppressions. Remaining 28 broad
 catches, 10 return counts, 7 long methods, 6 complexity, 10 other
 findings. Larger class responsibilities remain to be extracted; device
 validation, toolchain promotion and fresh CI pending. No merge/release.
+
+
+## Phase 3 engine and standalone test decomposition batch 7 (2026-11-25)
+
+Prior b3c1105 hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; Tests/APK/iOS builds pending at inspection. Split standalone
+engine, parser and ownership test harnesses into focused case groups
+without removing test cases. All three now pass strict Detekt, raising
+coverage from 25 to 28 of 34 Kotlin files. Local cached Kotlin 1.9.25
+compiler verified 24 parser and 13 ownership cases on JVM and compiled
+the Linux engine harness (execution requires Linux CI). Refactored
+EngineRunner launch preparation, validated launch, native bridge spawn,
+startup checks, SOCKS readiness and monitoring while preserving failure
+cleanup and checks. Detekt 61 -> 52 weighted findings (five files).
+Remaining: 27 broad catches, 9 return counts, 4 complexity, 4 function
+counts, 3 long methods, 3 swallowed exceptions, 1 nesting, 1 large
+class. No additional suppressions. Verified full ktlint, scoped Detekt,
+575 Flutter tests, 46 Android JVM tests, Android lint and 12 binary
+checks locally. Fresh Linux execution and CI, physical-device checks
+and toolchain promotion remain pending. Phase 3 open; no merge/release.

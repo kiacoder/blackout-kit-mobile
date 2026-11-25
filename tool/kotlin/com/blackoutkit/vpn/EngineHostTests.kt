@@ -40,6 +40,18 @@ fun main() {
         println("PASS $name")
         passed++
     }
+    sessionCases(::test)
+    sessionFailureCases(::test)
+    nativeChildCases(::test)
+    commandCases(::test)
+    commandContractCases(::test)
+    validatorCases(::test)
+    processLifecycleCases(::test)
+    socksCases(::test)
+    println("$passed host tests passed. No Android TUN or real VPN engine was tested.")
+}
+
+private fun sessionCases(test: (String, () -> Unit) -> Unit) {
     test("session stop serializes behind blocked start and suppresses stale completion") {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
@@ -70,6 +82,9 @@ fun main() {
             session.stop({}, close = true)
         }
     }
+}
+
+private fun sessionFailureCases(test: (String, () -> Unit) -> Unit) {
     test("session cleanup failure blocks engine start") {
         val done = CountDownLatch(1)
         val session = VpnSessionExecutor({ it() })
@@ -102,6 +117,9 @@ fun main() {
         check(!cleaned)
         check(session.start({}, { true }, {}) == null)
     }
+}
+
+private fun nativeChildCases(test: (String, () -> Unit) -> Unit) {
     test("native child stop does not signal an already-reaped PID") {
         check(NativeChildStop({ 0 }, { error("TERM after reap") }, { error("KILL after reap") }).stop(TEST_PID))
     }
@@ -152,6 +170,9 @@ fun main() {
             child.destroyForcibly().waitFor()
         }
     }
+}
+
+private fun commandCases(test: (String, () -> Unit) -> Unit) {
     val runner = BoundedEngineCommand()
     test("command success") { check(runner.execute(listOf("/bin/sh", "-c", "exit 0")).succeeded) }
     test("command nonzero") { check(runner.execute(listOf("/bin/sh", "-c", "exit 7")).exitCode == NONZERO_EXIT_CODE) }
@@ -190,6 +211,9 @@ fun main() {
         val result = runner.execute(listOf("/bin/sh", "-c", "echo private_key=SECRET; exit 1"))
         check(!result.toString().contains("SECRET"))
     }
+}
+
+private fun commandContractCases(test: (String, () -> Unit) -> Unit) {
     test("sing-box command contract") {
         val cmd = EngineCommands.SING_BOX.check(File("/engine"), File("/private/config.json"))
         check(cmd == listOf("/engine", "check", "-c", "/private/config.json"))
@@ -212,6 +236,9 @@ fun main() {
         check(EngineCommands.forProtocol("HYSTERIA2") == EngineCommands.SING_BOX)
         check(EngineCommands.forProtocol("mihomo") == EngineCommands.MIHOMO)
     }
+}
+
+private fun validatorCases(test: (String, () -> Unit) -> Unit) {
     val directory = Files.createTempDirectory("blackout-host-test").toFile()
     try {
         val config = File(directory, "profile.json").apply { writeText("{}") }
@@ -266,6 +293,9 @@ fun main() {
     } finally {
         directory.deleteRecursively()
     }
+}
+
+private fun processLifecycleCases(test: (String, () -> Unit) -> Unit) {
     test("lifecycle detects exited process") {
         val process = ProcessBuilder("/bin/sh", "-c", "exit 3").start()
         process.waitFor()
@@ -292,6 +322,9 @@ fun main() {
             process.destroyForcibly().waitFor()
         }
     }
+}
+
+private fun socksCases(test: (String, () -> Unit) -> Unit) {
     test("real loopback SOCKS handshake") {
         ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             var error: Throwable? = null
@@ -305,7 +338,9 @@ fun main() {
                             check(greeting.contentEquals(byteArrayOf(SOCKS_VERSION.toByte(), 1, 0)))
                             socket.getOutputStream().write(byteArrayOf(SOCKS_VERSION.toByte(), 0))
                         }
-                    } catch (failure: Throwable) {
+                    } catch (failure: java.io.IOException) {
+                        error = failure
+                    } catch (failure: IllegalStateException) {
                         error = failure
                     }
                 }.apply { start() }
@@ -318,5 +353,4 @@ fun main() {
         val port = ServerSocket(0).use { it.localPort }
         check(!LocalSocksReadiness.await("127.0.0.1", port, SOCKS_REFUSED_TIMEOUT_MS))
     }
-    println("$passed host tests passed. No Android TUN or real VPN engine was tested.")
 }

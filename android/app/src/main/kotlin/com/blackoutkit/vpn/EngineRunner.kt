@@ -135,6 +135,13 @@ object EngineRunner {
     private const val MAX_ENGINE_CONFIG_BYTES = 8 * 1024 * 1024
     private const val NATIVE_LOG_WITHHELD = " Native log content is withheld because it may contain credentials."
 
+    private class LaunchFiles(
+        val spec: EngineCommands,
+        val enginePath: File,
+        val tun2socksPath: File,
+        val configFile: File,
+    )
+
     fun start(
         context: Context,
         tunFd: Int,
@@ -143,26 +150,39 @@ object EngineRunner {
     ): Boolean {
         lastError = null
         stop()
+        val files = prepareLaunch(context, protocol) ?: return false
+        return try {
+            intentionalStop.set(false)
+            val validation = NativeConfigValidator().validate(files.spec, files.enginePath, files.configFile)
+            if (!validation.valid) {
+                lastError = validation.message
+                false
+            } else {
+                launchValidated(context, files, tunFd, socksPort)
+            }
+        } catch (e: Exception) {
+            lastError = "Engine launch failed: ${e.message}"
+            Log.e(TAG, lastError, e)
+            stop()
+            false
+        }
+    }
 
-        val libDir = context.applicationInfo.nativeLibraryDir
-        // Lower-cased for the same reason BlackoutVpnService lower-cases before
-        // its own set lookup: the map keys are lowercase, and a caller that
-        // ever passes "Hysteria2" would otherwise get a misleading "no engine
-        // is mapped" refusal.
-        val engineSpec = EngineCommands.forProtocol(protocol)
-        val engineName = engineSpec?.binary
-
-        if (engineName == null) {
+    private fun prepareLaunch(
+        context: Context,
+        protocol: String,
+    ): LaunchFiles? {
+        val spec = EngineCommands.forProtocol(protocol)
+        if (spec == null) {
             lastError = "No engine is mapped for protocol '$protocol'."
             Log.w(TAG, lastError!!)
-            return false
+            return null
         }
-
-        val tun2socksPath = File(libDir, TUN2SOCKS)
-        val enginePath = File(libDir, engineName)
-        val absent = listOf(tun2socksPath, enginePath).filterNot { it.exists() }
-
-        if (absent.isNotEmpty()) {
+        val libDir = context.applicationInfo.nativeLibraryDir
+        val bridge = File(libDir, TUN2SOCKS)
+        val engine = File(libDir, spec.binary)
+        val absent = listOf(bridge, engine).filterNot { it.exists() }
+        return if (absent.isNotEmpty()) {
             lastError =
                 buildString {
                     append("'$protocol' needs an engine that is not bundled in this build ")
@@ -171,158 +191,164 @@ object EngineRunner {
                     append("Use a VLESS, VMess, Trojan or Shadowsocks config for now.")
                 }
             Log.w(TAG, lastError!!)
-            return false
+            null
+        } else {
+            val config = File(configDir(context), spec.configName)
+            if (!config.exists()) {
+                lastError = "No configuration has been written for the selected engine."
+                Log.w(TAG, lastError!!)
+                null
+            } else {
+                LaunchFiles(spec, engine, bridge, config)
+            }
         }
+    }
 
-        val configFile = File(configDir(context), engineSpec.configName)
-        if (!configFile.exists()) {
-            lastError = "No configuration has been written for the selected engine."
-            Log.w(TAG, lastError!!)
-            return false
-        }
-
-        return try {
-            intentionalStop.set(false)
-
-            val validation = NativeConfigValidator().validate(engineSpec, enginePath, configFile)
-            if (!validation.valid) {
-                lastError = validation.message
-                return false
-            }
-
-            // Native output may contain full profiles/private keys. Discard it
-            // rather than persisting plaintext or filling an unread pipe.
-            // Status, exit codes and readiness remain available as diagnostics.
-            val engineLog = File("/dev/null")
-            engineProcess = processLauncher(engineSpec.run(enginePath, configFile))
-
-            // tun2socks needs the TUN descriptor itself. ProcessBuilder cannot
-            // deliver it (see nativeSpawnWithFd), so the launcher forks,
-            // duplicates the fd to slot FD_SLOT and execs the binary. The exit
-            // code is polled by the monitor thread below, like sing-box's.
-            loadNative()
-            if (!nativeLoaded) {
-                lastError = "The native fd launcher is unavailable in this build, so the " +
-                    "tunnel's file descriptor cannot be handed to the engine."
-                stop()
-                return false
-            }
-            tun2socksPid =
-                nativeSpawnWithFd(
-                    tun2socksPath.absolutePath,
-                    arrayOf(
-                        tun2socksPath.absolutePath,
-                        // DOUBLE dashes are mandatory here. This build parses its
-                        // options with go-flags, where a single dash means a
-                        // shorthand cluster: "-mtu" is read as "-m -t -u" and dies
-                        // with `unknown shorthand flag: 'm' in -mtu` (and "-device"
-                        // is read as "-d evice", silently swallowing the value).
-                        // The device is a URI, not a bare descriptor: "fd://<n>"
-                        // selects the fdbased driver, which opens that descriptor -
-                        // the launcher dup2()s the tun fd to exactly FD_SLOT.
-                        "--device",
-                        "fd://$FD_SLOT",
-                        "--proxy",
-                        "socks5://127.0.0.1:$socksPort",
-                        "--mtu",
-                        BlackoutVpnService.VPN_MTU.toString(),
-                        "--loglevel",
-                        "info",
-                    ),
-                    tunFd,
-                    engineLog.absolutePath,
-                )
-            if (tun2socksPid <= 0) {
-                lastError = "Could not start tun2socks (native launcher refused). " +
-                    NATIVE_LOG_WITHHELD
-                stop()
-                return false
-            }
-
-            if (anyChildDied()) {
-                lastError = "tun2socks exited during startup (code ${tun2socksExitCode()})." +
-                    NATIVE_LOG_WITHHELD
-                stop()
-                return false
-            }
-            val children = listOfNotNull(engineProcess, tun2socksProcess)
-            val startupError = lifecycle.awaitStartup(children, startupWaitMs)
-            if (startupError != null) {
-                lastError = startupError + NATIVE_LOG_WITHHELD
-                stop()
-                return false
-            }
-            // awaitStartup only watches Process children; tun2socks is a
-            // launcher-started pid, so re-check it here. Without this a dead
-            // tun2socks surfaced as a misleading SOCKS-handshake timeout.
-            if (anyChildDied()) {
-                lastError = "tun2socks exited during startup (code ${tun2socksExitCode()}). " +
-                    NATIVE_LOG_WITHHELD
-                stop()
-                return false
-            }
-            val readinessPort =
-                if (engineSpec == EngineCommands.MIHOMO) {
-                    socksPort
-                } else {
-                    readinessPortProvider(context, configFile.readText())
-                }
-            if (readinessPort !in 1..MAX_SOCKS_PORT ||
-                !readinessProbe("127.0.0.1", readinessPort, SOCKS_READY_TIMEOUT_MS)
-            ) {
-                lastError =
-                    "The selected engine did not accept a local SOCKS5 readiness handshake." + NATIVE_LOG_WITHHELD
-                stop()
-                return false
-            }
-
-            monitorThread =
-                Thread({
-                    while (!intentionalStop.get()) {
-                        val childrenNow = listOfNotNull(engineProcess, tun2socksProcess)
-                        val exited = lifecycle.exitedProcess(childrenNow)
-                        if (exited != null) {
-                            val reason = "Engine process exited unexpectedly (code ${runCatching {
-                                exited.exitValue()
-                            }.getOrNull() ?: "unknown"})."
-                            lastError = reason
-                            if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
-                            return@Thread
-                        }
-                        // tun2socks was started through the native launcher, so it
-                        // is not a Process the lifecycle helper can see.
-                        if (nativeLoaded &&
-                            tun2socksPid > 0 &&
-                            nativePollPid(tun2socksPid) != -1
-                        ) {
-                            val reason = "tun2socks exited unexpectedly (code ${tun2socksExitCode()})."
-                            lastError = reason
-                            if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
-                            return@Thread
-                        }
-                        try {
-                            Thread.sleep(MONITOR_INTERVAL_MS)
-                        } catch (_: InterruptedException) {
-                            return@Thread
-                        }
-                    }
-                }, "blackout-engine-monitor").apply {
-                    isDaemon = true
-                    start()
-                }
-
-            Log.i(
-                TAG,
-                "engine processes remained alive and accepted a local SOCKS5 handshake: " +
-                    "$engineName, socks=127.0.0.1:$readinessPort, tunFd=$tunFd",
+    private fun launchValidated(
+        context: Context,
+        files: LaunchFiles,
+        tunFd: Int,
+        socksPort: Int,
+    ): Boolean {
+        // Native output may contain full profiles/private keys. Discard it.
+        engineProcess = processLauncher(files.spec.run(files.enginePath, files.configFile))
+        loadNative()
+        if (!nativeLoaded) {
+            return failLaunch(
+                "The native fd launcher is unavailable in this build, so the " +
+                    "tunnel's file descriptor cannot be handed to the engine.",
             )
-            true
-        } catch (e: Exception) {
-            lastError = "Engine launch failed: ${e.message}"
-            Log.e(TAG, lastError, e)
-            stop()
-            false
         }
+        spawnBridge(files.tun2socksPath, tunFd, socksPort)
+        val startupError = bridgeStartupError()
+        return if (startupError != null) {
+            failLaunch(startupError)
+        } else {
+            verifyReadiness(context, files, tunFd, socksPort)
+        }
+    }
+
+    private fun spawnBridge(
+        tun2socksPath: File,
+        tunFd: Int,
+        socksPort: Int,
+    ) {
+        // ProcessBuilder cannot deliver the TUN descriptor; the launcher duplicates it.
+        val engineLog = File("/dev/null")
+        tun2socksPid =
+            nativeSpawnWithFd(
+                tun2socksPath.absolutePath,
+                arrayOf(
+                    tun2socksPath.absolutePath,
+                    // DOUBLE dashes are mandatory here. This build parses its
+                    // options with go-flags, where a single dash means a
+                    // shorthand cluster: "-mtu" is read as "-m -t -u" and dies
+                    // with `unknown shorthand flag: 'm' in -mtu` (and "-device"
+                    // is read as "-d evice", silently swallowing the value).
+                    // The device is a URI, not a bare descriptor: "fd://<n>"
+                    // selects the fdbased driver, which opens that descriptor -
+                    // the launcher dup2()s the tun fd to exactly FD_SLOT.
+                    "--device",
+                    "fd://$FD_SLOT",
+                    "--proxy",
+                    "socks5://127.0.0.1:$socksPort",
+                    "--mtu",
+                    BlackoutVpnService.VPN_MTU.toString(),
+                    "--loglevel",
+                    "info",
+                ),
+                tunFd,
+                engineLog.absolutePath,
+            )
+    }
+
+    private fun bridgeStartupError(): String? {
+        if (tun2socksPid <= 0) {
+            return "Could not start tun2socks (native launcher refused). " + NATIVE_LOG_WITHHELD
+        }
+        // Poll before and after the Process-only startup wait.
+        return if (anyChildDied()) {
+            "tun2socks exited during startup (code ${tun2socksExitCode()})." + NATIVE_LOG_WITHHELD
+        } else {
+            val startupError = lifecycle.awaitStartup(listOfNotNull(engineProcess, tun2socksProcess), startupWaitMs)
+            when {
+                startupError != null -> startupError + NATIVE_LOG_WITHHELD
+                anyChildDied() ->
+                    "tun2socks exited during startup (code ${tun2socksExitCode()}). " + NATIVE_LOG_WITHHELD
+                else -> null
+            }
+        }
+    }
+
+    private fun verifyReadiness(
+        context: Context,
+        files: LaunchFiles,
+        tunFd: Int,
+        socksPort: Int,
+    ): Boolean {
+        val readinessPort =
+            if (files.spec == EngineCommands.MIHOMO) {
+                socksPort
+            } else {
+                readinessPortProvider(context, files.configFile.readText())
+            }
+        if (readinessPort !in 1..MAX_SOCKS_PORT ||
+            !readinessProbe("127.0.0.1", readinessPort, SOCKS_READY_TIMEOUT_MS)
+        ) {
+            return failLaunch(
+                "The selected engine did not accept a local SOCKS5 readiness handshake." + NATIVE_LOG_WITHHELD,
+            )
+        }
+        startMonitor()
+        Log.i(
+            TAG,
+            "engine processes remained alive and accepted a local SOCKS5 handshake: " +
+                "${files.spec.binary}, socks=127.0.0.1:$readinessPort, tunFd=$tunFd",
+        )
+        return true
+    }
+
+    private fun failLaunch(reason: String): Boolean {
+        lastError = reason
+        stop()
+        return false
+    }
+
+    private fun startMonitor() {
+        monitorThread =
+            Thread({
+                while (!intentionalStop.get()) {
+                    val childrenNow = listOfNotNull(engineProcess, tun2socksProcess)
+                    val exited = lifecycle.exitedProcess(childrenNow)
+                    if (exited != null) {
+                        val reason = "Engine process exited unexpectedly (code ${runCatching {
+                            exited.exitValue()
+                        }.getOrNull() ?: "unknown"})."
+                        lastError = reason
+                        if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
+                        return@Thread
+                    }
+                    // tun2socks was started through the native launcher, so it
+                    // is not a Process the lifecycle helper can see.
+                    if (nativeLoaded &&
+                        tun2socksPid > 0 &&
+                        nativePollPid(tun2socksPid) != -1
+                    ) {
+                        val reason = "tun2socks exited unexpectedly (code ${tun2socksExitCode()})."
+                        lastError = reason
+                        if (!intentionalStop.get()) onUnexpectedExit?.invoke(reason)
+                        return@Thread
+                    }
+                    try {
+                        Thread.sleep(MONITOR_INTERVAL_MS)
+                    } catch (_: InterruptedException) {
+                        return@Thread
+                    }
+                }
+            }, "blackout-engine-monitor").apply {
+                isDaemon = true
+                start()
+            }
     }
 
     /**

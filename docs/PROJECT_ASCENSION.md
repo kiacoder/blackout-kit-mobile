@@ -966,3 +966,28 @@ manual assistance; recovery screen currently English only. This
 is not a secure-storage plugin upgrade or on-device keystore
 migration test. Original AAR provenance remains unresolved.
 No production binaries replaced or release approved.
+
+
+## Phase 3 localized storage recovery and plugin migration review (2026-11-25)
+
+Recovery screen now uses the existing English/Persian/Chinese
+translation catalogue, device locale and a local language selector
+without initializing the normal app services. Scrollable layout,
+large text and Persian RTL covered by two widget regressions.
+Explicit resetOnError:false preserves the existing plugin behavior.
+Full Flutter suite 584/584 passed; touched-file analyzer clean;
+12 tracked binary checks passed. Existing wakelock test mock warning
+remains. Upstream 10.3.4 is a migration bridge from v9 encrypted
+shared preferences; v11 removes the legacy backend. A direct major
+upgrade is not justified. See https://pub.dev/packages/flutter_secure_storage/versions/10.3.4/changelog
+and https://pub.dev/documentation/flutter_secure_storage/10.3.4/flutter_secure_storage/AndroidOptions/AndroidOptions.html
+for migration fixes and default resetOnError:true. Future candidate
+must explicitly disable destructive reset, review backup migration
+behavior, preserve the existing namespace and key identity, and
+verify upgrade on a synthetic v9 vault in an isolated app package
+before promotion. Retried dependency resolution in the separate
+storage experiment worktree: pub.dev insufficient permissions, exit
+69. No dependency or lockfile changed in PR20. Recovery language
+selection is session-local and does not access persisted settings.
+No physical-device upgrade verified; embedded source recovery and
+security scans remain outstanding. No main merge or release.

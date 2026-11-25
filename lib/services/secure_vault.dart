@@ -49,7 +49,10 @@ class SecureKeyStore implements KeyStore {
   SecureKeyStore({FlutterSecureStorage? storage})
       : _storage = storage ??
             const FlutterSecureStorage(
-              aOptions: AndroidOptions(encryptedSharedPreferences: true),
+              aOptions: AndroidOptions(
+                encryptedSharedPreferences: true,
+                resetOnError: false,
+              ),
             );
 
   @override

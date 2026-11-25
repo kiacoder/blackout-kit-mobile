@@ -108,6 +108,8 @@ class LocalizationService extends GetxService implements Translations {
   static const Map<String, Map<String, String>> _translations = {
     // ───────────────────────────── English ─────────────────────────────
     'en': {
+      'storage_recovery_title': 'Saved library requires recovery',
+      'storage_recovery_body': 'Existing files have been preserved. Restore access to the original device keystore and restart the app. If migration was interrupted, contact support for recovery. Do not clear app data or uninstall.',
       'app_title': 'Blackout Kit',
       'app_subtitle': 'Trustworthy VPN',
 
@@ -720,6 +722,8 @@ class LocalizationService extends GetxService implements Translations {
 
     // ───────────────────────────── Persian ─────────────────────────────
     'fa': {
+      'storage_recovery_title': 'کتابخانه ذخیره‌شده نیاز به بازیابی دارد',
+      'storage_recovery_body': 'فایل‌های موجود حفظ شده‌اند. دسترسی به مخزن کلید دستگاه اصلی را بازیابی کنید و برنامه را دوباره اجرا کنید. اگر انتقال داده‌ها متوقف شده است، برای بازیابی با پشتیبانی تماس بگیرید. داده‌های برنامه را پاک نکنید و برنامه را حذف نکنید.',
       'app_title': 'بلک‌اوت کیت',
       'app_subtitle': 'VPN قابل اعتماد',
 
@@ -1308,6 +1312,8 @@ class LocalizationService extends GetxService implements Translations {
 
     // ───────────────────────────── Chinese ─────────────────────────────
     'zh': {
+      'storage_recovery_title': '已保存的配置库需要恢复',
+      'storage_recovery_body': '现有文件已保留。请恢复对原设备密钥库的访问，然后重新启动应用。如果迁移曾中断，请联系支持人员协助恢复。请勿清除应用数据或卸载应用。',
       'app_title': 'Blackout Kit',
       'app_subtitle': '值得信赖的 VPN',
       'connected': '已连接',

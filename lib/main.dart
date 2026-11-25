@@ -212,27 +212,76 @@ class BlackoutKitApp extends StatelessWidget {
 
 /// Recovery mode deliberately does not initialize import or connection
 /// controllers. The user can restore access and relaunch without data loss.
-class StorageRecoveryApp extends StatelessWidget {
+class StorageRecoveryApp extends StatefulWidget {
   const StorageRecoveryApp({super.key});
 
   @override
+  State<StorageRecoveryApp> createState() => _StorageRecoveryAppState();
+}
+
+class _StorageRecoveryAppState extends State<StorageRecoveryApp> {
+  Locale? _locale;
+
+  @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'Saved library requires recovery. Existing files have been '
-                'preserved. Restore access to the original device keystore '
-                'and restart the app. If migration was interrupted, contact support '
-                'for recovery. Do not clear app data or uninstall.',
-                textAlign: TextAlign.center,
+    return MaterialApp(
+      locale: _locale,
+      supportedLocales: LocalizationService.supportedLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: ThemeData(useMaterial3: true),
+      darkTheme: ThemeData.dark(useMaterial3: true),
+      home: Builder(
+        builder: (context) {
+          final language = Localizations.localeOf(context).languageCode;
+          String text(String key) =>
+              LocalizationService.translate(key, language: language);
+          return Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.lock_outline, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        text('storage_recovery_title'),
+                        style: Theme.of(context).textTheme.titleLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        text('storage_recovery_body'),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      DropdownButton<String>(
+                        key: const Key('recovery-language'),
+                        value: language,
+                        items: LocalizationService.supportedLanguages.entries
+                            .map((entry) => DropdownMenuItem(
+                                  value: entry.key,
+                                  child: Text(entry.value),
+                                ))
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _locale = Locale(value));
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

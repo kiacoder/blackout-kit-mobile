@@ -1047,3 +1047,20 @@ and API34 jobs added. Six mock regression tests; Linux Python
 92/92 and 12 binary/action-pin checks passed. No real device
 acceptance yet, no production dependency, native binary or lockfile
 change. Hosted emulator boot and test results still pending.
+
+
+## Phase 3 scanner evidence coverage checks (2026-11-25)
+
+Hosted APK run 45588690313 completed with ClamAV 1.5.4, zero
+infected files and VirusTotal unknown-file for all three APK hashes.
+Unknown is not a clean VirusTotal result. MobSF ran on the pinned
+image; current detailed findings not independently retrieved yet.
+Report generation now checks exact three-file ClamAV coverage,
+zero detections/errors, matching VirusTotal filename/hash coverage,
+MobSF universal APK digest and severity schema. Scanner status
+and counts appear explicitly in evidence; review still required.
+Four new regressions, Linux Python 96/96, 12 binary integrity
+checks passed; historical locally downloaded scan evidence accepted
+by the new validator. No production dependency or binary changed.
+Hosted storage migration run 45591441880 was still in progress
+at inspection. Actual migration/device acceptance remains open.

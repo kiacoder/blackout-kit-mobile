@@ -91,11 +91,56 @@ def verify_apks(folder, signer, tagged, expected):
         'signing': 'release-certificate-pinned' if tagged else 'test-only',
         'apks': records}, indent=2) + '\n', encoding='utf-8')
 
+def scanner_summary(folder, records):
+    expected = {record['name']: record['sha256'] for record in records}
+    if len(expected) != 3 or len(records) != 3:
+        raise ValueError('Expected three unique APK inventory records')
+    clam = (folder / 'CLAMAV_REPORT.txt').read_text(encoding='utf-8')
+    for label, count in (('Scanned files', 3), ('Infected files', 0)):
+        matches = re.findall(r'^' + label + r': ([0-9]+)[ \t]*$', clam, re.M)
+        if matches != [str(count)]:
+            raise ValueError('Unexpected ClamAV scan coverage or detections: ' + label)
+    if re.search(r'^(?:Total errors|Errors): [1-9][0-9]*', clam, re.M):
+        raise ValueError('ClamAV reported scan errors')
+    vt = json.loads((folder / 'VIRUSTOTAL_REPORT.json').read_text(encoding='utf-8'))
+    allowed = {'unknown-file', 'not-configured', 'lookup-error', 'report-found-review-required'}
+    if (len(vt) != len(expected)
+            or {record['file']: record['sha256'] for record in vt} != expected
+            or any(record['status'] not in allowed for record in vt)):
+        raise ValueError('VirusTotal report does not cover exact APK hashes')
+    status = json.loads((folder / 'MOBSF_STATUS.json').read_text(encoding='utf-8'))
+    mobsf = {'status': status['status']}
+    report_path = folder / 'MOBSF_REPORT.json'
+    if status['status'] == 'completed-review-required':
+        report = json.loads(report_path.read_text(encoding='utf-8'))
+        universal = [sha for name, sha in expected.items() if name.endswith('-universal.apk')]
+        if len(universal) != 1 or report['sha256'] != universal[0]:
+            raise ValueError('MobSF report does not match universal APK')
+        appsec = report['appsec']
+        counts = {}
+        for level in ('high', 'warning', 'info', 'secure', 'hotspot'):
+            if not isinstance(appsec[level], list):
+                raise ValueError('Malformed MobSF severity results')
+            counts[level] = len(appsec[level])
+        score = appsec['security_score']
+        if type(score) is not int or not 0 <= score <= 100:
+            raise ValueError('Invalid MobSF security score')
+        mobsf.update(scope='universal APK static analysis only',
+                     score=score, counts=counts)
+    elif status['status'] != 'not-configured' or report_path.exists():
+        raise ValueError('Unexpected MobSF status or stale report')
+    return {'clamav': {'scanned_files': 3, 'infected_files': 0},
+            'virustotal': [{'file': r['file'], 'status': r['status']} for r in vt],
+            'mobsf': mobsf,
+            'review_required': True}
+
+
 def make_report(folder):
     data = json.loads((folder / 'APK_INVENTORY.json').read_text(encoding='utf-8'))
     for record in data['apks']:
         if digest(folder / record['name']) != record['sha256']:
             raise ValueError('APK changed after verification')
+    scanners = scanner_summary(folder, data['apks'])
     evidence = ('SBOM.spdx.json', 'CLAMAV_VERSION.txt', 'CLAMAV_REPORT.txt', 'MOBSF_STATUS.json', 'VIRUSTOTAL_REPORT.json')
     if (folder / 'MOBSF_REPORT.json').is_file():
         evidence += ('MOBSF_REPORT.json',)
@@ -103,6 +148,7 @@ def make_report(folder):
     report = {'commit': data['commit'], 'ref': data['ref'], 'signing': data['signing'],
               'apk_inventory_sha256': digest(folder / 'APK_INVENTORY.json'),
               'evidence_sha256': hashes,
+              'scanner_results': scanners,
               'malware_scan': 'ClamAV completed without detected malware or scanner errors',
               'limitations': ['Not a malware-free guarantee', 'SBOM is repository scan, not exhaustive binary dependency inventory',
                               'MobSF and VirusTotal require separate review', 'Device acceptance remains separate']}
@@ -112,6 +158,8 @@ def make_report(folder):
         f"Commit: {data['commit']}\n\nSigning: {data['signing']}\n\n"
         'APK signatures, ABI inventory and checksums verified. ClamAV scan completed without detections or errors. '
         'Repository SPDX SBOM and per-APK native library SHA-256 inventory attached. '
+        f"MobSF: {scanners['mobsf']['status']}. VirusTotal: "
+        + ', '.join(r['status'] for r in scanners['virustotal']) + '. '
         'This is not a malware-free guarantee. Review MobSF, VirusTotal and device results separately before publication.\n',
         encoding='utf-8')
 

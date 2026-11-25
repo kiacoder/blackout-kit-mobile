@@ -1,8 +1,9 @@
+import json
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from tool.release_security import inventory, signer_digest, verify_apks
+from tool.release_security import inventory, scanner_summary, signer_digest, verify_apks
 
 class ReleaseSecurityTests(unittest.TestCase):
     def apk(self, folder, abi='arm64-v8a', extra=None):
@@ -50,6 +51,57 @@ class ReleaseSecurityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             with self.assertRaisesRegex(ValueError, 'ANDROID_RELEASE_CERT_SHA256'):
                 verify_apks(Path(d), 'apksigner', True, '')
+
+class ScannerEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.folder = Path(temp.name)
+        self.records = [
+            {"name": "app-" + abi + ".apk", "sha256": digit * 64}
+            for abi, digit in (("arm64-v8a", "a"), ("armeabi-v7a", "b"), ("universal", "c"))
+        ]
+        self.vt = [{"file": r["name"], "sha256": r["sha256"], "status": "unknown-file"}
+                   for r in self.records]
+        self.write("VIRUSTOTAL_REPORT.json", self.vt)
+        self.write("MOBSF_STATUS.json", {"status": "completed-review-required"})
+        self.mobsf = {"sha256": "c" * 64, "appsec": {
+            "high": [{}], "warning": [], "info": [], "secure": [], "hotspot": [],
+            "security_score": 46,
+        }}
+        self.write("MOBSF_REPORT.json", self.mobsf)
+        (self.folder / "CLAMAV_REPORT.txt").write_text("Scanned files: 3\nInfected files: 0\n")
+
+    def write(self, name, value):
+        (self.folder / name).write_text(json.dumps(value))
+
+    def test_unknown_virustotal_is_not_clean(self):
+        result = scanner_summary(self.folder, self.records)
+        self.assertTrue(result["review_required"])
+        self.assertEqual(result["virustotal"][0]["status"], "unknown-file")
+        self.assertEqual(result["mobsf"]["counts"]["high"], 1)
+
+    def test_clamav_partial_scan_or_detection_rejected(self):
+        for value in ("Scanned files: 2\nInfected files: 0", "Scanned files: 3\nInfected files: 1",
+                      "Scanned files: 3\nInfected files: 0\nTotal errors: 1"):
+            (self.folder / "CLAMAV_REPORT.txt").write_text(value)
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                scanner_summary(self.folder, self.records)
+
+    def test_virustotal_mismatched_digest_rejected(self):
+        self.vt[0]["sha256"] = "0" * 64
+        self.write("VIRUSTOTAL_REPORT.json", self.vt)
+        with self.assertRaisesRegex(ValueError, "exact APK"):
+            scanner_summary(self.folder, self.records)
+
+    def test_mobsf_stale_report_rejected(self):
+        self.mobsf["sha256"] = "a" * 64
+        self.write("MOBSF_REPORT.json", self.mobsf)
+        with self.assertRaisesRegex(ValueError, "universal APK"):
+            scanner_summary(self.folder, self.records)
+        self.write("MOBSF_STATUS.json", {"status": "not-configured"})
+        with self.assertRaisesRegex(ValueError, "stale report"):
+            scanner_summary(self.folder, self.records)
 
 if __name__ == '__main__':
     unittest.main()

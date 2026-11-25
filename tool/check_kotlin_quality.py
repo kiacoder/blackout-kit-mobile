@@ -40,6 +40,12 @@ GATED = [
     "android/app/src/main/kotlin/com/blackoutkit/vpn/NativeTunnelEngine.kt",
     "android/app/src/main/kotlin/com/blackoutkit/vpn/NativeTunnelLifecycle.kt",
     "android/app/src/main/kotlin/com/blackoutkit/vpn/ProcessCompat.kt",
+    "android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCommands.kt",
+    "android/app/src/main/kotlin/com/blackoutkit/vpn/MainActivity.kt",
+    "android/app/src/main/kotlin/com/blackoutkit/vpn/NetworkPlugin.kt",
+    "android/app/src/main/kotlin/com/blackoutkit/vpn/UpdatePlugin.kt",
+    "android/app/src/main/kotlin/com/blackoutkit/vpn/BoundedImport.kt",
+    "android/app/src/test/kotlin/com/blackoutkit/vpn/BoundedImportTest.kt",
 ]
 
 

@@ -1,16 +1,21 @@
 package com.blackoutkit.vpn
 
+import android.content.ContentProviderClient
 import android.content.Intent
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.os.RemoteException
+import android.util.Log
 import androidx.core.content.IntentCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.io.IOException
 
 class MainActivity : FlutterActivity() {
     companion object {
+        private const val TAG = "MainActivity"
         private const val MAX_IMPORT_BYTES = 5L * 1024 * 1024
 
         // Payload waiting for Dart: set on cold start (onCreate intent) and on
@@ -111,31 +116,47 @@ class MainActivity : FlutterActivity() {
     // / fails closed under the sender's grant scoping.
     private fun copyToCache(uri: Uri?): String? {
         if (uri == null || !isSafeImportUri(uri)) return null
-        val client =
-            contentResolver.acquireUnstableContentProviderClient(uri)
-                ?: return null
         return try {
-            val pfd = client.openFile(uri, "r") ?: return null
-            val file = File(cacheDir, "import-${System.currentTimeMillis()}.cfg")
-            ParcelFileDescriptor.AutoCloseInputStream(pfd).use { source ->
-                file.outputStream().use { source.copyTo(it) }
-            }
-            if (file.length() > MAX_IMPORT_BYTES) {
-                file.delete()
-                null
-            } else {
-                file.absolutePath
-            }
-        } catch (e: Exception) {
+            val client = contentResolver.acquireUnstableContentProviderClient(uri)
+            client?.let { copyFromProvider(it, uri) }
+        } catch (_: SecurityException) {
+            Log.w(TAG, "Import provider access denied")
             null
-        } finally {
-            // release() is deprecated in favor of close(), but close() only
-            // exists from API 29 and minSdk is 24 — release() is the only
-            // option on the supported range. Dismissed as wont-fix in
-            // CodeQL (#24); switch to client.use { } if minSdk ever reaches 29.
-            client.release()
+        } catch (_: IllegalArgumentException) {
+            Log.w(TAG, "Import provider rejected the document")
+            null
+        } catch (_: RemoteException) {
+            Log.w(TAG, "Import provider disconnected")
+            null
+        } catch (_: IOException) {
+            Log.w(TAG, "Import document could not be read")
+            null
         }
     }
+
+    private fun copyFromProvider(
+        client: ContentProviderClient,
+        uri: Uri,
+    ): String? =
+        try {
+            val pfd = client.openFile(uri, "r")
+            pfd?.let { copyImportFile(it) }
+        } finally {
+            // Keep the existing API-24 compatible provider cleanup.
+            client.release()
+        }
+
+    private fun copyImportFile(pfd: ParcelFileDescriptor): String? =
+        ParcelFileDescriptor.AutoCloseInputStream(pfd).use { source ->
+            val file = File.createTempFile("import-", ".cfg", cacheDir)
+            var retained = false
+            try {
+                retained = file.outputStream().use { copyBoundedImport(source, it, MAX_IMPORT_BYTES) }
+                if (retained) file.absolutePath else null
+            } finally {
+                if (!retained) file.delete()
+            }
+        }
 
     // / CodeQL High #20 — the URI comes from an external intent, so a hostile
     // / sender controls it completely. Two hard rules before any resolution:
@@ -150,11 +171,8 @@ class MainActivity : FlutterActivity() {
     // / FLAG_GRANT_READ_URI_PERMISSION, which is scoped to that exact URI —
     // / cross-app reads fail closed at the resolver.
     private fun isSafeImportUri(uri: Uri): Boolean {
-        val scheme = uri.scheme?.lowercase()
-        if (scheme == "file") return false
-        if (scheme != "content") return false
         val authority = uri.authority ?: return false
-        if (authority.equals(packageName, ignoreCase = true)) return false
-        return true
+        return uri.scheme.equals("content", ignoreCase = true) &&
+            !authority.equals(packageName, ignoreCase = true)
     }
 }

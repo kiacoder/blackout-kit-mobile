@@ -307,3 +307,22 @@ Remaining 115 weighted issues: 48 broad catches, 25 return counts,
 functions, 3 parameter-list findings, 2 loop-jump findings, 2 nesting,
 1 throws-count and 1 large class. Native Android device validation
 remains outstanding. Phase 3 still open; no production merge or release.
+
+
+## Phase 3 Detekt Android boundaries (2026-11-25)
+
+Prior 68ba559 Kotlin and Linux host CI checks passed. Refactored
+NetworkPlugin, MainActivity, UpdatePlugin and NativeConfigValidator.
+Narrowed expected Android platform exceptions instead of broad catches;
+separated APK signature verification, archive checks, permission and
+installer launch without relaxing existing package/signature checks.
+Added bounded import copying (5 MiB cap enforced during streaming),
+unique temp filenames and cleanup for failed/oversized copies; added
+four JVM tests. Provider calls may still block; Android device and OEM
+behavior require verification. No new Detekt suppressions or baseline.
+
+Detekt full audit 115 -> 94 weighted issues; strict gate 19 -> 25
+files including the two new sources. Full ktlint, 575 Flutter tests,
+Android JVM tests, Android lint, binary inventory and diff checks
+passed locally. Fresh CI and device validation pending. Phase 3
+remains open; no production merge or release.

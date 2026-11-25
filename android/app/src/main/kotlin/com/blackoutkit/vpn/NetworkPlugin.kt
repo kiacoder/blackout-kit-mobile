@@ -1,5 +1,7 @@
 package com.blackoutkit.vpn
 
+import android.content.ActivityNotFoundException
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -93,11 +95,8 @@ class NetworkPlugin :
             val payload = ArrayList<Map<String, Any?>>()
             for (info in apps) {
                 val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                if (isSystem && !includeSystem) continue
-
-                // An app with no launcher entry is not something a user can
-                // meaningfully route, so skip it.
-                if (pm.getLaunchIntentForPackage(info.packageName) == null) continue
+                // Exclude hidden launcher entries and optionally system apps.
+                if ((isSystem && !includeSystem) || pm.getLaunchIntentForPackage(info.packageName) == null) continue
 
                 payload.add(
                     mapOf(
@@ -110,9 +109,9 @@ class NetworkPlugin :
 
             payload.sortBy { it["appName"]?.toString()?.lowercase() }
             result.success(payload)
-        } catch (t: Throwable) {
-            Log.e(TAG, "could not list installed apps", t)
-            result.error("LIST_FAILED", t.message, null)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Installed app listing denied")
+            result.error("LIST_FAILED", e.message, null)
         }
     }
 
@@ -140,8 +139,11 @@ class NetworkPlugin :
             result.success(
                 Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP),
             )
-        } catch (t: Throwable) {
-            Log.w(TAG, "no icon for $packageName: ${t.message}")
+        } catch (_: PackageManager.NameNotFoundException) {
+            result.success(null)
+        } catch (_: SecurityException) {
+            result.success(null)
+        } catch (_: IllegalArgumentException) {
             result.success(null)
         }
     }
@@ -170,18 +172,8 @@ class NetworkPlugin :
         val ctx = context ?: return mapOf("supported" to false)
         val resolver = ctx.contentResolver
 
-        val alwaysOnApp =
-            try {
-                Settings.Secure.getString(resolver, KEY_ALWAYS_ON_VPN_APP)
-            } catch (t: Throwable) {
-                null
-            }
-        val lockdown =
-            try {
-                Settings.Secure.getString(resolver, KEY_ALWAYS_ON_VPN_LOCKDOWN)
-            } catch (t: Throwable) {
-                null
-            }
+        val alwaysOnApp = readSecureSetting(resolver, KEY_ALWAYS_ON_VPN_APP)
+        val lockdown = readSecureSetting(resolver, KEY_ALWAYS_ON_VPN_LOCKDOWN)
 
         val isUs = alwaysOnApp != null && alwaysOnApp == ctx.packageName
         val lockdownOn = lockdown == "1"
@@ -197,6 +189,20 @@ class NetworkPlugin :
             "requiresUserAction" to !(isUs && lockdownOn),
         )
     }
+
+    private fun readSecureSetting(
+        resolver: ContentResolver,
+        key: String,
+    ): String? =
+        try {
+            Settings.Secure.getString(resolver, key)
+        } catch (_: SecurityException) {
+            Log.w(TAG, "VPN settings read denied")
+            null
+        } catch (_: IllegalArgumentException) {
+            Log.w(TAG, "VPN settings unavailable")
+            null
+        }
 
     /**
      * Deep-links to the system VPN screen so the user can enable always-on VPN
@@ -222,8 +228,10 @@ class NetworkPlugin :
                 ctx.startActivity(intent)
                 result.success(true)
                 return
-            } catch (t: Throwable) {
-                Log.w(TAG, "could not open $intent: ${t.message}")
+            } catch (_: ActivityNotFoundException) {
+                Log.w(TAG, "VPN settings activity unavailable")
+            } catch (_: SecurityException) {
+                Log.w(TAG, "VPN settings activity denied")
             }
         }
 
@@ -235,8 +243,10 @@ class NetworkPlugin :
                 },
             )
             result.success(true)
-        } catch (t: Throwable) {
-            result.error("SETTINGS_FAILED", t.message, null)
+        } catch (e: ActivityNotFoundException) {
+            result.error("SETTINGS_FAILED", e.message, null)
+        } catch (e: SecurityException) {
+            result.error("SETTINGS_FAILED", e.message, null)
         }
     }
 }

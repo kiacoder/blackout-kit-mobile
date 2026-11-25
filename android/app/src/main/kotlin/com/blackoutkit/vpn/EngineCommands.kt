@@ -119,15 +119,19 @@ internal class NativeConfigValidator(
                 "The selected native engine is not installed or executable.",
             )
         }
-        if (!config.isFile || config.length() == 0L || config.length() > MAX_ENGINE_CONFIG_BYTES) {
-            return NativeValidation(
+        return if (!config.isFile || config.length() == 0L || config.length() > MAX_ENGINE_CONFIG_BYTES) {
+            NativeValidation(
                 false,
                 "INVALID_INPUT",
                 "Engine configuration is missing, empty or larger than 8 MiB.",
             )
+        } else {
+            validationOutcome(commands.execute(engine.check(executable, config), timeoutMs))
         }
-        val result = commands.execute(engine.check(executable, config), timeoutMs)
-        return when {
+    }
+
+    private fun validationOutcome(result: CommandOutcome): NativeValidation =
+        when {
             result.succeeded ->
                 NativeValidation(
                     true,
@@ -150,5 +154,4 @@ internal class NativeConfigValidator(
                         "Raw diagnostics are withheld to protect credentials.",
                 )
         }
-    }
 }

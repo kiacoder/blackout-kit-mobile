@@ -205,3 +205,26 @@ Go module manifests. Candidate binaries remain ignored under
 Independent rebuild, runtime compatibility, standard library and
 symbol reachability analysis are pending. Sing-box patch build
 remains blocked by compress archive retrieval. No release approval.
+
+
+## Patched sing-box candidates and Go stdlib screening (2026-11-25)
+
+The compress v1.20.2 proxy archive returned HTTP403 again; explicit
+GOPROXY=direct retrieval from upstream succeeded with GOSUMDB enabled.
+Module sum h1:v5tiZvm1KGLyg5d5oXdXe3lsSPrbEUiKoXGia//I7Qo=;
+origin 7f5d8528720c895a6106f201719f87eb030a565d. All nine proposed
+module upgrades were used in an isolated sing-box workspace. Both
+ARM ABIs compiled, API24 ELF metadata and go mod verify passed;
+identical linked module graphs across ABIs, 81 entries including
+main. Fresh OSV screening returned zero linked module matches.
+Candidate snapshots under tool/go_engine_candidates/singbox;
+binaries only under ignored .cache/singbox-patched-trial.
+
+Separate stdlib version screening: Go 1.26.5 (historical) 23 matches;
+1.27.0 (candidate compiler) 15; 1.26.11 and 1.27.4 zero. See
+STDLIB_AUDIT.json for timestamp and advisory IDs. Official go.dev
+download listing returned 1.27.4 and 1.26.11 as stable. Compiler
+upgrade, independently verified archive, fresh builds and repeat
+module/stdlib scans still required. Zero version matches does not
+prove vulnerability absence or runtime reachability. No native
+binary promotion; Android device acceptance still outstanding.

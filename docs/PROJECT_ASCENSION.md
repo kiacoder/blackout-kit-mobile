@@ -880,3 +880,21 @@ ARM ABIs pass build, ELF API24 and module verification. Snapshot
 inputs/evidence retained; no bundled binary change. Sing-box patch
 archive HTTP403, pending. No independent rebuild, stdlib or
 reachability assessment, Android device acceptance, or main merge.
+
+
+## Phase 3 patched sing-box candidate and stdlib follow-up (2026-11-25)
+
+Direct upstream retrieval with sumdb resolved compress v1.20.2
+archive blockage. Both patched sing-box ABIs built, API24 ELF
+metadata and module verification passed; all 81 linked module
+versions returned zero OSV matches (historical 25). Tun2socks
+candidate previously zero (23 linked versions). Snapshots saved;
+no tracked binary replaced. Separate standard-library query found
+23 matches on Go 1.26.5 and 15 on 1.27.0, zero on 1.26.11 and
+1.27.4. Upgrade candidate compiler and verify provenance before
+independent builds. 12 tracked binary checks passed; previous
+hosted native Go report succeeded in reporting mode. No fresh
+Python/Flutter tests needed for snapshot-only changes; previous
+74 Python and 578 Flutter tests remain last runs. Runtime
+acceptance and source provenance for merged AAR still pending.
+No main merge or release.

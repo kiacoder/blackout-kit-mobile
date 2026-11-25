@@ -810,3 +810,22 @@ attached, so instrumentation execution is NOT verified. Production
 activation, actual app-process-death test on Android, crash residue,
 secure-storage migration and fresh security scan remain open.
 No main merge or release.
+
+
+## Phase 3 pinned standalone Go candidate builds (2026-11-25)
+
+Added source-pin build tool and four unit tests (all passed). Source
+module checksums verified for tun2socks and sing-box. Tun2socks
+ARM64 and ARMv7 API24 candidate builds repeated with matching hashes
+on the same Windows host and shared caches. Build evidence retained
+under ignored .cache/tun2socks-rebuild-c. No historical binary
+replaced. Candidate dependency graph differs from historical
+x/crypto and x/sys; promotion blocked pending reviewed lock and
+independent/device validation. Default-branch Dependabot alerts
+for ring 0.16.20 and curve25519-dalek 4.0.0-rc.3 are absent in PR
+lockfile (0.17.14 and 4.1.3 respectively); main remains unmerged.
+12 tracked binary integrity checks passed. Full Python suite on
+Windows: 61 tests, 1 permission assertion failure, 2 missing PyYAML
+errors, 1 skipped; focused new tests passed. Linux CI remains
+required. Sing-box build, AAR provenance and current scanner scores
+remain open. No main merge or release.

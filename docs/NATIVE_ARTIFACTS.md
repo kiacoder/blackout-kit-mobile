@@ -79,3 +79,33 @@ Rebuild from independently pinned sources and verified toolchains
 with device compatibility testing before replacing these artifacts.
 All 12 tracked artifact hashes remain unchanged. No execution or
 new native binary downloads were necessary for this audit.
+
+
+## Pinned standalone Go source candidates (2026-11-25)
+
+New tool/build_pinned_go_engines.py builds isolated candidates in .cache
+from pinned module and go.mod checksums, verifies module cache content,
+checks embedded module/target identity and ELF API floor, and records
+Go/Clang executable hashes, build metadata, source license and output
+hashes. It never stages into app jniLibs. Go 1.27.0 and NDK
+28.2.13676358 are required; installed toolchain hashes are recorded,
+not independently authenticated. Retrieved both source archives with
+matching module sums and GoModSum. Module Origin records identify
+tun2socks dda1b1058db86dd0ef40d1b007de0ce86cf16a46 and sing-box
+af6e64c3b69e6132ebaee0e1a3d24e93903f6709.
+
+Tun2socks 2.7.0 built for both ABIs, API24, twice on this host with
+matching SHA256 (shared compiler/module caches; NOT independent
+clean-room reproduction):
+
+- arm64-v8a: 55807d0a7bf3cff5361a4b75195cb7c2013a318394d22dd08bbde82923631283
+- armeabi-v7a: 285076c8f835cba89a734941b0d82e0a82062bbdbcb460fb6d1aad1f4f2ac7b8
+
+The historical binaries used Go 1.26.5; the candidate uses 1.27.0.
+The ARM64 candidate has upstream x/crypto 0.53.0 and x/sys 0.46.0
+versus historical 0.54.0 and 0.47.0. Do not promote these candidates
+or assume that older dependency versions are secure. A reviewed
+explicit dependency lock, independent rebuild, CLI contract/device
+validation, license obligations and security review remain required.
+Sing-box source pin verified; build pending. Merged AAR source
+revision remains unresolved. Existing native binaries unchanged.

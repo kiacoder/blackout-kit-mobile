@@ -274,3 +274,33 @@ and unknown identities in EMBEDDED_AAR_AUDIT.json. Module matches
 are not reachability findings. Existing wrapper/source revision
 not found in tracked mobile repository; original source required
 before trusted merged rebuild. No production binary change.
+
+
+## Independent patched binary equality and repeatable embedded audit (2026-11-25)
+
+Hosted run 45585302350, comparison job 139106820518, passed
+all four independent binary comparisons. SHA256 of each pair:
+
+- tun2socks ARM64: 4ad1bd1b0a2010d621baf05282938088289319bf134f36cc3c632acf91b922da
+- tun2socks ARMv7: 296a8d71867aa993a5426b7e9e0b76dc23d96d8e74d22a10fa1c7df98f6a29fb
+- sing-box ARM64: 004b6c5ab1f5b8d2634ffe10ab869d18bc71c79d62172cac3e830049477b172a
+- sing-box ARMv7: 0c71e2e7146fa4e8694f634599daafd6f753868526cda933fe6dbf85ed6174b1
+
+Earlier run 45584510998 tun2socks artifacts were also downloaded
+and locally verified, with identical hashes. Sing-box equality
+verified by the hosted comparison job, not by local download.
+This is independent reproduction of patched standalone candidates
+with the same pinned toolchain inputs, not historic binary equality.
+
+New audit_embedded_go_archive.py inspects both JNI members using
+go version -m without executing the libraries, validates target
+metadata, handles versioned replacements, includes stdlib, and
+reports unversioned identities. Strict mode rejects any match or
+unresolved identity. Live repeat found 81 distinct versions, 28
+advisory matches and 4 unresolved ABI/source entries (2 identities).
+CI advisory report now includes embedded findings. Three new tests
+cover effective replacements, unknowns and invalid metadata.
+Searched tracked history, relevant build directories, Windows temp
+and scoped WSL home/temp/backup locations; original bkcores and
+local sing-box checkout not recovered. Corrected false version
+claim in LibboxEngine KDoc. No native binary changed.

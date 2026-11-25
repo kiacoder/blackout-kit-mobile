@@ -927,3 +927,18 @@ and bkcores main wrapper source identity unknown. Audit snapshot
 recorded, no replacement. Further embedded source recovery,
 compatibility/device acceptance and fresh APK security scans open.
 No main merge or release.
+
+
+## Phase 3 independent binary equality and repeatable embedded audit (2026-11-25)
+
+Run 45585302350 comparison job 139106820518 passed all four
+patched binary hash pairs. Earlier tun2socks replicas locally
+verified; sing-box equality confirmed in hosted job log. New
+embedded AAR auditor repeats 81 queries, 28 matches, 4 unresolved
+ABI/source entries. Strict mode correctly exits 1; informational
+CI upload extended to include report. Source recovery in scoped
+locations unsuccessful; corrected unsupported Android libbox version
+claim. Full Linux Python suite 81/81, Kotlin quality and 12 binary
+checks passed. Hosted audit workflow change awaits CI. No source
+reconstruction claim, no production binary replacement, no
+physical-device acceptance or release.

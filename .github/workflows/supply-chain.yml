@@ -37,10 +37,17 @@ jobs:
       - name: Report advisory matches explicitly
         run: |
           python3 -c 'import json; r=json.load(open("native-go-osv.json")); n=len(r["findings"]); print(f"::warning::{n} native Go module/advisory matches; review required, not release approval") if n else print("No module-version matches returned; reachability and standard library not assessed")'
+      - name: Inspect and audit the embedded Go archive
+        run: |
+          go version
+          python3 tool/audit_embedded_go_archive.py --archive android/app/libs/libcores.aar --output embedded-go-osv.json
+          python3 -c 'import json; r=json.load(open("embedded-go-osv.json")); print("::warning::Embedded archive: %d advisory matches, %d unresolved ABI/source entries; review required" % (len(r["findings"]), len(r["unknown"])))'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: native-go-osv-report
-          path: native-go-osv.json
+          path: |
+            native-go-osv.json
+            embedded-go-osv.json
           if-no-files-found: error
           retention-days: 14
 

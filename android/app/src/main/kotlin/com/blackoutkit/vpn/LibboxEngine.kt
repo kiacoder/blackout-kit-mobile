@@ -23,10 +23,10 @@ private const val LIBBOX_OTHER_INTERFACE = 4
 /**
  * In-process libbox core (embedded sing-box, no subprocess).
  *
- * This is the Android twin of the iOS tunnel extension's libbox core: the
- * same libbox.aar grammar (pinned sing-box v1.11.4, matching the bundled
- * libsingbox.so), but instead of the tunnel extension handing over a TUN
- * fd, [BlackoutVpnService] passes the fd it established and this engine
+ * Android uses the libbox bindings in the merged libcores.aar. Its exact
+ * sing-box source revision is not established by the embedded build metadata.
+ * Do not assume grammar parity with the iOS build or standalone executable.
+ * [BlackoutVpnService] passes the established TUN fd to this engine, which
  * answers libbox's [PlatformInterface.openTun] with it.
  *
  * Ordering in [BlackoutVpnService.startEngine]: BlackoutCoreEngine (the

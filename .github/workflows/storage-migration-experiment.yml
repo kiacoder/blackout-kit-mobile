@@ -133,6 +133,8 @@ jobs:
         if: failure()
         with:
           name: storage-emulator-diagnostics-api-${{ matrix.api }}
-          path: ${{ runner.temp }}/storage-emulator.log
+          path: |
+            ${{ runner.temp }}/storage-emulator.log
+            ${{ runner.temp }}/storage-emulator-preflight.log
           if-no-files-found: warn
           retention-days: 7

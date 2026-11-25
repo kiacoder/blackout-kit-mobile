@@ -1103,3 +1103,18 @@ ClamAV detections and three unknown VirusTotal files. Detailed MobSF
 artifact still not retrieved locally. Python 96/96, shell syntax and
 12 binary/action checks passed. No production dependencies or
 binaries changed; hosted acceptance retry pending.
+
+
+## Phase 3 emulator runtime dependency repair (2026-11-25)
+
+Hosted retry 45593879636 confirmed both API24/API34 failed in
+QEMU dynamic loading: libpulse.so.0 absent, exit127. Resolution
+and all three fixture APK builds succeeded. No device migration
+executed. CI-only bootstrap now installs libpulse0 from Ubuntu
+package repositories before emulator startup, captures preflight
+output, prints ldd diagnostics on version-check failure and
+uploads both preflight and startup logs. Explicit Linux/GitHub
+Actions guard rejects non-CI invocation. Shell syntax, local
+non-CI rejection (exit2), Python 96/96 and 12 binary/action
+checks passed. Hosted retry still needed to confirm runtime repair.
+Production dependencies and native binaries unchanged; no release approval.

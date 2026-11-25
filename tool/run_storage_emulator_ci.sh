@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Only for disposable Linux CI runners; never boot or modify a user's AVD.
 set -euo pipefail
-: "${GITHUB_ACTIONS:?GitHub Actions runner required}"
+if [[ "${GITHUB_ACTIONS:-}" != true || "$(uname -s)" != Linux ]]; then
+  echo "Disposable Linux GitHub Actions runner required" >&2
+  exit 2
+fi
 : "${ANDROID_HOME:?Android SDK required}"
 : "${RUNNER_TEMP:?Runner temp required}"
 api="${1:?API level required}"
@@ -13,10 +16,19 @@ emulator="$ANDROID_HOME/emulator/emulator"
 serial=emulator-5554
 image="system-images;android-$api;google_apis;x86_64"
 log="$RUNNER_TEMP/storage-emulator.log"
+# Keep loader/preflight output even if QEMU fails before it creates an AVD.
+exec > >(tee "$RUNNER_TEMP/storage-emulator-preflight.log") 2>&1
+# Emulator QEMU dynamically links PulseAudio even with -no-audio.
+# Hosted runs 45593879636 on API 24 and 34 failed with missing libpulse.so.0.
+sudo apt-get update -qq
+sudo apt-get install -y --no-install-recommends libpulse0
 "$sdk/sdkmanager" "platform-tools" "build-tools;34.0.0" "emulator" "$image"
 test -c /dev/kvm
 sudo chmod a+rw /dev/kvm
-"$emulator" -version
+if ! "$emulator" -version; then
+  ldd "$ANDROID_HOME/emulator/qemu/linux-x86_64/qemu-system-x86_64" || true
+  exit 1
+fi
 "$emulator" -accel-check
 "$adb" start-server
 "$adb" devices -l

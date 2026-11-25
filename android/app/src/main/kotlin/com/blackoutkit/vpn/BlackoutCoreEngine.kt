@@ -11,6 +11,7 @@ import android.util.Log
  */
 object BlackoutCoreEngine {
     private const val TAG = "BlackoutCoreEngine"
+    private const val ERROR_BUFFER_BYTES = 512
 
     @Volatile
     var isLoaded = false
@@ -31,18 +32,46 @@ object BlackoutCoreEngine {
         }
     }
 
+    // These six names are exported JNI ABI symbols in native/blackout-core/src/jni.rs.
+    @Suppress("ktlint:standard:function-naming", "FunctionNaming")
     external fun blackout_init(logLevel: Int): Int
-    external fun blackout_start(tunFd: Int, configJson: String): Int
-    external fun blackout_stop(): Int
-    external fun blackout_is_running(): Boolean
-    external fun blackout_version(): String
-    external fun blackout_get_last_error(buffer: ByteArray, maxLen: Int): Int
 
-    fun start(tunFd: Int, configJson: String): Boolean {
+    @Suppress("ktlint:standard:function-naming", "FunctionNaming")
+    external fun blackout_start(
+        tunFd: Int,
+        configJson: String,
+    ): Int
+
+    @Suppress("ktlint:standard:function-naming", "FunctionNaming")
+    external fun blackout_stop(): Int
+
+    @Suppress("ktlint:standard:function-naming", "FunctionNaming")
+    external fun blackout_is_running(): Boolean
+
+    @Suppress("ktlint:standard:function-naming", "FunctionNaming")
+    external fun blackout_version(): String
+
+    @Suppress("ktlint:standard:function-naming", "FunctionNaming")
+    external fun blackout_get_last_error(
+        buffer: ByteArray,
+        maxLen: Int,
+    ): Int
+
+    fun start(
+        tunFd: Int,
+        configJson: String,
+    ): Boolean {
         if (!isLoaded) {
             lastError = "Native in-house core is not loaded"
             return false
         }
+        return startLoadedCore(tunFd, configJson)
+    }
+
+    private fun startLoadedCore(
+        tunFd: Int,
+        configJson: String,
+    ): Boolean {
         val initResult = blackout_init(2)
         if (initResult != 0) {
             lastError = "Native core initialization failed: code $initResult"
@@ -51,14 +80,14 @@ object BlackoutCoreEngine {
         }
         val rc = blackout_start(tunFd, configJson)
         if (rc != 0) {
-            val buf = ByteArray(512)
+            val buf = ByteArray(ERROR_BUFFER_BYTES)
             val len = blackout_get_last_error(buf, buf.size)
             lastError = if (len > 0) String(buf, 0, len).trimEnd('\u0000') else "Core start error: code $rc"
             Log.e(TAG, "blackout_start failed: $lastError")
-            return false
+        } else {
+            lastError = null
         }
-        lastError = null
-        return true
+        return rc == 0
     }
 
     fun stop() {

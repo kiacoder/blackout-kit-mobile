@@ -221,3 +221,366 @@ AGP 7.4.2 supports compileSdk 33 officially, while app uses 34; lint also
 reports Kotlin metadata 1.9 vs 1.7.1. Upgrade separately with wrapper
 checksum, plugin compatibility, all variants and device tests. No warning
 suppression, minSdk increase, merge or release.
+
+
+## Phase 3 shell correctness and toolchain CI (2026-11-24)
+
+Baseline e3c422d: both host CI jobs passed (31 tests and Android API
+compile); APK and Tests passed. One separate iOS runner acquisition failed
+with capacity notices; another iOS build passed. Candidate toolchain
+37be23c passed GitHub Tests workflow 45437373000; full APK workflow
+45443595453 is in progress. See ANDROID_TOOLCHAIN_MIGRATION.md.
+
+Added tool/check_shell_quality.sh and a Code quality CI job using
+Bash syntax validation plus ShellCheck severity=error for every tracked
+.sh/.bash file. All 15 scripts passed local syntax-only checks; a malformed
+script in an isolated test repository was correctly rejected (exit 2).
+ShellCheck is not installed locally; hosted check still pending. Runner
+ShellCheck version is logged; warning/style debt remains open. No build
+pins changed in this PR, and no APK release or merge performed.
+
+
+## Phase 3 Kotlin quality introduction (2026-11-25)
+
+ShellCheck correctness jobs passed. Experimental toolchain APK and iOS
+workflow 45443595453 passed, including APK signature/inventory checks and
+security scanner execution; report review/device validation remain open.
+Added standalone SHA-256-pinned ktlint 1.5.0 and Detekt 1.23.8 CLI tools,
+with Python 3.11+ runner and dedicated Code quality CI job. Initial full
+source audit found 1313 ktlint findings and 337 Detekt weighted issues.
+Strict gate covers OneShotCallbackSlot.kt and GoRuntimeAdmission.kt after
+formatting-only remediation; local strict checks passed. Full audit is
+available with --audit and fails on outstanding findings. No baseline or
+blanket suppression added. Expand strict scope in tested batches. Local
+Ruff unavailable; CI validation and Android regression recheck pending.
+No production merge or release. See ANDROID_TOOLCHAIN_MIGRATION.md.
+
+
+## Phase 3 Kotlin cleanup batch (2026-11-25)
+
+Full ktlint audit now passes across all 32 Kotlin files (1313 initial
+findings to zero reported). Aligned Kotlin line length to 120. Six scoped
+JNI naming exceptions preserve existing Rust ABI symbols; no global rule
+disabled. Full formatting is now enforced in CI. Host fixtures moved into
+package-matching directories; all script references updated.
+
+Detekt weighted issues reduced 337 -> 128; MagicNumber and MaxLineLength
+now report zero. Introduced semantic constants for wire encoding, protocol
+limits, process timeouts and test fixtures. Removed unused Kotlin JNI
+declaration (native implementation unchanged), replaced constant-return
+log helper with a constant, and strengthened a host negative-stop test.
+Strict Detekt scope expanded from 2 to 12 clean files; --audit still fails
+on outstanding issues. No baseline or blanket exception suppressions.
+Remaining debt includes 49 broad catches, 32 return-count findings,
+complexity/long-method issues and exception handling. Do not mark Phase 3
+complete or advance to Phase 4 until this cleanup is reviewed.
+
+Verified: full Kotlin formatting and scoped Detekt pass, 575 Flutter
+tests, 40 Android JVM tests, Android lint 0 errors/6 warnings, all 15
+Bash syntax checks, binary inventory/action pin verification. Structural
+assertions updated for whitespace, braces and named constants without
+removing the underlying checks. Standalone Linux host tests and fresh
+GitHub CI await verification. Old AGP metadata diagnostics persist;
+experimental toolchain promotion and device tests remain pending.
+
+
+## Phase 3 Detekt lifecycle and parser refactor (2026-11-25)
+
+Prior fc60f32 Kotlin formatting/static-analysis and Linux host CI jobs
+passed. Refactored native config section parser, field validation and
+peer/interface validation into bounded helpers with unchanged checks.
+Separated native TUN descriptor transfer from protection/ownership
+checks, split JNI startup/availability guards, simplified bounded child
+shutdown and SOCKS readiness retries while retaining interrupt semantics.
+ProcessCompat now guarantees attempted child cleanup if output drain
+startup fails via finally, rather than catching a generic exception.
+
+Detekt full audit 128 -> 115 weighted issues; strict scope 12 -> 19
+files. Ktlint remains fully clean; no new rule exceptions or baselines.
+Added two JUnit parser regression tests (header order, duplicate fields,
+case-insensitive headers and comments). Local verification: 42 Android
+JVM tests, 575 Flutter tests, lint 0 errors/6 warnings, scoped Detekt,
+full ktlint, binary inventory and diff checks passed. New CI pending.
+
+Remaining 115 weighted issues: 48 broad catches, 25 return counts,
+11 long methods, 10 complexity, 8 swallowed exceptions, 4 too many
+functions, 3 parameter-list findings, 2 loop-jump findings, 2 nesting,
+1 throws-count and 1 large class. Native Android device validation
+remains outstanding. Phase 3 still open; no production merge or release.
+
+
+## Phase 3 Detekt Android boundaries (2026-11-25)
+
+Prior 68ba559 Kotlin and Linux host CI checks passed. Refactored
+NetworkPlugin, MainActivity, UpdatePlugin and NativeConfigValidator.
+Narrowed expected Android platform exceptions instead of broad catches;
+separated APK signature verification, archive checks, permission and
+installer launch without relaxing existing package/signature checks.
+Added bounded import copying (5 MiB cap enforced during streaming),
+unique temp filenames and cleanup for failed/oversized copies; added
+four JVM tests. Provider calls may still block; Android device and OEM
+behavior require verification. No new Detekt suppressions or baseline.
+
+Detekt full audit 115 -> 94 weighted issues; strict gate 19 -> 25
+files including the two new sources. Full ktlint, 575 Flutter tests,
+Android JVM tests, Android lint, binary inventory and diff checks
+passed locally. Fresh CI and device validation pending. Phase 3
+remains open; no production merge or release.
+
+
+## Phase 3 Detekt engine cleanup batch 4 (2026-11-25)
+
+Prior 33cf005 Kotlin, host, Tests and both iOS CI jobs passed; APK
+job was pending at inspection. Refactored Xray initialization/startup
+branches and shared failed-start cleanup; simplified EngineRunner config
+write validation and narrowed IO/security exceptions; extracted libbox
+network description and narrowed network/package lookup exceptions.
+Reorganized import provider/descriptor ownership in one method, preserving
+API24 release and AutoCloseInputStream ownership. Both Recycle warnings
+from batch 3 resolved without suppression.
+
+Detekt 94 -> 83 weighted issues; strict scope remains 25 files. Full
+ktlint, scoped Detekt, 46 JVM tests, 575 Flutter tests, 12 binary
+checks and diff checks passed. Android lint 0 errors/6 pre-existing
+warnings. Confirmed via javap that bundled Xray startLoop/stopLoop
+declare generic checked Exception, so those catches remain flagged
+until a deliberate boundary review. No additional Detekt suppressions.
+Remaining 33 broad catches, 17 return counts, 10 long methods, 9
+complexity, 14 other findings. Fresh CI/device validation pending;
+Phase 3 not complete, no main merge or release.
+
+
+## Phase 3 VPN service and plugin cleanup batch 5 (2026-11-25)
+
+Prior af718dc hosted Kotlin, host, Tests and supply-chain checks passed;
+APK and iOS builds were pending at inspection. Extracted connection
+intent construction, consent dispatch and timeout scheduling from the
+plugin. Grouped service request parameters in a private non-data class
+(no generated configuration-revealing toString), preserving native
+extra removal, callback capture and session ticket checks. Simplified
+notification permission, HTTP status handling and IP matching control
+flow. Detekt 83 -> 71 weighted findings; all three long-parameter-list
+findings resolved. Strict scope remains 25 files. Full ktlint, scoped
+Detekt, 575 Flutter tests, Android JVM tests and lint passed locally.
+Remaining 33 broad catches, 11 return counts, 9 long methods, 7
+complexity, 11 other findings. No new suppressions. Old toolchain
+metadata diagnostics, native device validation and fresh CI remain
+open. Phase 3 remains incomplete; no main merge or release.
+
+
+## Phase 3 VPN service decomposition batch 6 (2026-11-25)
+
+Prior df9af21 hosted Kotlin, host and supply-chain checks passed;
+Tests/APK/iOS jobs pending at inspection. Split proxy interface setup,
+engine activation, connected-state publication and engine-family dispatch.
+Shared DNS setup across proxy/DNS-only paths; narrowed expected invalid
+DNS, missing package and descriptor IO failures. Unexpected exceptions
+now reach the outer setup failure handler. Preserved session tickets,
+kill-switch listener ordering, DNS refusal, split-list exclusivity and
+fresh-config requirement. Fixed API 33 permission warning with explicit
+SDK guard and annotated helper. Updated stale-config source assertion
+for when branch and ordering. Detekt 71 -> 61 weighted findings; strict
+scope remains 25 files. Full ktlint, scoped Detekt, 575 Flutter tests,
+46 Android JVM tests, lint 0 errors/6 pre-existing warnings, 12 binary
+checks and diff checks passed. No new suppressions. Remaining 28 broad
+catches, 10 return counts, 7 long methods, 6 complexity, 10 other
+findings. Larger class responsibilities remain to be extracted; device
+validation, toolchain promotion and fresh CI pending. No merge/release.
+
+
+## Phase 3 engine and standalone test decomposition batch 7 (2026-11-25)
+
+Prior b3c1105 hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; Tests/APK/iOS builds pending at inspection. Split standalone
+engine, parser and ownership test harnesses into focused case groups
+without removing test cases. All three now pass strict Detekt, raising
+coverage from 25 to 28 of 34 Kotlin files. Local cached Kotlin 1.9.25
+compiler verified 24 parser and 13 ownership cases on JVM and compiled
+the Linux engine harness (execution requires Linux CI). Refactored
+EngineRunner launch preparation, validated launch, native bridge spawn,
+startup checks, SOCKS readiness and monitoring while preserving failure
+cleanup and checks. Detekt 61 -> 52 weighted findings (five files).
+Remaining: 27 broad catches, 9 return counts, 4 complexity, 4 function
+counts, 3 long methods, 3 swallowed exceptions, 1 nesting, 1 large
+class. No additional suppressions. Verified full ktlint, scoped Detekt,
+575 Flutter tests, 46 Android JVM tests, Android lint and 12 binary
+checks locally. Fresh Linux execution and CI, physical-device checks
+and toolchain promotion remain pending. Phase 3 open; no merge/release.
+
+
+## Phase 3 site verification decomposition batch 8 (2026-11-25)
+
+Prior 53290a7 hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; Tests/APK/iOS were pending at inspection. Extracted SiteProbeRunner
+from VpnPlugin, preserving native VPN Network binding, session checks
+before and after requests and at result delivery, no native SOCKS fallback,
+TLS validation, no redirects, bounded parallelism and HTTP status semantics.
+Narrowed expected IO/argument/state/security and future exceptions,
+restored thread interruption and cancel timed-out futures. Added two
+JVM tests (missing native network fails without fallback, non-native
+results unchanged), updated structural assertions and optional plugin
+API compile source list. Detekt 52 -> 45 weighted findings; strict
+scope now 30 of 36 files. Full ktlint, scoped Detekt, 575 Flutter tests,
+48 Android JVM tests, lint 0 errors/6 warnings, binary inventory and
+15 shell syntax checks passed. No additional suppressions. Remaining
+25 broad catches, 7 return counts, 4 function counts, 3 swallowed
+exceptions, 3 complexity, 2 long methods, 1 large class. Fresh CI,
+physical-device VPN traffic verification, and toolchain promotion
+remain pending. Phase 3 open; no production merge or release.
+
+
+## Phase 3 native engine boundaries batch 9 (2026-11-25)
+
+Prior 2fc03c6 hosted Kotlin, host, Rust and supply-chain checks passed;
+Tests/APK/iOS were pending at inspection. Extracted EngineRunner launch
+coordinator while preserving JNI names and runner-owned process handles.
+Centralized failed-launch cleanup in finally; handle IO, permission,
+interruption and linkage failures explicitly. Unexpected failures propagate
+after attempted cleanup. EngineRunner now passes strict Detekt. Separated
+libbox platform policy from Android queries, split native service startup,
+and extracted Xray installation key handling. Removed several raw native
+error and status messages from logs/UI to reduce credential exposure.
+Verified actual bundled Java declarations with javap: libbox newService,
+start and close, and Xray startLoop/stopLoop declare checked Exception.
+Seven broad native-boundary catches remain flagged for review; no new
+suppressions. Existing embedded-engine failed-stop ownership behavior
+still needs explicit review and real-device tests.
+
+Full Detekt audit 45 -> 33 weighted findings; four files remain:
+VpnPlugin 15, BlackoutVpnService 11, LibboxEngine 4, XrayEngine 3.
+Strict scope 31 of 36 files. Full ktlint, scoped Detekt, 575 Flutter
+tests, 48 Android JVM tests, Android lint 0 errors/6 warnings,
+12 binary checks and diff checks passed. Fresh CI, toolchain promotion
+and physical-device validation remain pending. No production merge/release.
+
+
+## Phase 3 embedded ownership batch 10 (2026-11-25)
+
+Prior 3434811 hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; Tests/APK/iOS pending at inspection. Shared EmbeddedCoreOwner
+assigns native handles before activation, retains them on failed close,
+blocks replacement until cleanup succeeds, and serializes same-owner
+operations. Xray probe cleanup checks ownership even when not running.
+Libbox startup failure cannot fall back when native cleanup throws.
+Removed unused Xray config retention; native failure categories remain
+redacted. Centralized declared gomobile checked exceptions in embeddedCall
+with interrupt restoration and no catch of fatal JVM errors (other than
+expected linkage failures). One broad checked exception remains explicitly
+flagged, not suppressed. Five new JVM tests cover owner retention, retry,
+partial startup, interruption and error propagation. Service-level TUN
+descriptor lifetime on failed native close and cross-engine concurrency
+still require review; real-device behavior unverified.
+
+Detekt 33 -> 27 weighted findings: VpnPlugin 15, BlackoutVpnService 11,
+EmbeddedCoreOwner 1. Strict scope 34 of 38 Kotlin files; both embedded
+engine files clean. Full ktlint, scoped Detekt, 575 Flutter tests, 53
+Android JVM tests, Android lint, 12 binary checks and 15 shell syntax
+checks passed. No additional suppressions. Fresh CI, toolchain promotion
+and real-device tests pending; no main merge or release.
+
+
+## Phase 3 service descriptor cleanup batch 11 (2026-11-25)
+
+Prior bf8384e Tests, both iOS builds, Kotlin, host, Rust and supply-chain
+checks passed; APK job pending at inspection. TunnelCleanup attempts
+all engine stops before releasing TUN descriptors; failed engine stop
+retains service-owned descriptors for retry. Removed premature close on
+failed activation, report startup failure and retain foreground service
+if cleanup is pending. IOException handling is specific and redacted;
+three JVM regressions cover stop order, retry and linkage failure.
+This is an ordering improvement, not proof of descriptor ownership
+across native ABI, Android service destruction or process restart. Cross-
+engine concurrency and real device checks remain outstanding.
+
+Detekt 27 -> 23 weighted findings (VpnPlugin 15, BlackoutVpnService 7,
+EmbeddedCoreOwner 1); strict scope 36 of 40 Kotlin files. Full ktlint,
+scoped Detekt, 575 Flutter tests, 56 JVM tests, Android lint, 12 binary
+checks and 15 shell syntax checks passed. No new suppressions. Plugin
+decomposition deferred to next batch. Fresh CI and toolchain promotion
+pending; no production merge or release.
+
+
+## Phase 3 passive capability catalogue batch 12 (2026-11-25)
+
+Prior 5f3ab78 hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; Tests/APK/iOS pending at inspection. Extracted EngineCatalogue
+from the Flutter plugin. It reads packaged files and runtime ownership
+without claiming or loading a native runtime. Preserved protocol lists,
+restart requirements and experimental feature flags; absent native
+directory no longer falls back to relative executable paths. Split
+validation admission and asynchronous config checking. Added four JVM
+catalogue tests and updated source checks and optional Android compile
+source list. Detekt 23 -> 20 weighted findings (VpnPlugin 12, service 7,
+EmbeddedCoreOwner 1); strict scope 38 files. Full ktlint, scoped Detekt,
+575 Flutter tests, 60 Android JVM tests, Android lint, 12 binary checks
+and 15 shell syntax checks passed. No new suppressions. Probe lifecycle
+and service decomposition still pending, along with fresh CI, device
+validation and toolchain promotion. No production merge or release.
+
+
+## Phase 3 headless probe lifecycle batch 13 (2026-11-25)
+
+Prior 703020d hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; APK/iOS/Tests pending at inspection. Extracted process-wide
+ProbeEngineController from VpnPlugin, retaining the subprocess handle
+on unsuccessful cleanup and serializing headless starts/stops. Added
+worker-side live-VPN checks, port/config-size validation and child
+liveness confirmation after SOCKS readiness. Native diagnostics remain
+redacted. Updated structural assertion and optional API compile list.
+Cross-engine admission between service and probe remains unresolved;
+readiness is not proof of device traffic or listener ownership.
+
+Detekt 20 -> 14 weighted findings (VpnPlugin 6, service 7,
+EmbeddedCoreOwner 1); strict scope 39 files. Full ktlint, scoped Detekt,
+575 Flutter tests, 60 Android JVM tests, Android lint 0 errors/6 warnings,
+12 binary checks and 15 shell syntax checks passed. No new suppressions.
+Fresh CI, physical-device verification and toolchain promotion remain
+open. No main merge or production release.
+
+
+## Phase 3 VPN setup paths batch 14 (2026-11-25)
+
+Prior 09f02ca hosted Kotlin, Linux host, Rust and supply-chain checks
+passed; APK/iOS/Tests pending at inspection. Separated native builder,
+activation and status publication; split DNS-only interface opening
+from DNS validation and retained no-route behavior. Simplified proxy
+activation result handling and narrowed expected platform/network
+exceptions in service and plugin. Redacted setup failure diagnostics.
+Strengthened native routing structural test for resolver-before-TUN
+ordering and app inclusion. Full Detekt 14 -> 6 weighted findings:
+service class size/function count, plugin class size/function count/
+dispatch complexity, one required checked native ABI boundary.
+No new suppressions; strict scope remains 39 files. Full ktlint, scoped
+Detekt, 575 Flutter tests, 60 Android JVM tests, Android lint, and 12
+binary checks passed. Fresh CI, physical-device verification, cross-
+engine admission and toolchain promotion remain outstanding. No main
+merge or production release.
+
+
+## Phase 3 Kotlin cleanup completion (batch 15, 2026-11-25)
+
+Full ktlint and Detekt gates pass for all 43 Kotlin files. The staged
+Detekt allowlist has been removed; the default and --audit commands
+now run the same full scan. VPN plugin responsibilities are separated
+into permission, connection, catalogue and diagnostic controllers.
+Service responsibilities are separated into native/proxy setup,
+engine selection, DNS-only setup, engine monitoring and foreground
+notification components. No baseline or globally disabled rules.
+One function-level TooGenericExceptionCaught suppression is documented
+for embeddedCall: the shipped gomobile ABI declares java.lang.Exception
+for newService/start/close/startLoop/stopLoop. Retain checked exception
+translation and interrupt restoration without swallowing fatal JVM
+errors. Existing scoped JNI naming exceptions remain. Unresolved
+Detekt findings 337 -> 0; full formatting gate passes.
+
+Added bounded retry for transient Maven download failures after prior
+39202ef push CI returned HTTP 429 (PR equivalent passed). SHA256
+validation and official Maven source unchanged. Mocked retry/404
+checks passed. A temporary unused/magic-number Kotlin fixture was
+rejected by the full gate, removed, and the clean gate passed again.
+575 Flutter tests, 60 Android JVM tests, lint 0 errors/6 warnings,
+12 binary checks and diff checks passed locally. Prior 39202ef APK,
+both iOS builds, Tests, host, Rust, OSV and supply-chain jobs passed.
+Kotlin cleanup complete; Phase 3 still has broader toolchain, existing
+lint warnings and quality work. Fresh full CI and physical-device
+validation remain open. No main merge/release.

@@ -10,6 +10,35 @@ permissions:
   contents: read
 
 jobs:
+  shell:
+    name: Shell syntax and correctness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check tracked shell scripts
+        run: bash tool/check_shell_quality.sh
+
+  kotlin:
+    name: Kotlin static analysis and formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - name: Check all Kotlin formatting and strict Detekt
+        run: python tool/check_kotlin_quality.py
+
   python:
     name: Python correctness checks
     runs-on: ubuntu-latest

@@ -1,5 +1,7 @@
 package com.blackoutkit.vpn
 
+import android.content.ActivityNotFoundException
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -27,13 +29,16 @@ import java.io.ByteArrayOutputStream
  *  - the real state of Android's own kill switch (always-on VPN + lockdown),
  *    which is the part a non-root app genuinely cannot implement itself
  */
-class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
-
+class NetworkPlugin :
+    FlutterPlugin,
+    MethodChannel.MethodCallHandler {
     private var channel: MethodChannel? = null
     private var context: Context? = null
 
     companion object {
         private const val TAG = "NetworkPlugin"
+        private const val APP_ICON_SIZE_PX = 96
+        private const val PNG_QUALITY = 100
         private const val CHANNEL = "com.blackoutkit.vpn/network"
 
         // Settings.Secure keys. Referenced as literals because the matching
@@ -44,9 +49,10 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
-        channel = MethodChannel(binding.binaryMessenger, CHANNEL).also {
-            it.setMethodCallHandler(this)
-        }
+        channel =
+            MethodChannel(binding.binaryMessenger, CHANNEL).also {
+                it.setMethodCallHandler(this)
+            }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -55,7 +61,10 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         context = null
     }
 
-    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+    override fun onMethodCall(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         when (call.method) {
             "getInstalledApps" -> handleGetInstalledApps(call, result)
             "getAppIcon" -> handleGetAppIcon(call, result)
@@ -67,7 +76,10 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     // ───────────────────────── installed apps ──────────────────────────────
 
-    private fun handleGetInstalledApps(call: MethodCall, result: MethodChannel.Result) {
+    private fun handleGetInstalledApps(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         val ctx = context
         if (ctx == null) {
             result.error("NO_CONTEXT", "Plugin is not attached to a Flutter engine", null)
@@ -83,26 +95,23 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             val payload = ArrayList<Map<String, Any?>>()
             for (info in apps) {
                 val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                if (isSystem && !includeSystem) continue
-
-                // An app with no launcher entry is not something a user can
-                // meaningfully route, so skip it.
-                if (pm.getLaunchIntentForPackage(info.packageName) == null) continue
+                // Exclude hidden launcher entries and optionally system apps.
+                if ((isSystem && !includeSystem) || pm.getLaunchIntentForPackage(info.packageName) == null) continue
 
                 payload.add(
                     mapOf(
                         "packageName" to info.packageName,
                         "appName" to pm.getApplicationLabel(info).toString(),
-                        "isSystem" to isSystem
-                    )
+                        "isSystem" to isSystem,
+                    ),
                 )
             }
 
             payload.sortBy { it["appName"]?.toString()?.lowercase() }
             result.success(payload)
-        } catch (t: Throwable) {
-            Log.e(TAG, "could not list installed apps", t)
-            result.error("LIST_FAILED", t.message, null)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Installed app listing denied")
+            result.error("LIST_FAILED", e.message, null)
         }
     }
 
@@ -111,7 +120,10 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
      * would mean tens of megabytes of base64 crossing the channel to render a
      * list the user has not scrolled yet.
      */
-    private fun handleGetAppIcon(call: MethodCall, result: MethodChannel.Result) {
+    private fun handleGetAppIcon(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         val ctx = context
         val packageName = call.argument<String>("packageName")
         if (ctx == null || packageName.isNullOrBlank()) {
@@ -121,14 +133,17 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
         try {
             val drawable = ctx.packageManager.getApplicationIcon(packageName)
-            val bitmap = drawable.toBitmap(96)
+            val bitmap = drawable.toBitmap(APP_ICON_SIZE_PX)
             val stream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, stream)
             result.success(
-                Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+                Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP),
             )
-        } catch (t: Throwable) {
-            Log.w(TAG, "no icon for $packageName: ${t.message}")
+        } catch (_: PackageManager.NameNotFoundException) {
+            result.success(null)
+        } catch (_: SecurityException) {
+            result.success(null)
+        } catch (_: IllegalArgumentException) {
             result.success(null)
         }
     }
@@ -157,16 +172,8 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val ctx = context ?: return mapOf("supported" to false)
         val resolver = ctx.contentResolver
 
-        val alwaysOnApp = try {
-            Settings.Secure.getString(resolver, KEY_ALWAYS_ON_VPN_APP)
-        } catch (t: Throwable) {
-            null
-        }
-        val lockdown = try {
-            Settings.Secure.getString(resolver, KEY_ALWAYS_ON_VPN_LOCKDOWN)
-        } catch (t: Throwable) {
-            null
-        }
+        val alwaysOnApp = readSecureSetting(resolver, KEY_ALWAYS_ON_VPN_APP)
+        val lockdown = readSecureSetting(resolver, KEY_ALWAYS_ON_VPN_LOCKDOWN)
 
         val isUs = alwaysOnApp != null && alwaysOnApp == ctx.packageName
         val lockdownOn = lockdown == "1"
@@ -179,9 +186,23 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             // The combination that actually blocks traffic on tunnel loss.
             "systemKillSwitchActive" to (isUs && lockdownOn),
             "inAppKillSwitchAvailable" to true,
-            "requiresUserAction" to !(isUs && lockdownOn)
+            "requiresUserAction" to !(isUs && lockdownOn),
         )
     }
+
+    private fun readSecureSetting(
+        resolver: ContentResolver,
+        key: String,
+    ): String? =
+        try {
+            Settings.Secure.getString(resolver, key)
+        } catch (_: SecurityException) {
+            Log.w(TAG, "VPN settings read denied")
+            null
+        } catch (_: IllegalArgumentException) {
+            Log.w(TAG, "VPN settings unavailable")
+            null
+        }
 
     /**
      * Deep-links to the system VPN screen so the user can enable always-on VPN
@@ -194,11 +215,12 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             return
         }
 
-        val intents = listOf(
-            Intent(Settings.ACTION_VPN_SETTINGS),
-            Intent("android.net.vpn.SETTINGS"),
-            Intent(Settings.ACTION_SETTINGS)
-        )
+        val intents =
+            listOf(
+                Intent(Settings.ACTION_VPN_SETTINGS),
+                Intent("android.net.vpn.SETTINGS"),
+                Intent(Settings.ACTION_SETTINGS),
+            )
 
         for (intent in intents) {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -206,8 +228,10 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 ctx.startActivity(intent)
                 result.success(true)
                 return
-            } catch (t: Throwable) {
-                Log.w(TAG, "could not open $intent: ${t.message}")
+            } catch (_: ActivityNotFoundException) {
+                Log.w(TAG, "VPN settings activity unavailable")
+            } catch (_: SecurityException) {
+                Log.w(TAG, "VPN settings activity denied")
             }
         }
 
@@ -216,11 +240,13 @@ class NetworkPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             ctx.startActivity(
                 Intent(Settings.ACTION_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
+                },
             )
             result.success(true)
-        } catch (t: Throwable) {
-            result.error("SETTINGS_FAILED", t.message, null)
+        } catch (e: ActivityNotFoundException) {
+            result.error("SETTINGS_FAILED", e.message, null)
+        } catch (e: SecurityException) {
+            result.error("SETTINGS_FAILED", e.message, null)
         }
     }
 }

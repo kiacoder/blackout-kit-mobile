@@ -33,14 +33,15 @@ class SubprocessLifecycleTest {
     @Test
     fun localSocksReadinessCompletesHandshakeWithoutPublicNetwork() {
         val server = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
-        val thread = Thread {
-            server.accept().use { socket ->
-                val greeting = ByteArray(3)
-                socket.getInputStream().read(greeting)
-                assertEquals(listOf<Byte>(0x05, 0x01, 0x00), greeting.toList())
-                socket.getOutputStream().write(byteArrayOf(0x05, 0x00))
-            }
-        }.apply { start() }
+        val thread =
+            Thread {
+                server.accept().use { socket ->
+                    val greeting = ByteArray(3)
+                    socket.getInputStream().read(greeting)
+                    assertEquals(listOf<Byte>(0x05, 0x01, 0x00), greeting.toList())
+                    socket.getOutputStream().write(byteArrayOf(0x05, 0x00))
+                }
+            }.apply { start() }
 
         try {
             assertEquals(true, LocalSocksReadiness.await("127.0.0.1", server.localPort, 1000))
@@ -71,10 +72,11 @@ class SubprocessLifecycleTest {
     @Test
     fun stopEscalatesWhenChildIgnoresTerminate() {
         val child = FakeProcess(alive = true, ignoreTerminate = true)
-        val lifecycle = SubprocessLifecycle(
-            waitFor = { process, _ -> !process.isAlive },
-            forceStop = { it.destroyForcibly() },
-        )
+        val lifecycle =
+            SubprocessLifecycle(
+                waitFor = { process, _ -> !process.isAlive },
+                forceStop = { it.destroyForcibly() },
+            )
         lifecycle.stop(listOf(child), graceMs = 1)
         assertEquals(true, child.forced)
         assertEquals(false, child.isAlive)
@@ -83,10 +85,11 @@ class SubprocessLifecycleTest {
     @Test
     fun stopCleansUpWhenWaitIsInterrupted() {
         val child = FakeProcess(alive = true, ignoreTerminate = true)
-        val lifecycle = SubprocessLifecycle(
-            waitFor = { _, _ -> throw InterruptedException() },
-            forceStop = { it.destroyForcibly() },
-        )
+        val lifecycle =
+            SubprocessLifecycle(
+                waitFor = { _, _ -> throw InterruptedException() },
+                forceStop = { it.destroyForcibly() },
+            )
         try {
             lifecycle.stop(listOf(child))
             assertEquals(true, child.forced)
@@ -122,7 +125,8 @@ class SubprocessLifecycleTest {
             try {
                 ProcessCompat.waitForExit(child, 1000)
                 org.junit.Assert.fail("Expected InterruptedException")
-            } catch (_: InterruptedException) { }
+            } catch (_: InterruptedException) {
+            }
         } finally {
             Thread.interrupted()
         }
@@ -138,18 +142,45 @@ class SubprocessLifecycleTest {
         assertEquals(0, input.available())
     }
 
-    private class FakeProcess(var alive: Boolean, private val code: Int = 0,
-                              private val ignoreTerminate: Boolean = false,
-                              private val input: InputStream = ByteArrayInputStream(byteArrayOf())) : Process() {
+    private class FakeProcess(
+        var alive: Boolean,
+        private val code: Int = 0,
+        private val ignoreTerminate: Boolean = false,
+        private val input: InputStream = ByteArrayInputStream(byteArrayOf()),
+    ) : Process() {
         override fun getOutputStream(): OutputStream = ByteArrayOutputStream()
+
         override fun getInputStream(): InputStream = input
+
         override fun getErrorStream(): InputStream = ByteArrayInputStream(byteArrayOf())
-        override fun waitFor(): Int { alive = false; return code }
-        override fun waitFor(timeout: Long, unit: TimeUnit): Boolean { alive = false; return true }
+
+        override fun waitFor(): Int {
+            alive = false
+            return code
+        }
+
+        override fun waitFor(
+            timeout: Long,
+            unit: TimeUnit,
+        ): Boolean {
+            alive = false
+            return true
+        }
+
         override fun exitValue(): Int = if (alive) throw IllegalThreadStateException() else code
+
         var forced = false
-        override fun destroy() { if (!ignoreTerminate) alive = false }
-        override fun destroyForcibly(): Process { forced = true; alive = false; return this }
+
+        override fun destroy() {
+            if (!ignoreTerminate) alive = false
+        }
+
+        override fun destroyForcibly(): Process {
+            forced = true
+            alive = false
+            return this
+        }
+
         override fun isAlive(): Boolean = alive
     }
 }

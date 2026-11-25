@@ -1,0 +1,26 @@
+package com.blackoutkit.vpn
+
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
+
+private const val IMPORT_BUFFER_BYTES = 8192
+
+/** Copies no more than [maxBytes]. False means the input exceeds the limit. */
+internal fun copyBoundedImport(
+    input: InputStream,
+    output: OutputStream,
+    maxBytes: Long,
+): Boolean {
+    require(maxBytes >= 0)
+    val buffer = ByteArray(IMPORT_BUFFER_BYTES)
+    var remaining = maxBytes
+    while (remaining > 0) {
+        val count = input.read(buffer, 0, minOf(remaining, buffer.size.toLong()).toInt())
+        if (count == -1) return true
+        if (count == 0) throw IOException("Import stream did not make progress")
+        output.write(buffer, 0, count)
+        remaining -= count
+    }
+    return input.read() == -1
+}

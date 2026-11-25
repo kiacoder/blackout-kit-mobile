@@ -13,18 +13,24 @@ internal object NativeTunnelEngine {
     private val lifecycle = NativeTunnelLifecycle()
     private var combinedLibraryLoaded = false
     private val verified = mutableSetOf<String>()
+
     @Volatile var lastError: String? = null
         private set
 
     @Synchronized fun available(protocol: String): Boolean {
-        if (!BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS) return false
-        if (protocol !in setOf("wireguard", "amneziawg")) return false
-        if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.NATIVE_TUNNELS)) {
-            lastError = GoRuntimeAdmission.RESTART_REQUIRED
+        if (!BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS || protocol !in setOf("wireguard", "amneziawg")) {
             return false
         }
-        if (protocol in verified) return true
-        return try {
+        return if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.NATIVE_TUNNELS)) {
+            lastError = GoRuntimeAdmission.RESTART_REQUIRED
+            false
+        } else {
+            protocol in verified || verifyNativeAbi(protocol)
+        }
+    }
+
+    private fun verifyNativeAbi(protocol: String): Boolean =
+        try {
             if (!combinedLibraryLoaded) {
                 System.loadLibrary("blackout-tunnels")
                 combinedLibraryLoaded = true
@@ -40,32 +46,57 @@ internal object NativeTunnelEngine {
             }
             verified.add(protocol)
             true
-        } catch (_: LinkageError) { false } catch (_: Exception) { false }
-    }
+        } catch (_: LinkageError) {
+            false
+        } catch (_: Exception) {
+            false
+        }
 
-    @Synchronized fun start(service: VpnService, protocol: String, tun: ParcelFileDescriptor, settings: String): Boolean {
+    @Synchronized fun start(
+        service: VpnService,
+        protocol: String,
+        tun: ParcelFileDescriptor,
+        settings: String,
+    ): Boolean {
         lastError = null
         if (!available(protocol)) {
             if (lastError == null) lastError = "Native tunnel is disabled or its reviewed library is missing"
             return false
         }
-        val backend = object : NativeTunnelLifecycle.Backend {
-            override fun turnOn(fd: Int, settings: String): Int =
-                if (protocol == "amneziawg") AWG.awgTurnOn("blackout", fd, settings)
-                else WG.wgTurnOn("blackout", fd, settings)
-            override fun turnOff(handle: Int) {
-                if (protocol == "amneziawg") AWG.awgTurnOff(handle) else WG.wgTurnOff(handle)
+        val backend =
+            object : NativeTunnelLifecycle.Backend {
+                override fun turnOn(
+                    fd: Int,
+                    settings: String,
+                ): Int =
+                    if (protocol == "amneziawg") {
+                        AWG.awgTurnOn("blackout", fd, settings)
+                    } else {
+                        WG.wgTurnOn("blackout", fd, settings)
+                    }
+
+                override fun turnOff(handle: Int) {
+                    if (protocol == "amneziawg") AWG.awgTurnOff(handle) else WG.wgTurnOff(handle)
+                }
+
+                override fun isClosed(handle: Int): Boolean =
+                    if (protocol == "amneziawg") AWG.awgIsClosed(handle) != 0 else WG.wgIsClosed(handle) != 0
+
+                override fun sockets(handle: Int): List<Int> =
+                    if (protocol == "amneziawg") {
+                        listOf(AWG.awgGetSocketV4(handle), AWG.awgGetSocketV6(handle))
+                    } else {
+                        listOf(WG.wgGetSocketV4(handle), WG.wgGetSocketV6(handle))
+                    }
             }
-            override fun isClosed(handle: Int): Boolean =
-                if (protocol == "amneziawg") AWG.awgIsClosed(handle) != 0 else WG.wgIsClosed(handle) != 0
-            override fun sockets(handle: Int): List<Int> =
-                if (protocol == "amneziawg") listOf(AWG.awgGetSocketV4(handle), AWG.awgGetSocketV6(handle))
-                else listOf(WG.wgGetSocketV4(handle), WG.wgGetSocketV6(handle))
-        }
-        val result = lifecycle.start(backend, settings,
-            detach = { tun.dup().detachFd() },
-            closeUndelivered = { ParcelFileDescriptor.adoptFd(it).close() },
-            protect = { service.protect(it) })
+        val result =
+            lifecycle.start(
+                backend,
+                settings,
+                detach = { tun.dup().detachFd() },
+                closeUndelivered = { ParcelFileDescriptor.adoptFd(it).close() },
+                protect = { service.protect(it) },
+            )
         lastError = lifecycle.lastError
         return result
     }

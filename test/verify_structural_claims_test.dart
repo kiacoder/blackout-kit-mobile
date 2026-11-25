@@ -164,7 +164,10 @@ void main() {
       final svc = source(
           'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
       expect(svc.contains('if (holdTunnelOnFailure && tun != null)'), isTrue);
-      expect(svc.contains('.putBoolean(KEY_HELD_BLOCKING, true).apply()'), isTrue);
+      expect(
+          RegExp(r'\.putBoolean\(KEY_HELD_BLOCKING, true\)\s*\.apply\(\)')
+              .hasMatch(svc),
+          isTrue);
       expect(svc.contains('ticket.publish { notifyStatus("blocked") }'), isTrue);
       expect(svc.contains('isRunning = false'), isTrue);
     });
@@ -180,7 +183,8 @@ void main() {
       final compat = source(
           'android/app/src/main/kotlin/com/blackoutkit/vpn/ProcessCompat.kt');
       expect(compat, contains('System.nanoTime()'));
-      expect(compat, contains('Build.VERSION.SDK_INT >= 26'));
+      expect(compat, contains('FORCIBLE_DESTROY_MIN_API = 26'));
+      expect(compat, contains('Build.VERSION.SDK_INT >= FORCIBLE_DESTROY_MIN_API'));
       expect(compat, contains('process.destroyForcibly()'));
     });
   });
@@ -204,7 +208,8 @@ void main() {
 
     test('engine catalogue is passive and never loads a Go runtime', () {
       final plugin = source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
-      final catalogue = plugin.split('private fun engineInfoMap()').last.split('private fun statusMap()').first;
+      final catalogue = source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCatalogue.kt');
+      expect(plugin, contains('EngineCatalogue('));
       expect(catalogue, contains('bundled("libgojni.so")'));
       expect(catalogue, contains('bundled("libblackout-tunnels.so")'));
       for (final forbidden in ['XrayEngine.version(', 'LibboxEngine.version(',
@@ -219,17 +224,25 @@ void main() {
 
     test('native live verification binds to VPN network, never default HTTP or SOCKS fallback', () {
       final plugin = source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
-      final probe = plugin.split('private fun handleProbeSites(').last.split('private fun failedSite(').first;
+      final probe = source('android/app/src/main/kotlin/com/blackoutkit/vpn/SiteProbeRunner.kt');
+      expect(plugin, contains('worker.run(request)'));
+      expect(plugin, contains('worker.currentOutcomes(request, outcomes)'));
       expect(probe, contains('NetworkCapabilities.TRANSPORT_VPN'));
-      expect(probe, contains('network.openConnection(target, Proxy.NO_PROXY)'));
-      expect(probe, contains('if (native && network == null)'));
-      expect(probe, contains('return@Thread'));
+      expect(
+            probe,
+            matches(RegExp(r'network\.openConnection\(\s*target,\s*Proxy\.NO_PROXY,?\s*\)')));
+      expect(probe, contains('if (request.native && network == null)'));
+      expect(probe, contains('return request.urls.map'));
+      expect(probe, contains('check(!request.native)'));
       expect(probe, contains('nativeSessionCurrent(session)'));
       final service = source('android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
-      final native = service.split('private fun establishNative(').last.split('private fun establish(').first;
-      expect(native, contains('(allowed + packageName).distinct()'));
-      expect(native, isNot(contains('(disallowed + packageName)')));
+      final native = service.split('private inner class NativeSetup').last.split('private inner class ProxySetup').first;
+      expect(native, contains('(request.allowed + packageName).distinct()'));
+      expect(native, isNot(contains('(request.disallowed + packageName)')));
       expect(native, contains('NativeTunnelEngine.start('));
+      expect(native, contains('config.routedDns(request.dnsServers)'));
+      expect(native.indexOf('config.userspace()'),
+          lessThan(native.indexOf('nativeBuilder(request, config).establish()')));
     });
 
     test('VPN revoke callback is atomically taken and dispatched on main', () {

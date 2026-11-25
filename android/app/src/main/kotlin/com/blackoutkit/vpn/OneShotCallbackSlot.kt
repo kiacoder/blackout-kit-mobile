@@ -8,11 +8,12 @@ internal class OneShotCallbackSlot<T> {
 
     var value: ((T) -> Unit)?
         get() = ref.get()
-        set(next) { ref.set(next) }
+        set(next) {
+            ref.set(next)
+        }
 
     fun take(): ((T) -> Unit)? = ref.getAndSet(null)
 
     /** Clear only the callback the caller previously captured. */
-    fun clear(expected: ((T) -> Unit)?): Boolean =
-        expected != null && ref.compareAndSet(expected, null)
+    fun clear(expected: ((T) -> Unit)?): Boolean = expected != null && ref.compareAndSet(expected, null)
 }

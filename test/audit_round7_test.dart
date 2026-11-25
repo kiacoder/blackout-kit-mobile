@@ -173,7 +173,10 @@ void main() {
       final kt = _source(
         'android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt',
       );
-      expect(kt.contains('startSingboxProbe'), isTrue);
+      final controller = _source('android/app/src/main/kotlin/com/blackoutkit/vpn/ProbeEngineController.kt');
+      expect(kt.contains('ProbeEngineController.start(request)'), isTrue);
+      expect(controller.contains('startSingboxProbe'), isTrue);
+      expect(controller.contains('!request.singboxConfig.isNullOrBlank()'), isTrue);
       expect(kt.contains('"singboxConfig"'), isTrue);
     });
   });

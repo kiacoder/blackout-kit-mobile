@@ -1,16 +1,21 @@
 package com.blackoutkit.vpn
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import java.io.File
+
+private const val BYTES_PER_KIB = 1024L
 
 /**
  * In-app self-update: hands a downloaded APK to Android's package installer.
@@ -36,14 +41,20 @@ import java.io.File
  * "the download is not a valid APK" rather than the installer's opaque
  * "problem parsing the package".
  */
-class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
+class UpdatePlugin(
+    private val appContext: Context,
+) : MethodCallHandler {
+    private val signerVerifier = ApkSignerVerifier(appContext)
 
     fun register(messenger: io.flutter.plugin.common.BinaryMessenger) {
         val channel = MethodChannel(messenger, CHANNEL)
         channel.setMethodCallHandler(this)
     }
 
-    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+    override fun onMethodCall(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         when (call.method) {
             "installApk" -> installApk(call, result)
             // Which release asset fits this device. A 32-bit phone cannot
@@ -55,74 +66,10 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
         }
     }
 
-    /// Compares the archive's signing certificate with the installed app's.
-    ///
-    /// Returns an error message when they differ, null when they match (or
-    /// when the platform will not tell us - older APIs report nothing, and
-    /// Android's own signature enforcement remains the backstop there).
-    /** Signature flags for this OS level: signingInfo is API 28+. */
-    private fun signatureFlags(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
-        } else {
-            @Suppress("DEPRECATION")
-            android.content.pm.PackageManager.GET_SIGNATURES
-        }
-
-    /** Every signer digest on [info], newest API first, legacy as fallback. */
-    @Suppress("DEPRECATION")
-    private fun signerDigests(info: android.content.pm.PackageInfo): Set<String> {
-        val modern = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            info.signingInfo?.apkContentsSigners?.map { certDigest(it.toByteArray()) }
-        } else {
-            null
-        }
-        val legacy = info.signatures?.map { certDigest(it.toByteArray()) }
-        return (modern ?: legacy).orEmpty().toSet()
-    }
-
-    /**
-     * Compares the downloaded APK's signer with the installed app's.
-     *
-     * Returns null when they match, or the reason to refuse.
-     *
-     * This FAILS CLOSED. It used to return null - meaning "fine, proceed" -
-     * whenever either side's certificates were unavailable, and also on any
-     * exception. That turned the check into a no-op on API 24-27 (where
-     * `signingInfo` does not exist) and on any device where the lookup threw.
-     */
-    private fun verifySameSigner(
-        archive: android.content.pm.PackageInfo,
-    ): String? {
-        val installed = try {
-            appContext.packageManager.getPackageInfo(appContext.packageName, signatureFlags())
-        } catch (e: Exception) {
-            return "Could not read this app's signature to compare against the " +
-                "update (${e.message}). Nothing was installed."
-        }
-
-        val mine = signerDigests(installed)
-        val theirs = signerDigests(archive)
-
-        if (mine.isEmpty() || theirs.isEmpty()) {
-            return "Could not read the signing certificate of the update or of the " +
-                "installed app, so it cannot be verified. Nothing was installed."
-        }
-        if (mine.intersect(theirs).isEmpty()) {
-            return "This update is signed with a different key than the app you " +
-                "have installed, so Android cannot apply it in place. " +
-                "Uninstalling the current app would erase your saved " +
-                "configs - do that only if you are willing to re-import them."
-        }
-        return null
-    }
-
-    private fun certDigest(bytes: ByteArray): String {
-        val md = java.security.MessageDigest.getInstance("SHA-256")
-        return md.digest(bytes).joinToString("") { "%02x".format(it) }
-    }
-
-    private fun installApk(call: MethodCall, result: MethodChannel.Result) {
+    private fun installApk(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
         val path = call.argument<String>("path")
         if (path.isNullOrBlank()) {
             result.error("INVALID_ARGS", "path is required", null)
@@ -134,24 +81,38 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
             return
         }
 
+        if (validateArchive(file, result) && requireInstallPermission(result)) {
+            launchInstaller(file, result)
+        }
+    }
+
+    private fun validateArchive(
+        file: File,
+        result: MethodChannel.Result,
+    ): Boolean {
         // A truncated download or a GitHub error page is not installable; say so
         // here instead of letting the installer report a parse failure.
         //
         // The flags matter: GET_SIGNING_CERTIFICATES is what makes the signer
         // available for the checks below.
-        val archive = try {
-            appContext.packageManager.getPackageArchiveInfo(path, signatureFlags())
-        } catch (e: Exception) {
-            null
-        }
+        val archive =
+            try {
+                appContext.packageManager.getPackageArchiveInfo(file.absolutePath, signerVerifier.signatureFlags())
+            } catch (_: IllegalArgumentException) {
+                Log.w(CHANNEL, "APK archive parser rejected input")
+                null
+            } catch (_: SecurityException) {
+                Log.w(CHANNEL, "APK archive access denied")
+                null
+            }
         if (archive == null) {
             result.error(
                 "BAD_APK",
-                "The downloaded file is not a valid APK (${file.length() / 1024} KB). " +
+                "The downloaded file is not a valid APK (${file.length() / BYTES_PER_KIB} KB). " +
                     "Delete it and download again.",
                 null,
             )
-            return
+            return false
         }
 
         // The file came off the network; the only thing that made it "ours" was
@@ -160,22 +121,22 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
         // mismatched signature anyway, but only AFTER the user has been shown
         // an installer dialog - and a different package would be a plain
         // hijack, not an update.
-        if (archive.packageName != appContext.packageName) {
+        return if (archive.packageName != appContext.packageName) {
             result.error(
                 "WRONG_PACKAGE",
                 "That file is not Blackout Kit (it is ${archive.packageName}). " +
                     "Nothing was installed.",
                 null,
             )
-            return
+            false
+        } else {
+            val signerCheck = signerVerifier.verifySameSigner(archive)
+            if (signerCheck != null) result.error("SIGNER_MISMATCH", signerCheck, null)
+            signerCheck == null
         }
+    }
 
-        val signerCheck = verifySameSigner(archive)
-        if (signerCheck != null) {
-            result.error("SIGNER_MISMATCH", signerCheck, null)
-            return
-        }
-
+    private fun requireInstallPermission(result: MethodChannel.Result): Boolean {
         if (!canInstallPackages()) {
             // Send the user straight to this app's toggle, then let them retry.
             openUnknownSourcesSettings()
@@ -186,24 +147,38 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
                     "then tap Update again.",
                 null,
             )
-            return
+            return false
         }
+        return true
+    }
 
+    private fun launchInstaller(
+        file: File,
+        result: MethodChannel.Result,
+    ) {
         try {
-            val uri = FileProvider.getUriForFile(
-                appContext, "${appContext.packageName}.fileprovider", file
-            )
-            val intent = Intent(Intent.ACTION_VIEW)
-                .setDataAndType(uri, "application/vnd.android.package-archive")
-                .addFlags(
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        or Intent.FLAG_ACTIVITY_NEW_TASK
+            val uri =
+                FileProvider.getUriForFile(
+                    appContext,
+                    "${appContext.packageName}.fileprovider",
+                    file,
                 )
-                // OEM installers read the grant from the clip data.
-                .apply { clipData = ClipData.newRawUri("update", uri) }
+            val intent =
+                Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            or Intent.FLAG_ACTIVITY_NEW_TASK,
+                    )
+                    // OEM installers read the grant from the clip data.
+                    .apply { clipData = ClipData.newRawUri("update", uri) }
             appContext.startActivity(intent)
             result.success(true)
-        } catch (e: Exception) {
+        } catch (e: ActivityNotFoundException) {
+            result.error("INSTALL_FAILED", e.message ?: e.toString(), null)
+        } catch (e: SecurityException) {
+            result.error("INSTALL_FAILED", e.message ?: e.toString(), null)
+        } catch (e: IllegalArgumentException) {
             result.error("INSTALL_FAILED", e.message ?: e.toString(), null)
         }
     }
@@ -218,15 +193,16 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
     private fun openUnknownSourcesSettings() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         try {
-            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                .setData(Uri.parse("package:${appContext.packageName}"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val intent =
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                    .setData(Uri.parse("package:${appContext.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             appContext.startActivity(intent)
         } catch (_: Exception) {
             try {
                 appContext.startActivity(
                     Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             } catch (_: Exception) {
                 // Nothing else to try; the Dart layer already reports the reason.
@@ -246,5 +222,73 @@ class UpdatePlugin(private val appContext: Context) : MethodCallHandler {
 
     companion object {
         const val CHANNEL = "com.blackoutkit.vpn/update"
+    }
+}
+
+/** APK signer verification is independent of launching the installer. */
+private class ApkSignerVerifier(
+    private val appContext: Context,
+) {
+    /** Signature flags for this OS level: signingInfo is API 28+. */
+    fun signatureFlags(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            android.content.pm.PackageManager.GET_SIGNATURES
+        }
+
+    /** Every signer digest on [info], newest API first, legacy as fallback. */
+    @Suppress("DEPRECATION")
+    private fun signerDigests(info: android.content.pm.PackageInfo): Set<String> {
+        val modern =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.signingInfo?.apkContentsSigners?.map { certDigest(it.toByteArray()) }
+            } else {
+                null
+            }
+        val legacy = info.signatures?.map { certDigest(it.toByteArray()) }
+        return (modern ?: legacy).orEmpty().toSet()
+    }
+
+    /**
+     * Compares the downloaded APK's signer with the installed app's.
+     *
+     * Returns null when they match, or the reason to refuse.
+     *
+     * This FAILS CLOSED. It used to return null - meaning "fine, proceed" -
+     * whenever either side's certificates were unavailable, and also on any
+     * exception. That turned the check into a no-op on API 24-27 (where
+     * `signingInfo` does not exist) and on any device where the lookup threw.
+     */
+    fun verifySameSigner(archive: android.content.pm.PackageInfo): String? {
+        val installed =
+            try {
+                appContext.packageManager.getPackageInfo(appContext.packageName, signatureFlags())
+            } catch (_: PackageManager.NameNotFoundException) {
+                null
+            } catch (_: SecurityException) {
+                null
+            } ?: return "Could not read this app's signature. Nothing was installed."
+
+        val mine = signerDigests(installed)
+        val theirs = signerDigests(archive)
+
+        return when {
+            mine.isEmpty() || theirs.isEmpty() ->
+                "Could not read the signing certificate of the update or of the " +
+                    "installed app, so it cannot be verified. Nothing was installed."
+            mine.intersect(theirs).isEmpty() ->
+                "This update is signed with a different key than the app you " +
+                    "have installed, so Android cannot apply it in place. " +
+                    "Uninstalling the current app would erase your saved " +
+                    "configs - do that only if you are willing to re-import them."
+            else -> null
+        }
+    }
+
+    private fun certDigest(bytes: ByteArray): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        return md.digest(bytes).joinToString("") { "%02x".format(it) }
     }
 }

@@ -1,6 +1,6 @@
 import unittest
 
-from tool.build_pinned_go_engines import ENGINES, verify_build_info, verify_source
+from tool.build_pinned_go_engines import ENGINES, dependency_diff, verify_build_info, verify_source
 
 
 class PinnedGoEngineTests(unittest.TestCase):
@@ -39,3 +39,20 @@ class PinnedGoEngineTests(unittest.TestCase):
                 verify_build_info("\n".join(lines[:index] + lines[index + 1:]), module, "arm64")
         with self.assertRaises(ValueError):
             verify_build_info("\n".join(lines), module, "arm")
+
+    def test_dependency_diff_detects_version_checksum_and_membership_changes(self):
+        old = "\tdep\ta\tv1.0.0\th1:old\n\tdep\tb\tv1.0.0\th1:same\n\tdep\tc\tv1.0.0\th1:old"
+        new = "\tdep\ta\tv1.0.0\th1:new\n\tdep\tb\tv1.1.0\th1:new\n\tdep\td\tv1.0.0\th1:new"
+        changes = dependency_diff(old, new)
+        self.assertEqual([item["module"] for item in changes], ["a", "b", "c", "d"])
+        self.assertIsNone(changes[2]["candidate"])
+        self.assertIsNone(changes[3]["baseline"])
+        self.assertEqual(dependency_diff(old, old), [])
+
+    def test_replacement_and_invalid_metadata(self):
+        old = "\tdep\ta\tv1.0.0\n\t=>\tb\tv1.0.0\th1:old"
+        new = old.replace("h1:old", "h1:new")
+        self.assertEqual(len(dependency_diff(old, new)), 1)
+        for invalid in ("", old + "\n" + old, "\t=>\tb\tv1.0.0"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                dependency_diff(old, invalid)

@@ -109,3 +109,23 @@ explicit dependency lock, independent rebuild, CLI contract/device
 validation, license obligations and security review remain required.
 Sing-box source pin verified; build pending. Merged AAR source
 revision remains unresolved. Existing native binaries unchanged.
+
+
+## Sing-box repeat builds and dependency drift (2026-11-25)
+
+Pinned sing-box v1.14.2 candidates for both ARM ABIs pass API24 ELF
+metadata validation and repeated SHA256 comparison on the same host:
+
+- arm64-v8a: 9be733377ff046bc98e0f86e40e73946f9606b1ae83573cc915abefc055d354b
+- armeabi-v7a: 101b64f664c800d1fcef4aad8fc5ba9e3fb0c8d3fd48e6c87606df7f524de1d4
+
+Both candidate ABIs differ from the bundled dependency graph in six
+modules: ajg/form, go-chi/chi/v5, go.uber.org/zap, golang.org/x/exp,
+google.golang.org/genproto/googleapis/rpc, and google.golang.org/grpc.
+The upstream candidate versions are older. The build tool now records
+module additions/removals, version/checksum/replacement changes and
+baseline binary hash; --require-matching-dependencies refuses drift.
+A real tun2socks ARM64 mismatch was correctly rejected with no output
+directory published. All candidates remain separate from app binaries.
+Same-host repeats use shared caches, not independent reproduction.
+Reviewed lock reconstruction and vulnerability assessment remain open.

@@ -77,6 +77,35 @@ def verify_build_info(info, module_line, arch):
         raise ValueError("Built artifact has unexpected module or target identity")
 
 
+def dependency_records(info):
+    """Retain module version, checksum and any replacement as a single record."""
+    records = {}
+    previous = None
+    for line in info.splitlines():
+        fields = line.split("\t")
+        if len(fields) >= 2 and fields[0] == "" and fields[1] == "dep":
+            if len(fields) not in (4, 5) or not fields[2] or fields[2] in records:
+                raise ValueError("Invalid or duplicate dependency metadata")
+            previous = fields[2]
+            records[previous] = fields[3:]
+        elif len(fields) >= 2 and fields[0] == "" and fields[1] == "=>":
+            if previous is None or len(fields) not in (3, 4, 5):
+                raise ValueError("Unexpected module replacement")
+            records[previous] += fields[1:]
+            previous = None
+        else:
+            previous = None
+    if not records:
+        raise ValueError("No dependency metadata")
+    return records
+
+
+def dependency_diff(baseline, candidate):
+    old, new = dependency_records(baseline), dependency_records(candidate)
+    return [{"module": name, "baseline": old.get(name), "candidate": new.get(name)}
+            for name in sorted(old.keys() | new.keys()) if old.get(name) != new.get(name)]
+
+
 def build(args):
     pin = ENGINES[args.engine]
     cache = ROOT / ".cache"
@@ -159,8 +188,18 @@ def build(args):
             expected = "\tmod\t" + pin["module"] + "\t" + pin["version"] + "\t" + pin["sum"]
             verify_build_info(build_info, expected, arch)
             (staging / abi / "BUILD_INFO.txt").write_text(build_info, encoding="utf-8")
-            evidence["artifacts"].append({"abi": abi, "sha256": sha(destination),
-                                          "bytes": destination.stat().st_size, "elf": elf})
+            baseline = ROOT / "android/app/src/main/jniLibs" / abi / destination.name
+            baseline_info = run([go, "version", "-m", str(baseline)], env, workspace, True)
+            differences = dependency_diff(baseline_info, build_info)
+            if differences and args.require_matching_dependencies:
+                raise ValueError("Dependency graph differs from bundled binary")
+            evidence["artifacts"].append({
+                "abi": abi, "sha256": sha(destination),
+                "bytes": destination.stat().st_size, "elf": elf,
+                "baseline_sha256": sha(baseline),
+                "dependency_differences": differences,
+                "dependency_match": not differences,
+            })
         run([go, "mod", "verify"], env, workspace)
         shutil.copyfile(Path(metadata["Dir"]) / "LICENSE", staging / "LICENSE")
         (staging / "PROVENANCE.json").write_text(json.dumps(evidence, indent=2) + "\n",
@@ -177,6 +216,8 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--module-cache", type=Path)
     parser.add_argument("--abi", action="append", choices=ABIS)
+    parser.add_argument("--require-matching-dependencies", action="store_true",
+                        help="Reject any dependency difference from the bundled binary")
     args = parser.parse_args()
     try:
         build(args)

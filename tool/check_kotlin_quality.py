@@ -23,8 +23,17 @@ TOOLS = {
 }
 # All production and test Kotlin sources, with no baseline or partial allowlist.
 DETEKT_INPUTS = ["android/app/src", "tool/kotlin"]
-DOWNLOAD_ATTEMPTS = 4
+DOWNLOAD_ATTEMPTS = 6
 RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
+MAX_RETRY_DELAY = 60
+
+
+def retry_delay(attempt, retry_after=None):
+    delay = min(MAX_RETRY_DELAY, 5 * 2**attempt)
+    if retry_after and retry_after.isdecimal():
+        # Bound server-provided delays so the CI job remains finite.
+        delay = max(delay, min(MAX_RETRY_DELAY, int(retry_after)))
+    return delay
 
 
 def download(url, target):
@@ -37,10 +46,14 @@ def download(url, target):
         except urllib.error.HTTPError as error:
             if error.code not in RETRYABLE_HTTP_STATUS or attempt + 1 == DOWNLOAD_ATTEMPTS:
                 raise
+            delay = retry_delay(attempt, error.headers.get("Retry-After") if error.headers else None)
+            error.close()
         except (urllib.error.URLError, TimeoutError):
             if attempt + 1 == DOWNLOAD_ATTEMPTS:
                 raise
-        time.sleep(5 * 2**attempt)
+            delay = retry_delay(attempt)
+        print(f"Transient Kotlin tool download failure; retrying in {delay}s.", flush=True)
+        time.sleep(delay)
 
 
 def digest(path):

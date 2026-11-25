@@ -829,3 +829,22 @@ Windows: 61 tests, 1 permission assertion failure, 2 missing PyYAML
 errors, 1 skipped; focused new tests passed. Linux CI remains
 required. Sing-box build, AAR provenance and current scanner scores
 remain open. No main merge or release.
+
+
+## Phase 3 sing-box and dependency drift gate (2026-11-25)
+
+Both pinned sing-box ARM ABI builds completed twice, same-host hashes
+match. Six dependency versions differ from historical binaries; no
+promotion. Automated dependency comparison now records drift and
+strict mode rejects it. Two new comparison regressions and four
+Kotlin downloader tests added. Kotlin download retry budget increased
+from four to six attempts, honors bounded numeric Retry-After,
+closes retryable HTTP error responses, preserves pinned hashes and
+fails on permanent HTTP errors. One previous hosted Kotlin check
+failed on HTTP429, another passed; no source finding in failed log.
+Full Linux WSL Python suite 67/67 passed (system PyYAML 6.0.3);
+Windows-specific permission/PyYAML issues avoided, not suppressed.
+12 binary integrity checks passed. Prior hosted APK/iOS builds passed.
+Fresh CI, reviewed dependency lock, independent reproducibility,
+merged AAR provenance, secure-storage migration and physical-device
+acceptance remain open. No main merge or release.

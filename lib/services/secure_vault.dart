@@ -14,8 +14,8 @@
 ///     ciphertext.
 ///   * Migration is additive: the plaintext boxes are read, copied into new
 ///     encrypted boxes, and only then deleted. Any failure leaves the original
-///     boxes untouched and the app running in legacy mode - losing an existing
-///     library to a failed upgrade is not acceptable.
+///     boxes untouched. An ambiguous migration or unreadable encrypted
+///     library requires recovery rather than silently switching storage.
 ///   * The key store is injectable so the migration can be exercised in tests
 ///     (there is no platform channel on the Dart VM).
 library;
@@ -25,6 +25,17 @@ import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+
+/// Hive 2.2.3 completes its internal opening future with an error as well
+/// as throwing from openBox. A second same-name waiter observes that future
+/// so an expected failed open does not escape as an unhandled async error.
+Future<Box<T>> openPreservingBox<T>(String name, {HiveCipher? cipher}) async {
+  final boxes = await Future.wait([
+    Hive.openBox<T>(name, encryptionCipher: cipher, crashRecovery: false),
+    Hive.openBox<T>(name, encryptionCipher: cipher, crashRecovery: false),
+  ]);
+  return boxes.first;
+}
 
 /// Minimal key/value contract for the vault key.
 abstract class KeyStore {
@@ -62,7 +73,7 @@ class MemoryKeyStore implements KeyStore {
 
 /// What the vault can do right now.
 enum VaultState {
-  /// A key exists and encrypted boxes are readable.
+  /// Encrypted boxes exist and a syntactically valid key is available.
   active,
 
   /// Encrypted data exists but the key is gone (keystore reset, app data
@@ -106,11 +117,11 @@ class SecureVault {
 
   SecureVault({KeyStore? store}) : _store = store ?? SecureKeyStore();
 
-  /// True when a key exists, i.e. the app is running on encrypted boxes.
+  /// True when the stored key encoding is valid; does not prove readability.
   Future<bool> isActive() async {
     try {
       final key = await _store.read(_keyName);
-      return key != null && key.isNotEmpty;
+      return key != null && _decode(key) != null;
     } catch (_) {
       // No keystore (some emulators, stripped devices): stay on plaintext
       // rather than failing to boot.
@@ -142,7 +153,10 @@ class SecureVault {
       }
 
       final key = _randomKey();
-      await _store.write(_keyName, _encode(key));
+      final encoded = _encode(key);
+      await _store.write(_keyName, encoded);
+      // Do not encrypt anything until persistence of the key is confirmed.
+      if (await _store.read(_keyName) != encoded) return null;
       return key;
     } catch (_) {
       return null;
@@ -201,6 +215,38 @@ class SecureVault {
       );
     }
 
+    // Both generations may contain changes after an interrupted migration.
+    // Do not guess which is authoritative or silently skip the legacy data.
+    for (final entry in _encryptedBoxNames.entries) {
+      if (await _boxExists(entry.key) && await _boxExists(entry.value)) {
+        return const MigrationReport(
+          active: false,
+          migrated: false,
+          locked: true,
+          detail: 'Both storage generations exist. Recovery is required; '
+              'neither copy has been removed.',
+        );
+      }
+    }
+
+    // If a previous migration completed only some boxes, validate the
+    // original key against those boxes before using it for any new copy.
+    var hasLegacy = false;
+    for (final name in _encryptedBoxNames.keys) {
+      hasLegacy = hasLegacy || await _boxExists(name);
+    }
+    if (hasLegacy) {
+      for (final name in _encryptedBoxNames.values) {
+        if (await _boxExists(name) && !Hive.isBoxOpen(name)) {
+          final existing = await openPreservingBox<Map>(
+            name,
+            cipher: HiveAesCipher(key),
+          );
+          await existing.close();
+        }
+      }
+    }
+
     var moved = 0;
     for (final entry in _encryptedBoxNames.entries) {
       final legacyName = entry.key;
@@ -211,31 +257,38 @@ class SecureVault {
       if (!await _boxExists(legacyName)) continue;
 
       try {
-        final plain = await Hive.openBox<dynamic>(legacyName);
+        final plain = await openPreservingBox<dynamic>(legacyName);
         final records = <dynamic, dynamic>{};
-        for (final boxKey in plain.keys) {
-          records[boxKey] = plain.get(boxKey);
+        try {
+          for (final boxKey in plain.keys) {
+            records[boxKey] = plain.get(boxKey);
+          }
+        } finally {
+          await plain.close();
         }
-        await plain.close();
 
-        final encrypted = await Hive.openBox<dynamic>(
+        final encrypted = await openPreservingBox<dynamic>(
           encryptedName,
-          encryptionCipher: HiveAesCipher(key),
+          cipher: HiveAesCipher(key),
         );
-        await encrypted.putAll(records);
-        await encrypted.close();
+        try {
+          await encrypted.putAll(records);
+          await encrypted.flush();
+        } finally {
+          await encrypted.close();
+        }
 
         // Only now that the encrypted copy is durable is the plaintext box
-        // removed. A crash anywhere above leaves both on disk, and the next
-        // run finds the encrypted one and skips the migration.
+        // removed. A crash above leaves both generations for recovery.
         await Hive.deleteBoxFromDisk(legacyName);
         moved += records.length;
-      } catch (e) {
-        // Leave the plaintext box alone and keep running from it.
+      } catch (_) {
+        // Preserve both generations and never log configuration contents.
         return MigrationReport(
           active: false,
           migrated: false,
-          detail: 'Migration of $legacyName failed: $e',
+          locked: true,
+          detail: 'Config migration failed. Existing data was preserved.',
           recordsMoved: moved,
         );
       }
@@ -259,11 +312,7 @@ class SecureVault {
   /// was then never copied or removed.
   Future<bool> _boxExists(String name) async {
     if (Hive.isBoxOpen(name)) return true;
-    try {
-      return await Hive.boxExists(name);
-    } catch (_) {
-      return false;
-    }
+    return Hive.boxExists(name);
   }
 
   Uint8List _randomKey() {

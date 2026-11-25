@@ -23,6 +23,14 @@ class UnavailableKeyStore implements KeyStore {
       throw StateError('keystore unavailable');
 }
 
+class NonPersistingKeyStore implements KeyStore {
+  @override
+  Future<String?> read(String key) async => null;
+
+  @override
+  Future<void> write(String key, String value) async {}
+}
+
 void main() {
   late Directory dir;
 
@@ -57,7 +65,8 @@ void main() {
     expect(await Hive.boxExists('configs_v2'), isTrue,
         reason: 'the encrypted box must never be deleted');
     // And no new key was minted that would have made the data unrecoverable.
-    expect(await MemoryKeyStore().read('blackout_config_vault_key'), isNull);
+    expect(await Hive.boxExists('configs'), isFalse);
+    expect(await wiped.saveConfig(vless('new.example.com', 'New')), isFalse);
   });
 
   test('the key is not regenerated while encrypted data exists', () async {
@@ -123,4 +132,72 @@ void main() {
     expect(service.isVaultLocked, isFalse);
     expect(service.getAllConfigs().map((c) => c.displayName), contains('C'));
   });
+  test('wrong but well-formed key never truncates encrypted bytes', () async {
+    final store = MemoryKeyStore();
+    final first = ConfigService(keyStore: store);
+    await first.initialize();
+    await first.saveConfig(vless('wrong-key.example.com', 'WrongKey'));
+    await Hive.close();
+    Hive.init(dir.path);
+    final file = File('${dir.path}/configs_v2.hive');
+    final before = await file.readAsBytes();
+    final wrong = MemoryKeyStore();
+    await wrong.write('blackout_config_vault_key', List.filled(64, '0').join());
+    final service = ConfigService(keyStore: wrong);
+    await service.initialize();
+    expect(service.isVaultLocked, isTrue);
+    expect(service.isEncryptedAtRest, isFalse);
+    expect(await file.readAsBytes(), before);
+    expect(await Hive.boxExists('configs'), isFalse);
+    await Hive.close();
+    final restored = ConfigService(keyStore: store);
+    await restored.initialize();
+    expect(restored.getAllConfigs().map((c) => c.displayName), contains('WrongKey'));
+  });
+
+  test('overlapping storage generations require recovery without deletion', () async {
+    final store = MemoryKeyStore();
+    final first = ConfigService(keyStore: store);
+    await first.initialize();
+    await first.saveConfig(vless('encrypted.example.com', 'Encrypted'));
+    await Hive.close();
+    final plain = await Hive.openBox<Map>('configs');
+    await plain.put('legacy', {'rawUri': 'fixture'});
+    await plain.close();
+    final encrypted = File('${dir.path}/configs_v2.hive');
+    final before = await encrypted.readAsBytes();
+    final service = ConfigService(keyStore: store);
+    await service.initialize();
+    expect(service.isVaultLocked, isTrue);
+    expect(await Hive.boxExists('configs'), isTrue);
+    expect(await encrypted.readAsBytes(), before);
+    expect(Hive.isBoxOpen('configs'), isFalse);
+    expect(await service.saveConfig(vless('new.example.com', 'New')), isFalse);
+  });
+
+  test('a key that does not persist cannot be used to encrypt data', () async {
+    final vault = SecureVault(store: NonPersistingKeyStore());
+    expect(await vault.getOrCreateKey(), isNull);
+    expect(await vault.hasEncryptedData(), isFalse);
+  });
+
+  test('wrong key cannot migrate another box after a partial migration', () async {
+    final store = MemoryKeyStore();
+    final first = ConfigService(keyStore: store);
+    await first.initialize();
+    await first.saveConfig(vless('partial.example.com', 'Partial'));
+    await Hive.close();
+    await Hive.deleteBoxFromDisk('sources_v2');
+    final plain = await Hive.openBox<Map>('sources');
+    await plain.put('source_fixture', {'id': 'fixture'});
+    await plain.close();
+    final wrong = MemoryKeyStore();
+    await wrong.write('blackout_config_vault_key', List.filled(64, '0').join());
+    final service = ConfigService(keyStore: wrong);
+    await service.initialize();
+    expect(service.isVaultLocked, isTrue);
+    expect(await Hive.boxExists('sources'), isTrue);
+    expect(await Hive.boxExists('sources_v2'), isFalse);
+  });
+
 }

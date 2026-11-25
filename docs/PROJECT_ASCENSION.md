@@ -942,3 +942,27 @@ claim. Full Linux Python suite 81/81, Kotlin quality and 12 binary
 checks passed. Hosted audit workflow change awaits CI. No source
 reconstruction claim, no production binary replacement, no
 physical-device acceptance or release.
+
+
+## Phase 3 vault recovery and non-destructive migration (2026-11-25)
+
+Disabled Hive automatic crash recovery/truncation and removed
+destructive delete/reopen fallback for all config-library boxes.
+Accounted for Hive 2.2.3 duplicate opening-future error via a
+second same-name waiter. A wrong valid-length key no longer
+truncates encrypted files; restoring original key recovers records.
+Key persistence is read back before encryption. Overlapping
+legacy/encrypted generations fail closed instead of guessing
+authority. Partial migration validates existing closed encrypted
+boxes before copying other legacy boxes. Flush and close before
+deleting a migrated plaintext box. Locked service refuses access
+and startup shows a recovery message without starting import or
+connection controllers. Four new regressions; 582/582 Flutter
+tests passed, targeted analyzer no issues, 12 binary checks passed.
+Prior embedded audit hosted job passed. Existing no-keystore
+legacy plaintext behavior is retained only when no encrypted data
+exists. Recovery of ambiguous overlapping generations requires
+manual assistance; recovery screen currently English only. This
+is not a secure-storage plugin upgrade or on-device keystore
+migration test. Original AAR provenance remains unresolved.
+No production binaries replaced or release approved.

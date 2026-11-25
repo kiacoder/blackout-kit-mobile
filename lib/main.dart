@@ -1,6 +1,7 @@
 /// Blackout Kit Mobile - Main entry point
 /// Flutter VPN app with config-based architecture
 /// GetX for state management, Hive for local persistence
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -43,6 +44,10 @@ void main() async {
 
   // Initialize config service (opens Hive boxes)
   await configService.initialize();
+  if (configService.isVaultLocked) {
+    runApp(const StorageRecoveryApp());
+    return;
+  }
 
   // Initialize VPN service (platform channels)
   vpnService.initialize();
@@ -135,7 +140,7 @@ void main() async {
 }
 
 class BlackoutKitApp extends StatelessWidget {
-  const BlackoutKitApp({Key? key}) : super(key: key);
+  const BlackoutKitApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -202,5 +207,33 @@ class BlackoutKitApp extends StatelessWidget {
         ),
       );
     });
+  }
+}
+
+/// Recovery mode deliberately does not initialize import or connection
+/// controllers. The user can restore access and relaunch without data loss.
+class StorageRecoveryApp extends StatelessWidget {
+  const StorageRecoveryApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      home: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Saved library requires recovery. Existing files have been '
+                'preserved. Restore access to the original device keystore '
+                'and restart the app. If migration was interrupted, contact support '
+                'for recovery. Do not clear app data or uninstall.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

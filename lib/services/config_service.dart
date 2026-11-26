@@ -1,6 +1,6 @@
 /// Config service for loading, saving, and parsing VPN configs.
 /// Replicates Blackout Kit CLI's config/manager.py pattern:
-/// - Local persistence with encrypted Hive boxes when keystore is available
+/// - Local persistence with encrypted Hive boxes; no plaintext fallback
 /// - Atomic file I/O (write-temp + move)
 /// - Deduplication by config hash
 /// - Config validation before storage
@@ -40,8 +40,8 @@ class ConfigService {
 
   bool _vaultActive = false;
 
-  /// Encrypted data exists but its key is gone. The library is intact and
-  /// unreadable; callers must say so rather than showing an empty list.
+  /// Encrypted storage is unavailable. Preserve all files and reject writes
+  /// until a usable key and successful migration are confirmed.
   bool _vaultLocked = false;
   final KeyStore? _keyStore;
   final Logger _log;
@@ -59,33 +59,26 @@ class ConfigService {
     try {
       final report = await vault.migrate();
       _vaultActive = report.active;
-      _vaultLocked = report.locked ||
-          (!report.active && await vault.hasEncryptedData());
+      _vaultLocked = report.locked || !report.active;
       if (_vaultLocked) {
         _log.w('Config library requires recovery; storage left untouched');
         return;
       }
-      final vaultKey = _vaultActive ? await vault.getOrCreateKey() : null;
-      if (_vaultActive && vaultKey == null) {
+      final vaultKey = await vault.getOrCreateKey();
+      if (vaultKey == null) {
         _vaultActive = false;
         _vaultLocked = true;
         return;
       }
-      final cipher = vaultKey == null ? null : HiveAesCipher(vaultKey);
+      final cipher = HiveAesCipher(vaultKey);
       final configBox = await openPreservingBox<Map>(
-          _vaultActive
-              ? SecureVault.encryptedNameFor(_configBoxName)
-              : _configBoxName,
+          SecureVault.encryptedNameFor(_configBoxName),
           cipher: cipher);
       final sourceBox = await openPreservingBox<Map>(
-          _vaultActive
-              ? SecureVault.encryptedNameFor(_sourceBoxName)
-              : _sourceBoxName,
+          SecureVault.encryptedNameFor(_sourceBoxName),
           cipher: cipher);
       final resultBox = await openPreservingBox<Map>(
-          _vaultActive
-              ? SecureVault.encryptedNameFor(_resultBoxName)
-              : _resultBoxName,
+          SecureVault.encryptedNameFor(_resultBoxName),
           cipher: cipher);
       _configStorage = configBox;
       _sourceStorage = sourceBox;

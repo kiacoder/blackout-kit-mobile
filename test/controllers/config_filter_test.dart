@@ -18,6 +18,7 @@ import 'package:blackout_kit_mobile/models/config.dart';
 import 'package:blackout_kit_mobile/models/config_source.dart';
 import 'package:blackout_kit_mobile/models/test_result.dart';
 import 'package:blackout_kit_mobile/services/config_service.dart';
+import 'package:blackout_kit_mobile/services/secure_vault.dart';
 import 'package:blackout_kit_mobile/services/github_service.dart';
 import 'package:blackout_kit_mobile/services/tester_service.dart';
 
@@ -28,6 +29,7 @@ Config vless(String host, String name) => ConfigParser.parse(
 void main() {
   late Directory tempDir;
   late ConfigService service;
+  final store = MemoryKeyStore();
   late ConfigController controller;
 
   setUpAll(() async {
@@ -41,7 +43,7 @@ void main() {
   });
 
   setUp(() async {
-    service = ConfigService();
+    service = ConfigService(keyStore: store);
     await service.initialize();
     controller = ConfigController(
       configService: service,

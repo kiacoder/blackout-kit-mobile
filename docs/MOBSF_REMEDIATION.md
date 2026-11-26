@@ -71,3 +71,18 @@ vulnerabilities are fixed, security-relevant residual risks are accepted by
 the maintainer, migration and physical-device gates pass, and the exact
 production-signed APK is rescanned. Do not equate zero scanner warnings with
 security.
+
+## Fail-closed storage policy
+
+Removed the intentional plaintext fallback from ConfigService and SecureVault.
+If the platform key cannot be read, created and confirmed, the app enters its
+existing recovery screen rather than opening or creating plaintext boxes.
+Existing legacy/encrypted files remain untouched; the user can restart after
+restoring keystore access. This deliberately changes availability on devices
+without functioning secure storage. The tests now explicitly inject a memory
+key store for synthetic data rather than relying on the old production
+fallback. Added fresh-install failure/recovery coverage and revised legacy
+preservation assertions. Local 609/609 Flutter tests passed with cached
+pre-picker dependencies (no-pub); full locked candidate verification remains
+required in hosted CI. This fixes the plaintext application fallback, not the
+separate CBC path inside flutter_secure_storage or Hive's at-rest integrity.

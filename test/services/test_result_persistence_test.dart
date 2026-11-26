@@ -13,9 +13,11 @@ import 'package:hive/hive.dart';
 import 'package:blackout_kit_mobile/models/config.dart';
 import 'package:blackout_kit_mobile/models/test_result.dart';
 import 'package:blackout_kit_mobile/services/config_service.dart';
+import 'package:blackout_kit_mobile/services/secure_vault.dart';
 
 void main() {
   late ConfigService service;
+  final store = MemoryKeyStore();
   late Directory tempDir;
 
   setUpAll(() async {
@@ -29,7 +31,7 @@ void main() {
   });
 
   setUp(() async {
-    service = ConfigService();
+    service = ConfigService(keyStore: store);
     await service.initialize();
   });
 

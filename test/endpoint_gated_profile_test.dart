@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:blackout_kit_mobile/models/config.dart';
 import 'package:blackout_kit_mobile/services/config_service.dart';
+import 'package:blackout_kit_mobile/services/secure_vault.dart';
 
 void main() {
   group('SNI relay profile (configuration only)', () {
@@ -68,6 +69,7 @@ void main() {
   group('endpoint-gated profile storage', () {
     late Directory tempDir;
     late ConfigService service;
+  final store = MemoryKeyStore();
 
     setUpAll(() async {
       tempDir = await Directory.systemTemp.createTemp('endpoint_profile_test');
@@ -75,7 +77,7 @@ void main() {
     });
 
     setUp(() async {
-      service = ConfigService();
+      service = ConfigService(keyStore: store);
       await service.initialize();
     });
 

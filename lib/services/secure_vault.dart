@@ -132,8 +132,7 @@ class SecureVault {
       final key = await _store.read(_keyName);
       return key != null && _decode(key) != null;
     } catch (_) {
-      // No keystore (some emulators, stripped devices): stay on plaintext
-      // rather than failing to boot.
+      // No keystore: callers must not fall back to plaintext writes.
       return false;
     }
   }
@@ -232,15 +231,15 @@ class SecureVault {
   Future<MigrationReport> _migrate() async {
     final key = await getOrCreateKey();
     if (key == null) {
-      final locked = await state() == VaultState.locked;
+      final hasEncrypted = await hasEncryptedData();
       return MigrationReport(
         active: false,
         migrated: false,
-        locked: locked,
-        detail: locked
+        locked: true,
+        detail: hasEncrypted
             ? 'Encrypted configs exist but the vault key is gone. The data is '
                 'kept on disk; it cannot be read until the key is restored.'
-            : 'Platform keystore unavailable - configs stay in plain text',
+            : 'Platform keystore unavailable; existing files preserved, writes disabled',
       );
     }
 

@@ -104,6 +104,21 @@ void main() {
     expect(identical(keys.first, keys.last), isFalse);
   });
 
+  test('unavailable keystore on fresh install never creates plaintext boxes', () async {
+    final service = ConfigService(keyStore: UnavailableKeyStore());
+    await service.initialize();
+    expect(service.isVaultLocked, isTrue);
+    expect(await service.saveConfig(vless('new.example.com', 'New')), isFalse);
+    for (final name in ['configs', 'sources', 'test_results',
+      'configs_v2', 'sources_v2', 'test_results_v2']) {
+      expect(await Hive.boxExists(name), isFalse, reason: name);
+    }
+    final recovered = ConfigService(keyStore: MemoryKeyStore());
+    await recovered.initialize();
+    expect(recovered.isEncryptedAtRest, isTrue);
+    expect(await recovered.saveConfig(vless('new.example.com', 'New')), isTrue);
+  });
+
   test('a failed key request releases the initialization queue', () async {
     final failed = SecureVault(store: UnavailableKeyStore()).getOrCreateKey();
     final healthy = SecureVault(store: MemoryKeyStore()).getOrCreateKey();

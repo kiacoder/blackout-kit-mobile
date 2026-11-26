@@ -24,6 +24,35 @@ ciphertext and tag, wrong key, wrong record/box context, malformed and
 oversized envelopes, and invalid inputs. Nonce sampling is not a proof
 of uniqueness. No independent security audit is claimed.
 
+## Authenticated generation experiment
+
+The development-only generation verifier in
+tool/vault_generation_experiment.dart authenticates the sorted inventory of
+logical box, record key and SHA-256 of each encrypted record. It rejects
+duplicate identities, verifies each record's AEAD, and binds the manifest
+to a caller-supplied expected 128-bit generation identifier (32 lowercase
+hex characters). The reserved metadata contexts are "manifest" and "commit";
+each uses the generation identifier as its record key. The commit envelope
+authenticates the digest of the exact encrypted manifest. It is issued only
+after verifying the supplied record readback.
+
+Recovery classification is explicit: absent, verified staged, verified
+committed, or locked. Incomplete and inconsistent data fail closed. When
+the caller independently knows that the generation was committed, a missing
+marker or missing generation is locked rather than staged or absent.
+
+Eight additional tests cover staging versus commit, partial state, missing
+marker, extra/missing/duplicate records, replay of an older individual record,
+replacement of a manifest, altered metadata, wrong generation/key, invalid
+readback and an authenticated empty library. Bounds are 10,000 records and
+64 MiB of encrypted record data; the existing 8 MiB envelope payload limit
+also applies to metadata. These are experimental limits, not product limits.
+
+This verifier does not itself persist or select the authoritative generation.
+A trusted external generation/commit expectation, durable publication,
+exclusive ownership and rollback policy remain necessary. It is not a
+filesystem crash-recovery test and must not be activated in the app.
+
 ## Migration requirements before production activation
 
 1. Preserve the existing v2 library and secure-storage key. Use a
@@ -49,10 +78,11 @@ of uniqueness. No independent security audit is claimed.
 
 ## Explicit limitations
 
-The prototype only authenticates individual records. It does not
-authenticate a complete library, detect same-record replay, detect
-record deletion or rollback, provide a durable storage transaction,
-or implement production key management. Secure erasure on flash and
+The prototype authenticates records and an exact generation inventory. It
+detects record deletion and same-record replay relative to a verified
+manifest, but cannot detect replay or deletion of an entire generation
+without independently trusted state. It does not provide a durable storage
+transaction or production key management. Secure erasure on flash and
 protection against a compromised running application are not guaranteed.
 The underlying Dart implementation and its side-channel characteristics
 need review. No claim of a cryptographic audit or resolved MobSF finding.

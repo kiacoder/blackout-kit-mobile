@@ -144,3 +144,12 @@ with cryptography 2.9.0 added only as a development dependency. No
 existing package version, production storage format or key slot changed.
 See VAULT_V3_EXPERIMENT.md for the format, recovery gates and limitations.
 This is not production migration approval.
+
+### Follow-up: generation authentication and recovery classification
+
+Eight additional development-only tests verify the authenticated manifest,
+exact-manifest commit marker and fail-closed recovery classification.
+The record and generation suites passed all 15 tests; the complete Dart suite
+passed all 636 tests, strict Dart analysis and supply-chain inventory passed. No production code or dependency versions changed. Whole-generation
+rollback, durable filesystem transactions, platform key management and
+on-device migration remain unverified. See VAULT_V3_EXPERIMENT.md.

@@ -13,10 +13,13 @@ class VaultRecordExperiment {
   static const _overhead = 4 + _nonceLength + _tagLength;
   static const maxRecordBytes = 8 * 1024 * 1024;
   static const _boxes = {'configs', 'sources', 'test_results'};
+  static const _metadataBoxes = {'manifest', 'commit'};
   final _cipher = AesGcm.with256bits();
 
   List<int> _context(String box, String recordKey) {
-    if (!_boxes.contains(box) ||
+    if ((!_boxes.contains(box) && !_metadataBoxes.contains(box)) ||
+        (_metadataBoxes.contains(box) &&
+            !RegExp(r'^[0-9a-f]{32}$').hasMatch(recordKey)) ||
         recordKey.isEmpty ||
         utf8.encode(recordKey).length > 1024) {
       throw ArgumentError('Invalid vault record context');

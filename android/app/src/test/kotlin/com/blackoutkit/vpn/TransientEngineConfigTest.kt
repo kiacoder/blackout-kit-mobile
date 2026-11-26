@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.IOException
 
 class TransientEngineConfigTest {
     @get:Rule
@@ -37,6 +38,50 @@ class TransientEngineConfigTest {
     }
 
     @Test
+    fun partialWriteIsDiscardedAndRawErrorIsNotPropagated() {
+        var first = true
+        val owner =
+            TransientEngineConfig(writeConfig = { file, text ->
+                file.writeText(text)
+                if (first) {
+                    first = false
+                    throw IOException("synthetic-sensitive-error")
+                }
+            })
+        val failure = runCatching { owner.stage(folder.root.canonicalFile, "synthetic-config") }.exceptionOrNull()
+        assertEquals("Engine configuration write failed", failure?.message)
+        assertTrue(
+            folder.root
+                .listFiles()
+                .orEmpty()
+                .isEmpty(),
+        )
+        val next = owner.stage(folder.root.canonicalFile, "next-config")
+        assertEquals("next-config", next.readText())
+        owner.release()
+    }
+
+    @Test
+    fun failedWriteCleanupRetainsOwnership() {
+        val owner =
+            TransientEngineConfig(writeConfig = { file, _ ->
+                check(file.delete() && file.mkdir())
+                throw IOException("synthetic-write-error")
+            })
+        assertTrue(runCatching { owner.stage(folder.root.canonicalFile, "synthetic") }.isFailure)
+        val replaced =
+            folder.root
+                .listFiles()
+                .orEmpty()
+                .single()
+        assertTrue(replaced.isDirectory)
+        assertTrue(runCatching { owner.stage(folder.root.canonicalFile, "next") }.isFailure)
+        assertTrue(runCatching { owner.release() }.isFailure)
+        assertTrue(replaced.delete())
+        owner.release()
+    }
+
+    @Test
     fun failedDeletionRetainsOwnershipForRetry() {
         val owner = TransientEngineConfig()
         val file = owner.stage(folder.root, "synthetic-config")
@@ -47,6 +92,10 @@ class TransientEngineConfigTest {
         assertTrue(runCatching { owner.release() }.isFailure)
         assertTrue(runCatching { owner.stage(folder.root, "replacement") }.isFailure)
         assertTrue(child.delete())
+        // A replaced directory is never deleted by the config owner.
+        assertTrue(runCatching { owner.release() }.isFailure)
+        assertTrue(file.isDirectory)
+        assertTrue(file.delete())
         owner.release()
         assertFalse(file.exists())
     }

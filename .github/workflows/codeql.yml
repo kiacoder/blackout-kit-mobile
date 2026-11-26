@@ -134,8 +134,9 @@ jobs:
         # A debug build is enough for the tracer to see every Kotlin
         # compilation unit, and it skips the release signing setup.
         run: |
-          flutter pub get
-          flutter build apk --debug
+          flutter pub get --enforce-lockfile
+          cd android
+          bash ../tool/run_gradle_ci.sh :app:assembleDebug
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v4
@@ -196,7 +197,7 @@ jobs:
         # Libbox first: the Runner target imports it, and the framework is built
         # from sing-box with the pinned gomobile fork (same as ios.yml).
         run: |
-          flutter pub get
+          flutter pub get --enforce-lockfile
           chmod +x tool/build_libbox.sh
           ./tool/build_libbox.sh
           cd ios

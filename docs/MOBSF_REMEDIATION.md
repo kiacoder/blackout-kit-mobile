@@ -260,3 +260,28 @@ never treat a failed authentication as an empty library. Replay/deletion
 protection needs its own design. No cipher or dependency version is changed
 by this increment. The separate flutter_secure_storage CBC finding and
 physical-device migration gate remain open.
+
+## Native transient configuration write failure and CodeQL reliability
+
+Hosted builds, tests, quality and supply-chain checks passed on 49659d2.
+CodeQL run 45845643199 passed Swift, Actions and Python but Java/Kotlin
+failed before compilation resolving Kotlin 2.4.21. Route its real debug
+Gradle assemble through the existing narrowly scoped single-retry helper;
+keep manual extraction and security-and-quality queries, and enforce the
+reviewed dependency lock on both Android and Swift scans. The next scan
+must verify compilation and extraction; no alerts are suppressed.
+
+TransientEngineConfig now serializes stage/release, resolves the trusted
+app-directory parent (Android may alias it), refuses a replaced engine
+directory, and immediately attempts deletion after a partial write failure.
+If cleanup cannot finish, ownership remains and a subsequent stage is
+refused. Cleanup does not follow a replacement link or remove a substituted
+directory. Write errors are generic, without configuration or path details.
+The reader-exit gate remains unchanged. Strict Kotlin checks and seven
+focused JVM tests against the Android API jar passed. Two existing redundant
+initializer compiler warnings in EngineCommands.kt were observed; neither
+was introduced by this change. This limits failed-write exposure; active
+native readers still require a plaintext app-private file, and process-death
+orphan recovery and on-device validation remain open. It is not secure
+flash erasure or a resolution of the entire MobSF temporary-file rule.
+No dependencies or cryptographic formats changed.

@@ -135,3 +135,12 @@ original files, incompatible existing encrypted records block legacy
 deletion, and key loss during initialization refuses writes and allows
 recovery with the original key. No encryption format or dependency change.
 See MOBSF_REMEDIATION.md for scope and remaining risks.
+
+### Follow-up: authenticated record prototype
+
+Isolated development-only AES-256-GCM envelope added; seven focused
+tests, all 628 Dart tests, strict Dart analysis and supply-chain inventory passed. Exact lockfile resolution passed
+with cryptography 2.9.0 added only as a development dependency. No
+existing package version, production storage format or key slot changed.
+See VAULT_V3_EXPERIMENT.md for the format, recovery gates and limitations.
+This is not production migration approval.

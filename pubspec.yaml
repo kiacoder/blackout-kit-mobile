@@ -59,6 +59,7 @@ dependencies:
   wakelock_plus: 1.3.2  # Keep screen awake during config testing / active session
 
 dev_dependencies:
+  cryptography: 2.9.0 # Isolated authenticated vault experiment
   flutter_test:
     sdk: flutter
   integration_test:

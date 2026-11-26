@@ -9,7 +9,6 @@ import androidx.core.content.IntentCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.io.File
 import java.io.IOException
 
 class MainActivity : FlutterActivity() {
@@ -76,7 +75,7 @@ class MainActivity : FlutterActivity() {
                 Intent.ACTION_SEND -> {
                     val text = intent.getStringExtra(Intent.EXTRA_TEXT)
                     when {
-                        !text.isNullOrBlank() ->
+                        !text.isNullOrBlank() && text.length <= MAX_IMPORT_BYTES ->
                             mapOf("type" to "text", "text" to text)
                         else -> {
                             val uri =
@@ -85,7 +84,7 @@ class MainActivity : FlutterActivity() {
                                     Intent.EXTRA_STREAM,
                                     Uri::class.java,
                                 )
-                            copyToCache(uri)?.let { mapOf("type" to "file", "path" to it) }
+                            readSharedText(uri)?.let { mapOf("type" to "text", "text" to it) }
                         }
                     }
                 }
@@ -96,7 +95,7 @@ class MainActivity : FlutterActivity() {
                         // permission-scoped to this activity: it must be resolved
                         // through ContentResolver here, never passed to dart:io.
                         // file:// is rejected by isSafeImportUri below.
-                        copyToCache(uri)?.let { mapOf("type" to "file", "path" to it) }
+                        readSharedText(uri)?.let { mapOf("type" to "text", "text" to it) }
                     } else {
                         null
                     }
@@ -106,15 +105,9 @@ class MainActivity : FlutterActivity() {
         pendingPayload = payload
     }
 
-    // / Copies a picked/received document into our own cache dir and returns
-    // / the real path. Content-provider grants can expire after a process
-    // / restart, so the copy must happen while the grant is live.
-    // /
-    // / Resolution goes through a [ContentProviderClient] rather than
-    // / `ContentResolver.openInputStream`: the client pins the remote provider
-    // / for the whole copy (no mid-copy provider death), and the read still
-    // / fails closed under the sender's grant scoping.
-    private fun copyToCache(uri: Uri?): String? {
+    // Read while the provider grant is live. No credential-bearing cache file
+    // is created; only a bounded UTF-8 string crosses the in-process channel.
+    private fun readSharedText(uri: Uri?): String? {
         if (uri == null || !isSafeImportUri(uri)) return null
         return try {
             readImport(uri)
@@ -140,7 +133,7 @@ class MainActivity : FlutterActivity() {
             if (pfd == null) {
                 null
             } else {
-                ParcelFileDescriptor.AutoCloseInputStream(pfd).use(::copyImportFile)
+                ParcelFileDescriptor.AutoCloseInputStream(pfd).use { readBoundedImportText(it, MAX_IMPORT_BYTES) }
             }
         } finally {
             // close() is available from API 24, our minimum supported SDK.
@@ -148,23 +141,12 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun copyImportFile(source: java.io.InputStream): String? {
-        val file = File.createTempFile("import-", ".cfg", cacheDir)
-        var retained = false
-        try {
-            retained = file.outputStream().use { copyBoundedImport(source, it, MAX_IMPORT_BYTES) }
-            return if (retained) file.absolutePath else null
-        } finally {
-            if (!retained) file.delete()
-        }
-    }
-
     // / CodeQL High #20 — the URI comes from an external intent, so a hostile
     // / sender controls it completely. Two hard rules before any resolution:
     // /
     // / 1. `file://` is rejected: it is a raw filesystem path, and copying it
-    // /    into the import cache would turn a share-sheet tap into an
-    // /    arbitrary-file reader (the copied file's path is surfaced to Dart).
+    // /    into the app would turn a share-sheet tap into an
+    // /    arbitrary-file reader (the document content is surfaced to Dart).
     // / 2. Our own package's authorities are rejected: a crafted self-URI
     // /    could copy engine state through the import path.
     // /

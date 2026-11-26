@@ -56,25 +56,16 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   /// Ingests a payload received via "Open with" / share (see IntentService).
-  /// Text is parsed like a paste; the file is a native-side cache copy with a
-  /// REAL path (never a content:// URI), so dart:io is safe here.
+  /// The native side reads a bounded UTF-8 document while its grant is live.
   Future<void> _consumeIntentPayload() async {
     final payload = ConfigImportScreen.pendingPayload;
     if (payload == null) return;
     ConfigImportScreen.pendingPayload = null;
     if (_dialogOpen || _saving || !mounted) return;
     try {
-      String content;
-      final sourceName = 'shared-config';
-      if (payload['type'] == 'text') {
-        content = payload['text'] ?? '';
-      } else if (payload['type'] == 'file') {
-        final path = payload['path'];
-        if (path == null) return;
-        content = await File(path).readAsString();
-      } else {
-        return;
-      }
+      if (payload['type'] != 'text') return;
+      final content = payload['text'] ?? '';
+      const sourceName = 'shared-config';
       if (!mounted || _dialogOpen || _saving || _pickingFile ||
           content.trim().isEmpty || content.length > 5 * 1024 * 1024) return;
       final multiple = ConfigParser.parseMultiple(content);

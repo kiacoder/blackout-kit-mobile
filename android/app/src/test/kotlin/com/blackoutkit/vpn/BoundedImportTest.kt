@@ -41,6 +41,19 @@ class BoundedImportTest {
     }
 
     @Test
+    fun boundedTextPreservesUnicodeAndRejectsOversizedDocuments() {
+        val text = "config-فارسی-中文"
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        assertEquals(text, readBoundedImportText(ByteArrayInputStream(bytes), bytes.size.toLong()))
+        assertEquals(null, readBoundedImportText(ByteArrayInputStream(bytes), bytes.size.toLong() - 1))
+    }
+
+    @Test(expected = java.nio.charset.CharacterCodingException::class)
+    fun malformedUtf8IsNotAccepted() {
+        readBoundedImportText(ByteArrayInputStream(byteArrayOf(0xc3.toByte(), 0x28)), 2)
+    }
+
+    @Test
     fun zeroLimitAcceptsOnlyEmptyInput() {
         val output = ByteArrayOutputStream()
         assertTrue(copyBoundedImport(ByteArrayInputStream(byteArrayOf()), output, 0))

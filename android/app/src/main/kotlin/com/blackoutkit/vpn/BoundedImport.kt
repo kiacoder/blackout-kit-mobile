@@ -1,8 +1,10 @@
 package com.blackoutkit.vpn
 
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.ByteBuffer
 
 private const val IMPORT_BUFFER_BYTES = 8192
 
@@ -23,4 +25,17 @@ internal fun copyBoundedImport(
         remaining -= count
     }
     return input.read() == -1
+}
+
+/** Reads a bounded text document without creating a temporary file. */
+internal fun readBoundedImportText(
+    input: InputStream,
+    maxBytes: Long,
+): String? {
+    val output = ByteArrayOutputStream()
+    if (!copyBoundedImport(input, output, maxBytes)) return null
+    return Charsets.UTF_8
+        .newDecoder()
+        .decode(ByteBuffer.wrap(output.toByteArray()))
+        .toString()
 }

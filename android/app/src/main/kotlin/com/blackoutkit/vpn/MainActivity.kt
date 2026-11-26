@@ -142,8 +142,8 @@ class MainActivity : FlutterActivity() {
                 ParcelFileDescriptor.AutoCloseInputStream(pfd).use(::copyImportFile)
             }
         } finally {
-            // release() remains compatible with API 24 and 25.
-            client.release()
+            // close() is available from API 24, our minimum supported SDK.
+            client.close()
         }
     }
 

@@ -18,7 +18,6 @@ import io.flutter.plugin.common.PluginRegistry
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Proxy
-import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 /**
@@ -61,7 +60,6 @@ class VpnPlugin :
         // the tun2socks launch. 20s left no headroom and reported a
         // timeout for tunnels that were about to succeed.
         private const val CONNECT_TIMEOUT_MS = 35_000L
-        private const val IP_ECHO_URL = "https://api.ipify.org"
         private const val IP_FETCH_TIMEOUT_MS = 8_000
     }
 
@@ -667,7 +665,7 @@ class VpnPlugin :
 
         private fun fetchExitIpThroughTunnel(socksPort: Int): String? {
             val body =
-                fetchBodyThroughSocks(IP_ECHO_URL, socksPort, IP_FETCH_TIMEOUT_MS)
+                fetchBodyThroughSocks(TunnelDiagnosticPolicy.IP_ECHO_URL, socksPort, IP_FETCH_TIMEOUT_MS)
                     ?: return null
             return if (looksLikeIp(body)) {
                 body
@@ -692,16 +690,13 @@ class VpnPlugin :
             socksPort: Int,
             timeoutMs: Int,
         ): String? {
-            if (socksPort <= 0 || socksPort > MAX_PORT) {
-                Log.w(TAG, "Refusing out-of-range SOCKS port")
+            val target = TunnelDiagnosticPolicy.target(urlStr)
+            if (target == null || socksPort !in 1..MAX_PORT) {
+                Log.w(TAG, "Refusing unsupported diagnostic endpoint or SOCKS port")
                 return null
             }
             var conn: HttpsURLConnection? = null
             return try {
-                val target = URL(urlStr)
-                require(target.protocol == "https" && target.host.isNotBlank() && target.userInfo == null) {
-                    "Tunnel diagnostics require an HTTPS URL without user information"
-                }
                 val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
                 conn =
                     (target.openConnection(proxy) as HttpsURLConnection).apply {
@@ -716,7 +711,7 @@ class VpnPlugin :
                     Log.w(TAG, "Tunnel fetch returned HTTP $code")
                     null
                 } else {
-                    conn.inputStream.bufferedReader().use { it.readText() }
+                    conn.inputStream.bufferedReader().use(TunnelDiagnosticPolicy::readBody)
                 }
             } catch (_: java.io.IOException) {
                 Log.w(TAG, "Tunnel fetch I/O failed")
@@ -744,23 +739,30 @@ class VpnPlugin :
             result: MethodChannel.Result,
         ) {
             val urlStr = call.argument<String>("url") ?: ""
-            val socksPort =
-                call.argument<Int>("socksPort")
-                    ?: BlackoutVpnService.DEFAULT_SOCKS_PORT
             val timeoutMs =
                 (call.argument<Int>("timeoutMs") ?: DEFAULT_SITE_TIMEOUT_MS)
                     .coerceIn(MIN_SITE_TIMEOUT_MS, MAX_SITE_TIMEOUT_MS)
-            if (urlStr.isBlank()) {
-                result.error("BAD_ARGS", "url is required", null)
+            if (TunnelDiagnosticPolicy.target(urlStr) == null) {
+                result.error("BAD_ARGS", "Unsupported diagnostic endpoint", null)
                 return
             }
-            if (BlackoutVpnService.activeNativeTunnel) {
+            if (!BlackoutVpnService.isRunning || BlackoutVpnService.activeNativeTunnel) {
                 result.success(null)
                 return
             }
+            val socksPort = connection.lastSocksPort
+            val session = BlackoutVpnService.connectedAtMs
             Thread {
                 val body = fetchBodyThroughSocks(urlStr, socksPort, timeoutMs)
-                main.post { result.success(body) }
+                main.post {
+                    result.success(
+                        body.takeIf {
+                            BlackoutVpnService.isRunning &&
+                                !BlackoutVpnService.activeNativeTunnel &&
+                                BlackoutVpnService.connectedAtMs == session
+                        },
+                    )
+                }
             }.start()
         }
 

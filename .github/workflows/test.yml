@@ -56,7 +56,7 @@ jobs:
         # Native lifecycle/config tests live under android/app/src/test and are
         # not executed by flutter test. Keep them as a hard PR gate.
         working-directory: android
-        run: bash ./gradlew --no-daemon :app:testDebugUnitTest
+        run: bash ../tool/run_gradle_ci.sh :app:testDebugUnitTest
 
       - name: Run Android lint
         # Fail on lint errors; warning remediation is tracked independently.

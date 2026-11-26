@@ -78,7 +78,7 @@ jobs:
         # Covers the Android service/native lifecycle and strict WG/AWG config
         # boundary that flutter test cannot execute.
         working-directory: android
-        run: bash ./gradlew --no-daemon :app:testDebugUnitTest
+        run: bash ../tool/run_gradle_ci.sh :app:testDebugUnitTest
 
       - name: Set up Rust & Android targets
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, commit-pinned (CodeQL: non-immutable action)

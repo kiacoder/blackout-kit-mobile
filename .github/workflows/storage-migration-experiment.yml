@@ -46,7 +46,7 @@ jobs:
           flutter test
       - name: Verify full-app Android candidate (no installation or publication)
         working-directory: android
-        run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+        run: bash ../tool/run_gradle_ci.sh :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: storage-experiment-lock

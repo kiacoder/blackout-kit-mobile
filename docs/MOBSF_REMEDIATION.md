@@ -211,3 +211,19 @@ algorithm migration. The exact candidate lock must pass hosted resolution,
 Android/iOS builds, dependency review, and fresh scanner reports; the local
 cache lacks the new file_picker version. No new package or version upgrade
 is introduced by this increment.
+
+## Verified migration matrix and build reliability
+
+Run 45837435068 on 870b5ab completed all six jobs successfully: full-app
+v10.3.4 candidate compile, fixture build, and candidate/backup interruption
+and restart on API24 and API34. The backup mode still uses the isolated
+review patch; these tests do not approve changing the shipping dependency.
+Run 45838664604 passed hosted tests against the pruned lockfile, and both
+supply-chain and code-quality workflows passed on 55a4d78. APK run
+45838652114 failed before Android tests at resolution of the exact pinned
+Kotlin plugin marker 2.4.21, which exists in the official plugin repository.
+Add one bounded retry only for that specific pre-test resolution diagnostic.
+The identical Gradle invocation must pass; other errors propagate unchanged.
+Four synthetic tests verify success, retry, retry failure, and ordinary test
+failure without retry. No version changes, alternate artifact repositories,
+or weakened gates. A fresh hosted build is necessary to verify recovery.

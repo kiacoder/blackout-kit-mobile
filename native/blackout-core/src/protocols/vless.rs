@@ -52,7 +52,12 @@ impl VlessRealityDialer {
     /// 4. Command (1 byte: 0x01 = TCP, 0x02 = UDP)
     /// 5. Port (2 bytes, big-endian)
     /// 6. Address Type (1 byte: 0x01=IPv4, 0x02=Domain, 0x03=IPv6) + Address
-    pub fn build_vless_header(&self, target_host: &str, target_port: u16, is_udp: bool) -> io::Result<Vec<u8>> {
+    pub fn build_vless_header(
+        &self,
+        target_host: &str,
+        target_port: u16,
+        is_udp: bool,
+    ) -> io::Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(64);
 
         // Version: 0x00
@@ -101,12 +106,8 @@ impl VlessRealityDialer {
         let stream = TcpStream::connect(&addr).await?;
         stream.set_nodelay(true)?;
 
-        tracing::info!(
-            server = %self.server,
-            port = self.port,
-            sni = %self.sni,
-            "REALITY TLS session initiated with destination camouflage"
-        );
+        // This opens TCP only; no REALITY/TLS handshake is claimed.
+        tracing::info!("VLESS TCP stream opened");
 
         Ok(stream)
     }

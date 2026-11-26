@@ -10,11 +10,11 @@
 //! 4. If the probe is an active scanner, the server relays the real handshake from the shadowed site.
 //! 5. If the probe has the valid key/HMAC, the server switches to proxy mode.
 
+use ring::hmac;
+use ring::rand::SecureRandom;
 use std::io::{self, Error, ErrorKind};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use ring::hmac;
-use ring::rand::SecureRandom;
 
 pub struct ShadowTlsDialer {
     pub server: String,
@@ -166,7 +166,7 @@ impl ShadowTlsDialer {
         let mut body = vec![0u8; record_len];
         stream.read_exact(&mut body).await?;
 
-        tracing::info!(server = %self.server, port = self.port, "ShadowTLS v3 handshake established");
+        tracing::info!("ShadowTLS v3 handshake established");
         Ok(stream)
     }
 }

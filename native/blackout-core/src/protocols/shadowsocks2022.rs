@@ -19,7 +19,8 @@ pub struct Shadowsocks2022Dialer {
 
 impl Shadowsocks2022Dialer {
     pub fn new(server: String, port: u16, method: String, password_b64: &str) -> Self {
-        let psk = base64_sim::decode_bytes(password_b64).unwrap_or_else(|_| password_b64.as_bytes().to_vec());
+        let psk = base64_sim::decode_bytes(password_b64)
+            .unwrap_or_else(|_| password_b64.as_bytes().to_vec());
         Self {
             server,
             port,
@@ -55,12 +56,7 @@ impl Shadowsocks2022Dialer {
         let stream = TcpStream::connect(&addr).await?;
         stream.set_nodelay(true)?;
 
-        tracing::info!(
-            server = %self.server,
-            port = self.port,
-            method = %self.method,
-            "Shadowsocks-2022 connection established"
-        );
+        tracing::info!("Shadowsocks-2022 TCP stream opened");
 
         Ok(stream)
     }

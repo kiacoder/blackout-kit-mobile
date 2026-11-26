@@ -77,7 +77,7 @@ impl Hysteria2Dialer {
     pub async fn bind_socket(&self) -> io::Result<UdpSocket> {
         let bind_addr: SocketAddr = "0.0.0.0:0".parse().unwrap();
         let socket = UdpSocket::bind(bind_addr).await?;
-        tracing::info!(server = %self.server, "Hysteria 2 UDP socket bound");
+        tracing::info!("Hysteria 2 UDP socket bound");
         Ok(socket)
     }
 

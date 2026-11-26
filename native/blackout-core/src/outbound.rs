@@ -32,7 +32,10 @@ pub enum TcpOutbound {
     /// VLESS over a plain TCP transport (`security: "none"`, no flow).
     Vless(Arc<VlessRealityDialer>),
     /// Protocol configured, but its in-house dialer cannot carry streams yet.
-    Unsupported { protocol: &'static str, reason: String },
+    Unsupported {
+        protocol: &'static str,
+        reason: String,
+    },
 }
 
 impl TcpOutbound {
@@ -40,9 +43,7 @@ impl TcpOutbound {
     pub fn describe(&self) -> String {
         match self {
             TcpOutbound::Direct => "direct".to_string(),
-            TcpOutbound::Vless(dialer) => {
-                format!("vless (plain tcp) {}:{}", dialer.server, dialer.port)
-            }
+            TcpOutbound::Vless(_) => "vless (plain tcp)".to_string(),
             TcpOutbound::Unsupported { protocol, .. } => format!("{protocol} (unsupported)"),
         }
     }
@@ -58,8 +59,7 @@ impl TcpOutbound {
             }
             TcpOutbound::Vless(dialer) => {
                 let mut stream = dialer.connect().await?;
-                let header =
-                    dialer.build_vless_header(&dst.ip().to_string(), dst.port(), false)?;
+                let header = dialer.build_vless_header(&dst.ip().to_string(), dst.port(), false)?;
                 stream.write_all(&header).await?;
                 // VLESS response preamble: version (1 byte) + addons length
                 // (1 byte) + addons. It must be consumed before target data
@@ -111,11 +111,7 @@ pub fn build_outbound(config: &OutboundConfig) -> TcpOutbound {
                     short_id.clone().unwrap_or_default(),
                     spider_x.clone(),
                 ));
-                tracing::info!(
-                    "Dispatched VLESS plain-TCP outbound: {}:{}",
-                    dialer.server,
-                    dialer.port
-                );
+                tracing::info!("Dispatched VLESS plain-TCP outbound");
                 TcpOutbound::Vless(dialer)
             } else {
                 tracing::warn!(
@@ -130,11 +126,8 @@ pub fn build_outbound(config: &OutboundConfig) -> TcpOutbound {
                 }
             }
         }
-        OutboundConfig::Shadowsocks { server, server_port, method, .. } => {
+        OutboundConfig::Shadowsocks { .. } => {
             tracing::warn!(
-                server = %server,
-                port = server_port,
-                method = %method,
                 "Shadowsocks-2022 AEAD stream framing is not implemented in the native core yet; flows will be refused"
             );
             TcpOutbound::Unsupported {
@@ -142,11 +135,8 @@ pub fn build_outbound(config: &OutboundConfig) -> TcpOutbound {
                 reason: "2022-blake3 AEAD session framing not implemented yet".to_string(),
             }
         }
-        OutboundConfig::ShadowTls { server, server_port, version, .. } => {
+        OutboundConfig::ShadowTls { .. } => {
             tracing::warn!(
-                server = %server,
-                port = server_port,
-                version,
                 "ShadowTLS v3 handshake relay is not implemented in the native core yet; flows will be refused"
             );
             TcpOutbound::Unsupported {
@@ -154,10 +144,8 @@ pub fn build_outbound(config: &OutboundConfig) -> TcpOutbound {
                 reason: "v3 handshake relay not implemented yet".to_string(),
             }
         }
-        OutboundConfig::Hysteria2 { server, server_port, .. } => {
+        OutboundConfig::Hysteria2 { .. } => {
             tracing::warn!(
-                server = %server,
-                port = server_port,
                 "Hysteria 2 (QUIC via quinn) session dialer is not implemented in the native core yet; flows will be refused"
             );
             TcpOutbound::Unsupported {
@@ -165,10 +153,8 @@ pub fn build_outbound(config: &OutboundConfig) -> TcpOutbound {
                 reason: "QUIC (quinn) session dialer not implemented yet".to_string(),
             }
         }
-        OutboundConfig::Tuic { server, server_port, .. } => {
+        OutboundConfig::Tuic { .. } => {
             tracing::warn!(
-                server = %server,
-                port = server_port,
                 "TUIC v5 (QUIC via quinn) session dialer is not implemented in the native core yet; flows will be refused"
             );
             TcpOutbound::Unsupported {
@@ -176,10 +162,8 @@ pub fn build_outbound(config: &OutboundConfig) -> TcpOutbound {
                 reason: "QUIC (quinn) session dialer not implemented yet".to_string(),
             }
         }
-        OutboundConfig::WireGuard { server, server_port, .. } => {
+        OutboundConfig::WireGuard { .. } => {
             tracing::warn!(
-                server = %server,
-                port = server_port,
                 "WireGuard userspace tunnel integration is not implemented in the native core yet; flows will be refused"
             );
             TcpOutbound::Unsupported {
@@ -187,10 +171,8 @@ pub fn build_outbound(config: &OutboundConfig) -> TcpOutbound {
                 reason: "boringtun userspace tunnel integration not implemented yet".to_string(),
             }
         }
-        OutboundConfig::AmneziaWg { server, server_port, .. } => {
+        OutboundConfig::AmneziaWg { .. } => {
             tracing::warn!(
-                server = %server,
-                port = server_port,
                 "AmneziaWG userspace tunnel integration is not implemented in the native core yet; flows will be refused"
             );
             TcpOutbound::Unsupported {

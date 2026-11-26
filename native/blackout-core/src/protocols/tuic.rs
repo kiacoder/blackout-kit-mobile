@@ -45,7 +45,7 @@ impl TuicDialer {
     pub async fn bind_socket(&self) -> io::Result<UdpSocket> {
         let bind_addr: SocketAddr = "0.0.0.0:0".parse().unwrap();
         let socket = UdpSocket::bind(bind_addr).await?;
-        tracing::info!(server = %self.server, port = self.port, "TUIC v5 UDP socket ready");
+        tracing::info!("TUIC v5 UDP socket ready");
         Ok(socket)
     }
 

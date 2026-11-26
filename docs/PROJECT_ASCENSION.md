@@ -1549,3 +1549,14 @@ Three regression tests; Linux Python 118/118 and 12 binary/action checks
 passed. Hosted compile and emulator migration result still required.
 No claim of native crash recovery, ARM acceptance, new MobSF score or
 production release. Retain prior unpatched failures as baseline evidence.
+
+## Phase 3 distribution native variant consistency (2026-11-26)
+
+Require the seven essential native libraries per ABI, including sing-box,
+tun2socks and fdlauncher. Check exact native inventory/hash equality between
+each architecture-specific APK and its universal counterpart, and reject
+mixed filename build labels. Four new regression tests. Archived actual
+hosted run 45673047492 inventory passes all new rules (nine libraries per
+ABI, 18 universal); this checks archived evidence, not new APK bytes.
+Linux Python 122/122 and 12 binary/action checks passed. No production
+signing, runtime or MobSF remediation claim. Fresh CI required.

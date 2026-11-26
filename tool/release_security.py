@@ -10,6 +10,8 @@ import zipfile
 from pathlib import Path
 
 ABIS = {'arm64-v8a', 'armeabi-v7a'}
+REQUIRED_LIBRARIES = {'libflutter.so', 'libapp.so', 'libgojni.so', 'libblackout_core.so',
+                      'libsingbox.so', 'libtun2socks.so', 'libfdlauncher.so'}
 EXPERIMENTAL = {'libblackout-tunnels.so', 'libblackout-wireguard.so',
                 'libblackout-awg.so', 'libprocess_guard.so', 'libprocess_guard_fixture.so'}
 HEX = re.compile(r'[a-f0-9]{64}')
@@ -39,7 +41,7 @@ def inventory(path, expected_abis):
         if actual != expected_abis:
             raise ValueError(f'Wrong ABI set: {actual}')
         for abi in expected_abis:
-            for name in ('libflutter.so', 'libapp.so', 'libgojni.so', 'libblackout_core.so'):
+            for name in sorted(REQUIRED_LIBRARIES):
                 if f'lib/{abi}/{name}' not in libs:
                     raise ValueError(f'Missing required library: {abi}/{name}')
         return libs
@@ -85,6 +87,28 @@ def verify_keystore_certificate(path, expected, keytool='keytool'):
         raise ValueError('Keystore certificate differs from pinned publisher certificate')
 
 
+def verify_variant_consistency(records):
+    """Universal package must contain the identical libraries shipped in each split."""
+    variants = {}
+    labels = set()
+    for record in records:
+        name = record["name"]
+        matches = [abi for abi in ("universal", *sorted(ABIS))
+                   if name.endswith(f"-{abi}.apk")]
+        if len(matches) != 1 or matches[0] in variants:
+            raise ValueError("Unexpected or duplicate APK variant")
+        abi = matches[0]
+        labels.add(name[:-len(f"-{abi}.apk")])
+        variants[abi] = record["native_libraries"]
+    if set(variants) != {"universal", *ABIS} or len(labels) != 1:
+        raise ValueError("APK variants do not share one build label")
+    for abi in ABIS:
+        expected = {name: digest for name, digest in variants["universal"].items()
+                    if name.startswith(f"lib/{abi}/")}
+        if variants[abi] != expected:
+            raise ValueError(f"Native library inventory differs between {abi} and universal APK")
+
+
 def verify_apks(folder, signer, tagged, expected, aapt=None):
     if tagged and not HEX.fullmatch(expected):
         raise ValueError('Set ANDROID_RELEASE_CERT_SHA256 to the existing published signing certificate')
@@ -119,6 +143,7 @@ def verify_apks(folder, signer, tagged, expected, aapt=None):
         records.append({'name': apk.name, 'bytes': apk.stat().st_size, 'sha256': digest(apk),
                         'signer_sha256': cert, 'identity': identity,
                         'native_libraries': inventory(apk, ABIS if abi == 'universal' else {abi})})
+    verify_variant_consistency(records)
     if len({x['identity']['version_name'] for x in records}) != 1:
         raise ValueError('APK variants use different version names')
     if len({x['signer_sha256'] for x in records}) != 1:

@@ -8,28 +8,68 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 from tool.release_security import (inventory, package_identity, scanner_summary, signer_digest,
-                                   verify_apks, verify_keystore_certificate)
+                                   verify_apks, verify_keystore_certificate, verify_variant_consistency)
 
 class ReleaseSecurityTests(unittest.TestCase):
-    def apk(self, folder, abi='arm64-v8a', extra=None):
+    def apk(self, folder, abi='arm64-v8a', extra=None, omit=None):
         path = folder / 'blackout-kit-test-arm64-v8a.apk'
         with zipfile.ZipFile(path, 'w') as z:
             z.writestr('AndroidManifest.xml', b'manifest')
             z.writestr('classes.dex', b'dex')
-            for lib in ('libflutter.so','libapp.so','libgojni.so','libblackout_core.so'):
-                z.writestr(f'lib/{abi}/{lib}', b'lib')
+            for lib in ('libflutter.so', 'libapp.so', 'libgojni.so', 'libblackout_core.so',
+                        'libsingbox.so', 'libtun2socks.so', 'libfdlauncher.so'):
+                if lib != omit:
+                    z.writestr(f'lib/{abi}/{lib}', b'lib')
             if extra: z.writestr(extra, b'unexpected')
         return path
 
     def test_valid_inventory(self):
         with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(len(inventory(self.apk(Path(d)), {'arm64-v8a'})), 4)
+            self.assertEqual(len(inventory(self.apk(Path(d)), {'arm64-v8a'})), 7)
 
     def test_experimental_library_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             for name in ('libblackout-tunnels.so', 'libprocess_guard.so', 'libprocess_guard_fixture.so'):
                 with self.subTest(name=name), self.assertRaises(ValueError):
                     inventory(self.apk(Path(d), extra=f'lib/arm64-v8a/{name}'), {'arm64-v8a'})
+
+    def test_missing_fallback_engine_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name in ('libsingbox.so', 'libtun2socks.so', 'libfdlauncher.so'):
+                with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'Missing required library'):
+                    inventory(self.apk(Path(d), omit=name), {'arm64-v8a'})
+
+    def variant_records(self):
+        arm64 = {'lib/arm64-v8a/libapp.so': 'a'*64}
+        armv7 = {'lib/armeabi-v7a/libapp.so': 'b'*64}
+        return [
+            {'name': 'app-test-arm64-v8a.apk', 'native_libraries': arm64},
+            {'name': 'app-test-armeabi-v7a.apk', 'native_libraries': armv7},
+            {'name': 'app-test-universal.apk', 'native_libraries': {**arm64, **armv7}},
+        ]
+
+    def test_variant_native_inventory_matches(self):
+        verify_variant_consistency(self.variant_records())
+
+    def test_variant_native_inventory_mismatch(self):
+        for change in ('digest', 'extra', 'missing'):
+            records = self.variant_records()
+            libs = records[0]['native_libraries']
+            key = 'lib/arm64-v8a/libapp.so'
+            if change == 'digest':
+                libs[key] = 'c'*64
+            elif change == 'extra':
+                libs['lib/arm64-v8a/libunexpected.so'] = 'd'*64
+            else:
+                del libs[key]
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'inventory differs'):
+                verify_variant_consistency(records)
+
+    def test_variant_mixed_build_labels_rejected(self):
+        records = self.variant_records()
+        records[1]['name'] = 'app-other-armeabi-v7a.apk'
+        with self.assertRaisesRegex(ValueError, 'one build label'):
+            verify_variant_consistency(records)
 
     def test_wrong_abi_rejected(self):
         with tempfile.TemporaryDirectory() as d:

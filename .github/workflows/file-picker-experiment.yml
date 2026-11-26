@@ -1,0 +1,55 @@
+name: File picker permission experiment
+on:
+  workflow_dispatch:
+  push:
+    branches: ['arena/**']
+    paths:
+      - 'tool/prepare_file_picker_experiment.py'
+      - '.github/workflows/file-picker-experiment.yml'
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+      - name: Resolve candidate dependencies only in this checkout
+        run: |
+          python3 tool/prepare_file_picker_experiment.py --manifest pubspec.yaml
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test
+      - name: Build and verify merged manifest, no installation
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --no-pub --target-platform android-arm,android-arm64
+          aapt="$ANDROID_HOME/build-tools/34.0.0/aapt"
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          "$aapt" dump badging "$apk" | grep -F "package: name='com.blackoutkit.vpn'"
+          "$aapt" dump permissions "$apk" > file-picker-permissions.txt
+          if grep -Eq 'android.permission.(READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE)' file-picker-permissions.txt; then
+            echo 'Unexpected broad storage permission remains in candidate APK' >&2
+            exit 1
+          fi
+          sha256sum "$apk" > file-picker-apk-sha256.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: file-picker-permission-evidence
+          path: |
+            pubspec.lock
+            file-picker-permissions.txt
+            file-picker-apk-sha256.txt
+          if-no-files-found: warn
+          retention-days: 14

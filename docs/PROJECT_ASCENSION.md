@@ -1560,3 +1560,15 @@ hosted run 45673047492 inventory passes all new rules (nine libraries per
 ABI, 18 universal); this checks archived evidence, not new APK bytes.
 Linux Python 122/122 and 12 binary/action checks passed. No production
 signing, runtime or MobSF remediation claim. Fresh CI required.
+
+## Phase 3 file picker permission candidate (2026-11-26)
+
+The installed file_picker 8.0.0+1 requests READ_EXTERNAL_STORAGE on
+API <33. Upstream 8.1.5 removed the requirement; test pinned 8.1.7
+with package_info_plus 8.3.1 for web dependency compatibility. Separate
+read-only CI checkout resolves candidate, runs Flutter analysis/tests,
+builds Android APK and rejects broad storage permissions in actual
+packaged manifest. No production manifest override or dependency change.
+Two new Python tests; Linux Python 124/124, 12 integrity/action checks
+passed. Hosted build, import UI on hardware and iOS verification pending.
+Upstream changelog: https://pub.dev/packages/file_picker/changelog

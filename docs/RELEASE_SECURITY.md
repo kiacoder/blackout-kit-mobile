@@ -182,3 +182,34 @@ ktlint, Detekt and 12 integrity checks pass. Standard TLS certificate
 and hostname validation is unchanged. This reduces the diagnostic
 surface, but does not implement certificate pinning or close #43 by
 itself. Fresh Android CI and device testing remain required.
+
+### PackageInstaller migration candidate (#44)
+
+Replace the ACTION_VIEW APK intent and update-specific FileProvider with a
+PackageInstaller.Session owned by the app. Preserve private release-tag path
+confinement, bounded size/digest checks, exact package/version name and exact
+nonempty signer matching; reject non-increasing Android version codes.
+Stream the APK to base.apk while independently checking the exact byte count
+and SHA-256, fsync and commit only on success; abandon a failed staging session.
+On API 31+ require user action explicitly. Older Android versions retain the
+normal REQUEST_INSTALL_PACKAGES consent flow. The explicit status PendingIntent
+is mutable solely for platform status extras and targets a non-exported
+receiver with a session-specific action/data check. Pending confirmation is
+resolved to a system activity. A method-channel success means submission,
+not completed installation. Terminal callbacks show the platform outcome.
+
+Local verification: ktlint/Detekt passed, 12 inventory checks, compilation of
+installer sources using Kotlin 1.9.25, Android API 34, actual Flutter engine
+and AndroidX 1.13.1 jars; JUnit 9/9 (archive path/signers, streamed exact bytes,
+truncation, oversize, digest tamper, invalid metadata, equal/older version).
+No device connected via ADB. Keep candidate unmerged until Android acceptance
+covers real signed update, wrong package/signer, tamper, cancellation, restart,
+unknown-source permission denial/retry, API 24/31/34+, and OEM confirmation UI.
+The asynchronous confirmation can be subject to background-activity launch
+restrictions; an interrupted or orphaned session needs a tested recovery path.
+Verify split versus universal version-code selection before promotion. A
+successful CodeQL scan is not proof of functional installation. No alert
+dismissal or published release change.
+
+References: https://developer.android.com/reference/android/content/pm/PackageInstaller.Session
+and https://codeql.github.com/codeql-query-help/java/java-android-arbitrary-apk-installation/.

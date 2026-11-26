@@ -4,9 +4,8 @@
 /// matches this device's ABI into the app's internal files dir, and hands it
 /// to Android's package installer through the UpdatePlugin platform channel.
 ///
-/// Internal storage is deliberate: FileProvider maps `filesDir/updates/`
-/// through `res/xml/file_paths.xml`, whereas the external app dir is not
-/// always the volume that gets mapped ("Failed to find configured root").
+/// Internal storage is deliberate: native code verifies the private archive
+/// and streams the exact verified bytes into a user-confirmed install session.
 library;
 
 import 'dart:io';

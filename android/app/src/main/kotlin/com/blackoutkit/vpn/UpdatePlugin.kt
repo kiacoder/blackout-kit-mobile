@@ -1,7 +1,5 @@
 package com.blackoutkit.vpn
 
-import android.content.ActivityNotFoundException
-import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,7 +8,6 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
-import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -21,34 +18,12 @@ import java.security.MessageDigest
 
 private const val BYTES_PER_KIB = 1024L
 
-/**
- * In-app self-update: hands a downloaded APK to Android's package installer.
- *
- * The APK is downloaded by the Dart layer into the app's internal files dir
- * (`filesDir/updates/`), which [FileProvider] exposes through
- * `res/xml/file_paths.xml`. Internal storage is used deliberately: the external
- * app dir is not always the volume FileProvider maps, and `getUriForFile` then
- * throws "Failed to find configured root".
- *
- * Two things Android will silently refuse without help:
- *
- *  - Android 8+ requires the per-app "install unknown apps" grant. Without it
- *    the installer intent goes nowhere (or dumps the user in Settings), so this
- *    checks [canRequestPackageInstalls] first and sends them to the exact
- *    toggle for this app instead of failing with a blank screen.
- *  - The install intent must carry the URI in a [ClipData] as well as the
- *    grant flag: several OEM installers (Samsung, Xiaomi, Huawei) read the
- *    clip data and otherwise throw SecurityException on the content URI.
- *
- * The APK is also validated with [android.content.pm.PackageManager.getPackageArchiveInfo]
- * before launching, so a truncated download or an HTML error page surfaces as
- * "the download is not a valid APK" rather than the installer's opaque
- * "problem parsing the package".
- */
+/** Private APK verification and user-confirmed Android installation sessions. */
 class UpdatePlugin(
     private val appContext: Context,
 ) : MethodCallHandler {
     private val signerVerifier = ApkSignerVerifier(appContext)
+    private val sessionInstaller = UpdateSessionInstaller(appContext)
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun register(messenger: io.flutter.plugin.common.BinaryMessenger) {
@@ -97,9 +72,10 @@ class UpdatePlugin(
         ) {
             result.error("BAD_APK_DIGEST", "The update failed native integrity verification.", null)
         } else if (validateArchive(file, tag, result)) {
-            // Installer and permission UI must be launched on the main thread.
-            mainHandler.post {
-                if (requireInstallPermission(result)) launchInstaller(file, result)
+            if (!canInstallPackages()) {
+                mainHandler.post { requireInstallPermission(result) }
+            } else {
+                submitSession(file, expectedBytes, expectedDigest, result)
             }
         }
     }
@@ -152,9 +128,9 @@ class UpdatePlugin(
             result.error("WRONG_VERSION", "APK version does not match the requested release.", null)
             false
         } else {
-            val signerCheck = signerVerifier.verifySameSigner(archive)
-            if (signerCheck != null) result.error("SIGNER_MISMATCH", signerCheck, null)
-            signerCheck == null
+            val rejection = signerVerifier.verifyUpdate(archive)
+            if (rejection != null) result.error(rejection.first, rejection.second, null)
+            rejection == null
         }
     }
 
@@ -174,34 +150,24 @@ class UpdatePlugin(
         return true
     }
 
-    private fun launchInstaller(
+    private fun submitSession(
         file: File,
+        expectedBytes: Long,
+        expectedDigest: String,
         result: MethodChannel.Result,
     ) {
         try {
-            val uri =
-                FileProvider.getUriForFile(
-                    appContext,
-                    "${appContext.packageName}.fileprovider",
-                    file,
-                )
-            val intent =
-                Intent(Intent.ACTION_VIEW)
-                    .setDataAndType(uri, "application/vnd.android.package-archive")
-                    .addFlags(
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            or Intent.FLAG_ACTIVITY_NEW_TASK,
-                    )
-                    // OEM installers read the grant from the clip data.
-                    .apply { clipData = ClipData.newRawUri("update", uri) }
-            appContext.startActivity(intent)
+            sessionInstaller.submit(file, expectedBytes, expectedDigest)
+            // Submitted, NOT installed: Android reports the final outcome separately.
             result.success(true)
-        } catch (e: ActivityNotFoundException) {
-            result.error("INSTALL_FAILED", e.message ?: e.toString(), null)
-        } catch (e: SecurityException) {
-            result.error("INSTALL_FAILED", e.message ?: e.toString(), null)
-        } catch (e: IllegalArgumentException) {
-            result.error("INSTALL_FAILED", e.message ?: e.toString(), null)
+        } catch (_: java.io.IOException) {
+            result.error("INSTALL_FAILED", "Could not stage verified update bytes.", null)
+        } catch (_: SecurityException) {
+            result.error("INSTALL_FAILED", "Android denied the installation session.", null)
+        } catch (_: IllegalArgumentException) {
+            result.error("INSTALL_FAILED", "Android rejected the installation session.", null)
+        } catch (_: IllegalStateException) {
+            result.error("INSTALL_FAILED", "Finish or cancel the previous update session.", null)
         }
     }
 
@@ -305,7 +271,7 @@ private class ApkSignerVerifier(
      * exception. That turned the check into a no-op on API 24-27 (where
      * `signingInfo` does not exist) and on any device where the lookup threw.
      */
-    fun verifySameSigner(archive: android.content.pm.PackageInfo): String? {
+    fun verifyUpdate(archive: android.content.pm.PackageInfo): Pair<String, String>? {
         val installed =
             try {
                 installedInfo()
@@ -313,22 +279,34 @@ private class ApkSignerVerifier(
                 null
             } catch (_: SecurityException) {
                 null
-            } ?: return "Could not read this app's signature. Nothing was installed."
+            } ?: return "SIGNER_MISMATCH" to "Could not read this app's signature. Nothing was installed."
 
         val mine = signerDigests(installed)
         val theirs = signerDigests(archive)
 
         return when {
             mine.isEmpty() || theirs.isEmpty() ->
-                "Could not read the signing certificate of the update or of the " +
-                    "installed app, so it cannot be verified. Nothing was installed."
+                "SIGNER_MISMATCH" to
+                    (
+                        "Could not read the signing certificate of the update or of the " +
+                            "installed app, so it cannot be verified. Nothing was installed."
+                    )
             !UpdateArchivePolicy.sameSigners(mine, theirs) ->
-                "This update is signed with a different key than the app you " +
-                    "have installed, so Android cannot apply it in place. " +
-                    "Keep your existing app and contact support."
+                "SIGNER_MISMATCH" to
+                    (
+                        "This update is signed with a different key than the app you " +
+                            "have installed, so Android cannot apply it in place. " +
+                            "Keep your existing app and contact support."
+                    )
+            !UpdateArchivePolicy.isNewerVersion(versionCode(installed), versionCode(archive)) ->
+                "WRONG_VERSION" to "The update version code is not newer than the installed app."
             else -> null
         }
     }
+
+    @Suppress("DEPRECATION")
+    private fun versionCode(info: android.content.pm.PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
 
     private fun certDigest(bytes: ByteArray): String {
         val md = java.security.MessageDigest.getInstance("SHA-256")
@@ -419,6 +397,11 @@ internal object UpdateArchivePolicy {
         } catch (_: SecurityException) {
             null
         }
+
+    fun isNewerVersion(
+        installed: Long,
+        archive: Long,
+    ): Boolean = installed > 0 && archive > installed
 
     fun sameSigners(
         installed: Set<String>,

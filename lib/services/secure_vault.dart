@@ -323,8 +323,25 @@ class SecureVault {
           await encrypted.close();
         }
 
-        // Only now that the encrypted copy is durable is the plaintext box
-        // removed. A crash above leaves both generations for recovery.
+        // Verify the closed copy from disk, not Hive's in-memory cache.
+        // Recheck the persisted key before removing the only legacy copy.
+        final verified = await openPreservingBox<dynamic>(
+          encryptedName,
+          cipher: HiveAesCipher(key),
+        );
+        try {
+          if (!_sameValue(records, verified.toMap())) {
+            throw StateError('Encrypted migration readback mismatch');
+          }
+        } finally {
+          await verified.close();
+        }
+        final persisted = await _store.read(_keyName);
+        if (persisted == null || !_sameValue(key, _decode(persisted))) {
+          throw StateError('Vault key unavailable during migration');
+        }
+
+        // A failure above leaves both generations for recovery.
         await Hive.deleteBoxFromDisk(legacyName);
         moved += records.length;
       } catch (_) {
@@ -358,6 +375,24 @@ class SecureVault {
   Future<bool> _boxExists(String name) async {
     if (Hive.isBoxOpen(name)) return true;
     return Hive.boxExists(name);
+  }
+
+  /// Compare the nested values supported by the config library.
+  /// Unexpected record types fail closed unless they round-trip equal.
+  bool _sameValue(Object? a, Object? b) {
+    if (a is Map && b is Map) {
+      return a.length == b.length &&
+          a.keys.every((key) =>
+              b.containsKey(key) && _sameValue(a[key], b[key]));
+    }
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (!_sameValue(a[i], b[i])) return false;
+      }
+      return true;
+    }
+    return a == b;
   }
 
   Uint8List _randomKey() {

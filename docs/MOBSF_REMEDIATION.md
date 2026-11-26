@@ -86,3 +86,43 @@ preservation assertions. Local 609/609 Flutter tests passed with cached
 pre-picker dependencies (no-pub); full locked candidate verification remains
 required in hosted CI. This fixes the plaintext application fallback, not the
 separate CBC path inside flutter_secure_storage or Hive's at-rest integrity.
+
+## Candidate scan and mapping follow-up (6be157b)
+
+Build 45826558797 Android job succeeded; Tests 45826567611 succeeded with
+the exact upgraded file-picker lockfile. Its MobSF score is 51/100, 3 high,
+9 warning, 1 info, 2 secure, 1 hotspot. The SHA-1 warning is absent and the
+permission hotspot count dropped from four to three. The debug signing
+finding is candidate-only. The APK storage-permission gate passed; the
+external-storage code warning nevertheless remains. No scanner suppression.
+
+R8 mapping from that exact run identifies the following classes:
+
+| Rule | Mapped ownership | Disposition |
+| --- | --- | --- |
+| android_read_write_external | FilePickerDelegate, FileUtils | Broad permissions removed; provider-scoped selection and cache-copy code remains. |
+| android_temp_file | TransientEngineConfig, FileUtils | Shared-import MainActivity finding absent; engine file lifetime and picker cleanup still matter. |
+| android_hardcoded | NativeTunnelConfig | Source constructs UAPI private_key/public_key/preshared_key fields from supplied configuration, not an embedded secret in those expressions. Exact flagged statement still requires confirmation. |
+| android_insecure_random | kotlin.random.AbstractPlatformRandom, FallbackThreadLocalRandom, PlatformThreadLocalRandom | Standard library PRNG classes; app native key generation uses SecureRandom. Dependency callers still require reachability review. |
+| android_ip_disclosure | BlackoutVpnService, EngineRunner, VpnPlugin, ProbeEngineController, SiteProbeRunner | Review fixed addresses and runtime diagnostic fields separately; class names alone do not establish leakage. |
+| cbc_padding_oracle | fluttersecurestorage.ciphers.StorageCipher18Implementation | Confirmed legacy dependency code; migration remains open. |
+| android_sql_raw_query | Google DataTransport SQLiteEventStore, SchemaManager and synthetic Lambda | Dependency ownership established, not proof of SQL injection or absence thereof. Review exact SQL and input binding. |
+
+No raw secret candidates are copied into the ledger. Mapping identifies code
+ownership but is not a dynamic reachability or exploitability proof.
+
+## Migration durability and file picker follow-up
+
+Before legacy box deletion, reopen the encrypted copy and compare nested
+records, then re-read and compare the original persisted vault key. A failed
+readback or disappearing key preserves the legacy and encrypted generations.
+This hardens Hive migration, not the upstream secure-storage algorithm switch.
+Picker requests a stream (no whole-document bytes), enforces the actual
+5 MiB limit, strictly decodes UTF-8, and attempts plugin-owned cache cleanup
+in finally after success, cancellation or failure. Cleanup is single-flight
+across import screens; failures are logged generically without paths or
+credentials. The plugin may still copy provider documents before Dart reads;
+physical Android/iOS picker checks and the next APK scan remain required.
+Local Flutter tests: 614/614 (cached dependencies); focused vault: 18/18.
+Latest hosted regression tests on 33e4f53 (45827658258) passed with the
+reviewed lockfile. Independent physical-device acceptance remains open.

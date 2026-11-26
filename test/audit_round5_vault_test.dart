@@ -32,6 +32,17 @@ class NonPersistingKeyStore implements KeyStore {
   Future<void> write(String key, String value) async {}
 }
 
+class DisappearingKeyStore implements KeyStore {
+  String? value;
+  int reads = 0;
+
+  @override
+  Future<String?> read(String key) async => ++reads <= 2 ? value : null;
+
+  @override
+  Future<void> write(String key, String value) async => this.value = value;
+}
+
 class DelayedKeyStore implements KeyStore {
   final writeStarted = Completer<void>();
   final allowWrite = Completer<void>();
@@ -144,6 +155,40 @@ void main() {
     expect(encrypted.length, 1);
     expect(encrypted.get('fixture'), {'value': 'preserve me'});
     await encrypted.close();
+  });
+
+  test('migration verifies nested records after reopening encrypted storage', () async {
+    final legacy = await Hive.openBox<Map>('configs');
+    final record = {
+      'nested': {'tags': ['one', 'two'], 'enabled': true},
+      'ports': [443, 8443],
+      'optional': null,
+    };
+    await legacy.put('fixture', record);
+    await legacy.close();
+    final vault = SecureVault(store: MemoryKeyStore());
+    expect((await vault.migrate()).active, isTrue);
+    expect(await Hive.boxExists('configs'), isFalse);
+    final key = await vault.getOrCreateKey();
+    final migrated = await openPreservingBox<Map>('configs_v2',
+        cipher: HiveAesCipher(key!));
+    expect(migrated.get('fixture'), record);
+    await migrated.close();
+  });
+
+  test('lost key during migration preserves legacy and encrypted copies', () async {
+    final legacy = await Hive.openBox<Map>('configs');
+    await legacy.put('fixture', {'value': 'preserve me'});
+    await legacy.close();
+    final file = File('${dir.path}/configs.hive');
+    final before = await file.readAsBytes();
+    final store = DisappearingKeyStore();
+    final report = await SecureVault(store: store).migrate();
+    expect(report.locked, isTrue);
+    expect(report.active, isFalse);
+    expect(await file.readAsBytes(), before);
+    expect(await Hive.boxExists('configs_v2'), isTrue);
+    expect(Hive.isBoxOpen('configs_v2'), isFalse);
   });
 
   test('a failed migration does not block the next migration', () async {

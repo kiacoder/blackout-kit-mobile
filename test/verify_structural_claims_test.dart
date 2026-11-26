@@ -117,8 +117,14 @@ void main() {
   group('BK-038/BK-039 file decoding and size', () {
     test('file bytes are decoded as UTF-8 with a size cap', () {
       final src = source('lib/screens/config_import_screen.dart');
-      expect(src.contains('utf8.decode(file.bytes!'), isTrue);
-      expect(src.contains('maxImportBytes'), isTrue);
+      final reader = source('lib/services/bounded_config_import.dart');
+      expect(src, contains('withData: false'));
+      expect(src, contains('withReadStream: true'));
+      expect(src, contains('readBoundedConfigText(stream)'));
+      expect(src, contains('file.size > maxConfigImportBytes'));
+      expect(src, contains('clearTemporaryFiles()'));
+      expect(reader, contains('chunk.length > maxBytes - bytes.length'));
+      expect(reader, contains('utf8.decode(bytes.takeBytes())'));
     });
   });
 

@@ -197,7 +197,7 @@ void main() {
           'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
       expect(svc.contains('if (holdTunnelOnFailure && tun != null)'), isTrue);
       expect(
-          RegExp(r'\.putBoolean\(KEY_HELD_BLOCKING, true\)\s*\.apply\(\)')
+          RegExp(r'getSharedPreferences\(PREFS, MODE_PRIVATE\)\.edit\s*\{\s*putBoolean\(KEY_HELD_BLOCKING, true\)\s*\}')
               .hasMatch(svc),
           isTrue);
       expect(svc.contains('ticket.publish { notifyStatus("blocked") }'), isTrue);

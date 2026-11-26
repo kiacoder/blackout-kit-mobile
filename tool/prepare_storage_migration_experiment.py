@@ -47,6 +47,16 @@ def fixture_toolchain(folder):
 
 def app_toolchain(root):
     """Apply the tested toolchain in an experiment, or verify the promoted pins."""
+    # Keep isolated fixture builds on their own pinned toolchain. The full-app
+    # candidate can also use the reviewed next production toolchain as a set.
+    settings = (root / "android/settings.gradle").read_text(encoding="utf-8")
+    wrapper = (root / "android/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
+    app = (root / "android/app/build.gradle").read_text(encoding="utf-8")
+    if all(pin in settings for pin in ('version "8.13.2"', 'version "2.4.21"')) and all(
+        pin in wrapper for pin in ("gradle-8.14.8-bin.zip",
+                                   "94da89692fc3ca6d2d0ce6bb48548762ea0f1897ba444286f5c7f3759c7af651")
+    ) and "buildConfig = true" in app:
+        return
     edits = {
         "android/settings.gradle": [
             ('version "7.4.2"', 'version "8.5.2"'),

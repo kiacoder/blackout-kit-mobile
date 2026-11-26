@@ -43,9 +43,9 @@
     },
     {
       "path": "android/gradle/wrapper/gradle-wrapper.jar",
-      "sha256": "16caeaf66d57a0d1d2087fef6a97efa62de8da69afa5b908f40db35afc4342da",
-      "bytes": 53636,
-      "provenance": "Gradle wrapper; validate against official wrapper checksums"
+      "sha256": "ad16bca46cb71bb5887c546860d93992aeee35c1fdaf4a242b0a612375d937e0",
+      "bytes": 44309,
+      "provenance": "Gradle 8.14.8 wrapper; verified official https://services.gradle.org/distributions/gradle-8.14.8-wrapper.jar.sha256"
     },
     {
       "path": "releases/blackout-kit-v1.12.4-arm64-v8a-debug-signed.apk",

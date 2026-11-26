@@ -12,6 +12,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.content.edit
 
 /**
  * The real Android VPN tunnel for Blackout Kit.
@@ -244,10 +246,9 @@ class BlackoutVpnService : VpnService() {
                 "stale held-blocking marker from a previous process - " +
                     "the tunnel died with it, clearing instead of reporting 'blocked'",
             )
-            getSharedPreferences(PREFS, MODE_PRIVATE)
-                .edit()
-                .putBoolean(KEY_HELD_BLOCKING, false)
-                .apply()
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit {
+                putBoolean(KEY_HELD_BLOCKING, false)
+            }
         }
     }
 
@@ -398,10 +399,9 @@ class BlackoutVpnService : VpnService() {
         cleanupPending = false
         // The held-blocking marker describes a live tunnel; once the interface
         // is gone the state is "stopped" again, not "blocked".
-        getSharedPreferences(PREFS, MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_HELD_BLOCKING, false)
-            .apply()
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit {
+            putBoolean(KEY_HELD_BLOCKING, false)
+        }
         activeProtocol = null
         activeName = null
         activeProtocolId = null
@@ -928,10 +928,9 @@ class BlackoutVpnService : VpnService() {
                 lastError = reason
                 if (holdTunnelOnFailure && tun != null) {
                     isRunning = false
-                    getSharedPreferences(PREFS, MODE_PRIVATE)
-                        .edit()
-                        .putBoolean(KEY_HELD_BLOCKING, true)
-                        .apply()
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit {
+                        putBoolean(KEY_HELD_BLOCKING, true)
+                    }
                     ticket.publish { notifyStatus("blocked") }
                 } else {
                     var cleaned = false
@@ -1029,15 +1028,8 @@ class BlackoutVpnService : VpnService() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
-            val builder =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    Notification.Builder(this@BlackoutVpnService, CHANNEL_ID)
-                } else {
-                    @Suppress("DEPRECATION")
-                    Notification.Builder(this@BlackoutVpnService)
-                }
-
-            return builder
+            return NotificationCompat
+                .Builder(this@BlackoutVpnService, CHANNEL_ID)
                 .setContentTitle("Blackout Kit")
                 .setContentText("Tunnel active${activeName?.let { " - $it" } ?: ""}")
                 .setSmallIcon(R.drawable.ic_vpn_notification)

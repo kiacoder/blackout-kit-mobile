@@ -13,6 +13,23 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// Some legacy Flutter Android libraries declare compileSdk 33 or below,
+// but the app's resolved AndroidX dependencies require API 34. AGP 8.13
+// checks that metadata in library lint. Use the app's compile SDK floor
+// for Android libraries, retaining higher compile SDKs and leaving
+// minSdk/targetSdk and dependency metadata checks unchanged.
+subprojects { subproject ->
+    if (subproject.name != "app") {
+        subproject.pluginManager.withPlugin("com.android.library") {
+            subproject.extensions.getByName("androidComponents").finalizeDsl { dsl ->
+                if (dsl.compileSdk == null || dsl.compileSdk < 34) {
+                    dsl.compileSdk = 34
+                }
+            }
+        }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }

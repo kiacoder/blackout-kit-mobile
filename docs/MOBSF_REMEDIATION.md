@@ -310,3 +310,12 @@ SHA-256 metadata. It still uses deprecated RenderScript APIs and raises the
 minimum iOS target to 15.5. Upgrading solely to silence RenderScript warnings
 would not solve them and would change platform compatibility. No scanner
 dependency or iOS deployment target was changed in this increment.
+
+## Bounded shutdown follow-up
+
+Interrupted subprocess shutdown now retains the interrupt flag even if
+escalation raises an exception and attempts a bounded exit check after
+escalation. Existing callers still retain unresolved handles and refuse
+configuration deletion until exit is confirmed. The Linux supervisor
+test handles the procfs disappearance race without masking permission or
+live-child failures. See ENGINEERING_ACCEPTANCE.md for local test results.

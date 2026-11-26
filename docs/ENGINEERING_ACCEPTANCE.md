@@ -106,3 +106,23 @@ adds path-boundary hardening and removes two native compiler warnings.
 Ten local focused JVM tests passed with -Werror. The revised head requires
 fresh hosted checks; physical device, scanner upgrade and authenticated
 vault migration gates remain open. See MOBSF_REMEDIATION.md for details.
+
+### Follow-up: subprocess shutdown and procfs race
+
+On a8f0ba7 the native launcher lifecycle job (run 45876422267) failed
+because a process disappeared between opening and reading /proc/PID/stat.
+The test now accepts only ENOENT or ESRCH as disappearance, or an observed
+zombie. Permission errors and a live process past the deadline still fail.
+The deterministic regression and all seven supervisor tests passed under
+Ubuntu WSL, including ten consecutive repetitions.
+
+SubprocessLifecycle now clears/restores the caller interrupt around the
+bounded cleanup and attempts an exit check even after interrupted waiting
+and escalation. Two new JVM regressions cover the final exit check and
+interrupt preservation on cleanup failure. All 23 focused JVM tests passed
+with -Werror; strict Kotlin static quality also passed.
+
+No production supervisor activation, orphan deletion, cipher migration,
+or device acceptance is claimed. Production ProcessBuilder readers do
+not yet have the experimental lifetime-pipe guarantee; sweeping session
+files after app restart could delete a file still needed by a live reader.

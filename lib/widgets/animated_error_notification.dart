@@ -8,11 +8,11 @@ class AnimatedErrorNotification extends StatefulWidget {
   final VoidCallback? onDismiss;
 
   const AnimatedErrorNotification({
-    Key? key,
+    super.key,
     required this.message,
     this.displayDuration = const Duration(seconds: 4),
     this.onDismiss,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedErrorNotification> createState() =>

@@ -21,23 +21,23 @@ final class BlackoutStatsNative extends ffi.Struct {
 }
 
 // C-ABI Function Signatures
-typedef _c_blackout_init = ffi.Int32 Function(ffi.Int32 logLevel);
-typedef _dart_blackout_init = int Function(int logLevel);
+typedef _CBlackoutInit = ffi.Int32 Function(ffi.Int32 logLevel);
+typedef _DartBlackoutInit = int Function(int logLevel);
 
-typedef _c_blackout_start = ffi.Int32 Function(ffi.Int32 tunFd, ffi.Pointer<Utf8> configJson);
-typedef _dart_blackout_start = int Function(int tunFd, ffi.Pointer<Utf8> configJson);
+typedef _CBlackoutStart = ffi.Int32 Function(ffi.Int32 tunFd, ffi.Pointer<Utf8> configJson);
+typedef _DartBlackoutStart = int Function(int tunFd, ffi.Pointer<Utf8> configJson);
 
-typedef _c_blackout_stop = ffi.Int32 Function();
-typedef _dart_blackout_stop = int Function();
+typedef _CBlackoutStop = ffi.Int32 Function();
+typedef _DartBlackoutStop = int Function();
 
-typedef _c_blackout_is_running = ffi.Bool Function();
-typedef _dart_blackout_is_running = bool Function();
+typedef _CBlackoutIsRunning = ffi.Bool Function();
+typedef _DartBlackoutIsRunning = bool Function();
 
-typedef _c_blackout_version = ffi.Pointer<Utf8> Function();
-typedef _dart_blackout_version = ffi.Pointer<Utf8> Function();
+typedef _CBlackoutVersion = ffi.Pointer<Utf8> Function();
+typedef _DartBlackoutVersion = ffi.Pointer<Utf8> Function();
 
-typedef _c_blackout_get_last_error = ffi.Int32 Function(ffi.Pointer<Utf8> buffer, ffi.Int32 maxLen);
-typedef _dart_blackout_get_last_error = int Function(ffi.Pointer<Utf8> buffer, int maxLen);
+typedef _CBlackoutGetLastError = ffi.Int32 Function(ffi.Pointer<Utf8> buffer, ffi.Int32 maxLen);
+typedef _DartBlackoutGetLastError = int Function(ffi.Pointer<Utf8> buffer, int maxLen);
 
 /// High-level Dart interface to the native in-house Rust core
 class BlackoutCoreBindings {
@@ -47,12 +47,12 @@ class BlackoutCoreBindings {
   ffi.DynamicLibrary? _lib;
   bool _available = false;
 
-  _dart_blackout_init? _init;
-  _dart_blackout_start? _start;
-  _dart_blackout_stop? _stop;
-  _dart_blackout_is_running? _isRunning;
-  _dart_blackout_version? _version;
-  _dart_blackout_get_last_error? _getLastError;
+  _DartBlackoutInit? _init;
+  _DartBlackoutStart? _start;
+  _DartBlackoutStop? _stop;
+  _DartBlackoutIsRunning? _isRunning;
+  _DartBlackoutVersion? _version;
+  _DartBlackoutGetLastError? _getLastError;
 
   BlackoutCoreBindings._internal() {
     _loadLibrary();
@@ -68,12 +68,12 @@ class BlackoutCoreBindings {
         _lib = ffi.DynamicLibrary.process();
       }
       if (_lib != null) {
-        _init = _lib!.lookupFunction<_c_blackout_init, _dart_blackout_init>('blackout_init');
-        _start = _lib!.lookupFunction<_c_blackout_start, _dart_blackout_start>('blackout_start');
-        _stop = _lib!.lookupFunction<_c_blackout_stop, _dart_blackout_stop>('blackout_stop');
-        _isRunning = _lib!.lookupFunction<_c_blackout_is_running, _dart_blackout_is_running>('blackout_is_running');
-        _version = _lib!.lookupFunction<_c_blackout_version, _dart_blackout_version>('blackout_version');
-        _getLastError = _lib!.lookupFunction<_c_blackout_get_last_error, _dart_blackout_get_last_error>('blackout_get_last_error');
+        _init = _lib!.lookupFunction<_CBlackoutInit, _DartBlackoutInit>('blackout_init');
+        _start = _lib!.lookupFunction<_CBlackoutStart, _DartBlackoutStart>('blackout_start');
+        _stop = _lib!.lookupFunction<_CBlackoutStop, _DartBlackoutStop>('blackout_stop');
+        _isRunning = _lib!.lookupFunction<_CBlackoutIsRunning, _DartBlackoutIsRunning>('blackout_is_running');
+        _version = _lib!.lookupFunction<_CBlackoutVersion, _DartBlackoutVersion>('blackout_version');
+        _getLastError = _lib!.lookupFunction<_CBlackoutGetLastError, _DartBlackoutGetLastError>('blackout_get_last_error');
         _available = true;
       }
     } catch (_) {

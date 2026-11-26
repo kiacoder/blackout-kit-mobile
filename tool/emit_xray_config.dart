@@ -35,7 +35,7 @@ void main(List<String> args) {
     }
     final name = (config.displayName.isEmpty ? 'config' : config.displayName)
         .replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    final json = XrayConfigBuilder().buildJson(config);
+    final json = const XrayConfigBuilder().buildJson(config);
     File('$outDir/$name.json').writeAsStringSync(json);
     stdout.writeln('WROTE: $outDir/$name.json (${config.protocol})');
   }

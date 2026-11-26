@@ -1,4 +1,5 @@
 /// Test result for config speed and reliability testing.
+library;
 
 enum TestStatus {
   notTested,

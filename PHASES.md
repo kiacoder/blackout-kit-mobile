@@ -32,7 +32,7 @@ Blackout Kit Mobile is built in phases, with each phase adding features and stab
 ### Technical Decisions
 
 - **State Management:** GetX (reactive observables, simplicity)
-- **Local Storage:** Hive (currently unencrypted at rest; encryption requires a backup-first migration design)
+- **Local Storage (historical):** initially unencrypted Hive; superseded by the encrypted config vault. Current status: [CURRENT_STATUS.md](CURRENT_STATUS.md).
 - **Config Format:** Parse from GitHub raw URIs (WireGuard, OpenVPN, Shadowsocks)
 - **Architecture:** Registry + Factory + State Machine patterns
 

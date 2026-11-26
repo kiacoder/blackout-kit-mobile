@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.util.Patterns
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -850,28 +849,14 @@ class VpnPlugin :
     }
 }
 
-private const val MIN_IPV6_TEXT_GROUPS = 3
-private const val MAX_IPV6_GROUPS = 8
-private const val MAX_IPV6_GROUP_LENGTH = 4
-
-/** True for an IPv4 literal (or a colon-separated IPv6 literal). */
+/** Validate a numeric exit-IP response without resolving arbitrary hostnames. */
 private fun looksLikeIp(value: String): Boolean =
-    value.isNotEmpty() &&
-        (Patterns.IP_ADDRESS.matcher(value).matches() || looksLikeIpv6(value))
-
-// Preserve the existing narrow IPv6 fallback (no zone ids or embedded IPv4).
-private fun looksLikeIpv6(value: String): Boolean {
-    val groups = value.split(':')
-    return groups.size in MIN_IPV6_TEXT_GROUPS..MAX_IPV6_GROUPS &&
-        groups.all { group ->
-            (group.isEmpty() && value.contains("::")) ||
-                (
-                    group.isNotEmpty() &&
-                        group.length <= MAX_IPV6_GROUP_LENGTH &&
-                        group.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }
-                )
-        }
-}
+    try {
+        NativeTunnelConfig.numericAddress(value)
+        true
+    } catch (_: IllegalArgumentException) {
+        false
+    }
 
 // Survive Flutter plugin detach/reattach while a checker or file needs cleanup.
 private val validationBusy =

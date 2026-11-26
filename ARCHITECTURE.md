@@ -73,7 +73,7 @@ abstract class Config {
 
 **Why**: Protocol-agnostic interface. UI works with any Config subclass.
 
-### 4. Local Persistence (currently unencrypted)
+### 4. Local Persistence (encrypted config library)
 
 **Location**: `lib/services/config_service.dart` → `saveConfig()`
 
@@ -84,7 +84,7 @@ Hive handles atomic writes internally:
 await _configBox.put(configHash, config.toMap());
 ```
 
-**Security note**: Hive config, source, result, and settings boxes are opened without an encryption cipher in the current implementation. Treat sensitive configuration values as unencrypted local data. Enabling encryption in-place is not safe without a separately designed, backup-first migration that preserves existing boxes on failure.
+**Security note:** The v1.19.4 candidate opens config, source and test-result boxes with HiveAesCipher and a platform-secure-storage key. Settings remain separate. Migration verifies persisted copies before deletion and fails closed on ambiguous storage. See SECURITY.md for CBC and recovery limitations.
 
 ### 5. State Machine Pattern
 
@@ -170,7 +170,7 @@ Obx(() => Text('Configs: ${allConfigs.length}'))
    ↓
 3. GitHubService.fetchConfigsFromSource() [cache check → GitHub API]
    ↓
-4. ConfigService.saveConfigs() [dedup by hash → local Hive storage; currently unencrypted]
+4. ConfigService.saveConfigs() [dedup by hash → encrypted config library]
    ↓
 5. User taps Connect or ConnectFastest
    ↓

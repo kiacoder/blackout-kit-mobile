@@ -1,6 +1,7 @@
 /// VPN service for platform channel integration.
 /// Bridges to native Android VPN service and iOS NEVPNManager.
 /// Handles connect, disconnect, and status checks.
+library;
 
 import 'dart:io' show Platform;
 
@@ -731,8 +732,9 @@ class EngineAvailability {
 
   /// Human-readable summary, e.g. for a settings or about screen.
   String get summary {
-    if (!isKnown)
+    if (!isKnown) {
       return 'Engine support could not be determined on this platform.';
+    }
     if (supportedProtocols.isEmpty) {
       return runtimeRestartRequired
           ? 'Restart the app before switching VPN runtime families.'

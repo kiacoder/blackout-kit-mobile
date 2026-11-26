@@ -36,7 +36,7 @@ void main() {
     await service.initialize();
   });
 
-  TestResult _success(String hash) => TestResult.success(
+  TestResult success(String hash) => TestResult.success(
         configHash: hash,
         latencyMs: 42,
         successCount: 3,
@@ -44,7 +44,7 @@ void main() {
       );
 
   test('a saved result round-trips through storage', () async {
-    await service.saveTestResult(_success('hash-a'));
+    await service.saveTestResult(success('hash-a'));
 
     final loaded = service.loadTestResults();
     expect(loaded['hash-a'], isNotNull);
@@ -64,7 +64,7 @@ void main() {
   });
 
   test('deleting a config removes its result', () async {
-    await service.saveTestResult(_success('hash-c'));
+    await service.saveTestResult(success('hash-c'));
     await service.deleteTestResult('hash-c');
 
     expect(service.loadTestResults().containsKey('hash-c'), isFalse);

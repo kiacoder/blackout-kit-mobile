@@ -16,20 +16,20 @@ void main() {
 
     test('ENG-02: empty security= stays plaintext', () {
       final c = ConfigParser.parse('vless://11111111-1111-1111-1111-111111111111@a.com:80?type=ws&security=&path=%2F')!;
-      final json = (XrayConfigBuilder().build(c)['outbounds'] as List).first as Map;
+      final json = (const XrayConfigBuilder().build(c)['outbounds'] as List).first as Map;
       expect(json['streamSettings']['security'], 'none');
     });
 
     test('ENG-08: trojan security=none is respected', () {
       final c = ConfigParser.parse('trojan://pw@a.com:80?security=none&type=ws&path=%2F')!;
-      final json = (XrayConfigBuilder().build(c)['outbounds'] as List).first as Map;
+      final json = (const XrayConfigBuilder().build(c)['outbounds'] as List).first as Map;
       expect(json['streamSettings']['security'], 'none');
     });
 
     test('ENG-01: headerType=http emits tcpSettings.header', () {
       final c = ConfigParser.parse(
           'vless://11111111-1111-1111-1111-111111111111@a.com:80?type=tcp&headerType=http&host=speedtest.net&path=%2F')!;
-      final json = (XrayConfigBuilder().build(c)['outbounds'] as List).first as Map;
+      final json = (const XrayConfigBuilder().build(c)['outbounds'] as List).first as Map;
       final header = json['streamSettings']['tcpSettings']['header'];
       expect(header['type'], 'http');
       expect(header['request']['headers']['Host'], contains('speedtest.net'));
@@ -38,7 +38,7 @@ void main() {
     test('ENG-06: TLS vless with host but no sni still sends SNI', () {
       final c = ConfigParser.parse(
           'vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?type=ws&security=tls&host=cdn.a.com')!;
-      final json = (XrayConfigBuilder().build(c)['outbounds'] as List).first as Map;
+      final json = (const XrayConfigBuilder().build(c)['outbounds'] as List).first as Map;
       expect(json['streamSettings']['tlsSettings']['serverName'], 'cdn.a.com');
     });
 

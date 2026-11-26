@@ -5,6 +5,7 @@
 /// The headless-engine side (native core start, SOCKS fetches) is exercised
 /// on device, not here — these tests pin the decision logic that must not
 /// regress.
+library;
 
 
 import 'package:flutter_test/flutter_test.dart';
@@ -90,19 +91,19 @@ void main() {
     expect(SiteCheckService.meetsThreshold(hosts, [a, b], -1), isTrue);
     expect(SiteCheckService.meetsThreshold(hosts, [a], 1), isTrue);
     expect(SiteCheckService.meetsThreshold(hosts,
-        [SiteCheckOutcome(host: 'unexpected.example.com', ok: true)], 1), isFalse);
+        [const SiteCheckOutcome(host: 'unexpected.example.com', ok: true)], 1), isFalse);
   });
 
   group('SiteCheckReport', () {
-    const _usable = SiteCheckReport(
+    const usable = SiteCheckReport(
       configHash: 'a',
       reachable: 6,
       total: 8,
       bestLatencyMs: 320,
     );
-    const _poor = SiteCheckReport(configHash: 'b', reachable: 1, total: 8);
-    const _none = SiteCheckReport(configHash: 'c', reachable: 0, total: 8);
-    const _unsupported = SiteCheckReport(
+    const poor = SiteCheckReport(configHash: 'b', reachable: 1, total: 8);
+    const none = SiteCheckReport(configHash: 'c', reachable: 0, total: 8);
+    const unsupported = SiteCheckReport(
       configHash: 'd',
       reachable: 0,
       total: 8,
@@ -110,17 +111,17 @@ void main() {
     );
 
     test('passRatio and isUsable thresholds', () {
-      expect(_usable.passRatio, closeTo(0.75, 1e-9));
-      expect(_usable.isUsable, isTrue);
-      expect(_poor.isUsable, isFalse);
-      expect(_none.passRatio, 0);
+      expect(usable.passRatio, closeTo(0.75, 1e-9));
+      expect(usable.isUsable, isTrue);
+      expect(poor.isUsable, isFalse);
+      expect(none.passRatio, 0);
       // An unsupported report is not a verdict against the config.
-      expect(_unsupported.isUsable, isFalse);
+      expect(unsupported.isUsable, isFalse);
     });
   });
 
   group('SiteCheckService.pickBest', () {
-    Config _config(String id) => VlessConfig(
+    Config config(String id) => VlessConfig(
           name: id,
           rawUri: 'vless://11111111-1111-1111-1111-111111111111@$id.example:443',
           uuid: '11111111-1111-1111-1111-111111111111',
@@ -129,17 +130,17 @@ void main() {
           security: 'none',
         );
 
-    TestResult _result(String id, int tcpLatency) => TestResult.success(
-          configHash: _config(id).getHash(),
+    TestResult result(String id, int tcpLatency) => TestResult.success(
+          configHash: config(id).getHash(),
           latencyMs: tcpLatency,
           successCount: 1,
           totalCount: 1,
         );
 
-    SiteCheckReport _report(String id,
+    SiteCheckReport report(String id,
         {required int reachable, int? bestLatency, bool supported = true}) {
       return SiteCheckReport(
-        configHash: _config(id).getHash(),
+        configHash: config(id).getHash(),
         reachable: reachable,
         total: 8,
         bestLatencyMs: bestLatency,
@@ -148,52 +149,52 @@ void main() {
     }
 
     test('a verified-usable config beats a faster unchecked one', () {
-      final configs = [_config('slow-but-real'), _config('tcp-fast')];
-      final results = [_result('tcp-fast', 50), _result('slow-but-real', 400)];
+      final configs = [config('slow-but-real'), config('tcp-fast')];
+      final results = [result('tcp-fast', 50), result('slow-but-real', 400)];
       final reports = {
-        _config('slow-but-real').getHash():
-            _report('slow-but-real', reachable: 6, bestLatency: 900),
+        config('slow-but-real').getHash():
+            report('slow-but-real', reachable: 6, bestLatency: 900),
       };
 
       final best = SiteCheckService.pickBest(results, configs, reports);
-      expect(best!.configHash, _config('slow-but-real').getHash());
+      expect(best!.configHash, config('slow-but-real').getHash());
     });
 
     test('among equally usable configs, tunnel latency wins', () {
-      final configs = [_config('a'), _config('b')];
-      final results = [_result('a', 100), _result('b', 200)];
+      final configs = [config('a'), config('b')];
+      final results = [result('a', 100), result('b', 200)];
       final reports = {
-        _config('a').getHash(): _report('a', reachable: 7, bestLatency: 500),
-        _config('b').getHash(): _report('b', reachable: 7, bestLatency: 250),
+        config('a').getHash(): report('a', reachable: 7, bestLatency: 500),
+        config('b').getHash(): report('b', reachable: 7, bestLatency: 250),
       };
 
       expect(
         SiteCheckService.pickBest(results, configs, reports)!.configHash,
-        _config('b').getHash(),
+        config('b').getHash(),
       );
     });
 
     test('with no reports at all, pure TCP latency decides', () {
-      final configs = [_config('a'), _config('b')];
-      final results = [_result('a', 300), _result('b', 90)];
+      final configs = [config('a'), config('b')];
+      final results = [result('a', 300), result('b', 90)];
 
       expect(
         SiteCheckService.pickBest(results, configs, const {})!.configHash,
-        _config('b').getHash(),
+        config('b').getHash(),
       );
     });
 
     test('an unsupported report does not beat an unchecked config', () {
       // Both are effectively "no data"; the faster TCP one must win.
-      final configs = [_config('a'), _config('b')];
-      final results = [_result('a', 300), _result('b', 90)];
+      final configs = [config('a'), config('b')];
+      final results = [result('a', 300), result('b', 90)];
       final reports = {
-        _config('a').getHash(): _report('a', reachable: 0, supported: false),
+        config('a').getHash(): report('a', reachable: 0, supported: false),
       };
 
       expect(
         SiteCheckService.pickBest(results, configs, reports)!.configHash,
-        _config('b').getHash(),
+        config('b').getHash(),
       );
     });
 

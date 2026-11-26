@@ -28,54 +28,40 @@ This app is built on the following security principles:
 - Users choose which repos to trust
 - Transparent source control (all configs visible)
 
-### 2. No Backend Dependence
-- ✅ App works entirely offline after initial config fetch
-- ✅ No phone-home telemetry
-- ✅ No account system or login
-- ✅ No data sync to servers
+### 2. Network and privacy boundaries
 
-### 3. Local Storage & Encryption Roadmap
-- Configs, results, sources and settings are currently persisted via Hive key-value boxes without encryption at rest.
-- Enabling encryption at rest requires a backup-first migration plan to avoid data loss.
-- In-memory data is bounded, and no telemetry is collected or sent to remote servers.
+No developer-operated account or application telemetry is required. Config
+fetches, probes, tunnel traffic, update checks and optional exit-IP lookups
+contact external endpoints. Those endpoints can observe the requests they
+receive. Users must trust their chosen server and configuration sources.
 
-### 4. Low-Spec & Potato Hardware Security (V4)
-- **Zero-Allocation Socket Ring Buffers**: Mitigates memory churn and denial-of-service crashes on low-RAM devices (512MB–1GB RAM).
-- **Constant-Time Cryptography**: Auto-negotiates ChaCha20-Poly1305 on ARMv7 and older silicon lacking hardware `AES-NI`, eliminating cache-timing side-channel vulnerabilities inherent to software AES table lookups.
+### 3. Local storage
 
-### 5. Transparent Code
+The v1.19.4 candidate stores configs, sources and test results in encrypted
+Hive boxes using a platform-secure-storage key. Hive 2.2.3 uses AES-256-CBC;
+this is encryption at rest, not authenticated encryption. Settings are
+separate. The candidate locks the library rather than writing plaintext if
+the key is unavailable; ambiguous migration preserves both copies. Do not
+clear app data or uninstall to resolve a recovery screen. Active native
+engines can require app-private transient plaintext configuration files.
+Process-death cleanup and device migration verification remain open.
 
-- All code on GitHub (open-source)
-- No closed-source binaries
-- Community code review enabled
-- Reproducible builds planned
+### 4. Transparency and permissions
 
-### 5. Minimal Permissions
-- Android: VPN permission only
-- iOS: VPN configuration access only
-- No camera, microphone, contacts, location, etc.
+Application source and native component provenance are documented. Exact
+reproducible APK builds and independent audit are not yet established.
+Android requires network and VPN capabilities; notifications, QR-camera
+access, installed-app enumeration for split tunneling, and APK installation
+are feature-dependent. Consult the merged manifest for a specific build.
+iOS device connectivity is unverified.
 
 ## Security Limitations
 
-This app protects against:
-- ✅ ISP monitoring of visited websites
-- ✅ Regional censorship (content blocking)
-- ✅ Man-in-the-middle attacks on public WiFi
-- ✅ IP address leaks
-
-This app does NOT protect against:
-- ❌ Application-level leaks (DNS, WebRTC)
-  - *Mitigation*: Always use secure DNS (DOH/DOT)
-  - *Mitigation*: Disable WebRTC in browsers
-- ❌ VPN provider snooping
-  - *Mitigation*: Only use trusted providers
-  - *Mitigation*: Use no-log VPN providers
-- ❌ Compromised VPN server
-  - *Mitigation*: Review server configuration source
-  - *Mitigation*: Speed test results indicate anomalies
-- ❌ Malware on device
-  - *Mitigation*: Keep OS and apps updated
-  - *Mitigation*: Use reputable antivirus
+When a supported tunnel is established and verified, the client can reduce
+local-network exposure and help reach otherwise blocked services. It cannot
+guarantee anonymity, protect against a malicious server or compromised
+device, or eliminate every DNS, IPv6 or application-level leak. Use HTTPS
+and verify the tunnel before sensitive use. See [release security evidence](docs/RELEASE_SECURITY.md).
 
 ## Known Security Considerations
 
@@ -95,10 +81,12 @@ This app does NOT protect against:
 - **Impact**: Reveals to VPN provider that app performed tests
 - **Mitigation**: Can be disabled in settings, tests are optional
 
-### Kill Switch
-- Not implemented in v1.0 (Phase 5 feature)
-- **Impact**: If app crashes, user traffic may leak outside VPN
-- **Mitigation**: Connection status is real-time, reconnect is instant
+### Kill switch
+
+Android implements a fail-closed tunnel policy for supported engine failure
+paths. Android always-on VPN with lockdown is a separate system control.
+Physical-device failure, handover and leak acceptance remains pending.
+Do not assume a UI status alone proves fail-closed traffic behavior.
 
 ## Dependencies
 
@@ -129,7 +117,7 @@ Security review checklist for dependencies:
 5. Code review by at least one contributor
 
 ### User Verification
-- Check file integrity: SHA256 checksums provided for APK/IPA
+- Check file integrity: Verify published checksums and signatures where provided
 - Verify signature: Android APK signed with official key
 - Audit code: Review on GitHub before downloading
 
@@ -193,7 +181,8 @@ Security review checklist for dependencies:
 
 ---
 
-**Last Updated**: 2026-10-16  
+**Last Updated**: 2026-11-26
+
 **Maintained By**: Blackout Kit Security Team  
 **Contact**: security@blackout-kit.dev
 

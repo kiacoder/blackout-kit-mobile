@@ -1,5 +1,6 @@
 /// Config controller using GetX for state management.
 /// Manages loading, filtering, testing, and ranking of VPN configs.
+library;
 
 import 'dart:async';
 

@@ -4,6 +4,7 @@
 /// the same key set as the fallback language. A missing key silently falls back
 /// to English, which looks like a half-translated screen and is easy to miss in
 /// review. These tests make it a build failure instead.
+library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';

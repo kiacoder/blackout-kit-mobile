@@ -3,6 +3,7 @@
 /// The bug this locks down: the tile collapsed five statuses into two, so a
 /// config that had never been tested — or whose probe failed once before the
 /// tunnel worked — was labelled "✗ Failed" even while it carried traffic.
+library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:blackout_kit_mobile/models/config.dart';

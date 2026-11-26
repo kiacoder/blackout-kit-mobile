@@ -7,11 +7,11 @@ Get up and running with Blackout Kit Mobile in 5 minutes. 🚀
 ### Installation
 
 **Android:**
-1. Download the APK from [GitHub Releases](https://github.com/blackout-kit/blackout-kit-mobile/releases)
+1. Download the APK from [GitHub Releases](https://github.com/kiacoder/blackout-kit-mobile/releases)
 2. Enable "Install from Unknown Sources" in Settings → Security
 3. Tap the APK file to install
 
-**iOS:** The iOS VPN layer is not implemented; iOS installation and VPN connection are not currently supported.
+**iOS:** An iOS Packet Tunnel integration builds unsigned; signed installation and real-device VPN connectivity are not verified. See [IOS_SUPPORT.md](IOS_SUPPORT.md).
 
 ### First Run
 
@@ -45,14 +45,14 @@ Get up and running with Blackout Kit Mobile in 5 minutes. 🚀
 **Prerequisites:**
 ```bash
 # Check versions
-flutter --version      # Should be 3.22+
-dart --version         # Should be 3.0+
+flutter --version      # Should be 3.24.0 (CI baseline)
+dart --version         # Should be 3.5+
 ```
 
 **Clone & Setup:**
 ```bash
 # Clone repository
-git clone https://github.com/blackout-kit/blackout-kit-mobile.git
+git clone https://github.com/kiacoder/blackout-kit-mobile.git
 cd blackout-kit-mobile
 
 # Get dependencies
@@ -148,7 +148,7 @@ The app uses these core patterns (full details in `ARCHITECTURE.md`):
 
 1. **GetX** - State management with reactive observables (`.obs`)
 2. **Hive** - Local persistence; current config/settings boxes are not encrypted at rest
-3. **Platform Channels** - Android VPN integration; iOS VPN is not implemented
+3. **Platform Channels** - Android VPN integration; experimental iOS Packet Tunnel integration
 4. **Registry Pattern** - Engine discovery (prep for V2 extensibility)
 5. **Factory Pattern** - Protocol-agnostic config parsing
 

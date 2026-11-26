@@ -7,11 +7,11 @@ class AnimatedConnectionButton extends StatefulWidget {
   final bool isLoading;
 
   const AnimatedConnectionButton({
-    Key? key,
+    super.key,
     required this.onPressed,
     required this.isConnected,
     required this.isLoading,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedConnectionButton> createState() =>
@@ -71,7 +71,7 @@ class _AnimatedConnectionButtonState extends State<AnimatedConnectionButton>
         : (widget.isLoading ? 'Connecting...' : 'Connect');
 
     return ScaleTransition(
-      scale: widget.isLoading ? _scaleAnimation : AlwaysStoppedAnimation(1.0),
+      scale: widget.isLoading ? _scaleAnimation : const AlwaysStoppedAnimation(1.0),
       child: GestureDetector(
         onTapDown: (_) {
           if (!widget.isLoading) {
@@ -102,7 +102,7 @@ class _AnimatedConnectionButtonState extends State<AnimatedConnectionButton>
                     if (widget.isLoading)
                       RotationTransition(
                         turns: _rotationAnimation,
-                        child: Icon(
+                        child: const Icon(
                           Icons.cloud_queue,
                           size: 48,
                           color: Colors.white,

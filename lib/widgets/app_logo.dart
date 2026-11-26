@@ -10,13 +10,13 @@ class AppLogo extends StatelessWidget {
   final Axis direction;
 
   const AppLogo({
-    Key? key,
+    super.key,
     this.size = 64.0,
     this.showTitle = true,
     this.showSubtitle = true,
     this.useFullLogoImage = false,
     this.direction = Axis.vertical,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

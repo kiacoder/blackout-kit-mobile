@@ -1,4 +1,5 @@
 /// Root navigation screen - handles tab switching between main screens
+library;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -10,7 +11,7 @@ import 'library_screen.dart';
 import 'settings_screen.dart';
 
 class RootScreen extends StatefulWidget {
-  const RootScreen({Key? key}) : super(key: key);
+  const RootScreen({super.key});
 
   @override
   State<RootScreen> createState() => _RootScreenState();

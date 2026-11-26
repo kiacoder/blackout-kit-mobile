@@ -19,7 +19,7 @@ import '../services/split_tunneling_service.dart';
 /// The mode chips were also local `setState` state that was never persisted and
 /// never read by anything. They now write through to the service.
 class SplitTunnelingScreen extends StatefulWidget {
-  const SplitTunnelingScreen({Key? key}) : super(key: key);
+  const SplitTunnelingScreen({super.key});
 
   @override
   State<SplitTunnelingScreen> createState() => _SplitTunnelingScreenState();
@@ -99,7 +99,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                       contentPadding: EdgeInsets.zero,
                       title: Text(
                         'Enable Split Tunneling'.tr,
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(_service.describe()),
                       value: _service.isEnabled,
@@ -119,7 +119,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                         Expanded(
                           child: Text(
                             'Reconnect for this selection to take effect. Android fixes the app list when the tunnel opens.'.tr,
-                            style: TextStyle(fontSize: 12),
+                            style: const TextStyle(fontSize: 12),
                           ),
                         ),
                       ],
@@ -128,7 +128,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                 }),
                 const Divider(),
                 const SizedBox(height: 8),
-                Text('mode_label'.tr, style: TextStyle(fontWeight: FontWeight.w600)),
+                Text('mode_label'.tr, style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Obx(() => Row(
                       children: [
@@ -137,7 +137,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                             label: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.filter_alt_outlined, size: 16),
+                                const Icon(Icons.filter_alt_outlined, size: 16),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
@@ -159,7 +159,7 @@ class _SplitTunnelingScreenState extends State<SplitTunnelingScreen> {
                             label: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.block_outlined, size: 16),
+                                const Icon(Icons.block_outlined, size: 16),
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(

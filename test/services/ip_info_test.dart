@@ -1,6 +1,7 @@
 /// Tests for the IP identity parser: the home screen shows "before vs now"
 /// addresses and places, and a malformed lookup response must degrade to
 /// "unavailable", never to a wrong location.
+library;
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,19 +38,19 @@ void main() {
 
   group('IpInfo.flag', () {
     test('builds a flag emoji from an ISO code', () {
-      expect(IpInfo(ip: '1.2.3.4', countryCode: 'DE').flag, '🇩🇪');
-      expect(IpInfo(ip: '1.2.3.4', countryCode: 'ir').flag, '🇮🇷');
+      expect(const IpInfo(ip: '1.2.3.4', countryCode: 'DE').flag, '🇩🇪');
+      expect(const IpInfo(ip: '1.2.3.4', countryCode: 'ir').flag, '🇮🇷');
     });
 
     test('bad codes yield no flag', () {
-      expect(IpInfo(ip: '1.2.3.4', countryCode: 'X').flag, '');
-      expect(IpInfo(ip: '1.2.3.4', countryCode: '').flag, '');
+      expect(const IpInfo(ip: '1.2.3.4', countryCode: 'X').flag, '');
+      expect(const IpInfo(ip: '1.2.3.4', countryCode: '').flag, '');
     });
   });
 
   group('IpInfo cache round trip', () {
     test('toCache/fromCached preserve the identity', () {
-      final original = IpInfo(
+      const original = IpInfo(
         ip: '5.125.1.2',
         city: 'Tehran',
         country: 'Iran',

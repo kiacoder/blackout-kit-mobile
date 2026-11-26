@@ -4,10 +4,10 @@
 
 | Phase | Focus | State |
 | --- | --- | --- |
-| 0 | Security remediation and PR #20 acceptance | In progress |
+| 0 | Engineering hardening and PR #27 acceptance | In progress |
 | 1 | Repository governance | Core settings active; migration/review pending |
 | 2 | Supply-chain security | Initial gates implemented; CI and review pending |
-| 3 | Code quality engineering | Initial quality gates; Android lint remediation pending |
+| 3 | Code quality engineering | Strict Dart analyzer clean locally; native/plugin and hosted checks pending |
 | 4 | Advanced automated testing | Planned |
 | 5 | Android device laboratory | Planned |
 | 6 | Performance engineering | Planned |

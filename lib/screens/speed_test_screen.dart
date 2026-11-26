@@ -7,7 +7,7 @@ import '../models/config.dart';
 import '../models/test_result.dart';
 
 class SpeedTestScreen extends StatefulWidget {
-  const SpeedTestScreen({Key? key}) : super(key: key);
+  const SpeedTestScreen({super.key});
 
   @override
   State<SpeedTestScreen> createState() => _SpeedTestScreenState();
@@ -151,7 +151,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                       children: [
                         Text(
                           'Performance Tester'.tr,
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 4),
                         Obx(() {
@@ -226,7 +226,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                       children: [
                         Text(
                           'Fastest Configuration'.tr,
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                         Text(
                           fastest.displayName,

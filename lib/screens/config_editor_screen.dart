@@ -11,9 +11,9 @@ class ConfigEditorScreen extends StatefulWidget {
   final Config config;
 
   const ConfigEditorScreen({
-    Key? key,
+    super.key,
     required this.config,
-  }) : super(key: key);
+  });
 
   @override
   State<ConfigEditorScreen> createState() => _ConfigEditorScreenState();
@@ -213,11 +213,11 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Expanded(child: TextField(controller: cJc, decoration: InputDecoration(labelText: 'awg_jc'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cJc, decoration: InputDecoration(labelText: 'awg_jc'.tr, isDense: true, border: const OutlineInputBorder()), keyboardType: TextInputType.number)),
                   const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: cJmin, decoration: InputDecoration(labelText: 'awg_jmin'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cJmin, decoration: InputDecoration(labelText: 'awg_jmin'.tr, isDense: true, border: const OutlineInputBorder()), keyboardType: TextInputType.number)),
                   const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: cJmax, decoration: InputDecoration(labelText: 'awg_jmax'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cJmax, decoration: InputDecoration(labelText: 'awg_jmax'.tr, isDense: true, border: const OutlineInputBorder()), keyboardType: TextInputType.number)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -225,9 +225,9 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  Expanded(child: TextField(controller: cS1, decoration: InputDecoration(labelText: 'awg_s1'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cS1, decoration: InputDecoration(labelText: 'awg_s1'.tr, isDense: true, border: const OutlineInputBorder()), keyboardType: TextInputType.number)),
                   const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: cS2, decoration: InputDecoration(labelText: 'awg_s2'.tr, isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                  Expanded(child: TextField(controller: cS2, decoration: InputDecoration(labelText: 'awg_s2'.tr, isDense: true, border: const OutlineInputBorder()), keyboardType: TextInputType.number)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -353,7 +353,7 @@ class _ConfigEditorScreenState extends State<ConfigEditorScreen> {
             const SizedBox(height: 12),
             Text(
               'Scan with Blackout Kit or any VPN app to import'.tr,
-              style: TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ],

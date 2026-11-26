@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.19.4] - Security remediation candidate
 
+- Make the config library fail closed when key storage is unavailable; verify migration copies and preserve ambiguous data for recovery.
+- Bound document imports, remove obsolete import caches, redact diagnostic material and retain ownership of failed transient configuration writes.
+- Correct all 195 initial Dart analyzer diagnostics and enforce the strict analyzer on PR and release builds.
+- Declare previously transitive imports directly; update wakelock_plus to 1.3.2 for package_info_plus 8.3.1 compatibility without overriding the latter.
+- Replace deprecated Android exit-IP matching with numeric-only address validation; update setup-java to a pinned v5 revision.
+- Reconcile security, installation and architecture documentation. The existing release, not this candidate, remains the downloadable stable version.
+
 - Update Gradle to 8.14.8 with verified wrapper/distribution checksums, refresh Android compatibility APIs and dependency pins.
 - Replace deprecated network enumeration with a service-owned callback registry.
 - Verify official update bytes, exact package, signing certificate and increasing version code before staging a user-confirmed PackageInstaller session. Handle interrupted sessions and explicit cancellation without deleting installed app data.

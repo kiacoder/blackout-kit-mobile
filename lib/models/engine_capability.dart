@@ -20,7 +20,7 @@ enum EngineType {
   openvpn,
   shadowsocks,
   xray,
-  singbox_proxy,
+  singboxProxy,
   mihomo,
   amneziawg,
   sni,
@@ -89,6 +89,7 @@ class EngineCapability {
     return translated == 'engine_$key' ? displayName : translated;
   }
 
+  @override
   String toString() =>
     'EngineCapability(key=$key, displayName=$displayName, platforms=$platformSupport)';
 }
@@ -111,7 +112,7 @@ class EngineRegistry {
       category: 'Proxy Core',
     ),
     'singbox_proxy': const EngineCapability(
-      engine: EngineType.singbox_proxy,
+      engine: EngineType.singboxProxy,
       key: 'singbox_proxy',
       displayName: 'SingBox Core',
       description: 'Ultra-fast QUIC & UDP proxy core: Hysteria2, TUIC v5, AnyTLS, ShadowTLS v3',

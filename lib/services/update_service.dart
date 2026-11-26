@@ -90,11 +90,7 @@ class AppUpdate {
         break;
       }
     }
-    if (apk == null) {
-      // Fall back ONLY to an APK this device can actually install. The old
-      // fallback took any .apk, so a 32-bit phone could be offered the arm64
-      // build and fail with INSTALL_FAILED_NO_MATCHING_ABIS after downloading.
-      apk = assets.cast<Map<String, dynamic>?>().firstWhere(
+    apk ??= assets.cast<Map<String, dynamic>?>().firstWhere(
             (a) {
               final name = nameOf(a!).toLowerCase();
               if (!name.endsWith('.apk')) return false;
@@ -103,7 +99,6 @@ class AppUpdate {
             },
             orElse: () => null,
           );
-    }
     if (apk == null) return null;
     return AppUpdate(
       tagName: tag,

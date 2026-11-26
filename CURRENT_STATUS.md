@@ -1,5 +1,7 @@
 # Current status — 2026-11-26
 
+PR #27 follow-up: strict Dart analysis reports zero issues; 618 local Dart tests passed against the updated lockfile. Kotlin formatting/static quality and supply-chain inventory checks passed locally. The previous CodeQL failure passed on retry; hosted checks on the revised commit and device acceptance remain pending. This is not release approval.
+
 Published stable [v1.19.3](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.3) has signed Android APKs and an unsigned iOS IPA. Main commit 81e613a carries the v1.19.4 candidate, including the PackageInstaller migration. Main tests, CodeQL, supply-chain and iOS build completed successfully; two TLS pinning alerts remain open. Physical update and network-switching acceptance is deferred, not passed. Experimental Rust, native WG/AWG and Mihomo paths are not production-proven. See [engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md) and [release security](docs/RELEASE_SECURITY.md).
 
 The following original 2026-11-16 milestones are historical, not the current release status.

@@ -76,3 +76,24 @@ full scanner reports, known exceptions, migration evidence, independent
 build results, physical/network failure matrix and benchmark methodology.
 A named external reviewer must validate and retest the findings; this document
 is preparation, not an audit certificate.
+
+## PR #27 follow-up ? 2026-11-26
+
+Local pinned Flutter 3.24.0/Dart 3.5 toolchain: exact lockfile resolved,
+strict analyzer zero diagnostics, 618 Dart tests passed. Kotlin quality
+and tracked-binary/action-pin checks passed locally. The dependency
+change replaces the incompatible wakelock_plus 1.1.4 constraint with
+1.3.2, preserving package_info_plus 8.3.1 and declaring ffi/path_provider
+directly. All other resolved package versions remain unchanged.
+
+Java setup v5 replaces v4 at a fixed commit. Android exit-IP parsing now
+uses numeric-only validation. Remaining version notices are not proof of
+vulnerabilities: Flutter SDK constraints, mobile_scanner RenderScript,
+older workflow actions, Gradle plugin warnings and secure-storage CBC
+need separate compatible upgrades and regression evidence. A broad upgrade
+or warning suppression is not an acceptance substitute.
+
+The preceding CodeQL Kotlin scan failed during dependency resolution;
+the rerun completed successfully. All hosted checks must be repeated on the final
+head. No physical device was attached. No merge or release approval is
+implied by this checkpoint.

@@ -103,7 +103,7 @@ void main() {
           dns: '1.1.1.1',
           mtu: 1280,
           peers: [
-            WireGuardPeer(
+            const WireGuardPeer(
               publicKey: 'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=',
               endpoint: 'engage.cloudflareclient.com:2408',
             ),

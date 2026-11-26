@@ -1,6 +1,7 @@
 /// Connection controller using GetX for state management.
 /// Orchestrates config selection, VPN connection, and status updates.
 /// Replicates CLI's ConnectionService state machine pattern.
+library;
 
 import 'dart:async';
 import 'dart:io' show Platform;

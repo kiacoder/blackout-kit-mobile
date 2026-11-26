@@ -4,6 +4,7 @@
 /// - Real-time connection status and IP
 /// - Quick stats (latency, reliability, uptime)
 /// - Quick access to Library and Settings
+library;
 
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:get/get.dart';
@@ -17,7 +18,7 @@ import '../services/localization_service.dart';
 import '../widgets/app_logo.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -56,8 +57,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _handleConnectSpecific(Config config) async {
     final result = _configController.testResults[config.getHash()];
     final ok = await _connectionController.connect(config, testResult: result);
-    if (!ok)
+    if (!ok) {
       _showSnackbar(_connectionController.statusMessage.value, Colors.red);
+    }
   }
 
   Future<void> _handleConnectDisconnect() async {
@@ -725,7 +727,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Text(
                   'Configuration Info'.tr,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),

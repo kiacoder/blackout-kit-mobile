@@ -9,6 +9,7 @@
 ///
 /// Inbound exposes a local SOCKS5 proxy on `127.0.0.1:$socksPort`, which
 /// [EngineRunner] bridges to the TUN interface via [libtun2socks.so].
+library;
 
 import 'dart:convert';
 import '../models/config.dart';

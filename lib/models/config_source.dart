@@ -1,5 +1,6 @@
 /// Config source model (GitHub repo or manual configs).
 /// Tracks where configs come from and their metadata.
+library;
 
 class ConfigSource {
   final String id;

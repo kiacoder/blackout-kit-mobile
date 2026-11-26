@@ -29,7 +29,7 @@ void main() {
     expect(ConfigParser.parse('{"proxies":[]}'), isA<MihomoConfig>());
   });
   test('runtime uses loopback SOCKS and disables competing TUN/listeners', () {
-    final profile = MihomoConfig.fromDocument(document + '''allow-lan: true
+    final profile = MihomoConfig.fromDocument('''${document}allow-lan: true
 socks-port: 9999
 external-controller: 0.0.0.0:9090
 tun: {enable: true}
@@ -56,7 +56,7 @@ tun: {enable: true}
     }
   });
   test('HTTP providers get private relative paths without losing update policy', () {
-    final profile = MihomoConfig.fromDocument(document + '''proxy-providers:
+    final profile = MihomoConfig.fromDocument('''${document}proxy-providers:
   source:
     type: http
     url: https://example.com/proxies.yaml

@@ -5,6 +5,7 @@
 /// screen asks the native layer which protocols are really served and marks the
 /// rest as unavailable, instead of presenting the catalogue as if every entry
 /// were wired up.
+library;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -13,7 +14,7 @@ import '../models/engine_capability.dart';
 import '../services/vpn_service.dart';
 
 class EngineHubScreen extends StatefulWidget {
-  const EngineHubScreen({Key? key}) : super(key: key);
+  const EngineHubScreen({super.key});
 
   @override
   State<EngineHubScreen> createState() => _EngineHubScreenState();
@@ -44,7 +45,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
       // "unknown" so the screen degrades to the plain catalogue rather than
       // asserting that everything is broken.
       if (!mounted) return;
-      setState(() => _availability = EngineAvailability.unknown());
+      setState(() => _availability = const EngineAvailability.unknown());
     }
   }
 
@@ -64,7 +65,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     if (engine.engine == EngineType.xray && _availability?.xrayVersion != null) {
       return _availability!.xrayVersion;
     }
-    if (engine.engine == EngineType.singbox_proxy && _availability?.singboxVersion != null) {
+    if (engine.engine == EngineType.singboxProxy && _availability?.singboxVersion != null) {
       return _availability!.singboxVersion;
     }
     if (_availability?.packagedCapabilities == true) return null;
@@ -525,7 +526,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 12),
-              Text('supported_protocols'.tr, style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('supported_protocols'.tr, style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 8,
@@ -544,7 +545,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                 }).toList(),
               ),
               const SizedBox(height: 12),
-              Text('requirements'.tr, style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('requirements'.tr, style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               for (final req in engine.requirements)
                 Padding(

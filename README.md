@@ -5,7 +5,7 @@
 <h1 align="center">Blackout Kit</h1>
 
 <p align="center">
-  <b>A free, open-source VPN client for Android and iOS that survives censorship.</b><br>
+  <b>Free, open-source Android VPN and proxy client; experimental iOS integration.</b><br>
   Paste a config, tap connect. No account, no ads, no telemetry.
 </p>
 
@@ -18,19 +18,22 @@
 
 ---
 
-**Blackout Kit** is an open-source VPN client for **Android and iOS**, built with
-Flutter. It turns a subscription link, a config file or a QR code into a
+**Blackout Kit Mobile** is an open-source VPN client built with Flutter for Android.
+An iOS Packet Tunnel integration exists, but signed installation and device traffic remain unverified. It turns a subscription link, a config file or a QR code into a
 one-tap connection, and it is designed for **censorship circumvention in Iran** —
 where a VPN that cannot survive filtering is no VPN at all.
 
-It speaks the protocols Iranian providers actually hand out: **VLESS, VMess,
-Trojan, Shadowsocks, WireGuard, Hysteria 2, TUIC, AmneziaWG and Cloudflare WARP**,
-served by an in-process **Xray** core or a bundled **sing-box** runtime.
+The production Android paths use Xray (VLESS, VMess, Trojan, Shadowsocks and
+WireGuard) and sing-box (Hysteria 2, TUIC and AnyTLS, subject to packaged
+capabilities). Native WireGuard/AmneziaWG and Mihomo are experimental and
+default-off. OpenVPN is configuration-only. See [ENGINE_SUPPORT.md](ENGINE_SUPPORT.md).
 
-- **No account, no ads, no telemetry.** Nothing leaves the device unless you turn
-  on the optional exit-IP lookup.
-- **Configs are encrypted at rest**, with the key in the Android Keystore
-  (see [SECURITY.md](SECURITY.md)).
+- **No account, no ads, no application telemetry.** Config sources, connectivity
+  checks, VPN endpoints, update checks and optional exit-IP lookup make network
+  requests when used. See [SECURITY.md](SECURITY.md).
+- **Encrypted config library:** the v1.19.4 hardening candidate refuses
+  plaintext fallback if secure key storage is unavailable. Existing data
+  is preserved for recovery; settings are not covered by the config vault.
 - **Accessibility** is a tracked requirement, not an afterthought — see
   [ACCESSIBILITY.md](ACCESSIBILITY.md) for what we support, what we know is
   missing, and how to report a barrier.
@@ -79,9 +82,7 @@ second (2026-10-16).
 
 **Android runtime status:** this repository retains the existing in-process Xray
 path and sing-box/tun2socks subprocess path. The Rust `native/blackout-core`
-workspace is experimental scaffolding, not a production tunnel: its current TUN
-loop counts/parses packets but does not forward flows to protocol servers or
-inject replies. The Rust protocol modules have not been verified for interoperability.
+workspace is experimental scaffolding, not a production tunnel: it has experimental IPv4 TCP forwarding, direct UDP and plain-TCP VLESS support, but is not a production Android data path. Authenticated protocol interoperability, IPv6 and proxied UDP remain incomplete.
 The v1.18.0 tagged build's Rust CI step failed before APK packaging, so that run
 produced no APK artifacts. Any later or separately published release must be
 checked independently; this statement refers specifically to that failed CI run.
@@ -185,9 +186,9 @@ translated into all three languages like everything else.
 ## Architecture
 
 ### Tech Stack
-- **Framework**: Flutter 3.22+
+- **Framework**: Flutter 3.24.0 (CI baseline)
 - **State Management**: GetX (reactive .obs, dependency injection)
-- **Local Storage**: Hive key-value persistence (currently unencrypted at rest)
+- **Local Storage**: Hive with encrypted config/source/test-result boxes; settings separate
 - **VPN Bridge**: Platform channels (Android/iOS native)
 - **Testing**: Unit + Integration tests
 
@@ -218,8 +219,8 @@ lib/
 ## Setup
 
 ### Prerequisites
-- Flutter 3.22 or higher
-- Dart 3.0+
+- Flutter 3.24.0 (CI baseline)
+- Dart 3.5+
 - Android SDK 24+ or iOS 12+
 - Git
 
@@ -551,7 +552,7 @@ Open-source under the MIT License. See [LICENSE](LICENSE) for details.
 
 - Flutter and Dart teams for the framework
 - GetX author for the state management library
-- Hive for local persistence (currently unencrypted at rest)
+- Hive for local persistence; config library encrypted
 - Community members testing and contributing
 
 ## Support

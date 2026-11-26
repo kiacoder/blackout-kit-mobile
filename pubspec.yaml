@@ -5,7 +5,8 @@ publish_to: none
 version: 1.19.4+2064
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.5.0 <4.0.0'
+  flutter: '>=3.24.0'
 
 dependencies:
   flutter:
@@ -41,6 +42,9 @@ dependencies:
   # strongSwan IKEv2/IPSec wrapper and cannot carry WireGuard, OpenVPN or V2Ray.
 
   # Utilities
+  ffi: 2.1.3
+  path_provider: 2.1.5
+  package_info_plus: 8.3.1
   crypto: ^3.0.2  # For config hashing
   logger: ^2.0.1  # Better logging
   intl: ^0.19.0
@@ -52,7 +56,7 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   flutter_localizations:
     sdk: flutter
-  wakelock_plus: 1.1.4  # Keep screen awake during config testing / active session
+  wakelock_plus: 1.3.2  # Keep screen awake during config testing / active session
 
 dev_dependencies:
   flutter_test:
@@ -68,7 +72,6 @@ dev_dependencies:
   test: ^1.24.0
 
 dependency_overrides:
-  package_info_plus: 8.3.1
   flutter_plugin_android_lifecycle: 2.0.20
 
 flutter:

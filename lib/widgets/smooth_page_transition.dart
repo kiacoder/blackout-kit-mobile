@@ -6,10 +6,10 @@ class SmoothPageTransition extends StatefulWidget {
   final Duration duration;
 
   const SmoothPageTransition({
-    Key? key,
+    super.key,
     required this.child,
     this.duration = const Duration(milliseconds: 400),
-  }) : super(key: key);
+  });
 
   @override
   State<SmoothPageTransition> createState() => _SmoothPageTransitionState();
@@ -64,8 +64,8 @@ class SmoothPageRoute<T> extends PageRoute<T> {
   SmoothPageRoute({
     required this.builder,
     this.duration = const Duration(milliseconds: 400),
-    RouteSettings? settings,
-  }) : super(settings: settings);
+    super.settings,
+  });
 
   final WidgetBuilder builder;
   final Duration duration;

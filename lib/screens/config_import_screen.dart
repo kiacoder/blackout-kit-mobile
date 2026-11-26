@@ -10,7 +10,7 @@ import '../models/config.dart';
 import '../services/bounded_config_import.dart';
 
 class ConfigImportScreen extends StatefulWidget {
-  const ConfigImportScreen({Key? key}) : super(key: key);
+  const ConfigImportScreen({super.key});
 
   /// Payload handed over from outside the app ("Open with" / share sheet),
   /// stashed by [RootScreen] before navigation. Consumed once in initState.
@@ -431,7 +431,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             const SizedBox(height: 8),
             Text(
               'Address: ${config.address}:${config.port}',
-              style: TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
             ),
           ],
         ),
@@ -444,7 +444,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           ),
           ElevatedButton.icon(
             onPressed: _saving ? null : () => _saveConfig(config, dialogContext: dialogContext),
-            icon: Icon(Icons.add),
+            icon: const Icon(Icons.add),
             label: Text('add_to_library'.tr),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
@@ -516,9 +516,9 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            Tab(icon: Icon(Icons.qr_code_scanner), text: 'Scan QR'.tr),
-            Tab(icon: Icon(Icons.paste), text: 'Clipboard & Text'.tr),
-            Tab(icon: Icon(Icons.file_present), text: 'Import File'.tr),
+            Tab(icon: const Icon(Icons.qr_code_scanner), text: 'Scan QR'.tr),
+            Tab(icon: const Icon(Icons.paste), text: 'Clipboard & Text'.tr),
+            Tab(icon: const Icon(Icons.file_present), text: 'Import File'.tr),
           ],
         ),
       ),
@@ -647,7 +647,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             children: [
               Text(
                 'Paste Configuration Text or URI'.tr,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               ElevatedButton.icon(
                 onPressed: () async {
@@ -767,7 +767,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             const SizedBox(height: 16),
             Text(
               'Import Configuration File'.tr,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(

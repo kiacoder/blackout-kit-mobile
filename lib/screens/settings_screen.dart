@@ -1,5 +1,6 @@
 /// Settings screen - Manage preferences and VPN sources
 /// Includes auto-connect, kill switch, theme, language, and more
+library;
 
 import 'dart:io';
 
@@ -25,7 +26,7 @@ import 'split_tunneling_screen.dart';
 import 'engine_hub_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -747,8 +748,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final primary = _settingsController.customDnsServer.value;
     final secondary = _settingsController.dnsSecondaryServer.value;
     final provider = DnsCatalog.byKey(_settingsController.dnsProviderKey.value);
-    if (primary.isEmpty)
+    if (primary.isEmpty) {
       return 'Not set - pick one to enable leak prevention'.tr;
+    }
     if (provider == null) {
       return secondary.isEmpty
           ? LocalizationService.t('@ip (custom)', {'ip': primary})
@@ -928,12 +930,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             RadioListTile<String>(
                               dense: true,
                               value: provider.key,
-                              // ignore: deprecated_member_use
                               groupValue:
                                   _settingsController.dnsProviderKey.value,
                               title: Text(provider.localizedName),
                               subtitle: Text(provider.servers.join('  ·  ')),
-                              // ignore: deprecated_member_use
                               onChanged: (value) {
                                 if (value == null) return;
                                 _settingsController.setDnsProvider(value);
@@ -1180,8 +1180,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ElevatedButton(
           onPressed: () {
             final value = int.tryParse(field.text.trim());
-            if (value != null)
+            if (value != null) {
               _settingsController.setConnectScanBatchSize(value);
+            }
             Get.back();
           },
           child: Text('save'.tr),
@@ -1205,8 +1206,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 groupValue:
                     _settingsController.connectVerificationStrategy.value,
                 onChanged: (value) {
-                  if (value != null)
+                  if (value != null) {
                     _settingsController.setConnectVerificationMode(value);
+                  }
                   Get.back();
                 },
               ),
@@ -1255,8 +1257,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: -1,
               groupValue: _settingsController.connectWebsitePassThreshold.value,
               onChanged: (value) {
-                if (value != null)
+                if (value != null) {
                   _settingsController.setConnectWebsitePassThreshold(value);
+                }
                 Get.back();
               },
             ),
@@ -1269,8 +1272,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   groupValue:
                       _settingsController.connectWebsitePassThreshold.value,
                   onChanged: (value) {
-                    if (value != null)
+                    if (value != null) {
                       _settingsController.setConnectWebsitePassThreshold(value);
+                    }
                     Get.back();
                   },
                 ),
@@ -1287,8 +1291,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: 'next_batch',
               groupValue: _settingsController.connectFailureScanPolicy.value,
               onChanged: (value) {
-                if (value != null)
+                if (value != null) {
                   _settingsController.setConnectFailureScanPolicy(value);
+                }
                 Get.back();
               },
             ),
@@ -1297,8 +1302,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: 'restart',
               groupValue: _settingsController.connectFailureScanPolicy.value,
               onChanged: (value) {
-                if (value != null)
+                if (value != null) {
                   _settingsController.setConnectFailureScanPolicy(value);
+                }
                 Get.back();
               },
             ),

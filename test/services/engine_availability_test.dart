@@ -4,6 +4,7 @@
 /// The important property is *fail-open*: when the native layer cannot report
 /// anything, nothing may be reported as broken, otherwise a working build on an
 /// unknown platform would grey out every protocol.
+library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:blackout_kit_mobile/models/engine_capability.dart';

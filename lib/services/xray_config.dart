@@ -18,6 +18,7 @@
 ///   - libv2ray `libv2ray_main.go`  → `tunFdKey = "xray.tun.fd"`, 0 = no tun
 ///   - Xray TUN inbound schema      → name / mtu / gateway / dns / userLevel
 ///   - v2rayNG `v2ray_config_with_tun.json` → the proven inbound shape
+library;
 
 import 'dart:convert';
 

@@ -4,6 +4,7 @@
 /// its URI form, because a dropped query parameter does not fail loudly — it
 /// produces a config that connects to the right host on the right port and then
 /// does not work, which is the hardest kind of bug to diagnose.
+library;
 
 import 'dart:convert';
 
@@ -713,7 +714,7 @@ AllowedIPs = 0.0.0.0/0
     });
 
     test('awg://?query builds a conf from the link parameters', () {
-      final uri = 'awg://?private_key=PRIV&address=10.10.10.2/32'
+      const uri = 'awg://?private_key=PRIV&address=10.10.10.2/32'
           '&public_key=PUB&endpoint=srv2.example.com:39006'
           '&jc=6&jmin=60&jmax=90&h1=11112222';
       final config = ConfigParser.parse(uri) as AmneziaWGConfig;

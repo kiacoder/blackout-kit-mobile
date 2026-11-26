@@ -124,7 +124,7 @@ class TesterService {
     // failed by the scan and dropped before it could be tried. Report them as
     // unverified instead - the connect attempt is the only real test.
     if (_isUdpOnly(config.protocol)) {
-      _log.i('Skipping TCP probe for ${config.displayName} '
+      _log.i('Skipping TCP probe '
           '(${config.protocol} is UDP-only)');
       onProgress?.call(hash, TestStatus.notTested);
       return TestResult(
@@ -135,7 +135,7 @@ class TesterService {
       );
     }
 
-    _log.i('Probing ${config.displayName} (${config.address}:${config.port})');
+    _log.i('Probing config');
 
     var successes = 0;
     int? bestLatency;
@@ -155,7 +155,7 @@ class TesterService {
     }
 
     if (successes == 0) {
-      _log.w('${config.displayName} unreachable: ${lastError ?? "no response"}');
+      _log.w('Config unreachable');
       onProgress?.call(hash, TestStatus.timeout);
       return TestResult.failed(
         configHash: hash,
@@ -164,7 +164,7 @@ class TesterService {
       );
     }
 
-    _log.i('${config.displayName}: ${bestLatency}ms, $successes/$attempts attempts');
+    _log.i('Config: ${bestLatency}ms, $successes/$attempts attempts');
     onProgress?.call(hash, TestStatus.success);
 
     return TestResult.success(

@@ -86,11 +86,11 @@ class VPNService {
       return result ?? false;
     } on PlatformException catch (e) {
       _lastError = e.message ?? e.code;
-      _log.e('VPN prepare failed: ${e.message}');
+      _log.e('VPN prepare failed');
       return false;
     } catch (e) {
       _lastError = e.toString();
-      _log.e('VPN prepare failed: $e');
+      _log.e('VPN prepare failed');
       return false;
     }
   }
@@ -105,7 +105,7 @@ class VPNService {
       if (result == null) return const EngineAvailability.unknown();
       return EngineAvailability.fromMap(Map<String, dynamic>.from(result));
     } catch (e) {
-      _log.w('Could not read engine info: $e');
+      _log.w('Could not read engine info');
       return const EngineAvailability.unknown();
     }
   }
@@ -153,13 +153,13 @@ class VPNService {
     if (usable.isEmpty) {
       _status = VPNStatus.error;
       _lastError = 'Pick a resolver first (Settings, DNS).';
-      _log.e('Refusing DNS-only connect: no usable resolver in $servers');
+      _log.e('Refusing DNS-only connect: no usable resolver');
       return false;
     }
 
     try {
       _status = VPNStatus.connecting;
-      _log.i('Starting DNS-only session with $usable');
+      _log.i('Starting DNS-only session');
 
       final result = await platform.invokeMethod('connectDnsOnly', {
         'protocol': 'dns',
@@ -185,12 +185,12 @@ class VPNService {
     } on PlatformException catch (e) {
       _status = VPNStatus.error;
       _lastError = e.message ?? e.code;
-      _log.e('Platform error starting DNS-only: ${e.message}');
+      _log.e('Platform error starting DNS-only');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
       _lastError = e.toString();
-      _log.e('Error starting DNS-only: $e');
+      _log.e('Error starting DNS-only');
       return false;
     }
   }
@@ -209,13 +209,13 @@ class VPNService {
       if (configProblem != null) {
         _status = VPNStatus.error;
         _lastError = configProblem;
-        _log.e('Refusing to connect: $configProblem');
+        _log.e('Refusing to connect');
         return false;
       }
 
       _lastError = null;
       _status = VPNStatus.connecting;
-      _log.i('Connecting to ${config.displayName} ($session)');
+      _log.i('Connecting to config');
 
       // Xray-family protocols are carried by the in-process core, which needs a
       // complete config document rather than loose credentials.
@@ -267,7 +267,7 @@ class VPNService {
         } on ArgumentError catch (e) {
           _status = VPNStatus.error;
           _lastError = e.message?.toString() ?? e.toString();
-          _log.e('Refusing to build an Xray config: $_lastError');
+          _log.e('Refusing to build an Xray config');
           return false;
         }
       }
@@ -291,7 +291,7 @@ class VPNService {
         } on ArgumentError catch (e) {
           _status = VPNStatus.error;
           _lastError = e.message?.toString() ?? e.toString();
-          _log.e('Refusing to build a sing-box config: $_lastError');
+          _log.e('Refusing to build a sing-box config');
           return false;
         }
       }
@@ -309,9 +309,9 @@ class VPNService {
             routeDnsThroughProxy: session.routeDnsThroughProxy,
             libboxMode: true,
           ).buildJson(config);
-        } on ArgumentError catch (e) {
+        } on ArgumentError {
           _log.w(
-              'libbox-mode config refused for ${config.protocol}: ${e.message}');
+              'libbox-mode config refused');
         }
       }
 
@@ -324,7 +324,7 @@ class VPNService {
         _lastError = 'This build cannot dial "${config.protocol}" configs. '
             'Use a VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC or AnyTLS '
             'config, or update the app.';
-        _log.e('Refusing to connect: $_lastError');
+        _log.e('Refusing to connect');
         return false;
       }
 
@@ -349,12 +349,12 @@ class VPNService {
         _status = VPNStatus.connected;
         _connectedConfigHash = config.getHash();
         _lastError = null;
-        _log.i('Connected to ${config.displayName}');
+        _log.i('Connected to config');
         return true;
       } else {
         _status = VPNStatus.error;
         _lastError = 'The tunnel failed to come up';
-        _log.e('Failed to connect: $result');
+        _log.e('Failed to connect');
         return false;
       }
     } on PlatformException catch (e) {
@@ -362,12 +362,12 @@ class VPNService {
       // consent, establish() failure) instead of a generic error.
       _status = VPNStatus.error;
       _lastError = e.message ?? e.code;
-      _log.e('Platform error connecting: ${e.message}');
+      _log.e('Platform error connecting');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
       _lastError = e.toString();
-      _log.e('Error connecting: $e');
+      _log.e('Error connecting');
       return false;
     }
   }
@@ -410,16 +410,16 @@ class VPNService {
         return true;
       } else {
         _status = VPNStatus.error;
-        _log.e('Failed to disconnect: $result');
+        _log.e('Failed to disconnect');
         return false;
       }
-    } on PlatformException catch (e) {
+    } on PlatformException {
       _status = VPNStatus.error;
-      _log.e('Platform error disconnecting: ${e.message}');
+      _log.e('Platform error disconnecting');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
-      _log.e('Error disconnecting: $e');
+      _log.e('Error disconnecting');
       return false;
     }
   }
@@ -429,11 +429,11 @@ class VPNService {
     try {
       final result = await platform.invokeMethod('isRunning');
       return result == true;
-    } on PlatformException catch (e) {
-      _log.e('Platform error checking status: ${e.message}');
+    } on PlatformException {
+      _log.e('Platform error checking status');
       return false;
     } catch (e) {
-      _log.e('Error checking status: $e');
+      _log.e('Error checking status');
       return false;
     }
   }
@@ -443,11 +443,11 @@ class VPNService {
     try {
       final result = await platform.invokeMethod<Map>('getStatus');
       return Map<String, dynamic>.from(result ?? {});
-    } on PlatformException catch (e) {
-      _log.e('Platform error getting status: ${e.message}');
+    } on PlatformException {
+      _log.e('Platform error getting status');
       return {};
     } catch (e) {
-      _log.e('Error getting status: $e');
+      _log.e('Error getting status');
       return {};
     }
   }
@@ -457,11 +457,11 @@ class VPNService {
     try {
       final result = await platform.invokeMethod<String>('getConnectedIP');
       return result;
-    } on PlatformException catch (e) {
-      _log.e('Platform error getting IP: ${e.message}');
+    } on PlatformException {
+      _log.e('Platform error getting IP');
       return null;
     } catch (e) {
-      _log.e('Error getting IP: $e');
+      _log.e('Error getting IP');
       return null;
     }
   }
@@ -497,7 +497,7 @@ class VPNService {
       return result ?? false;
     } on PlatformException catch (e) {
       _lastError = e.message ?? e.code;
-      _log.w('Probe start failed: ${e.message}');
+      _log.w('Probe start failed');
       return false;
     }
   }
@@ -506,8 +506,8 @@ class VPNService {
   Future<void> probeStop() async {
     try {
       await platform.invokeMethod('probeStop');
-    } catch (e) {
-      _log.w('Probe stop failed: $e');
+    } catch (_) {
+      _log.w('Probe stop failed');
     }
   }
 
@@ -526,8 +526,8 @@ class VPNService {
       });
       if (result == null) return const [];
       return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    } on PlatformException catch (e) {
-      _log.w('Site check failed: ${e.message}');
+    } on PlatformException {
+      _log.w('Site check failed');
       return const [];
     }
   }
@@ -548,11 +548,11 @@ class VPNService {
         'socksPort': defaultSocksPort,
         'timeoutMs': timeout.inMilliseconds,
       });
-    } on PlatformException catch (e) {
-      _log.w('Tunnel fetch failed: ${e.message}');
+    } on PlatformException {
+      _log.w('Tunnel fetch failed');
       return null;
     } catch (e) {
-      _log.w('Tunnel fetch failed: $e');
+      _log.w('Tunnel fetch failed');
       return null;
     }
   }
@@ -569,7 +569,7 @@ class VPNService {
         _handleError(error);
         break;
       default:
-        _log.w('Unknown method: ${call.method}');
+        _log.w('Unknown method');
     }
   }
 
@@ -608,22 +608,22 @@ class VPNService {
         _lastError = (error != null && error.isNotEmpty)
             ? error
             : 'The VPN engine stopped unexpectedly. Reconnect to try again.';
-        _log.e('VPN status changed: error — $_lastError');
+        _log.e('VPN status changed: error');
         break;
       default:
-        _log.w('Unknown status: $status');
+        _log.w('Unknown status');
     }
     // Always notify — including 'disconnected' and the failure statuses.
     try {
       onStatusChanged?.call(status ?? 'unknown', _lastError);
-    } catch (e) {
-      _log.w('Status listener threw: $e');
+    } catch (_) {
+      _log.w('Status listener threw');
     }
   }
 
   void _handleError(String? error) {
     _status = VPNStatus.error;
-    _log.e('VPN error: $error');
+    _log.e('VPN error');
   }
 }
 

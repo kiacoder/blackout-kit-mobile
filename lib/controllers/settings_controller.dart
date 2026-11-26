@@ -193,8 +193,8 @@ class SettingsController extends GetxController {
     try {
       await initializeForTest();
       _log.i('SettingsController initialized with persistent storage');
-    } catch (e) {
-      _log.e('Error opening settings Hive box: $e');
+    } catch (_) {
+      _log.e('Error opening settings Hive box');
     }
   }
 
@@ -207,7 +207,7 @@ class SettingsController extends GetxController {
     try {
       _settingsBox = await Hive.openBox(_settingsBoxName);
     } catch (e) {
-      _log.e('Settings box unreadable ($e) - quarantining it');
+      _log.e('Settings box unreadable - quarantining it');
       await Hive.deleteBoxFromDisk(_settingsBoxName);
       _settingsBox = await Hive.openBox(_settingsBoxName);
     }
@@ -315,8 +315,8 @@ class SettingsController extends GetxController {
       _applyKeepScreenAwake(keepScreenAwake.value);
 
       _log.i('Settings loaded successfully');
-    } catch (e) {
-      _log.e('Error loading settings from Hive: $e');
+    } catch (_) {
+      _log.e('Error loading settings from Hive');
     }
   }
 
@@ -373,8 +373,8 @@ class SettingsController extends GetxController {
       }
 
       _log.i('Settings saved to storage');
-    } catch (e) {
-      _log.e('Error saving settings: $e');
+    } catch (_) {
+      _log.e('Error saving settings');
     }
   }
 
@@ -403,7 +403,7 @@ class SettingsController extends GetxController {
   /// Set split tunneling mode ('whitelist' | 'blacklist')
   void setSplitTunnelingMode(String newMode) {
     if (newMode != 'whitelist' && newMode != 'blacklist') {
-      _log.w('Ignoring unknown split tunneling mode: $newMode');
+      _log.w('Ignoring unknown split tunneling mode');
       return;
     }
     splitTunnelingMode.value = newMode;
@@ -431,7 +431,7 @@ class SettingsController extends GetxController {
     dnsProviderKey.value = 'custom';
     dnsSecondaryServer.value = '';
     saveSettings();
-    _log.i('Custom DNS server: $server');
+    _log.i('Custom DNS server changed');
   }
 
   /// Turn the DNS-only mode on or off.
@@ -451,14 +451,14 @@ class SettingsController extends GetxController {
   void setDnsProvider(String key) {
     final provider = DnsCatalog.byKey(key);
     if (provider == null) {
-      _log.w('Ignoring unknown DNS provider: $key');
+      _log.w('Ignoring unknown DNS provider');
       return;
     }
     dnsProviderKey.value = provider.key;
     customDnsServer.value = provider.primary;
     dnsSecondaryServer.value = provider.secondary ?? '';
     saveSettings();
-    _log.i('DNS provider: ${provider.key} -> ${provider.servers.join(", ")}');
+    _log.i('DNS provider changed');
   }
 
   /// Add app to split tunneling list
@@ -466,7 +466,7 @@ class SettingsController extends GetxController {
     if (!splitTunnelingApps.contains(appPackage)) {
       splitTunnelingApps.add(appPackage);
       saveSettings();
-      _log.i('Added app to split tunneling: $appPackage');
+      _log.i('Added app to split tunneling');
     }
   }
 
@@ -474,7 +474,7 @@ class SettingsController extends GetxController {
   void removeSplitTunnelingApp(String appPackage) {
     splitTunnelingApps.remove(appPackage);
     saveSettings();
-    _log.i('Removed app from split tunneling: $appPackage');
+    _log.i('Removed app from split tunneling');
   }
 
   /// Set theme and trigger Get.changeThemeMode
@@ -482,7 +482,7 @@ class SettingsController extends GetxController {
     theme.value = themeValue;
     _applyTheme(themeValue);
     saveSettings();
-    _log.i('Theme set to: $themeValue');
+    _log.i('Theme updated');
   }
 
   void _applyTheme(String themeValue) {
@@ -499,7 +499,7 @@ class SettingsController extends GetxController {
   void setPreferredProtocol(String protocol) {
     preferredProtocol.value = protocol;
     saveSettings();
-    _log.i('Preferred protocol set to: $protocol');
+    _log.i('Preferred protocol updated');
   }
 
   /// Toggle auto-select fastest config
@@ -618,7 +618,7 @@ class SettingsController extends GetxController {
     final hosts = sanitizeSiteCheckUrls(raw);
     siteCheckUrls.assignAll(hosts);
     saveSettings();
-    _log.i('Site check URLs: $hosts');
+    _log.i('Site check URLs updated');
     _action('setting_site_check_urls', {'count': hosts.length, 'hosts': hosts});
   }
 
@@ -638,7 +638,7 @@ class SettingsController extends GetxController {
   /// was persisted nowhere and read by nothing.
   void setLanguage(String languageCode) {
     if (!LocalizationService.isSupported(languageCode)) {
-      _log.w('Ignoring unsupported language code: $languageCode');
+      _log.w('Ignoring unsupported language code');
       return;
     }
     selectedLanguage.value = languageCode;
@@ -666,15 +666,15 @@ class SettingsController extends GetxController {
     try {
       if (enabled) {
         WakelockPlus.enable().catchError((e) {
-          _log.w('Wakelock enable failed: $e');
+          _log.w('Wakelock enable failed');
         });
       } else {
         WakelockPlus.disable().catchError((e) {
-          _log.w('Wakelock disable failed: $e');
+          _log.w('Wakelock disable failed');
         });
       }
-    } catch (e) {
-      _log.w('Wakelock error: $e');
+    } catch (_) {
+      _log.w('Wakelock error');
     }
   }
 

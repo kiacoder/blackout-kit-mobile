@@ -1483,3 +1483,24 @@ wakelock warning remains. At inspection previous bcd6fb8 workflows
 passed except separate iOS workflow still running. This is scoped to
 ConfigService logging, not an app-wide redaction claim. No new MobSF
 score, storage dependency promotion, device acceptance or release.
+
+## Phase 3 consolidated privacy, widget and signing hardening (2026-11-26)
+
+Reviewed Dart controller/service diagnostic paths; removed private labels,
+URLs, addresses and raw exceptions from reviewed logs; restrict action
+metadata to allowlisted aggregate integers/booleans. UI errors unchanged.
+Use pinned Pigeon wakelock mock in VM tests (69 prior warnings, now zero).
+IP lookup consent epoch invalidates in-flight results after opt-out even
+if reenabled, and disabled cache readers return unresolved. Two tests
+verify old exit responses cannot repopulate the cache. This does not
+cancel a request already sent or erase third-party logs. Add tag-only
+keystore certificate preflight before building, with environment password
+transport; verified real disposable keytool certificate and mismatch.
+Full Flutter 600/600, Python 115/115, 12 binary/action checks passed;
+prior full analyzer zero errors/warnings, informational findings remain.
+Prior da471dc hosted workflows all passed, including native host and
+standalone candidate audits. Fresh hosted validation pending. Latest
+MobSF 46/100, 4 high and 10 warnings; ClamAV zero detections, VT unknown.
+Storage backup-mode migration still fails API24/34; no promotion. No ARM
+ADB device connected; no native physical acceptance or production signing
+claim. PR remains draft; no merge, release, or credential rotation.

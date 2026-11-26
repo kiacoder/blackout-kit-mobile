@@ -115,13 +115,14 @@ class IpInfoService {
   Future<void> initialize() async {
     try {
       _box = await Hive.openBox(_boxName);
-    } catch (e) {
-      _log.e('Could not open the ipinfo box: $e');
+    } catch (_) {
+      _log.e('Could not open the ipinfo box');
     }
   }
 
   /// Last known home identity from cache (survives restarts and blockades).
   IpInfo cachedHome() {
+    if (!_lookupsEnabled) return IpInfo.unresolved();
     final data = _box?.get(_homeKey);
     if (data is! Map) return IpInfo.unresolved();
     return IpInfo.fromCached(data);
@@ -129,6 +130,7 @@ class IpInfoService {
 
   /// Last known exit identity from cache.
   IpInfo cachedExit() {
+    if (!_lookupsEnabled) return IpInfo.unresolved();
     final data = _box?.get(_exitKey);
     if (data is! Map) return IpInfo.unresolved();
     return IpInfo.fromCached(data);
@@ -140,6 +142,9 @@ class IpInfoService {
   /// queried a third-party IP service on connect. Off by default; the user
   /// opts in with the "Show my location" switch in Settings.
   bool _lookupsEnabled = false;
+  int _consentEpoch = 0;
+
+  bool _mayUseResult(int epoch) => _lookupsEnabled && epoch == _consentEpoch;
 
   /// Test/diagnostic hook: true when a lookup was actually attempted (i.e. the
   /// opt-in switch is on). Never true while lookups are disabled.
@@ -147,8 +152,10 @@ class IpInfoService {
   bool _lookupAttempted = false;
 
   void setLookupsEnabled(bool enabled) {
+    if (_lookupsEnabled != enabled) _consentEpoch++;
     _lookupsEnabled = enabled;
     if (!enabled) {
+      _lookupAttempted = false;
       // Drop anything already resolved so turning the switch off really means
       // "no third-party data on this device".
       _box?.delete(_homeKey);
@@ -159,8 +166,10 @@ class IpInfoService {
   /// Resolves the user's direct (pre-tunnel) address and location.
   Future<IpInfo> fetchHome() async {
     if (!_lookupsEnabled) return IpInfo.unresolved();
+    final epoch = _consentEpoch;
     _lookupAttempted = true;
     final info = await _directLookup();
+    if (!_mayUseResult(epoch)) return IpInfo.unresolved();
     if (!info.isEmpty) _cache(_homeKey, info);
     return info;
   }
@@ -170,16 +179,19 @@ class IpInfoService {
   /// callers hide the row rather than show a wrong place.
   Future<IpInfo> fetchExit() async {
     if (!_lookupsEnabled) return IpInfo.unresolved();
+    final epoch = _consentEpoch;
+    _lookupAttempted = true;
     try {
       final body = await _vpnService.tunnelFetch(
         _lookupUrl,
         timeout: const Duration(seconds: 8),
       );
+      if (!_mayUseResult(epoch)) return IpInfo.unresolved();
       final info = body == null ? IpInfo.unresolved() : _parse(body);
       if (!info.isEmpty) _cache(_exitKey, info);
       return info;
     } catch (e) {
-      _log.w('Exit lookup failed: $e');
+      _log.w('Exit lookup failed');
       return IpInfo.unresolved();
     }
   }
@@ -208,7 +220,7 @@ class IpInfoService {
         client.close(force: true);
       }
     } catch (e) {
-      _log.w('Home lookup failed: $e');
+      _log.w('Home lookup failed');
       return IpInfo.unresolved();
     }
   }
@@ -219,7 +231,7 @@ class IpInfoService {
         jsonDecode(body) as Map<String, dynamic>,
       );
     } catch (e) {
-      _log.w('Could not parse lookup response: $e');
+      _log.w('Could not parse lookup response');
       return IpInfo.unresolved();
     }
   }
@@ -228,7 +240,7 @@ class IpInfoService {
     try {
       _box?.put(key, info.toCache());
     } catch (e) {
-      _log.w('Could not cache $key identity: $e');
+      _log.w('Could not cache $key identity');
     }
   }
 }

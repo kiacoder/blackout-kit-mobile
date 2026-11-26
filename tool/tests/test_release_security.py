@@ -1,9 +1,14 @@
+import hashlib
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from tool.release_security import inventory, package_identity, scanner_summary, signer_digest, verify_apks
+from unittest.mock import patch
+from tool.release_security import (inventory, package_identity, scanner_summary, signer_digest,
+                                   verify_apks, verify_keystore_certificate)
 
 class ReleaseSecurityTests(unittest.TestCase):
     def apk(self, folder, abi='arm64-v8a', extra=None):
@@ -59,6 +64,30 @@ class ReleaseSecurityTests(unittest.TestCase):
                         report + '\n' + report, 'no package'):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 package_identity(invalid)
+
+    def test_keystore_certificate_pin_and_password_transport(self):
+        cert = b'synthetic DER certificate'
+        expected = hashlib.sha256(cert).hexdigest()
+        with patch.dict(os.environ, {'ANDROID_KEY_ALIAS': 'fixture',
+                                    'ANDROID_KEYSTORE_PASSWORD': 'synthetic-secret'}):
+            with patch('tool.release_security.subprocess.run',
+                       return_value=subprocess.CompletedProcess([], 0, cert, b'')) as run:
+                verify_keystore_certificate(Path('fixture.jks'), expected)
+                self.assertNotIn('synthetic-secret', run.call_args.args[0])
+                self.assertIn('-storepass:env', run.call_args.args[0])
+                with self.assertRaisesRegex(ValueError, 'differs from pinned'):
+                    verify_keystore_certificate(Path('fixture.jks'), '0' * 64)
+            with patch('tool.release_security.subprocess.run',
+                       return_value=subprocess.CompletedProcess([], 1, b'', b'secret error')):
+                with self.assertRaisesRegex(ValueError, '^Could not read signing certificate$'):
+                    verify_keystore_certificate(Path('fixture.jks'), expected)
+
+    def test_keystore_requires_pin_and_credentials(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ValueError, 'ANDROID_RELEASE_CERT_SHA256'):
+                verify_keystore_certificate(Path('fixture.jks'), '')
+            with self.assertRaisesRegex(ValueError, 'Missing signing alias'):
+                verify_keystore_certificate(Path('fixture.jks'), 'a' * 64)
 
     def test_tag_requires_existing_certificate(self):
         with tempfile.TemporaryDirectory() as d:

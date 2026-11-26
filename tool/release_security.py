@@ -68,6 +68,23 @@ def package_identity(output):
     return {'package': match[1], 'version_code': match[2], 'version_name': match[3]}
 
 
+def verify_keystore_certificate(path, expected, keytool='keytool'):
+    """Check public certificate before signing; never print keystore contents."""
+    if not HEX.fullmatch(expected):
+        raise ValueError('Set ANDROID_RELEASE_CERT_SHA256 to the existing published signing certificate')
+    alias = os.getenv('ANDROID_KEY_ALIAS')
+    if not alias or not os.getenv('ANDROID_KEYSTORE_PASSWORD'):
+        raise ValueError('Missing signing alias or keystore password')
+    result = subprocess.run(
+        [keytool, '-exportcert', '-keystore', str(path), '-alias', alias,
+         '-storepass:env', 'ANDROID_KEYSTORE_PASSWORD'],
+        capture_output=True, timeout=60, check=False)
+    if result.returncode != 0 or not result.stdout:
+        raise ValueError('Could not read signing certificate')
+    if hashlib.sha256(result.stdout).hexdigest() != expected:
+        raise ValueError('Keystore certificate differs from pinned publisher certificate')
+
+
 def verify_apks(folder, signer, tagged, expected, aapt=None):
     if tagged and not HEX.fullmatch(expected):
         raise ValueError('Set ANDROID_RELEASE_CERT_SHA256 to the existing published signing certificate')
@@ -215,18 +232,22 @@ def make_report(folder):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--keystore', type=Path)
     parser.add_argument('--apk-dir', type=Path)
     parser.add_argument('--apksigner')
     parser.add_argument('--aapt')
     parser.add_argument('--report-dir', type=Path)
     args = parser.parse_args()
-    if args.apk_dir and args.apksigner:
+    if args.keystore:
+        verify_keystore_certificate(args.keystore, os.getenv('EXPECTED_CERT_SHA256', '').lower().strip())
+        print('Signing certificate matches the pinned publisher identity.')
+    elif args.apk_dir and args.apksigner:
         verify_apks(args.apk_dir, args.apksigner, os.getenv('GITHUB_REF', '').startswith('refs/tags/v'),
                     os.getenv('EXPECTED_CERT_SHA256', '').lower().strip(), args.aapt)
     elif args.report_dir:
         make_report(args.report_dir)
     else:
-        parser.error('Provide --apk-dir and --apksigner or --report-dir')
+        parser.error('Provide --keystore, --apk-dir and --apksigner, or --report-dir')
 
 if __name__ == '__main__':
     main()

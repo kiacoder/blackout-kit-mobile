@@ -176,7 +176,7 @@ class SiteCheckService {
       );
       return normalizeOutcomes(hosts, outcomes.map(SiteCheckOutcome.fromMap).toList());
     } catch (e) {
-      _log.w('Live tunnel website checks failed: $e');
+      _log.w('Live tunnel website checks failed');
       return [for (final host in hosts) SiteCheckOutcome(
         host: host,
         ok: false,
@@ -213,7 +213,7 @@ class SiteCheckService {
       // A failed verification probe must not itself break the connection
       // flow — but it also must not bless a dead tunnel. Treat the check as
       // failed so the caller falls through to the next candidate.
-      _log.w('Live tunnel check errored: $e');
+      _log.w('Live tunnel check errored');
       return false;
     }
   }
@@ -289,8 +289,7 @@ class SiteCheckService {
       socksPort: probePort,
     );
     if (!started) {
-      _log.w('Site check: probe core refused config ${config.displayName}: '
-          '${_vpnService.lastError}');
+      _log.w('Site check: probe core refused config');
       return SiteCheckReport(
         configHash: hash,
         reachable: 0,
@@ -313,7 +312,7 @@ class SiteCheckService {
           : reachable
               .map((o) => o.latencyMs ?? 1 << 30)
               .reduce((a, b) => a < b ? a : b);
-      _log.i('Site check ${config.displayName}: '
+      _log.i('Site check: '
           '${reachable.length}/${hosts.length} hosts reachable');
       return SiteCheckReport(
         configHash: hash,

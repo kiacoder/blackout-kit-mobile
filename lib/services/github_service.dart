@@ -76,14 +76,14 @@ class GitHubService {
       if (_contentCache.containsKey(url)) {
         final cached = _contentCache[url]!;
         if (DateTime.now().difference(cached.timestamp) < _repoTtl) {
-          _log.d('Cache hit: $url');
+          _log.d('Cache hit');
           return cached.content;
         } else {
           _contentCache.remove(url);
         }
       }
 
-      _log.i('Fetching $url');
+      _log.i('Fetching remote file');
       final response = await _client.get<String>(
         url,
         options: Options(
@@ -104,13 +104,13 @@ class GitHubService {
       return null;
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        _log.w('File not found: $owner/$repo/$path');
+        _log.w('Remote file not found');
       } else {
-        _log.e('Fetch error: $e');
+        _log.e('Fetch error');
       }
       return null;
     } catch (e) {
-      _log.e('Unexpected error: $e');
+      _log.e('Unexpected error');
       return null;
     }
   }
@@ -145,7 +145,7 @@ class GitHubService {
       }
       return null;
     } catch (e) {
-      _log.e('Direct URL fetch error: $e');
+      _log.e('Direct URL fetch error');
       return null;
     }
   }
@@ -164,14 +164,14 @@ class GitHubService {
       if (_contentCache.containsKey(key)) {
         final cached = _contentCache[key]!;
         if (DateTime.now().difference(cached.timestamp) < _repoTtl) {
-          _log.d('Cache hit: $key');
+          _log.d('Cache hit');
           return _parseReleaseAssets(cached.content);
         } else {
           _contentCache.remove(key);
         }
       }
 
-      _log.i('Fetching releases: $owner/$repo');
+      _log.i('Fetching releases');
       final response = await _client.get<Map<String, dynamic>>(url);
       if (response.statusCode == 200 && response.data != null) {
         final jsonStr = response.data.toString();
@@ -184,13 +184,13 @@ class GitHubService {
       return {};
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        _log.w('Releases not found: $owner/$repo');
+        _log.w('Releases not found');
       } else {
-        _log.e('Release fetch error: $e');
+        _log.e('Release fetch error');
       }
       return {};
     } catch (e) {
-      _log.e('Unexpected error: $e');
+      _log.e('Unexpected error');
       return {};
     }
   }
@@ -202,14 +202,14 @@ class GitHubService {
     String? filePattern,
   }) async {
     try {
-      _log.i('Fetching configs from ${source.fullId}');
+      _log.i('Fetching configs from source');
 
       // If user entered a full direct URL
       if (source.owner.startsWith('http://') || source.owner.startsWith('https://')) {
         final content = await fetchDirectUrl(source.owner);
         if (content != null && content.isNotEmpty) {
           final configs = ConfigParser.parseMultiple(content);
-          _log.i('Parsed ${configs.length} configs from direct URL ${source.owner}');
+          _log.i('Parsed ${configs.length} configs from direct URL');
           return configs;
         }
         throw const SourceUnavailableException(
@@ -254,7 +254,7 @@ class GitHubService {
         if (content != null && content.trim().isNotEmpty) {
           final configs = ConfigParser.parseMultiple(content);
           if (configs.isNotEmpty) {
-            _log.i('Parsed ${configs.length} configs from ${source.fullId}/$filename');
+            _log.i('Parsed ${configs.length} configs from repository');
             return configs;
           }
         }
@@ -272,7 +272,7 @@ class GitHubService {
           if (content != null && content.trim().isNotEmpty) {
             final configs = ConfigParser.parseMultiple(content);
             if (configs.isNotEmpty) {
-              _log.i('Parsed ${configs.length} configs from ${source.fullId}/$filename (master)');
+              _log.i('Parsed ${configs.length} configs from repository (master)');
               return configs;
             }
           }
@@ -288,7 +288,7 @@ class GitHubService {
     } on SourceUnavailableException {
       rethrow;
     } catch (e) {
-      _log.e('Error fetching configs: $e');
+      _log.e('Error fetching configs');
       throw SourceUnavailableException(e.toString());
     }
   }
@@ -322,7 +322,7 @@ class GitHubService {
       // This is a placeholder implementation
       return {};
     } catch (e) {
-      _log.e('Error parsing releases: $e');
+      _log.e('Error parsing releases');
       return {};
     }
   }

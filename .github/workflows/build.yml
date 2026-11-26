@@ -121,6 +121,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
         run: |
           set -eu
           umask 077
@@ -131,6 +132,7 @@ jobs:
             fi
           done
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release-keystore.jks"
+          python3 tool/release_security.py --keystore "$RUNNER_TEMP/release-keystore.jks"
           printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$RUNNER_TEMP/release-keystore.jks" \
             "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" \

@@ -334,8 +334,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       _log.i('Auto-connect is on — starting a scan');
       debugService.logAction('auto_connect');
       await connectFastest(configs);
-    } catch (e) {
-      _log.w('Auto-connect skipped: $e');
+    } catch (_) {
+      _log.w('Auto-connect skipped');
     }
   }
 
@@ -519,7 +519,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
     } catch (e) {
       // Reconciliation is a repair, never a blocker.
-      _log.w('State reconciliation failed: $e');
+      _log.w('State reconciliation failed');
     }
   }
 
@@ -928,7 +928,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           if (!await _disconnectImpl()) return false;
           state.value = ConnectionState.selecting;
           scanPhase.value = 'connect';
-          _log.w('Website threshold not met for ${config.displayName} '
+          _log.w('Website threshold not met for config '
               '($batchLabel: $scanSitesDone/@$scanSitesTotal passed)');
         }
         _resumeCursor = batchStart + batch.length;
@@ -953,7 +953,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       state.value = ConnectionState.error;
       statusMessage.value =
           LocalizationService.t('status_error', {'error': '$e'});
-      _log.e('Error connecting to fastest: $e');
+      _log.e('Error connecting to fastest');
       return false;
     }
   }
@@ -1036,7 +1036,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           candidateError.value = refusal;
         }
         debugService
-            .logError('Connect refused for ${config.protocol}: $refusal');
+            .logError('Connect refused');
         return false;
       }
 
@@ -1049,7 +1049,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       selectedConfig.value = config;
       selectedConfigResult.value = testResult;
 
-      _log.i('Connecting to ${config.displayName}');
+      _log.i('Connecting to config');
 
       // Android shows a system consent dialog before the first tunnel.
       final prepared = await vpnService.prepare();
@@ -1080,7 +1080,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         if (_candidateAttemptInFlight) {
           candidateError.value = optionProblem;
         }
-        debugService.logError('Session options rejected: $optionProblem');
+        debugService.logError('Session options rejected');
         return false;
       }
 
@@ -1140,10 +1140,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         _fetchConnectedIP();
 
         debugService.logInfo(
-          'VPN connected to ${config.displayName} - '
-          'split tunneling: ${splitTunnelingService.describe()}, '
-          'DNS: ${dnsLeakPreventionService.describe()}, '
-          'kill switch: ${killSwitchService.describe()}',
+          'VPN connected',
         );
 
         // The live tunnel now carries the current selection.
@@ -1177,7 +1174,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       if (_candidateAttemptInFlight && candidateError.value.isEmpty) {
         candidateError.value = statusMessage.value;
       }
-      _log.e('Error connecting: $e');
+      _log.e('Error connecting');
       return false;
     }
   }
@@ -1190,7 +1187,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     try {
       _engineAvailability.value = await vpnService.getEngineInfo();
     } catch (e) {
-      _log.w('Engine capability probe failed, testing all configs: $e');
+      _log.w('Engine capability probe failed, testing all configs');
       return configs;
     }
 
@@ -1225,8 +1222,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   Future<void> ensureEngineAvailability() async {
     try {
       _engineAvailability.value = await vpnService.getEngineInfo();
-    } catch (e) {
-      _log.w('Engine capability probe failed: $e');
+    } catch (_) {
+      _log.w('Engine capability probe failed');
     }
   }
 
@@ -1240,7 +1237,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     try {
       _engineAvailability.value = await vpnService.getEngineInfo();
     } catch (e) {
-      _log.w('Engine capability probe failed, continuing: $e');
+      _log.w('Engine capability probe failed, continuing');
       return null;
     }
 
@@ -1360,7 +1357,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       state.value = ConnectionState.error;
       statusMessage.value =
           LocalizationService.t('status_disconnect_error', {'error': '$e'});
-      _log.e('Error disconnecting: $e');
+      _log.e('Error disconnecting');
       return false;
     }
   }
@@ -1445,14 +1442,14 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
 
       debugService.logInfo(
-          'DNS leak prevention: ${dnsLeakPreventionService.describe()}');
+          'DNS leak prevention updated');
       if (next && isConnected) {
         statusMessage.value = LocalizationService.t('status_dns_applies');
       }
       return true;
     } catch (e) {
-      _log.e('Error toggling DNS leak prevention: $e');
-      debugService.logError('Error toggling DNS leak prevention: $e');
+      _log.e('Error toggling DNS leak prevention');
+      debugService.logError('Error toggling DNS leak prevention');
       return false;
     }
   }
@@ -1476,8 +1473,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
       return true;
     } catch (e) {
-      _log.e('Error toggling kill switch: $e');
-      debugService.logError('Error toggling kill switch: $e');
+      _log.e('Error toggling kill switch');
+      debugService.logError('Error toggling kill switch');
       return false;
     }
   }
@@ -1499,8 +1496,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
       return true;
     } catch (e) {
-      _log.e('Error toggling split tunneling: $e');
-      debugService.logError('Error toggling split tunneling: $e');
+      _log.e('Error toggling split tunneling');
+      debugService.logError('Error toggling split tunneling');
       return false;
     }
   }
@@ -1578,7 +1575,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     statusMessage.value = LocalizationService.t('dns_only_started');
     _connectionStartTime = DateTime.now();
     _startUptimeCounter();
-    debugService.logInfo('DNS-only session: ${resolvers.join(", ")}');
+    debugService.logInfo('DNS-only session started');
     return true;
   }
 
@@ -1649,7 +1646,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           }
         }
       } catch (e) {
-        _log.w('Exit lookup attempt $attempt/$attempts failed: $e');
+        _log.w('Exit lookup attempt $attempt/$attempts failed');
       }
       // 1s, 2s, 3s, 4s, 5s - long enough for the upstream handshake.
       await Future<void>.delayed(Duration(seconds: attempt));

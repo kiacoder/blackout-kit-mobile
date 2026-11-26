@@ -177,6 +177,16 @@ class SecureVault {
     }
   }
 
+  /// Confirm the exact key is still persisted without creating a replacement.
+  Future<bool> isPersistedKey(Uint8List key) async {
+    try {
+      final persisted = await _store.read(_keyName);
+      return persisted != null && _sameValue(key, _decode(persisted));
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// True when any encrypted box exists on disk.
   Future<bool> hasEncryptedData() async {
     for (final encrypted in _encryptedBoxNames.values) {
@@ -281,14 +291,27 @@ class SecureVault {
           );
         }
       }
-      for (final name in _encryptedBoxNames.values) {
-        if (await _boxExists(name)) {
-          final existing = await openPreservingBox<Map>(
-            name,
-            cipher: HiveAesCipher(key),
-          );
-          await existing.close();
+      // Check every existing box before copying or deleting any legacy data.
+      // All three production library boxes contain Map records. A dynamically
+      // readable but incompatible record must not become a migrated library.
+      try {
+        for (final name in _encryptedBoxNames.values) {
+          if (await _boxExists(name)) {
+            await _verifyRecordShape(name, cipher: HiveAesCipher(key));
+          }
         }
+        for (final name in _encryptedBoxNames.keys) {
+          if (await _boxExists(name)) {
+            await _verifyRecordShape(name);
+          }
+        }
+      } catch (_) {
+        return const MigrationReport(
+          active: false,
+          migrated: false,
+          locked: true,
+          detail: 'Storage preflight failed. Existing data was preserved.',
+        );
       }
     }
 
@@ -336,8 +359,7 @@ class SecureVault {
         } finally {
           await verified.close();
         }
-        final persisted = await _store.read(_keyName);
-        if (persisted == null || !_sameValue(key, _decode(persisted))) {
+        if (!await isPersistedKey(key)) {
           throw StateError('Vault key unavailable during migration');
         }
 
@@ -364,6 +386,22 @@ class SecureVault {
           : 'Encrypted storage already in use',
       recordsMoved: moved,
     );
+  }
+
+  Future<void> _verifyRecordShape(String name, {HiveCipher? cipher}) async {
+    if (Hive.isBoxOpen(name)) {
+      throw StateError('Storage already open');
+    }
+    final box = await openPreservingBox<dynamic>(name, cipher: cipher);
+    try {
+      for (final value in box.values) {
+        if (value is! Map) {
+          throw StateError('Unsupported storage record type');
+        }
+      }
+    } finally {
+      await box.close();
+    }
   }
 
   /// True when a box exists on disk OR is already open.

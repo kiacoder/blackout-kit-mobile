@@ -104,6 +104,11 @@ class ConfigService {
       for (final name in names) {
         opened.add(await openPreservingBox<Map>(name, cipher: cipher));
       }
+      // A key may disappear or change while the boxes are being opened.
+      // Never expose a writable library that cannot be reopened on restart.
+      if (!await vault.isPersistedKey(vaultKey)) {
+        throw StateError('Vault key unavailable during initialization');
+      }
       _configStorage = opened[0];
       _sourceStorage = opened[1];
       _resultStorage = opened[2];

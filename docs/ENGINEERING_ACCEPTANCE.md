@@ -126,3 +126,12 @@ No production supervisor activation, orphan deletion, cipher migration,
 or device acceptance is claimed. Production ProcessBuilder readers do
 not yet have the experimental lifetime-pipe guarantee; sweeping session
 files after app restart could delete a file still needed by a live reader.
+
+### Follow-up: vault preflight
+
+All 24 focused vault tests, all 621 Dart regression tests and strict Dart analysis passed locally.
+New tests prove that an incompatible later legacy box preserves both
+original files, incompatible existing encrypted records block legacy
+deletion, and key loss during initialization refuses writes and allows
+recovery with the original key. No encryption format or dependency change.
+See MOBSF_REMEDIATION.md for scope and remaining risks.

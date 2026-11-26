@@ -41,7 +41,9 @@ The v1.19.4 candidate stores configs, sources and test results in encrypted
 Hive boxes using a platform-secure-storage key. Hive 2.2.3 uses AES-256-CBC;
 this is encryption at rest, not authenticated encryption. Settings are
 separate. The candidate locks the library rather than writing plaintext if
-the key is unavailable; ambiguous migration preserves both copies. Do not
+the key is unavailable; ambiguous migration preserves both copies. Migration
+checks the record types in all existing library boxes before deleting legacy
+data, and initialization rechecks the persisted key before allowing writes. Do not
 clear app data or uninstall to resolve a recovery screen. Active native
 engines can require app-private transient plaintext configuration files.
 Process-death cleanup and device migration verification remain open.

@@ -319,3 +319,24 @@ escalation. Existing callers still retain unresolved handles and refuse
 configuration deletion until exit is confirmed. The Linux supervisor
 test handles the procfs disappearance race without masking permission or
 live-child failures. See ENGINEERING_ACCEPTANCE.md for local test results.
+
+## Vault preflight and persisted-key acceptance
+
+Before migrating a legacy library, validate every existing encrypted and
+plaintext library box for supported top-level Map records. An incompatible
+later box must not be discovered only after an earlier legacy box was
+deleted. Report a locked library on preflight failure without copying or
+deleting records. Existing overlapping generations still require recovery.
+
+After opening all three encrypted boxes, recheck the persisted key before
+publishing the writable ConfigService. If the key is lost or changed during
+initialization, close only the boxes opened by that attempt, retain their
+files, and refuse writes. This does not continuously monitor keystore
+changes during an active session.
+
+Three regressions cover incompatible legacy records, incompatible existing
+encrypted records during partial migration, and loss of the key during
+initialization followed by successful recovery. Strict Dart analysis and
+all 24 focused vault tests passed. No change to CBC, key encoding, storage
+generation names or the shipping secure-storage dependency. Authenticated
+encryption and physical upgrade tests remain separate acceptance gates.

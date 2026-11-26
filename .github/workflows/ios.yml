@@ -48,9 +48,8 @@ jobs:
 
       - name: Dart analyze + tests
         run: |
-          flutter pub get
-          # Errors only — infos and warnings are not fatal (same policy as
-          # the Tests workflow).
+          flutter pub get --enforce-lockfile
+          # Errors and warnings remain fatal; informational lint debt is visible.
           flutter analyze --no-fatal-infos
           flutter test
 

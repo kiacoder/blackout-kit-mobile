@@ -189,3 +189,25 @@ Standalone iOS run 45833521156 was cancelled before runner acquisition;
 GitHub check annotations report macOS arm64 capacity constraints. Combined
 build 45833509159 passed both Android and iOS for f976da8. Do not weaken or
 remove the standalone check in response to runner capacity.
+
+## Dependency minimization
+
+No Dart application, integration-test or unit-test source imports
+encrypted_shared_preferences or shared_preferences; the only remaining
+platform registration was generated. The active vault is SecureKeyStore
+(flutter_secure_storage) and Hive, not the unused preference package.
+An isolated copy of main's manifest and lock resolved offline with the
+pinned Flutter SDK. Removing the unused direct dependency and its Android
+version override made the resolver remove exactly 11 packages: asn1lib,
+encrypt, encrypted_shared_preferences, pointycastle, shared_preferences,
+and its six platform implementations/interface. No retained lockfile
+entry changed. Transfer only that deletion set to the current candidate
+lock (which separately has reviewed picker upgrades, including a newer
+shared_preferences_web entry that is also removed). Remove the obsolete
+tracked Android plugin registration; enforce the lock in standalone iOS CI.
+This reduces unnecessary crypto/plugin dependency surface. It does not
+remove the actual flutter_secure_storage CBC finding, and is not a vault
+algorithm migration. The exact candidate lock must pass hosted resolution,
+Android/iOS builds, dependency review, and fresh scanner reports; the local
+cache lacks the new file_picker version. No new package or version upgrade
+is introduced by this increment.

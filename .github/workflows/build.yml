@@ -56,13 +56,8 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          # Must be >= 3.24.0. pubspec.lock pins `sdks: dart ">=3.5.0 <4.0.0"`,
-          # `flutter ">=3.24.0"` because shared_preferences_android 2.3.4 (a
-          # dependency_overrides entry) declares a language version above 3.4.
-          # At 3.22.0 / Dart 3.4 the kernel snapshot step failed with
-          # "The specified language version is too high. The highest supported
-          # language version is 3.4."
-          # Keep in step with the local SDK (3.24.0) and with test.yml.
+          # Match the reviewed lockfile and local SDK (Dart 3.5 / Flutter 3.24).
+          # Keep the toolchain aligned with test.yml and ios.yml.
           flutter-version: '3.24.0'
           channel: stable
 

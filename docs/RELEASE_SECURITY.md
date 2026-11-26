@@ -171,3 +171,14 @@ and its test with Android API 34, actual Flutter engine jar and AndroidX
 core 1.13.1, then JUnit 5/5. Full local Gradle blocked by missing offline
 AGP 8.5.2 resolution; hosted Android build/lint, fresh CodeQL and device
 update acceptance required. Published v1.19.3 unchanged.
+
+### Diagnostic endpoint follow-up
+For #43, Android SOCKS IP diagnostics now accept only exact HTTPS URLs
+for api.ipify.org and ipwho.is, reject bodies above 32 Ki characters,
+ignore caller-supplied SOCKS ports in favor of the live session, and
+return no geo lookup result when the tunnel session changes. Tests cover
+endpoint rejection and the exact response-size boundary (JUnit 2/2);
+ktlint, Detekt and 12 integrity checks pass. Standard TLS certificate
+and hostname validation is unchanged. This reduces the diagnostic
+surface, but does not implement certificate pinning or close #43 by
+itself. Fresh Android CI and device testing remain required.

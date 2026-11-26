@@ -693,7 +693,7 @@ class VpnPlugin :
             timeoutMs: Int,
         ): String? {
             if (socksPort <= 0 || socksPort > MAX_PORT) {
-                Log.w(TAG, "Refusing to dial an out-of-range SOCKS port: $socksPort")
+                Log.w(TAG, "Refusing out-of-range SOCKS port")
                 return null
             }
             var conn: HttpsURLConnection? = null

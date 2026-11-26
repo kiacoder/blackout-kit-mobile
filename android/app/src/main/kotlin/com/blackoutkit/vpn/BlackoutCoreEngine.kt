@@ -28,7 +28,7 @@ object BlackoutCoreEngine {
             Log.i(TAG, "libblackout_core.so loaded successfully")
         } catch (e: UnsatisfiedLinkError) {
             isLoaded = false
-            Log.w(TAG, "libblackout_core.so not bundled or not yet built: ${e.message}")
+            Log.w(TAG, "libblackout_core.so unavailable: ${e.javaClass.simpleName}")
         }
     }
 
@@ -75,7 +75,7 @@ object BlackoutCoreEngine {
         val initResult = blackout_init(2)
         if (initResult != 0) {
             lastError = "Native core initialization failed: code $initResult"
-            Log.e(TAG, lastError!!)
+            Log.e(TAG, "Native core initialization failed: code $initResult")
             return false
         }
         val rc = blackout_start(tunFd, configJson)
@@ -83,7 +83,7 @@ object BlackoutCoreEngine {
             val buf = ByteArray(ERROR_BUFFER_BYTES)
             val len = blackout_get_last_error(buf, buf.size)
             lastError = if (len > 0) String(buf, 0, len).trimEnd('\u0000') else "Core start error: code $rc"
-            Log.e(TAG, "blackout_start failed: $lastError")
+            Log.e(TAG, "Native core startup failed: code $rc")
         } else {
             lastError = null
         }

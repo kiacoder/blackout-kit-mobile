@@ -1520,3 +1520,15 @@ errors/warnings (196 infos), Kotlin quality and 12 integrity checks pass.
 Android runtime verification remains outstanding. Retain loopback network
 policy until actual ARM traffic acceptance; no new MobSF score claimed.
 No physical ADB device, storage upgrade or production merge/release.
+
+## Phase 3 Android engine diagnostic privacy follow-up (2026-11-26)
+
+Five Android Kotlin engine/service files now use fixed system-log messages
+or numeric native return codes instead of raw engine failures, DNS server
+lists, user protocol strings and loader exception messages. UI lastError
+and failure propagation are unchanged. Added a source-level regression
+for the reviewed log call patterns, not a runtime logcat proof. Full Flutter
+605/605, ktlint and Detekt pass, 12 binary/action checks pass. Latest
+3f5c64c hosted jobs were still running at inspection. No ARM device
+attached; no native runtime or storage migration acceptance, fresh MobSF
+score, production signing, merge or release claimed.

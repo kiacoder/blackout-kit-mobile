@@ -217,7 +217,7 @@ object XrayEngine {
     ): Boolean {
         if (configJson.isBlank()) {
             lastError = "Refusing to start the Xray core with an empty config"
-            Log.e(TAG, lastError!!)
+            Log.e(TAG, "Xray configuration empty")
             return false
         }
         return ensureEnv(context) && startInitializedCore(configJson, tunFd)

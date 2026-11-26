@@ -195,7 +195,7 @@ object EngineRunner {
             val spec = EngineCommands.forProtocol(protocol)
             if (spec == null) {
                 lastError = "No engine is mapped for protocol '$protocol'."
-                Log.w(TAG, lastError!!)
+                Log.w(TAG, "No engine mapped for requested protocol")
                 return null
             }
             val libDir = context.applicationInfo.nativeLibraryDir
@@ -210,7 +210,7 @@ object EngineRunner {
                         append("The tunnel was refused instead of black-holing your traffic. ")
                         append("Use a VLESS, VMess, Trojan or Shadowsocks config for now.")
                     }
-                Log.w(TAG, lastError!!)
+                Log.w(TAG, "Required engine binary missing")
                 null
             } else {
                 val config = configOwner.stage(configDir(context), json)

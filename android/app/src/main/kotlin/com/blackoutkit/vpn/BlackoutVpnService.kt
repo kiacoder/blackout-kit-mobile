@@ -335,7 +335,7 @@ class BlackoutVpnService : VpnService() {
         message: String,
     ): Boolean {
         lastError = message
-        Log.w(TAG, message)
+        Log.w(TAG, "VPN setup failed")
         ticket.publish { notifyStatus("error") }
         return false
     }
@@ -585,7 +585,7 @@ class BlackoutVpnService : VpnService() {
                 lastError = "Every DNS server was rejected by Android " +
                     "($dnsServers). Refusing to build a tunnel that would " +
                     "silently fall back to the carrier resolver."
-                Log.e(TAG, lastError!!)
+                Log.e(TAG, "Android rejected all configured DNS servers")
                 ticket.publish { notifyStatus("error") }
                 return null
             }
@@ -612,7 +612,7 @@ class BlackoutVpnService : VpnService() {
             val fd = builder.establish()
             if (fd == null) {
                 lastError = "establish() returned null - VPN consent missing or revoked"
-                Log.e(TAG, lastError!!)
+                Log.e(TAG, "VPN interface establishment failed")
                 ticket.publish { notifyStatus("error") }
                 return false
             }
@@ -669,7 +669,7 @@ class BlackoutVpnService : VpnService() {
                     protocol == "mihomo" -> EngineRunner.lastError
                     else -> LibboxEngine.lastError ?: EngineRunner.lastError
                 } ?: "Engine failed to start for protocol '$protocol'"
-                Log.e(TAG, lastError!!)
+                Log.e(TAG, "Proxy engine startup failed")
                 // Startup failure does not prove the native engine released the fd.
                 // The session executor stops the engine before releasing descriptors.
                 ticket.publish { notifyStatus("error") }
@@ -768,7 +768,7 @@ class BlackoutVpnService : VpnService() {
             val xrayConfig = request.xrayConfig
             if (xrayConfig.isNullOrBlank()) {
                 lastError = "No Xray config was supplied for protocol '${request.protocol}'"
-                Log.e(TAG, lastError!!)
+                Log.e(TAG, "Xray configuration missing")
                 return false
             }
             return XrayEngine.start(this@BlackoutVpnService, xrayConfig, tunFd)
@@ -778,10 +778,9 @@ class BlackoutVpnService : VpnService() {
             request: StartRequest,
             tunFd: Int,
         ): Boolean {
-            val protocol = request.protocol
             val libboxConfig = request.libboxConfig
             if (!request.xrayConfig.isNullOrBlank()) {
-                Log.w(TAG, "ignoring an Xray config supplied for non-Xray '$protocol'")
+                Log.w(TAG, "Ignoring an Xray config supplied for a different engine")
             }
 
             // A non-Xray protocol MUST arrive with its config document.
@@ -793,7 +792,7 @@ class BlackoutVpnService : VpnService() {
             // tunnel into it until its selected protocol has a tested end-to-end
             // data path. Libbox is the production in-process sing-box runtime here.
             if (BlackoutCoreEngine.isLoaded) {
-                Log.d(TAG, "Rust core is bundled but not enabled for '$protocol' until its outbound is implemented")
+                Log.d(TAG, "Rust core outbound not enabled")
             }
 
             // In-process libbox core before the subprocess fallback: same sing-box
@@ -801,12 +800,12 @@ class BlackoutVpnService : VpnService() {
             // and takes the TUN fd directly - no tun2socks, no fdlauncher.
             LibboxEngine.resetLastError()
             if (libboxConfig.isNullOrBlank()) {
-                Log.w(TAG, "no libbox-mode config supplied for '$protocol' (older Dart caller?)")
+                Log.w(TAG, "No libbox-mode config supplied")
             } else if (LibboxEngine.start(this@BlackoutVpnService, tunFd, libboxConfig)) {
-                Log.i(TAG, "Starting protocol '$protocol' via in-process libbox core")
+                Log.i(TAG, "Starting in-process libbox core")
                 return true
             } else {
-                Log.w(TAG, "LibboxEngine failed, falling back to EngineRunner: ${LibboxEngine.lastError}")
+                Log.w(TAG, "LibboxEngine failed, falling back to EngineRunner")
             }
 
             return startSingboxSubprocess(request, tunFd)
@@ -823,7 +822,7 @@ class BlackoutVpnService : VpnService() {
                     lastError =
                         "No sing-box config was supplied for protocol '$protocol'; " +
                         "refusing to start an engine on a stale config file."
-                    Log.e(TAG, lastError!!)
+                    Log.e(TAG, "Sing-box configuration missing")
                     false
                 }
                 else ->

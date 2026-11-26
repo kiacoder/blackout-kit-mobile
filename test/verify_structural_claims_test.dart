@@ -33,6 +33,22 @@ void main() {
     });
   });
 
+  group('Native diagnostic privacy', () {
+    test('engine errors are kept out of Android system logs', () {
+      for (final name in [
+        'BlackoutCoreEngine', 'BlackoutVpnService', 'EngineRunner', 'XrayEngine',
+      ]) {
+        final code = source('android/app/src/main/kotlin/com/blackoutkit/vpn/$name.kt');
+        expect(code, isNot(matches(RegExp(
+          r'Log\.[ewidv]\(TAG,\s*(lastError!!|message)\)',
+        ))), reason: name);
+        expect(code, isNot(contains(r'failed: $lastError')), reason: name);
+        expect(code, isNot(contains(r'EngineRunner: ${LibboxEngine.lastError}')),
+            reason: name);
+      }
+    });
+  });
+
   group('BK-001 editor save order', () {
     test('the replacement is stored before the old record is deleted', () {
       final src = source('lib/screens/config_editor_screen.dart');

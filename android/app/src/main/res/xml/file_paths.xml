@@ -5,7 +5,4 @@
          one FileProvider maps, unlike the external app dir which can live on a
          volume this provider does not cover. -->
     <files-path name="updates_internal" path="updates/" />
-    <!-- Kept for APKs downloaded by builds before the switch to internal
-         storage, so an in-flight update from an older version still installs. -->
-    <external-files-path name="updates_external" path="updates/" />
 </paths>

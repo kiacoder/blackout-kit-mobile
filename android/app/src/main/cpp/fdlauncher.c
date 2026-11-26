@@ -15,8 +15,8 @@
  * passes fd 3 on the child's command line.
  *
  * Two entry points, both reentrant and safe to call from the main thread:
- *   spawn(path, args, fd, logPath) -> child pid (or -1 on failure)
- *   poll(pid)                      -> -1 still running, >= 0 exit code
+ *   spawn(path, args, fd, logPath) -> opaque child token (or -1 on failure)
+ *   poll(token)                    -> -1 still running, >= 0 terminal status
  * The child's stdout and stderr are appended to logPath so a startup failure
  * is diagnosable after the fact, and poll() reaps the child so it cannot
  * linger as a zombie.
@@ -32,13 +32,21 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <unistd.h>
+#include "parent_guard.h"
+#include "owned_child.h"
+#include "descriptor_guard.h"
+#include <pthread.h>
+#include <limits.h>
+
+static pthread_mutex_t child_lock = PTHREAD_MUTEX_INITIALIZER;
+static owned_child bridge = {0, 0, CHILD_UNKNOWN};
 
 #define LOG_TAG "fdlauncher"
 #define LOGF(fmt, ...) \
     __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, fmt, ##__VA_ARGS__)
 
 /*
- * Returns the child pid, or -1. On failure errno describes the reason.
+ * Returns an opaque child token, or -1 on failure.
  */
 JNIEXPORT jint JNICALL
 Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
@@ -46,8 +54,10 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
         jint fd, jstring jLogPath) {
     (void) thiz;
     const char *path = (*env)->GetStringUTFChars(env, jPath, NULL);
+    if (path == NULL) return -1;
     const char *logPath = jLogPath ? (*env)->GetStringUTFChars(env, jLogPath, NULL) : NULL;
-    if (path == NULL) {
+    if (jLogPath && !logPath) {
+        (*env)->ReleaseStringUTFChars(env, jPath, path);
         return -1;
     }
 
@@ -63,21 +73,49 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
     int slot = 1;
     for (jsize i = 0; i < argCount; i++) {
         jstring arg = (jstring) (*env)->GetObjectArrayElement(env, jArgs, i);
-        const char *utf = (*env)->GetStringUTFChars(env, arg, NULL);
-        argv[slot++] = utf ? strdup(utf) : strdup("");
+        const char *utf = arg ? (*env)->GetStringUTFChars(env, arg, NULL) : NULL;
+        char *copy = utf ? strdup(utf) : NULL;
         if (utf) (*env)->ReleaseStringUTFChars(env, arg, utf);
-        (*env)->DeleteLocalRef(env, arg);
+        if (arg) (*env)->DeleteLocalRef(env, arg);
+        if (!copy) {
+            for (int k = 1; k < slot; k++) free(argv[k]);
+            free(argv);
+            (*env)->ReleaseStringUTFChars(env, jPath, path);
+            if (logPath) (*env)->ReleaseStringUTFChars(env, jLogPath, logPath);
+            return -1;
+        }
+        argv[slot++] = copy;
     }
     argv[slot] = NULL;
 
     /* Open the log before forking so both sides agree on the descriptor. */
     int logFd = -1;
     if (logPath != NULL) {
-        logFd = open(logPath, O_WRONLY | O_CREAT | O_APPEND, 0600);
+        logFd = open(logPath, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+        if (logFd < 0) {
+            for (int i = 1; i < slot; i++) free(argv[i]);
+            free(argv);
+            (*env)->ReleaseStringUTFChars(env, jPath, path);
+            (*env)->ReleaseStringUTFChars(env, jLogPath, logPath);
+            return -1;
+        }
     }
 
+    /* The launcher has exactly one bridge slot. Tokens never wrap or reuse. */
+    pthread_mutex_lock(&child_lock);
+    if (bridge.pid > 0 || bridge.token == INT_MAX) {
+        pthread_mutex_unlock(&child_lock);
+        if (logFd >= 0) close(logFd);
+        for (int i = 1; i < slot; i++) free(argv[i]);
+        free(argv);
+        (*env)->ReleaseStringUTFChars(env, jPath, path);
+        if (logPath) (*env)->ReleaseStringUTFChars(env, jLogPath, logPath);
+        return -1;
+    }
+    pid_t expected_parent = getpid();
     pid_t pid = fork();
     if (pid < 0) {
+        pthread_mutex_unlock(&child_lock);
         LOGF("fork failed: %s", strerror(errno));
         if (logFd >= 0) close(logFd);
         for (int i = 1; i < slot; i++) free(argv[i]);
@@ -88,7 +126,10 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
     }
 
     if (pid == 0) {
-        /* Child. */
+        /* Child: never keep the TUN alive beyond its launcher owner. */
+        if (arm_parent_guard(expected_parent) != 0) {
+            _exit(126);
+        }
         /*
          * First, duplicate the VPN tunnel descriptor to a safe high slot so
          * stdout/stderr redirection and logFd manipulation cannot clobber it
@@ -96,23 +137,34 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
          */
         int vpnFd = fcntl(fd, F_DUPFD_CLOEXEC, 100);
         if (vpnFd < 0) {
-            vpnFd = fd;
+            _exit(126);
         }
 
         if (logFd >= 0) {
-            dup2(logFd, STDOUT_FILENO);
-            dup2(logFd, STDERR_FILENO);
+            if (dup2(logFd, STDOUT_FILENO) < 0 ||
+                dup2(logFd, STDERR_FILENO) < 0 ||
+                fcntl(STDOUT_FILENO, F_SETFD, 0) < 0 ||
+                fcntl(STDERR_FILENO, F_SETFD, 0) < 0) {
+                _exit(126);
+            }
             if (logFd != STDOUT_FILENO && logFd != STDERR_FILENO) {
                 close(logFd);
             }
         }
 
+        /* Never inherit the app's standard input. */
+        int nullInput = open("/dev/null", O_RDONLY | O_CLOEXEC);
+        if (nullInput < 0 || dup2(nullInput, STDIN_FILENO) < 0 ||
+            fcntl(STDIN_FILENO, F_SETFD, 0) < 0) {
+            _exit(126);
+        }
+        if (nullInput != STDIN_FILENO) close(nullInput);
+
         /*
          * The engine reads the tunnel from fd 3. Copy the descriptor there.
          */
         if (dup2(vpnFd, 3) < 0) {
-            /* Report through the log fd; the parent sees exit code 126. */
-            LOGF("dup2(vpnFd=%d, 3) failed: %s", vpnFd, strerror(errno));
+            /* Avoid non-async-signal-safe logging after fork. */
             _exit(126);
         }
 
@@ -124,93 +176,48 @@ Java_com_blackoutkit_vpn_EngineRunner_nativeSpawnWithFd(
          * then closed fd 3, causing tun2socks to immediately crash with:
          * "unix.SetNonblock(3) failed: bad file descriptor (EBADF)".
          */
-        fcntl(3, F_SETFD, 0);
+        if (fcntl(3, F_SETFD, 0) < 0) _exit(126);
 
-        /* Keep the child from holding the parent's other descriptors. */
-        for (int d = 4; d < 128; d++) {
-            close(d);
-        }
+        /* Keep only standard streams and the explicitly mapped TUN. */
+        if (close_extra_descriptors() != 0) _exit(126);
         execv(path, argv);
         /* execv only returns on failure; 127 tells the caller so. */
-        LOGF("execv(\"%s\") failed: %s", path, strerror(errno));
         _exit(127);
     }
 
-    /* Parent. */
+    /* Parent: publish ownership before any caller can poll or signal. */
+    bridge.pid = pid;
+    int token = ++bridge.token;
+    bridge.terminal_status = CHILD_UNKNOWN;
+    pthread_mutex_unlock(&child_lock);
     if (logFd >= 0) close(logFd);
     for (int i = 1; i < slot; i++) free(argv[i]);
     free(argv);
     (*env)->ReleaseStringUTFChars(env, jPath, path);
     if (logPath) (*env)->ReleaseStringUTFChars(env, jLogPath, logPath);
-    return (jint) pid;
+    return (jint) token;
 }
 
-/*
- * Returns -1 while the child runs, otherwise its exit code (0..255).
- * A negative code other than -1 is returned as 128 + signal.
- */
+/* Poll by opaque launcher token, not by an OS PID. */
 JNIEXPORT jint JNICALL
-Java_com_blackoutkit_vpn_EngineRunner_nativePollPid(
-        JNIEnv *env, jobject thiz, jint pid) {
+Java_com_blackoutkit_vpn_EngineRunner_nativePollChild(
+        JNIEnv *env, jobject thiz, jint token) {
     (void) env;
     (void) thiz;
-    if (pid <= 0) {
-        return -1;
-    }
-    int status = 0;
-    pid_t result = waitpid((pid_t) pid, &status, WNOHANG);
-    if (result == 0) {
-        return -1; /* still running */
-    }
-    if (result < 0) {
-        return errno == ECHILD ? 0 : -1;
-    }
-    if (WIFEXITED(status)) {
-        return WEXITSTATUS(status);
-    }
-    if (WIFSIGNALED(status)) {
-        return 128 + WTERMSIG(status);
-    }
-    return -1;
+    pthread_mutex_lock(&child_lock);
+    int result = owned_child_poll(&bridge, token);
+    pthread_mutex_unlock(&child_lock);
+    return result;
 }
 
-/*
- * Signal a child (SIGTERM then SIGKILL semantics live on the caller side).
- * Returns 0 on success, -1 with errno set otherwise.
- */
+/* Check and signal under the same lock as the sole launcher reaper. */
 JNIEXPORT jint JNICALL
-Java_com_blackoutkit_vpn_EngineRunner_nativeKillPid(
-        JNIEnv *env, jobject thiz, jint pid, jint sig) {
+Java_com_blackoutkit_vpn_EngineRunner_nativeSignalChild(
+        JNIEnv *env, jobject thiz, jint token, jint sig) {
     (void) env;
     (void) thiz;
-    if (pid <= 0) {
-        return -1;
-    }
-    return kill((pid_t) pid, sig) == 0 ? 0 : -1;
-}
-
-/*
- * Reap a child that outlived the tunnel (used by stop()). Returns the same
- * codes as poll() but blocks until the child is gone.
- */
-JNIEXPORT jint JNICALL
-Java_com_blackoutkit_vpn_EngineRunner_nativeWaitPid(
-        JNIEnv *env, jobject thiz, jint pid) {
-    (void) env;
-    (void) thiz;
-    if (pid <= 0) {
-        return -1;
-    }
-    int status = 0;
-    pid_t result = waitpid((pid_t) pid, &status, 0);
-    if (result < 0) {
-        return errno == ECHILD ? 0 : -1;
-    }
-    if (WIFEXITED(status)) {
-        return WEXITSTATUS(status);
-    }
-    if (WIFSIGNALED(status)) {
-        return 128 + WTERMSIG(status);
-    }
-    return -1;
+    pthread_mutex_lock(&child_lock);
+    int result = owned_child_signal(&bridge, token, sig);
+    pthread_mutex_unlock(&child_lock);
+    return result;
 }

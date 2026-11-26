@@ -71,11 +71,28 @@ class DebugService extends GetxService {
   /// source, delete a config, fetch results — goes through here so the logs
   /// screen can answer "what happened?" without a debugger attached.
   void logAction(String action, [Map<String, dynamic>? details]) {
-    final detail = (details == null || details.isEmpty)
-        ? ''
-        : ' ' +
-            details.entries.map((e) => '${e.key}=${e.value}').join(' ');
-    log('⚡ $action$detail', level: Level.info);
+    // Keep only known aggregate counters and boolean settings. Free-form
+    // identifiers, URLs, error strings and nested objects never enter exports.
+    const safeKeys = {
+      'count',
+      'configs',
+      'attempted',
+      'fetched',
+      'new',
+      'batch',
+      'total_batches',
+      'reachable',
+      'total',
+      'value',
+      'success',
+    };
+    final fields = (details ?? const <String, dynamic>{}).entries.where(
+        (entry) =>
+            safeKeys.contains(entry.key) &&
+            (entry.value is bool || entry.value is int));
+    final detail =
+        fields.map((entry) => '${entry.key}=${entry.value}').join(' ');
+    log(detail.isEmpty ? '⚡ $action' : '⚡ $action $detail', level: Level.info);
   }
 
   /// Log a message at specified level

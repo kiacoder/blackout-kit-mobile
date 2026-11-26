@@ -1,0 +1,160 @@
+name: Secure storage migration experiment
+on:
+  workflow_dispatch:
+  push:
+    branches: ['arena/**']
+    paths:
+      - 'tool/prepare_storage_migration_experiment.py'
+      - 'tool/patch_storage_backup_fixture.py'
+      - 'tool/run_storage_migration_acceptance.py'
+      - 'tool/run_storage_emulator_ci.sh'
+      - 'tool/fixtures/storage_migration/**'
+      - '.github/workflows/storage-migration-experiment.yml'
+permissions:
+  contents: read
+jobs:
+  resolve:
+    name: Full-app candidate dependency and toolchain verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+      - name: Resolve in disposable checkout
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from tool.prepare_storage_migration_experiment import candidate_manifest, candidate_source, app_toolchain
+          p = Path('pubspec.yaml')
+          p.write_text(candidate_manifest(p.read_text()))
+          p = Path('lib/services/secure_vault.dart')
+          p.write_text(candidate_source(p.read_text()))
+          app_toolchain(Path("."))
+          PY
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test
+      - name: Verify full-app Android candidate (no installation or publication)
+        working-directory: android
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: storage-experiment-lock
+          path: pubspec.lock
+          if-no-files-found: error
+          retention-days: 14
+  fixture:
+    name: Compile isolated synthetic upgrade fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+      - name: Build fixtures (no installation)
+        run: |
+          set -euo pipefail
+          mkdir -p .cache/storage-fixtures-output
+          for mode in legacy candidate backup; do
+            folder=".cache/storage-$mode"
+            python3 tool/prepare_storage_migration_experiment.py --create --mode "$mode" --folder "$folder"
+            seed=false
+            interrupt=false
+            if [ "$mode" = candidate ]; then interrupt=true; fi
+            if [ "$mode" = legacy ]; then seed=true; fi
+            (
+              cd "$folder"
+              if [ "$mode" = backup ]; then
+                export PUB_CACHE="$GITHUB_WORKSPACE/.cache/storage-backup-pub"
+              fi
+              flutter pub get
+              if [ "$mode" = backup ]; then
+                python3 "$GITHUB_WORKSPACE/tool/patch_storage_backup_fixture.py" --pub-cache "$PUB_CACHE"
+              fi
+              flutter analyze --no-pub lib
+              flutter build apk --no-pub --debug --dart-define=SEED_LEGACY="$seed" --dart-define=INTERRUPT_AFTER_KEY="$interrupt"
+            )
+            cp "$folder/build/app/outputs/flutter-apk/app-debug.apk" ".cache/storage-fixtures-output/$mode.apk"
+            cp "$folder/pubspec.lock" ".cache/storage-fixtures-output/$mode.lock"
+          done
+          aapt="$ANDROID_HOME/build-tools/34.0.0/aapt"
+          apksigner="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          for mode in legacy candidate backup; do
+            apk=".cache/storage-fixtures-output/$mode.apk"
+            "$aapt" dump badging "$apk" | grep -F "package: name='com.blackoutkit.storagefixture'"
+            "$apksigner" verify --print-certs "$apk" > ".cache/storage-fixtures-output/$mode.signer.txt"
+          done
+          baseline=$(grep -E '^Signer #1 certificate SHA-256 digest: [[:xdigit:]]{64}$' .cache/storage-fixtures-output/legacy.signer.txt)
+          for mode in candidate backup; do
+            signer=$(grep -E '^Signer #1 certificate SHA-256 digest: [[:xdigit:]]{64}$' ".cache/storage-fixtures-output/$mode.signer.txt")
+            test "$signer" = "$baseline"
+          done
+          (cd .cache/storage-fixtures-output && sha256sum *.apk > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: isolated-storage-fixtures
+          path: .cache/storage-fixtures-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  acceptance:
+    name: Synthetic migration on Android API ${{ matrix.api }} (${{ matrix.mode }})
+    needs: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [24, 34]
+        mode: [candidate, backup]
+    env:
+      API: ${{ matrix.api }}
+      MODE: ${{ matrix.mode }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: isolated-storage-fixtures
+          path: .cache/storage-fixtures-output
+      - name: Verify artifacts and run on a fresh disposable emulator
+        run: bash tool/run_storage_emulator_ci.sh "$API" "$MODE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: storage-migration-result-api-${{ matrix.api }}-${{ matrix.mode }}
+          path: migration-result.json
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: storage-emulator-diagnostics-api-${{ matrix.api }}-${{ matrix.mode }}
+          path: |
+            ${{ runner.temp }}/storage-emulator.log
+            ${{ runner.temp }}/storage-emulator-preflight.log
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,9 +1,10 @@
 /// Config service for loading, saving, and parsing VPN configs.
 /// Replicates Blackout Kit CLI's config/manager.py pattern:
-/// - Local persistence with Hive (currently not encrypted at rest)
+/// - Local persistence with encrypted Hive boxes when keystore is available
 /// - Atomic file I/O (write-temp + move)
 /// - Deduplication by config hash
 /// - Config validation before storage
+library;
 
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -19,10 +20,24 @@ class ConfigService {
   static const String _resultBoxName = 'test_results';
   static const String _dedupKey = '_dedup_hashes'; // Tracks stored config hashes
 
-  late Box<Map> _configBox;
-  late Box<Map> _sourceBox;
-  late Box<Map> _resultBox;
-  SecureVault? _vault;
+  late Box<Map> _configStorage;
+  Box<Map> get _configBox {
+    if (_vaultLocked) throw StateError('Storage recovery required');
+    return _configStorage;
+  }
+
+  late Box<Map> _sourceStorage;
+  Box<Map> get _sourceBox {
+    if (_vaultLocked) throw StateError('Storage recovery required');
+    return _sourceStorage;
+  }
+
+  late Box<Map> _resultStorage;
+  Box<Map> get _resultBox {
+    if (_vaultLocked) throw StateError('Storage recovery required');
+    return _resultStorage;
+  }
+
   bool _vaultActive = false;
 
   /// Encrypted data exists but its key is gone. The library is intact and
@@ -35,120 +50,62 @@ class ConfigService {
       : _log = logger ?? Logger(),
         _keyStore = keyStore;
 
-  /// Initialize Hive boxes.
-  ///
-  /// A corrupt box (power loss / OOM kill during a compaction or write) used
-  /// to rethrow out of `main()`, which is a white screen on EVERY subsequent
-  /// launch - the app became permanently unbootable with no user-visible
-  /// recovery. Now a failed open quarantines that box (deleted, fresh one
-  /// created) exactly once and continues: losing a stored copy of configs is
-  /// recoverable; an unbootable app is not.
+  /// Initialize without opening or replacing plaintext when an existing
+  /// encrypted library needs recovery.
   Future<void> initialize() async {
-    // Encrypted-at-rest storage (BK-053). Every saved config embeds a live
-    // credential - UUID, password or private key - and used to sit in a plain
-    // Hive box readable by anything with storage access. The vault moves them
-    // into AES-encrypted boxes whose key lives in the platform keystore.
-    //
-    // Migration is additive and idempotent: plaintext records are copied into
-    // the encrypted boxes and the originals are deleted only afterwards. Any
-    // failure leaves the plaintext boxes untouched and the app runs in legacy
-    // mode rather than losing the library.
+    _vaultActive = false;
+    _vaultLocked = false;
+    final vault = SecureVault(store: _keyStore);
     try {
-      // The key store is injectable so tests (and platforms with no keystore)
-      // can supply their own; production gets the platform keystore.
-      _vault = SecureVault(store: _keyStore);
-      final report = await _vault!.migrate();
+      final report = await vault.migrate();
       _vaultActive = report.active;
-      // migrate() already distinguishes "no keystore" from "key lost while
-      // encrypted data exists" - take its verdict rather than re-deriving it,
-      // which read a flag that had just been set to false.
-      _vaultLocked = report.locked;
-      if (report.locked) {
-        _log.e('Config vault is locked: ${report.detail}');
-      } else if (report.migrated) {
-        _log.i('Config vault: ${report.detail}');
-      } else if (!report.active) {
-        _log.w('Config vault inactive: ${report.detail}');
+      _vaultLocked = report.locked ||
+          (!report.active && await vault.hasEncryptedData());
+      if (_vaultLocked) {
+        _log.w('Config library requires recovery; storage left untouched');
+        return;
       }
-    } catch (e) {
-      // Never let the vault block startup: legacy plaintext still works.
-      _log.e('Config vault setup failed, continuing unencrypted: $e');
+      final vaultKey = _vaultActive ? await vault.getOrCreateKey() : null;
+      if (_vaultActive && vaultKey == null) {
+        _vaultActive = false;
+        _vaultLocked = true;
+        return;
+      }
+      final cipher = vaultKey == null ? null : HiveAesCipher(vaultKey);
+      final configBox = await openPreservingBox<Map>(
+          _vaultActive
+              ? SecureVault.encryptedNameFor(_configBoxName)
+              : _configBoxName,
+          cipher: cipher);
+      final sourceBox = await openPreservingBox<Map>(
+          _vaultActive
+              ? SecureVault.encryptedNameFor(_sourceBoxName)
+              : _sourceBoxName,
+          cipher: cipher);
+      final resultBox = await openPreservingBox<Map>(
+          _vaultActive
+              ? SecureVault.encryptedNameFor(_resultBoxName)
+              : _resultBoxName,
+          cipher: cipher);
+      _configStorage = configBox;
+      _sourceStorage = sourceBox;
+      _resultStorage = resultBox;
+      _log.i('ConfigService initialized (encrypted at rest: $_vaultActive)');
+    } catch (_) {
       _vaultActive = false;
+      _vaultLocked = true;
+      _log.w('Config storage could not be safely opened; recovery required');
     }
-
-    // The cipher is mandatory for the encrypted boxes: opening one without it
-    // silently yields zero records, which looks exactly like an empty library.
-    // If the key cannot be read back (keystore wiped, app data restored onto a
-    // new device) the vault is unusable, so fall back to the plaintext boxes
-    // rather than presenting an empty library.
-    var vaultKey = _vaultActive ? await _vault!.getOrCreateKey() : null;
-    if (_vaultActive && vaultKey == null) {
-      // Distinguish "no keystore on this platform" from "the key that opens
-      // existing encrypted data is gone". The second case must never delete
-      // anything: the boxes are intact and a restore of the key brings the
-      // library back.
-      _vaultLocked = await _vault!.hasEncryptedData();
-      _vaultActive = false;
-      vaultKey = null;
-      _log.e(_vaultLocked
-          ? 'Vault key missing but encrypted configs exist - keeping them '
-              'untouched and reporting a locked library'
-          : 'Vault key unavailable - falling back to plaintext storage');
-    }
-    final cipher = vaultKey == null ? null : HiveAesCipher(vaultKey);
-
-    _configBox = await _openOrQuarantine<Map>(
-        _vaultActive ? SecureVault.encryptedNameFor(_configBoxName) : _configBoxName,
-        cipher);
-    _sourceBox = await _openOrQuarantine<Map>(
-        _vaultActive ? SecureVault.encryptedNameFor(_sourceBoxName) : _sourceBoxName,
-        cipher);
-    _resultBox = await _openOrQuarantine<Map>(
-        _vaultActive ? SecureVault.encryptedNameFor(_resultBoxName) : _resultBoxName,
-        cipher);
-    _log.i('ConfigService initialized (encrypted at rest: $_vaultActive)');
   }
 
   /// Whether the saved configs are encrypted on disk.
   bool get isEncryptedAtRest => _vaultActive;
 
-  /// Encrypted configs are on disk but cannot be decrypted right now.
+  /// Saved storage needs recovery before normal access can resume.
   ///
   /// The UI shows a recovery message for this instead of "no configs", which
   /// is what made a keystore reset look like the library had been deleted.
   bool get isVaultLocked => _vaultLocked;
-
-  /// Opens [name], or - if the file is corrupt - deletes it and reopens
-  /// fresh. One retry only; if that also fails the error propagates, since
-  /// silently running with no storage at all would mask real bugs.
-  Future<Box<T>> _openOrQuarantine<T>(String name, [HiveCipher? cipher]) async {
-    try {
-      return await Hive.openBox<T>(name, encryptionCipher: cipher);
-    } on HiveError catch (e) {
-      // "already open and of type ...": another ConfigService (or a previous
-      // instance in the same process) holds the box. Reuse it rather than
-      // failing - the data is fine, only the second open is refused.
-      final message = e.toString();
-      if (message.contains('already open')) {
-        try {
-          return Hive.box(name) as Box<T>;
-        } catch (_) {
-          // fall through to quarantine
-        }
-      }
-      // Never delete encrypted data. A wrong or missing key is not corruption:
-      // the bytes are fine, and deleting them destroys a library that a
-      // restored key would have opened. Rename instead, so the file survives.
-      if (name.endsWith('_v2')) {
-        _log.e('Encrypted box "$name" could not be opened ($e) - leaving it on '
-            'disk; the vault key may be missing');
-        rethrow;
-      }
-      _log.e('Box "$name" is unreadable ($e) - quarantining it');
-      await Hive.deleteBoxFromDisk(name);
-      return await Hive.openBox<T>(name, encryptionCipher: cipher);
-    }
-  }
 
   // ── Test result persistence ──────────────────────────────────────────────
   //
@@ -161,8 +118,8 @@ class ConfigService {
   Future<void> saveTestResult(TestResult result) async {
     try {
       await _resultBox.put(result.configHash, result.toJson());
-    } catch (e) {
-      _log.e('Error saving test result: $e');
+    } catch (_) {
+      _log.e('Error saving test result');
     }
   }
 
@@ -176,13 +133,13 @@ class ConfigService {
         try {
           results[key] =
               TestResult.fromJson(Map<String, dynamic>.from(data));
-        } catch (e) {
-          _log.w('Skipping unreadable test result $key: $e');
+        } catch (_) {
+          _log.w('Skipping unreadable test result');
         }
       }
       return results;
-    } catch (e) {
-      _log.e('Error loading test results: $e');
+    } catch (_) {
+      _log.e('Error loading test results');
       return {};
     }
   }
@@ -191,8 +148,8 @@ class ConfigService {
   Future<void> deleteTestResult(String configHash) async {
     try {
       await _resultBox.delete(configHash);
-    } catch (e) {
-      _log.e('Error deleting test result: $e');
+    } catch (_) {
+      _log.e('Error deleting test result');
     }
   }
 
@@ -262,7 +219,20 @@ class ConfigService {
     return null;
   }
 
-  Future<bool> saveConfig(Config config, {String? sourceId}) async {
+  // Serialize record + dedup-index changes across concurrent imports,
+  // refreshes and deletes. One failed mutation must not poison the queue.
+  Future<void> _configMutationTail = Future<void>.value();
+
+  Future<T> _mutateConfigs<T>(Future<T> Function() action) {
+    final next = _configMutationTail.then((_) => action());
+    _configMutationTail = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
+
+  Future<bool> saveConfig(Config config, {String? sourceId}) =>
+      _mutateConfigs(() => _saveConfig(config, sourceId: sourceId));
+
+  Future<bool> _saveConfig(Config config, {String? sourceId}) async {
     try {
       final hash = config.getHash();
 
@@ -287,13 +257,13 @@ class ConfigService {
             }
           }
         }
-        _log.w('Duplicate config detected: $hash (source: $sourceId)');
+        _log.w('Duplicate config detected');
         return false;
       }
 
       // Validate config
       if (!config.validate()) {
-        _log.e('Invalid config: ${config.displayName}');
+        _log.e('Invalid config');
         return false;
       }
 
@@ -306,10 +276,10 @@ class ConfigService {
       dedup[hash] = DateTime.now().toIso8601String();
       await _configBox.put(_dedupKey, dedup);
 
-      _log.i('Saved config: ${config.displayName} (hash: $hash)');
+      _log.i('Saved config');
       return true;
-    } catch (e) {
-      _log.e('Error saving config: $e');
+    } catch (_) {
+      _log.e('Error saving config');
       return false;
     }
   }
@@ -320,12 +290,16 @@ class ConfigService {
   /// returns thousands of configs, and the old loop cost two Hive writes plus a
   /// log line for every one of them — tens of thousands of awaits on the fetch
   /// path, which is what left the library stuck on "Loading repositories".
-  Future<int> saveConfigs(
+  Future<int> saveConfigs(List<Config> configs, {String? sourceId}) =>
+      _mutateConfigs(() => _saveConfigs(configs, sourceId: sourceId));
+
+  Future<int> _saveConfigs(
     List<Config> configs, {
     String? sourceId,
   }) async {
     final dedup = Map<dynamic, dynamic>.of(_configBox.get(_dedupKey) ?? {});
     final batch = <String, Map<String, dynamic>>{};
+    var newCount = 0;
 
     for (final config in configs) {
       final hash = config.getHash();
@@ -359,6 +333,7 @@ class ConfigService {
       if (!config.validate()) continue;
       dedup[hash] = DateTime.now().toIso8601String();
       batch['config_$hash'] = _configToMap(config, sourceId: sourceId);
+      newCount++;
     }
 
     if (batch.isEmpty) return 0;
@@ -366,7 +341,7 @@ class ConfigService {
     await _configBox.putAll(batch);
     await _configBox.put(_dedupKey, dedup);
     _log.i('Saved ${batch.length}/${configs.length} configs');
-    return batch.length;
+    return newCount;
   }
 
   /// Get all stored configs
@@ -385,8 +360,8 @@ class ConfigService {
       }
       _log.i('Loaded ${configs.length} configs from storage');
       return configs;
-    } catch (e) {
-      _log.e('Error loading configs: $e');
+    } catch (_) {
+      _log.e('Error loading configs');
       return [];
     }
   }
@@ -414,8 +389,8 @@ class ConfigService {
           map[key.substring('config_'.length)] = ids;
         }
       }
-    } catch (e) {
-      _log.e('Error building hash→sourceIds map: $e');
+    } catch (_) {
+      _log.e('Error building hash→sourceIds map');
     }
     return map;
   }
@@ -432,8 +407,8 @@ class ConfigService {
           map[key.substring('config_'.length)] = sourceId;
         }
       }
-    } catch (e) {
-      _log.e('Error building hash→source map: $e');
+    } catch (_) {
+      _log.e('Error building hash→source map');
     }
     return map;
   }
@@ -456,8 +431,8 @@ class ConfigService {
           map[key.substring('config_'.length)] = parsed;
         }
       }
-    } catch (e) {
-      _log.e('Error building hash→savedAt map: $e');
+    } catch (_) {
+      _log.e('Error building hash→savedAt map');
     }
     return map;
   }
@@ -489,8 +464,8 @@ class ConfigService {
           counts[sourceId] = (counts[sourceId] ?? 0) + 1;
         }
       }
-    } catch (e) {
-      _log.e('Error counting configs by source: $e');
+    } catch (_) {
+      _log.e('Error counting configs by source');
     }
     return counts;
   }
@@ -511,8 +486,8 @@ class ConfigService {
         }
       }
       return configs;
-    } catch (e) {
-      _log.e('Error loading configs by source: $e');
+    } catch (_) {
+      _log.e('Error loading configs by source');
       return [];
     }
   }
@@ -530,7 +505,10 @@ class ConfigService {
   }
 
   /// Delete config by hash
-  Future<bool> deleteConfig(String hash) async {
+  Future<bool> deleteConfig(String hash) =>
+      _mutateConfigs(() => _deleteConfig(hash));
+
+  Future<bool> _deleteConfig(String hash) async {
     try {
       final key = 'config_$hash';
       await _configBox.delete(key);
@@ -543,22 +521,25 @@ class ConfigService {
       // Its measurement is meaningless without the config.
       await deleteTestResult(hash);
 
-      _log.i('Deleted config: $hash');
+      _log.i('Deleted config');
       return true;
-    } catch (e) {
-      _log.e('Error deleting config: $e');
+    } catch (_) {
+      _log.e('Error deleting config');
       return false;
     }
   }
 
   /// Clear all configs (careful!)
-  Future<void> clearAllConfigs() async {
+  Future<void> clearAllConfigs() =>
+      _mutateConfigs(_clearAllConfigs);
+
+  Future<void> _clearAllConfigs() async {
     try {
       await _configBox.clear();
       await _resultBox.clear();
       _log.w('All configs cleared');
-    } catch (e) {
-      _log.e('Error clearing configs: $e');
+    } catch (_) {
+      _log.e('Error clearing configs');
     }
   }
 
@@ -566,10 +547,10 @@ class ConfigService {
   Future<bool> saveSource(ConfigSource source) async {
     try {
       await _sourceBox.put(source.id, source.toJson());
-      _log.i('Saved source: ${source.name}');
+      _log.i('Saved source');
       return true;
-    } catch (e) {
-      _log.e('Error saving source: $e');
+    } catch (_) {
+      _log.e('Error saving source');
       return false;
     }
   }
@@ -581,10 +562,10 @@ class ConfigService {
   Future<bool> deleteSource(String id) async {
     try {
       await _sourceBox.delete(id);
-      _log.i('Deleted source: $id');
+      _log.i('Deleted source');
       return true;
-    } catch (e) {
-      _log.e('Error deleting source: $e');
+    } catch (_) {
+      _log.e('Error deleting source');
       return false;
     }
   }
@@ -594,7 +575,7 @@ class ConfigService {
   /// Each record is decoded on its own: one corrupt or schema-drifted entry
   /// used to throw inside the single try block and return an EMPTY list,
   /// which made every stored source disappear from the app until the record
-  /// was removed. A skipped record is logged with its key; a list that loads
+  /// was removed. A skipped record is logged without its key; a list that loads
   /// 9 of 10 sources is strictly better than one that loads none.
   List<ConfigSource> getAllSources() {
     final sources = <ConfigSource>[];
@@ -606,8 +587,8 @@ class ConfigService {
         sources.add(
           ConfigSource.fromJson(Map<String, dynamic>.from(data)),
         );
-      } catch (e) {
-        _log.w('Skipping unreadable source $key: $e');
+      } catch (_) {
+        _log.w('Skipping unreadable source');
       }
     }
     return sources;
@@ -619,8 +600,8 @@ class ConfigService {
       final data = _sourceBox.get(id);
       if (data == null) return null;
       return ConfigSource.fromJson(Map<String, dynamic>.from(data));
-    } catch (e) {
-      _log.e('Error loading source: $e');
+    } catch (_) {
+      _log.e('Error loading source');
       return null;
     }
   }
@@ -723,8 +704,8 @@ class ConfigService {
             customName: data['displayName'] as String?,
           );
       }
-    } catch (e) {
-      _log.e('Error converting map to config: $e');
+    } catch (_) {
+      _log.e('Error converting map to config');
       return null;
     }
   }

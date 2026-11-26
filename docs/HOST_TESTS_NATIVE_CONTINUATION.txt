@@ -1,0 +1,31 @@
+PASS session stop serializes behind blocked start and suppresses stale completion
+PASS session cleanup failure blocks engine start
+PASS session stop reports cleanup failure and closed owner rejects starts
+PASS native child stop does not signal an already-reaped PID
+PASS native child stop escalates with bounded failure
+PASS native child stop restores interrupt after forced cleanup
+PASS native child stop handles a real process without blocking waitpid
+PASS command success
+PASS command nonzero
+PASS missing executable
+PASS silent hung command is killed at deadline
+PASS unbounded diagnostic producer cannot fill pipe or memory
+PASS interruption kills child and restores interrupt flag
+PASS no credential-bearing diagnostics in result
+PASS sing-box command contract
+PASS Mihomo native check contract
+PASS Mihomo run contract does not run test mode
+PASS unsupported protocols cannot silently use sing-box
+PASS known protocol mapping
+PASS validator success from test double is distinct from connectivity
+PASS validator missing engine
+PASS validator empty profile
+PASS validator oversized profile
+PASS native checker rejection is not success
+PASS native checker timeout
+PASS lifecycle detects exited process
+PASS lifecycle stops real process ignoring TERM
+PASS lifecycle preserves interrupt during cleanup
+PASS real loopback SOCKS handshake
+PASS unavailable SOCKS endpoint
+30 host tests passed. No Android TUN or real VPN engine was tested.

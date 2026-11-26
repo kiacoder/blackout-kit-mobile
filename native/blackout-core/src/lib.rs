@@ -7,8 +7,7 @@ pub mod outbound;
 pub mod protocols;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub struct EngineStats {
     pub tx_bytes: Arc<AtomicU64>,
@@ -49,5 +48,11 @@ impl BlackoutEngine {
 
     pub fn stats(&self) -> &EngineStats {
         &self.stats
+    }
+}
+
+impl Default for BlackoutEngine {
+    fn default() -> Self {
+        Self::new()
     }
 }

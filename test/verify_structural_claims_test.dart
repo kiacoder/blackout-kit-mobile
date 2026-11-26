@@ -17,6 +17,38 @@ void main() {
   final repo = Directory.current.path;
   String source(String relative) => _read('$repo/$relative');
 
+  group('Android cleartext network policy', () {
+    test('only loopback hosts are exempt from the HTTPS default', () {
+      final policy = source(
+          'android/app/src/main/res/xml/network_security_config.xml');
+      expect(policy, contains('<base-config cleartextTrafficPermitted="false">'));
+      final domains = RegExp(r'<domain includeSubdomains="false">([^<]+)</domain>')
+          .allMatches(policy)
+          .map((match) => match.group(1))
+          .toList();
+      expect(domains, unorderedEquals(['127.0.0.1', 'localhost']));
+      expect(RegExp(r'cleartextTrafficPermitted="true"').allMatches(policy),
+          hasLength(1));
+      expect(RegExp(r'<domain\s').allMatches(policy), hasLength(2));
+    });
+  });
+
+  group('Native diagnostic privacy', () {
+    test('engine errors are kept out of Android system logs', () {
+      for (final name in [
+        'BlackoutCoreEngine', 'BlackoutVpnService', 'EngineRunner', 'XrayEngine',
+      ]) {
+        final code = source('android/app/src/main/kotlin/com/blackoutkit/vpn/$name.kt');
+        expect(code, isNot(matches(RegExp(
+          r'Log\.[ewidv]\(TAG,\s*(lastError!!|message)\)',
+        ))), reason: name);
+        expect(code, isNot(contains(r'failed: $lastError')), reason: name);
+        expect(code, isNot(contains(r'EngineRunner: ${LibboxEngine.lastError}')),
+            reason: name);
+      }
+    });
+  });
+
   group('BK-001 editor save order', () {
     test('the replacement is stored before the old record is deleted', () {
       final src = source('lib/screens/config_editor_screen.dart');
@@ -159,14 +191,132 @@ void main() {
           source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
       expect(plugin.contains('CONSENT_SUPERSEDED'), isTrue);
     });
+
+    test('engine death holds the TUN only for an active kill-switch request', () {
+      final svc = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
+      expect(svc.contains('if (holdTunnelOnFailure && tun != null)'), isTrue);
+      expect(
+          RegExp(r'\.putBoolean\(KEY_HELD_BLOCKING, true\)\s*\.apply\(\)')
+              .hasMatch(svc),
+          isTrue);
+      expect(svc.contains('ticket.publish { notifyStatus("blocked") }'), isTrue);
+      expect(svc.contains('isRunning = false'), isTrue);
+    });
   });
 
   group('BK-022 sing-box checker timeout', () {
     test('the checker has a hard timeout', () {
-      final runner =
-          source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt');
-      expect(runner.contains('waitFor(20, java.util.concurrent.TimeUnit.SECONDS'),
+      final commands =
+          source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCommands.kt');
+      expect(commands.contains('timeoutMs: Long = 20_000'), isTrue);
+      expect(commands, contains('= ProcessCompat::waitForExit'));
+      expect(commands, contains('= ProcessCompat::forceStop'));
+      expect(commands, contains('waitFor(process, timeoutMs)'));
+      expect(commands, contains('forceStop(process)'));
+      expect(commands, contains('waitFor(process, CHECK_CLEANUP_MS)'));
+      expect(commands, contains('outcome.copy(cleanupPending = true)'));
+      final compat = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/ProcessCompat.kt');
+      expect(compat, contains('System.nanoTime()'));
+      expect(compat, contains('FORCIBLE_DESTROY_MIN_API = 26'));
+      expect(compat, contains('Build.VERSION.SDK_INT >= FORCIBLE_DESTROY_MIN_API'));
+      expect(compat, contains('process.destroyForcibly()'));
+    });
+  });
+
+  group('native tunnel packaging gate', () {
+    test('combined WG/AWG runtime is debug-only and release stays disabled', () {
+      final gradle = source('android/app/build.gradle');
+      final engine = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/NativeTunnelEngine.kt');
+      expect(gradle.contains('libblackout-tunnels.so'), isTrue);
+      expect(gradle.contains('Refusing stale dual-Go-runtime native tunnel staging'),
           isTrue);
+      expect(gradle.contains('sourceSets.debug.jniLibs.srcDir nativeDir'), isTrue);
+      expect(engine.contains('System.loadLibrary("blackout-tunnels")'), isTrue);
+      expect(engine.contains('System.loadLibrary("blackout-awg")'), isFalse);
+      expect(engine.contains('System.loadLibrary("blackout-wireguard")'), isFalse);
+      expect(
+          gradle.contains('buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"'),
+          isTrue);
+    });
+
+    test('engine catalogue is passive and never loads a Go runtime', () {
+      final plugin = source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
+      final catalogue = source('android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCatalogue.kt');
+      expect(plugin, contains('EngineCatalogue('));
+      expect(catalogue, contains('bundled("libgojni.so")'));
+      expect(catalogue, contains('bundled("libblackout-tunnels.so")'));
+      for (final forbidden in ['XrayEngine.version(', 'LibboxEngine.version(',
+        'LibboxEngine.isAvailable(', 'NativeTunnelEngine.available(', 'System.loadLibrary(', '.claim(']) {
+        expect(catalogue, isNot(contains(forbidden)));
+      }
+      for (final engine in ['XrayEngine', 'LibboxEngine', 'NativeTunnelEngine']) {
+        expect(source('android/app/src/main/kotlin/com/blackoutkit/vpn/$engine.kt'),
+          contains('GoRuntimeAdmission.process.claim('));
+      }
+    });
+
+    test('native live verification binds to VPN network, never default HTTP or SOCKS fallback', () {
+      final plugin = source('android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt');
+      final probe = source('android/app/src/main/kotlin/com/blackoutkit/vpn/SiteProbeRunner.kt');
+      expect(plugin, contains('worker.run(request)'));
+      expect(plugin, contains('worker.currentOutcomes(request, outcomes)'));
+      expect(probe, contains('NetworkCapabilities.TRANSPORT_VPN'));
+      expect(
+            probe,
+            matches(RegExp(r'network\.openConnection\(\s*target,\s*Proxy\.NO_PROXY,?\s*\)')));
+      expect(probe, contains('if (request.native && network == null)'));
+      expect(probe, contains('return request.urls.map'));
+      expect(probe, contains('check(!request.native)'));
+      expect(probe, contains('nativeSessionCurrent(session)'));
+      final service = source('android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
+      final native = service.split('private inner class NativeSetup').last.split('private inner class ProxySetup').first;
+      expect(native, contains('(request.allowed + packageName).distinct()'));
+      expect(native, isNot(contains('(request.disallowed + packageName)')));
+      expect(native, contains('NativeTunnelEngine.start('));
+      expect(native, contains('config.routedDns(request.dnsServers)'));
+      expect(native.indexOf('config.userspace()'),
+          lessThan(native.indexOf('nativeBuilder(request, config).establish()')));
+    });
+
+    test('VPN revoke callback is atomically taken and dispatched on main', () {
+      final service = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
+      expect(service.contains('val completion = takeConnectResultCallback()'), isTrue);
+      expect(service.contains('mainHandler.post { completion(false) }'), isTrue);
+      expect(service.contains('clearConnectResultCallback(completion)'), isTrue);
+    });
+
+    test('Android JVM suite is a PR and release gate', () {
+      final ci = source('.github/workflows/test.yml');
+      final release = source('.github/workflows/build.yml');
+      expect(ci.contains(':app:testDebugUnitTest'), isTrue);
+      expect(release.contains(':app:testDebugUnitTest'), isTrue);
+    });
+
+    test('native test APK can use a side-by-side package without changing release', () {
+      final gradle = source('android/app/build.gradle');
+      final builder = source('tool/build_native_debug_windows.ps1');
+      expect(gradle.contains('applicationIdSuffix ".nativetest"'), isTrue);
+      expect(gradle.contains('project.findProperty("nativeTestPackage") == "true"'),
+          isTrue);
+      expect(builder.contains(r'[switch]$SideBySide'), isTrue);
+      expect(builder.contains('-PnativeTestPackage=true'), isTrue);
+      expect(builder.contains('com.blackoutkit.vpn.nativetest'), isTrue);
+    });
+
+    test('native test distribution carries third-party license notices', () {
+      final pubspec = source('pubspec.yaml');
+      final notices = source('assets/licenses/native_tunnel_licenses.txt');
+      final builder = source('tool/build_native_debug_windows.ps1');
+      expect(pubspec.contains('assets/licenses/native_tunnel_licenses.txt'), isTrue);
+      expect(notices.contains('Apache License'), isTrue);
+      expect(notices.contains('MIT license - WireGuard Go core'), isTrue);
+      expect(notices.contains('MIT license - AmneziaWG-Go'), isTrue);
+      expect(notices.contains('Go Authors BSD-style license'), isTrue);
+      expect(builder.contains('native_tunnel_licenses.txt'), isTrue);
     });
   });
 }

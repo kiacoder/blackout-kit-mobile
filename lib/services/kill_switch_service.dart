@@ -97,7 +97,7 @@ class KillSwitchService extends GetxService {
       return systemState.value;
     } catch (e) {
       lastError.value = 'Could not read the system kill switch state: $e';
-      _logger.e('Kill switch state read failed: $e');
+      _logger.e('Kill switch state read failed');
       return systemState.value;
     }
   }
@@ -113,7 +113,7 @@ class KillSwitchService extends GetxService {
       return false;
     } catch (e) {
       lastError.value = 'Could not open VPN settings: $e';
-      _logger.e('openVpnSettings failed: $e');
+      _logger.e('openVpnSettings failed');
       return false;
     }
   }

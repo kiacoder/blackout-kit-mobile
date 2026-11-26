@@ -1,6 +1,7 @@
 /// BK-01: losing the vault key must never delete the encrypted library.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,63 @@ Config vless(String host, String name) => ConfigParser.parse(
       'vless://11111111-1111-1111-1111-111111111111@$host:443?security=none&type=tcp#$name',
     )!;
 
+class UnavailableKeyStore implements KeyStore {
+  @override
+  Future<String?> read(String key) async => throw StateError('keystore unavailable');
+
+  @override
+  Future<void> write(String key, String value) async =>
+      throw StateError('keystore unavailable');
+}
+
+class NonPersistingKeyStore implements KeyStore {
+  @override
+  Future<String?> read(String key) async => null;
+
+  @override
+  Future<void> write(String key, String value) async {}
+}
+
+class DelayedKeyStore implements KeyStore {
+  final writeStarted = Completer<void>();
+  final allowWrite = Completer<void>();
+  String? value;
+  int reads = 0;
+  int writes = 0;
+
+  @override
+  Future<String?> read(String key) async {
+    reads++;
+    return value;
+  }
+
+  @override
+  Future<void> write(String key, String value) async {
+    writes++;
+    if (!writeStarted.isCompleted) writeStarted.complete();
+    await allowWrite.future;
+    this.value = value;
+  }
+}
+
+// Hive 2.2.3 does not await the backend close after a failed open.
+// Wait for its lock-file cleanup before deleting the synthetic directory
+// or reopening a failed box. Do not suppress persistent locks or IO errors.
+Future<void> awaitFixtureLocksReleased(Directory directory) async {
+  final deadline = Stopwatch()..start();
+  while (true) {
+    final locks = await directory
+        .list()
+        .where((entry) => entry.path.endsWith('.lock'))
+        .toList();
+    if (locks.isEmpty) return;
+    if (deadline.elapsed >= const Duration(seconds: 5)) {
+      fail('Hive fixture still has open lock files after cleanup deadline');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
 void main() {
   late Directory dir;
 
@@ -25,7 +83,108 @@ void main() {
 
   tearDown(() async {
     await Hive.close();
+    await awaitFixtureLocksReleased(dir);
     await dir.delete(recursive: true);
+  });
+
+  test('concurrent vault instances create exactly one persisted key', () async {
+    final store = DelayedKeyStore();
+    final first = SecureVault(store: store).getOrCreateKey();
+    await store.writeStarted.future;
+    final second = SecureVault(store: store).getOrCreateKey();
+    // Give the second caller a turn while the first write is blocked.
+    await Future<void>.delayed(Duration.zero);
+    final readsBeforeRelease = store.reads;
+    store.allowWrite.complete();
+    final keys = await Future.wait([first, second]);
+    expect(readsBeforeRelease, 1);
+    expect(store.writes, 1);
+    expect(keys.first, isNotNull);
+    expect(keys.last, keys.first);
+    expect(identical(keys.first, keys.last), isFalse);
+  });
+
+  test('a failed key request releases the initialization queue', () async {
+    final failed = SecureVault(store: UnavailableKeyStore()).getOrCreateKey();
+    final healthy = SecureVault(store: MemoryKeyStore()).getOrCreateKey();
+    expect(await failed, isNull);
+    expect(await healthy, hasLength(32));
+  });
+
+  test('concurrent migrations copy legacy records exactly once', () async {
+    final store = MemoryKeyStore();
+    final legacy = await Hive.openBox<Map>('configs');
+    await legacy.put('fixture', {'value': 'preserve me'});
+    await legacy.close();
+
+    final first = SecureVault(store: store);
+    final second = SecureVault(store: store);
+    final reports = await Future.wait([first.migrate(), second.migrate()]);
+    expect(reports.every((report) => report.active && !report.locked), isTrue);
+    expect(reports.map((report) => report.recordsMoved), [1, 0]);
+    expect(await Hive.boxExists('configs'), isFalse);
+    final key = await first.getOrCreateKey();
+    final encrypted = await openPreservingBox<Map>('configs_v2',
+        cipher: HiveAesCipher(key!));
+    expect(encrypted.length, 1);
+    expect(encrypted.get('fixture'), {'value': 'preserve me'});
+    await encrypted.close();
+  });
+
+  test('a failed migration does not block the next migration', () async {
+    final store = MemoryKeyStore();
+    final reports = await Future.wait([
+      SecureVault(store: UnavailableKeyStore()).migrate(),
+      SecureVault(store: store).migrate(),
+    ]);
+    expect(reports.first.active, isFalse);
+    expect(reports.last.active, isTrue);
+  });
+
+  test('migration does not close a live legacy box', () async {
+    final store = MemoryKeyStore();
+    final legacy = await Hive.openBox<Map>('configs');
+    await legacy.put('fixture', {'value': 'live'});
+    final vault = SecureVault(store: store);
+
+    final blocked = await vault.migrate();
+    expect(blocked.locked, isTrue);
+    expect(legacy.isOpen, isTrue);
+    expect(legacy.get('fixture'), {'value': 'live'});
+    expect(await Hive.boxExists('configs_v2'), isFalse);
+
+    await legacy.close();
+    expect((await vault.migrate()).active, isTrue);
+    expect(await Hive.boxExists('configs'), isFalse);
+  });
+
+  test('open encrypted box cannot bypass key validation during migration',
+      () async {
+    final store = MemoryKeyStore();
+    final vault = SecureVault(store: store);
+    final key = await vault.getOrCreateKey();
+    final encrypted = await Hive.openBox<Map>('configs_v2',
+        encryptionCipher: HiveAesCipher(key!));
+    await encrypted.put('existing', {'value': 'encrypted'});
+    final legacy = await Hive.openBox<Map>('sources');
+    await legacy.put('source', {'value': 'legacy'});
+    await legacy.close();
+
+    final wrongStore = MemoryKeyStore();
+    await wrongStore.write('blackout_config_vault_key', List.filled(64, '0').join());
+    final blocked = await SecureVault(store: wrongStore).migrate();
+    expect(blocked.locked, isTrue);
+    expect(encrypted.isOpen, isTrue);
+    expect(encrypted.get('existing'), {'value': 'encrypted'});
+    expect(await Hive.boxExists('sources'), isTrue);
+    expect(await Hive.boxExists('sources_v2'), isFalse);
+
+    await encrypted.close();
+    expect((await vault.migrate()).active, isTrue);
+    final migrated = await openPreservingBox<Map>('sources_v2',
+        cipher: HiveAesCipher(key));
+    expect(migrated.get('source'), {'value': 'legacy'});
+    await migrated.close();
   });
 
   test('a lost key keeps the data and reports a locked vault', () async {
@@ -48,7 +207,8 @@ void main() {
     expect(await Hive.boxExists('configs_v2'), isTrue,
         reason: 'the encrypted box must never be deleted');
     // And no new key was minted that would have made the data unrecoverable.
-    expect(await MemoryKeyStore().read('blackout_config_vault_key'), isNull);
+    expect(await Hive.boxExists('configs'), isFalse);
+    expect(await wiped.saveConfig(vless('new.example.com', 'New')), isFalse);
   });
 
   test('the key is not regenerated while encrypted data exists', () async {
@@ -64,6 +224,36 @@ void main() {
     expect(await vault.getOrCreateKey(), isNull,
         reason: 'a fresh key could never open the existing boxes');
     expect(await vault.state(), VaultState.locked);
+  });
+
+  test('unavailable keystore reports existing encrypted data as locked', () async {
+    final first = ConfigService(keyStore: MemoryKeyStore());
+    await first.initialize();
+    await first.saveConfig(vless('d.example.com', 'D'));
+    await Hive.close();
+    Hive.init(dir.path);
+
+    final vault = SecureVault(store: UnavailableKeyStore());
+    expect(await vault.state(), VaultState.locked);
+    expect(await vault.getOrCreateKey(), isNull);
+    expect((await vault.migrate()).locked, isTrue);
+    expect(await Hive.boxExists('configs_v2'), isTrue);
+  });
+
+  test('malformed key cannot replace a key for existing encrypted data', () async {
+    final first = ConfigService(keyStore: MemoryKeyStore());
+    await first.initialize();
+    await first.saveConfig(vless('e.example.com', 'E'));
+    await Hive.close();
+    Hive.init(dir.path);
+
+    final store = MemoryKeyStore();
+    await store.write('blackout_config_vault_key', 'abcd');
+    final vault = SecureVault(store: store);
+    expect(await vault.getOrCreateKey(), isNull);
+    expect(await vault.state(), VaultState.locked);
+    expect((await vault.migrate()).locked, isTrue);
+    expect(await store.read('blackout_config_vault_key'), 'abcd');
   });
 
   test('restoring the key brings the library back', () async {
@@ -84,4 +274,73 @@ void main() {
     expect(service.isVaultLocked, isFalse);
     expect(service.getAllConfigs().map((c) => c.displayName), contains('C'));
   });
+  test('wrong but well-formed key never truncates encrypted bytes', () async {
+    final store = MemoryKeyStore();
+    final first = ConfigService(keyStore: store);
+    await first.initialize();
+    await first.saveConfig(vless('wrong-key.example.com', 'WrongKey'));
+    await Hive.close();
+    Hive.init(dir.path);
+    final file = File('${dir.path}/configs_v2.hive');
+    final before = await file.readAsBytes();
+    final wrong = MemoryKeyStore();
+    await wrong.write('blackout_config_vault_key', List.filled(64, '0').join());
+    final service = ConfigService(keyStore: wrong);
+    await service.initialize();
+    expect(service.isVaultLocked, isTrue);
+    expect(service.isEncryptedAtRest, isFalse);
+    expect(await file.readAsBytes(), before);
+    expect(await Hive.boxExists('configs'), isFalse);
+    await Hive.close();
+    await awaitFixtureLocksReleased(dir);
+    final restored = ConfigService(keyStore: store);
+    await restored.initialize();
+    expect(restored.getAllConfigs().map((c) => c.displayName), contains('WrongKey'));
+  });
+
+  test('overlapping storage generations require recovery without deletion', () async {
+    final store = MemoryKeyStore();
+    final first = ConfigService(keyStore: store);
+    await first.initialize();
+    await first.saveConfig(vless('encrypted.example.com', 'Encrypted'));
+    await Hive.close();
+    final plain = await Hive.openBox<Map>('configs');
+    await plain.put('legacy', {'rawUri': 'fixture'});
+    await plain.close();
+    final encrypted = File('${dir.path}/configs_v2.hive');
+    final before = await encrypted.readAsBytes();
+    final service = ConfigService(keyStore: store);
+    await service.initialize();
+    expect(service.isVaultLocked, isTrue);
+    expect(await Hive.boxExists('configs'), isTrue);
+    expect(await encrypted.readAsBytes(), before);
+    expect(Hive.isBoxOpen('configs'), isFalse);
+    expect(await service.saveConfig(vless('new.example.com', 'New')), isFalse);
+  });
+
+  test('a key that does not persist cannot be used to encrypt data', () async {
+    final vault = SecureVault(store: NonPersistingKeyStore());
+    expect(await vault.getOrCreateKey(), isNull);
+    expect(await vault.hasEncryptedData(), isFalse);
+  });
+
+  test('wrong key cannot migrate another box after a partial migration', () async {
+    final store = MemoryKeyStore();
+    final first = ConfigService(keyStore: store);
+    await first.initialize();
+    await first.saveConfig(vless('partial.example.com', 'Partial'));
+    await Hive.close();
+    await Hive.deleteBoxFromDisk('sources_v2');
+    final plain = await Hive.openBox<Map>('sources');
+    await plain.put('source_fixture', {'id': 'fixture'});
+    await plain.close();
+    final wrong = MemoryKeyStore();
+    await wrong.write('blackout_config_vault_key', List.filled(64, '0').join());
+    final service = ConfigService(keyStore: wrong);
+    await service.initialize();
+    expect(service.isVaultLocked, isTrue);
+    expect(await Hive.boxExists('sources'), isTrue);
+    expect(await Hive.boxExists('sources_v2'), isFalse);
+  });
+
 }

@@ -140,8 +140,11 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
             color: isDark ? theme.cardColor : Colors.indigo.withOpacity(0.06),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 12,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,7 +185,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                 if (_isTesting) ...[
                   const SizedBox(height: 16),
                   LinearProgressIndicator(
-                    value: _totalToTest > 0 ? _testedCount / _totalToTest : 0.0,
+                    value: _totalToTest > 0 ? (_testedCount / _totalToTest).clamp(0.0, 1.0) : 0.0,
                   ),
                   const SizedBox(height: 8),
                   if (_currentTestingConfig != null)

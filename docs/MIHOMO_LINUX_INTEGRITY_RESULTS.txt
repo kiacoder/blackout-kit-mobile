@@ -1,0 +1,4 @@
+PASS exact official v1.19.34 archive SHA-256: 223fab877e5795ce780ba39902e5f0b1113c1256ae244a7160f1165e017e9ccc
+Binary SHA-256: 0a68807c7c93963bb66d07717fe0f3ac3945b422b525f8a1e19438d278d7ae11
+GitHub release asset ID: 734505033
+Integrity only: NOT Android compatibility, licensing clearance, or VPN testing.

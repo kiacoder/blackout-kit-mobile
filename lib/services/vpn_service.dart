@@ -86,11 +86,11 @@ class VPNService {
       return result ?? false;
     } on PlatformException catch (e) {
       _lastError = e.message ?? e.code;
-      _log.e('VPN prepare failed: ${e.message}');
+      _log.e('VPN prepare failed');
       return false;
     } catch (e) {
       _lastError = e.toString();
-      _log.e('VPN prepare failed: $e');
+      _log.e('VPN prepare failed');
       return false;
     }
   }
@@ -105,8 +105,36 @@ class VPNService {
       if (result == null) return const EngineAvailability.unknown();
       return EngineAvailability.fromMap(Map<String, dynamic>.from(result));
     } catch (e) {
-      _log.w('Could not read engine info: $e');
+      _log.w('Could not read engine info');
       return const EngineAvailability.unknown();
+    }
+  }
+
+  /// Runs the installed engine checker, not merely the document parser.
+  /// Does not start a VPN or claim that any server is reachable.
+  Future<Map<String, dynamic>> validateNativeConfiguration(Config config) async {
+    String engine;
+    String document;
+    if (config is MihomoConfig) {
+      engine = 'mihomo';
+      document = config.buildRuntimeJson();
+    } else if (isSingboxProtocol(config.protocol)) {
+      engine = 'sing-box';
+      document = const SingboxConfigBuilder().buildJson(config);
+    } else {
+      return {'valid': false, 'code': 'CHECK_UNAVAILABLE',
+        'message': 'No standalone native checker is exposed for this profile.'};
+    }
+    try {
+      final value = await platform.invokeMethod<Map>('validateEngineConfig',
+          {'engine': engine, 'config': document});
+      return value == null
+          ? {'valid': false, 'message': 'Native checker returned no result.'}
+          : Map<String, dynamic>.from(value);
+    } on PlatformException {
+      return {'valid': false, 'message': 'Native checker is busy or unavailable.'};
+    } on MissingPluginException {
+      return {'valid': false, 'message': 'Native checker is unavailable on this platform.'};
     }
   }
 
@@ -125,13 +153,13 @@ class VPNService {
     if (usable.isEmpty) {
       _status = VPNStatus.error;
       _lastError = 'Pick a resolver first (Settings, DNS).';
-      _log.e('Refusing DNS-only connect: no usable resolver in $servers');
+      _log.e('Refusing DNS-only connect: no usable resolver');
       return false;
     }
 
     try {
       _status = VPNStatus.connecting;
-      _log.i('Starting DNS-only session with $usable');
+      _log.i('Starting DNS-only session');
 
       final result = await platform.invokeMethod('connectDnsOnly', {
         'protocol': 'dns',
@@ -157,12 +185,12 @@ class VPNService {
     } on PlatformException catch (e) {
       _status = VPNStatus.error;
       _lastError = e.message ?? e.code;
-      _log.e('Platform error starting DNS-only: ${e.message}');
+      _log.e('Platform error starting DNS-only');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
       _lastError = e.toString();
-      _log.e('Error starting DNS-only: $e');
+      _log.e('Error starting DNS-only');
       return false;
     }
   }
@@ -181,18 +209,53 @@ class VPNService {
       if (configProblem != null) {
         _status = VPNStatus.error;
         _lastError = configProblem;
-        _log.e('Refusing to connect: $configProblem');
+        _log.e('Refusing to connect');
         return false;
       }
 
       _lastError = null;
       _status = VPNStatus.connecting;
-      _log.i('Connecting to ${config.displayName} ($session)');
+      _log.i('Connecting to config');
 
       // Xray-family protocols are carried by the in-process core, which needs a
       // complete config document rather than loose credentials.
+      String? nativeTunnelConfig;
+      if (Platform.isAndroid &&
+          (config is WireGuardConfig || config is AmneziaWGConfig)) {
+        final engines = await getEngineInfo();
+        final nativeAvailable = config is AmneziaWGConfig
+            ? engines.nativeAmneziawgAvailable
+            : engines.nativeWireguardAvailable;
+        if (nativeAvailable) {
+          // Preserve all peers and modern AWG fields from the original profile.
+          // Native parsing rejects unsupported directives rather than dropping them.
+          nativeTunnelConfig = config.rawUri;
+        } else if (config is AmneziaWGConfig) {
+          _status = VPNStatus.error;
+          _lastError = engines.restartRequiredProtocols.contains(config.protocol)
+              ? 'Fully restart the app before switching VPN runtime families.'
+              : 'AmneziaWG requires an enabled private native-tunnel build.';
+          return false;
+        }
+      }
+      String? mihomoJson;
+      if (config is MihomoConfig) {
+        final availability = await getEngineInfo();
+        if (!Platform.isAndroid || !availability.mihomoAvailable) {
+          _status = VPNStatus.error;
+          _lastError = 'Mihomo requires an experimental Android build with a verified native artifact.';
+          return false;
+        }
+        try {
+          mihomoJson = config.buildRuntimeJson(socksPort: defaultSocksPort);
+        } on ArgumentError catch (e) {
+          _status = VPNStatus.error;
+          _lastError = e.message.toString();
+          return false;
+        }
+      }
       String? xrayJson;
-      if (isXrayProtocol(config.protocol)) {
+      if (nativeTunnelConfig == null && isXrayProtocol(config.protocol)) {
         try {
           xrayJson = XrayConfigBuilder(
             socksPort: defaultSocksPort,
@@ -204,7 +267,7 @@ class VPNService {
         } on ArgumentError catch (e) {
           _status = VPNStatus.error;
           _lastError = e.message?.toString() ?? e.toString();
-          _log.e('Refusing to build an Xray config: $_lastError');
+          _log.e('Refusing to build an Xray config');
           return false;
         }
       }
@@ -217,7 +280,7 @@ class VPNService {
       // document built in libbox mode; on Android nothing changes.
       String? singboxJson;
       final wantLibbox = Platform.isIOS;
-      if (wantLibbox || isSingboxProtocol(config.protocol)) {
+      if (nativeTunnelConfig == null && (wantLibbox || isSingboxProtocol(config.protocol))) {
         try {
           singboxJson = SingboxConfigBuilder(
             socksPort: defaultSocksPort,
@@ -228,7 +291,7 @@ class VPNService {
         } on ArgumentError catch (e) {
           _status = VPNStatus.error;
           _lastError = e.message?.toString() ?? e.toString();
-          _log.e('Refusing to build a sing-box config: $_lastError');
+          _log.e('Refusing to build a sing-box config');
           return false;
         }
       }
@@ -238,7 +301,7 @@ class VPNService {
       // runner. The subprocess config above stays as the last-resort
       // fallback, so an old core that cannot serve a document still works.
       String? libboxJson;
-      if (Platform.isAndroid && kSingboxProtocols.contains(config.protocol)) {
+      if (nativeTunnelConfig == null && Platform.isAndroid && kSingboxProtocols.contains(config.protocol)) {
         try {
           libboxJson = SingboxConfigBuilder(
             socksPort: defaultSocksPort,
@@ -246,9 +309,9 @@ class VPNService {
             routeDnsThroughProxy: session.routeDnsThroughProxy,
             libboxMode: true,
           ).buildJson(config);
-        } on ArgumentError catch (e) {
+        } on ArgumentError {
           _log.w(
-              'libbox-mode config refused for ${config.protocol}: ${e.message}');
+              'libbox-mode config refused');
         }
       }
 
@@ -256,12 +319,12 @@ class VPNService {
       // config document built here. A protocol that produces neither is one
       // this build cannot dial - say so instead of handing the native layer a
       // connect request it will serve from a stale config file.
-      if (xrayJson == null && singboxJson == null) {
+      if (nativeTunnelConfig == null && xrayJson == null && singboxJson == null && mihomoJson == null) {
         _status = VPNStatus.error;
         _lastError = 'This build cannot dial "${config.protocol}" configs. '
             'Use a VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC or AnyTLS '
             'config, or update the app.';
-        _log.e('Refusing to connect: $_lastError');
+        _log.e('Refusing to connect');
         return false;
       }
 
@@ -278,18 +341,20 @@ class VPNService {
         if (xrayJson != null) 'xrayConfig': xrayJson,
         if (singboxJson != null) 'singboxConfig': singboxJson,
         if (libboxJson != null) 'libboxConfig': libboxJson,
+        if (mihomoJson != null) 'mihomoConfig': mihomoJson,
+        if (nativeTunnelConfig != null) 'nativeTunnelConfig': nativeTunnelConfig,
       });
 
       if (result == true) {
         _status = VPNStatus.connected;
         _connectedConfigHash = config.getHash();
         _lastError = null;
-        _log.i('Connected to ${config.displayName}');
+        _log.i('Connected to config');
         return true;
       } else {
         _status = VPNStatus.error;
         _lastError = 'The tunnel failed to come up';
-        _log.e('Failed to connect: $result');
+        _log.e('Failed to connect');
         return false;
       }
     } on PlatformException catch (e) {
@@ -297,12 +362,12 @@ class VPNService {
       // consent, establish() failure) instead of a generic error.
       _status = VPNStatus.error;
       _lastError = e.message ?? e.code;
-      _log.e('Platform error connecting: ${e.message}');
+      _log.e('Platform error connecting');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
       _lastError = e.toString();
-      _log.e('Error connecting: $e');
+      _log.e('Error connecting');
       return false;
     }
   }
@@ -317,6 +382,7 @@ class VPNService {
   static List<String> dnsServersForConfig(Config config) {
     final dns = switch (config) {
       WireGuardConfig c when c.dns.isNotEmpty => c.dns,
+      AmneziaWGConfig c when c.dns != null && c.dns!.isNotEmpty => c.dns!,
       _ => '',
     };
     if (dns.isEmpty) return const ['1.1.1.1', '8.8.8.8'];
@@ -344,16 +410,16 @@ class VPNService {
         return true;
       } else {
         _status = VPNStatus.error;
-        _log.e('Failed to disconnect: $result');
+        _log.e('Failed to disconnect');
         return false;
       }
-    } on PlatformException catch (e) {
+    } on PlatformException {
       _status = VPNStatus.error;
-      _log.e('Platform error disconnecting: ${e.message}');
+      _log.e('Platform error disconnecting');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
-      _log.e('Error disconnecting: $e');
+      _log.e('Error disconnecting');
       return false;
     }
   }
@@ -363,11 +429,11 @@ class VPNService {
     try {
       final result = await platform.invokeMethod('isRunning');
       return result == true;
-    } on PlatformException catch (e) {
-      _log.e('Platform error checking status: ${e.message}');
+    } on PlatformException {
+      _log.e('Platform error checking status');
       return false;
     } catch (e) {
-      _log.e('Error checking status: $e');
+      _log.e('Error checking status');
       return false;
     }
   }
@@ -377,11 +443,11 @@ class VPNService {
     try {
       final result = await platform.invokeMethod<Map>('getStatus');
       return Map<String, dynamic>.from(result ?? {});
-    } on PlatformException catch (e) {
-      _log.e('Platform error getting status: ${e.message}');
+    } on PlatformException {
+      _log.e('Platform error getting status');
       return {};
     } catch (e) {
-      _log.e('Error getting status: $e');
+      _log.e('Error getting status');
       return {};
     }
   }
@@ -391,11 +457,11 @@ class VPNService {
     try {
       final result = await platform.invokeMethod<String>('getConnectedIP');
       return result;
-    } on PlatformException catch (e) {
-      _log.e('Platform error getting IP: ${e.message}');
+    } on PlatformException {
+      _log.e('Platform error getting IP');
       return null;
     } catch (e) {
-      _log.e('Error getting IP: $e');
+      _log.e('Error getting IP');
       return null;
     }
   }
@@ -431,7 +497,7 @@ class VPNService {
       return result ?? false;
     } on PlatformException catch (e) {
       _lastError = e.message ?? e.code;
-      _log.w('Probe start failed: ${e.message}');
+      _log.w('Probe start failed');
       return false;
     }
   }
@@ -440,8 +506,8 @@ class VPNService {
   Future<void> probeStop() async {
     try {
       await platform.invokeMethod('probeStop');
-    } catch (e) {
-      _log.w('Probe stop failed: $e');
+    } catch (_) {
+      _log.w('Probe stop failed');
     }
   }
 
@@ -460,8 +526,8 @@ class VPNService {
       });
       if (result == null) return const [];
       return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    } on PlatformException catch (e) {
-      _log.w('Site check failed: ${e.message}');
+    } on PlatformException {
+      _log.w('Site check failed');
       return const [];
     }
   }
@@ -482,11 +548,11 @@ class VPNService {
         'socksPort': defaultSocksPort,
         'timeoutMs': timeout.inMilliseconds,
       });
-    } on PlatformException catch (e) {
-      _log.w('Tunnel fetch failed: ${e.message}');
+    } on PlatformException {
+      _log.w('Tunnel fetch failed');
       return null;
     } catch (e) {
-      _log.w('Tunnel fetch failed: $e');
+      _log.w('Tunnel fetch failed');
       return null;
     }
   }
@@ -503,7 +569,7 @@ class VPNService {
         _handleError(error);
         break;
       default:
-        _log.w('Unknown method: ${call.method}');
+        _log.w('Unknown method');
     }
   }
 
@@ -542,22 +608,22 @@ class VPNService {
         _lastError = (error != null && error.isNotEmpty)
             ? error
             : 'The VPN engine stopped unexpectedly. Reconnect to try again.';
-        _log.e('VPN status changed: error — $_lastError');
+        _log.e('VPN status changed: error');
         break;
       default:
-        _log.w('Unknown status: $status');
+        _log.w('Unknown status');
     }
     // Always notify — including 'disconnected' and the failure statuses.
     try {
       onStatusChanged?.call(status ?? 'unknown', _lastError);
-    } catch (e) {
-      _log.w('Status listener threw: $e');
+    } catch (_) {
+      _log.w('Status listener threw');
     }
   }
 
   void _handleError(String? error) {
     _status = VPNStatus.error;
-    _log.e('VPN error: $error');
+    _log.e('VPN error');
   }
 }
 
@@ -568,11 +634,17 @@ class VPNService {
 /// (iOS, tests, desktop), in which case callers should not grey anything out.
 class EngineAvailability {
   final bool isKnown;
+  final bool runtimeRestartRequired;
+  final List<String> restartRequiredProtocols;
+  final bool packagedCapabilities;
   final bool xrayAvailable;
   final String? xrayVersion;
   final List<String> xrayProtocols;
   final bool singboxAvailable;
   final String? singboxVersion;
+  final bool mihomoAvailable;
+  final bool nativeWireguardAvailable;
+  final bool nativeAmneziawgAvailable;
   final List<String> singboxProtocols;
 
   /// Protocols the native layer has explicitly declared unusable.
@@ -587,11 +659,17 @@ class EngineAvailability {
 
   const EngineAvailability({
     required this.isKnown,
+    this.runtimeRestartRequired = false,
+    this.restartRequiredProtocols = const [],
+    this.packagedCapabilities = false,
     required this.xrayAvailable,
     required this.xrayVersion,
     required this.xrayProtocols,
     required this.singboxAvailable,
     this.singboxVersion,
+    this.mihomoAvailable = false,
+    this.nativeWireguardAvailable = false,
+    this.nativeAmneziawgAvailable = false,
     required this.singboxProtocols,
     required this.unavailableProtocols,
     this.configurableProtocols = const [],
@@ -600,10 +678,16 @@ class EngineAvailability {
 
   const EngineAvailability.unknown()
       : isKnown = false,
+        runtimeRestartRequired = false,
+        restartRequiredProtocols = const [],
+        packagedCapabilities = false,
         xrayAvailable = false,
         xrayVersion = null,
         xrayProtocols = const [],
         singboxAvailable = false,
+        mihomoAvailable = false,
+        nativeWireguardAvailable = false,
+        nativeAmneziawgAvailable = false,
         singboxVersion = null,
         singboxProtocols = const [],
         unavailableProtocols = const [],
@@ -615,11 +699,17 @@ class EngineAvailability {
         (map[key] as List?)?.map((e) => e.toString()).toList() ?? const [];
     return EngineAvailability(
       isKnown: true,
+      runtimeRestartRequired: map['runtimeRestartRequired'] == true,
+      restartRequiredProtocols: strings('restartRequiredProtocols'),
+      packagedCapabilities: map['capabilitySource'] == 'packaged',
       xrayAvailable: map['xrayAvailable'] == true,
       xrayVersion: map['xrayVersion'] as String?,
       xrayProtocols: strings('xrayProtocols'),
       singboxAvailable: map['singboxAvailable'] == true,
       singboxVersion: map['singboxVersion'] as String?,
+      mihomoAvailable: map['mihomoAvailable'] == true,
+      nativeWireguardAvailable: map['nativeWireguardAvailable'] == true,
+      nativeAmneziawgAvailable: map['nativeAmneziawgAvailable'] == true,
       singboxProtocols: strings('singboxProtocols'),
       unavailableProtocols: strings('unavailableProtocols'),
       configurableProtocols: strings('configurableProtocols'),
@@ -631,6 +721,9 @@ class EngineAvailability {
   List<String> get supportedProtocols => [
         if (xrayAvailable) ...xrayProtocols,
         if (singboxAvailable) ...singboxProtocols,
+        if (mihomoAvailable) 'mihomo',
+        if (nativeWireguardAvailable) 'wireguard',
+        if (nativeAmneziawgAvailable) 'amneziawg',
       ];
 
   bool canConnect(String protocol) =>
@@ -641,9 +734,14 @@ class EngineAvailability {
     if (!isKnown)
       return 'Engine support could not be determined on this platform.';
     if (supportedProtocols.isEmpty) {
-      return 'No engine is bundled in this build.';
+      return runtimeRestartRequired
+          ? 'Restart the app before switching VPN runtime families.'
+          : 'No engine is bundled in this build.';
     }
     final bundled = <String>[
+      if (mihomoAvailable) 'Mihomo (experimental)',
+      if (nativeWireguardAvailable) 'WireGuard native (experimental)',
+      if (nativeAmneziawgAvailable) 'AmneziaWG native (experimental)',
       if (xrayAvailable) 'Xray ${xrayVersion ?? ""}'.trim(),
       if (singboxAvailable) 'sing-box ${singboxVersion ?? ""}'.trim(),
     ];
@@ -651,6 +749,8 @@ class EngineAvailability {
         .where((p) => !supportedProtocols.contains(p))
         .toList();
     return '${bundled.join(" + ")} - ${supportedProtocols.join(", ")}'
-        '${configurableOnly.isEmpty ? "" : " | configurable only: ${configurableOnly.join(", ")}"}';
+        '${configurableOnly.isEmpty ? "" : " | configurable only: ${configurableOnly.join(", ")}"}'
+        '${packagedCapabilities ? " | packaged; runtime checked at connection" : ""}'
+        '${runtimeRestartRequired ? " | fully restart the app before switching runtime families" : ""}';
   }
 }

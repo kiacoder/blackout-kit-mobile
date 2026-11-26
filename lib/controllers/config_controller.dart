@@ -147,7 +147,7 @@ class ConfigController extends GetxController {
             totalCount: existing.totalCount,
           );
     _invalidateFilterCache();
-    _log.i('Marked ${config.displayName} as working (connected)');
+    _log.i('Marked config as working (connected)');
   }
 
   /// Grows the visible window of the library list.
@@ -227,8 +227,8 @@ class ConfigController extends GetxController {
       sourceIdsByHash.value = configService.loadHashToSourceIds();
       savedAtByHash.value = configService.loadHashToSavedAt();
       _log.i('Loaded ${configs.length} configs');
-    } catch (e) {
-      _log.e('Error loading configs: $e');
+    } catch (_) {
+      _log.e('Error loading configs');
     } finally {
       isLoading.value = false;
     }
@@ -288,8 +288,8 @@ class ConfigController extends GetxController {
 
       sources.value = merged;
       _log.i('Loaded ${merged.length} sources');
-    } catch (e) {
-      _log.e('Error loading sources: $e');
+    } catch (_) {
+      _log.e('Error loading sources');
     }
   }
 
@@ -300,7 +300,7 @@ class ConfigController extends GetxController {
   Future<void> toggleSource(String sourceId, bool enabled) async {
     final index = sources.indexWhere((s) => s.id == sourceId);
     if (index == -1) {
-      _log.w('toggleSource: no source with id $sourceId');
+      _log.w('toggleSource: source not found');
       return;
     }
 
@@ -310,7 +310,7 @@ class ConfigController extends GetxController {
     sources.value = next;
 
     await configService.saveSource(updated);
-    _log.i('${enabled ? 'Enabled' : 'Disabled'} source: ${updated.name}');
+    _log.i('${enabled ? 'Enabled' : 'Disabled'} source');
     _action(
       enabled ? 'source_enabled' : 'source_disabled',
       {'source': updated.name},
@@ -326,11 +326,17 @@ class ConfigController extends GetxController {
     } catch (_) {}
   }
 
+  final Set<String> _sourceFetches = {};
+
+  ConfigSource _currentSource(ConfigSource source) =>
+      sources.firstWhereOrNull((s) => s.id == source.id) ?? source;
+
   /// Fetch configs from a source and save to local storage
   Future<int> fetchFromSource(ConfigSource source) async {
+    if (!_sourceFetches.add(source.id)) return 0;
     try {
       _refreshBegin('Fetching ${source.name}...');
-      _log.i('Fetching from ${source.name}');
+      _log.i('Fetching from source');
 
       final configs = await githubService.fetchConfigsFromSource(source);
       final saved = await configService.saveConfigs(
@@ -339,12 +345,11 @@ class ConfigController extends GetxController {
       );
 
       // Update source with config count (and clear any previous failure).
-      final updated = source.copyWith(
-        configCount: saved,
+      final updated = _currentSource(source).copyWith(
+        configCount: configs.length,
         lastFetched: DateTime.now(),
         clearError: true,
       );
-      await configService.saveSource(updated);
       // Keep the in-memory list in step with the saved source, so a source
       // that just failed does not keep showing its old error afterwards.
       final sourceIndex = sources.indexWhere((s) => s.id == source.id);
@@ -354,6 +359,7 @@ class ConfigController extends GetxController {
         sources.value = nextSources;
       }
 
+      await configService.saveSource(updated);
       // Reload configs
       await loadConfigs();
 
@@ -370,27 +376,28 @@ class ConfigController extends GetxController {
         'new': saved,
       });
 
-      _log.i('Saved $saved configs from ${source.name}');
+      _log.i('Saved $saved configs from source');
       return saved;
     } catch (e) {
-      _log.e('Error fetching from source: $e');
+      _log.e('Error fetching from source');
       // Record the failure on the source so the Library can tell "every fetch
       // failed" apart from "there are no configs" — the screen used to render
       // the same empty state for both and the user had no way to see why the
       // list was blank (or that a retry might help).
       final reason = e.toString();
-      final failed = source.copyWith(
+      final failed = _currentSource(source).copyWith(
         error: reason.length > 120 ? '${reason.substring(0, 120)}…' : reason,
       );
-      await configService.saveSource(failed);
       final index = sources.indexWhere((s) => s.id == source.id);
       if (index != -1) {
         final next = List<ConfigSource>.of(sources);
         next[index] = failed;
         sources.value = next;
       }
+      await configService.saveSource(failed);
       return 0;
     } finally {
+      _sourceFetches.remove(source.id);
       _refreshEnd();
     }
   }
@@ -449,8 +456,8 @@ class ConfigController extends GetxController {
       this.rankings.value = rankings;
 
       _log.i('Tested ${results.length} configs');
-    } catch (e) {
-      _log.e('Error testing configs: $e');
+    } catch (_) {
+      _log.e('Error testing configs');
     } finally {
       _refreshEnd();
     }
@@ -461,9 +468,9 @@ class ConfigController extends GetxController {
     try {
       final result = await testerService.testConfig(config);
       testResults[config.getHash()] = result;
-      _log.i('Tested ${config.displayName}');
-    } catch (e) {
-      _log.e('Error testing config: $e');
+      _log.i('Tested config');
+    } catch (_) {
+      _log.e('Error testing config');
     }
   }
 
@@ -616,27 +623,29 @@ class ConfigController extends GetxController {
       await configService.saveSource(source);
       await loadSources();
 
-      _log.i('Added custom source: $name');
+      _log.i('Added custom source');
       return source;
     } catch (e) {
-      _log.e('Error adding source: $e');
+      _log.e('Error adding source');
       return null;
     }
   }
 
   /// Remove source
   Future<bool> removeSource(String sourceId) async {
+    // Do not allow a pending refresh to resurrect a deleted source.
+    if (_sourceFetches.contains(sourceId)) return false;
     try {
       // Deleting from storage is what actually removes it: dropping it from the
       // in-memory list alone means the next loadSource() brings it back.
       final name = sources.firstWhereOrNull((s) => s.id == sourceId)?.name;
       sources.removeWhere((s) => s.id == sourceId);
       await configService.deleteSource(sourceId);
-      _log.i('Removed source: $sourceId');
+      _log.i('Removed source');
       _action('source_removed', {'source': name ?? sourceId});
       return true;
     } catch (e) {
-      _log.e('Error removing source: $e');
+      _log.e('Error removing source');
       return false;
     }
   }
@@ -661,7 +670,7 @@ class ConfigController extends GetxController {
       });
       return result;
     } catch (e) {
-      _log.e('Single test failed for ${config.displayName}: $e');
+      _log.e('Single config test failed');
       return null;
     } finally {
       testingHashes.remove(hash);
@@ -677,7 +686,7 @@ class ConfigController extends GetxController {
       // Library said "removed" even when the delete had failed.
       final removed = await configService.deleteConfig(config.getHash());
       if (!removed) {
-        _log.w('Storage did not delete config: ${config.displayName}');
+        _log.w('Storage did not delete config');
         return false;
       }
       allConfigs.remove(config);
@@ -698,10 +707,10 @@ class ConfigController extends GetxController {
         // No connection controller (tests, or startup ordering): nothing to do.
       }
 
-      _log.i('Deleted config: ${config.displayName}');
+      _log.i('Deleted config');
       return true;
     } catch (e) {
-      _log.e('Error deleting config: $e');
+      _log.e('Error deleting config');
       return false;
     }
   }

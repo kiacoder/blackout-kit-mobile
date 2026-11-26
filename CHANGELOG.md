@@ -5,6 +5,19 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.3] - Release candidate
+
+### Security and stability
+- Harden configuration vault initialization and legacy migration against concurrent requests, preserve records on ambiguous storage failures, and prevent live-box migration.
+- Remove reviewed sensitive diagnostic fields from application and Android system logs; discard stale location lookup results after consent is revoked.
+- Require HTTPS for direct subscription requests and diagnostic lookups; reject unsafe redirect targets.
+- Verify signing certificate continuity, package identity, native library inventory and consistency across APK variants. Generate SBOM, scanner reports and provenance attestations.
+- Expand regression, Kotlin, Rust and supply-chain checks.
+
+### Release limitations
+- Experimental WireGuard/AWG native integration remains gated out of production builds. The isolated secure-storage and file-picker dependency experiments are not shipped.
+- ARM device acceptance and fresh scanner review remain required for production approval. No malware-free or complete security-remediation claim is made.
+
 ## [1.18.2] - 2026-11-02
 
 ### Changed

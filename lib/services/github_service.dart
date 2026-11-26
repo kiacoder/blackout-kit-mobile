@@ -76,14 +76,14 @@ class GitHubService {
       if (_contentCache.containsKey(url)) {
         final cached = _contentCache[url]!;
         if (DateTime.now().difference(cached.timestamp) < _repoTtl) {
-          _log.d('Cache hit: $url');
+          _log.d('Cache hit');
           return cached.content;
         } else {
           _contentCache.remove(url);
         }
       }
 
-      _log.i('Fetching $url');
+      _log.i('Fetching remote file');
       final response = await _client.get<String>(
         url,
         options: Options(
@@ -104,19 +104,21 @@ class GitHubService {
       return null;
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        _log.w('File not found: $owner/$repo/$path');
+        _log.w('Remote file not found');
       } else {
-        _log.e('Fetch error: $e');
+        _log.e('Fetch error');
       }
       return null;
     } catch (e) {
-      _log.e('Unexpected error: $e');
+      _log.e('Unexpected error');
       return null;
     }
   }
 
-  /// Fetch directly from any HTTP/HTTPS URL
+  /// Fetch directly from HTTPS only, including redirect destinations.
   Future<String?> fetchDirectUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !_isSafeFeedUri(uri)) return null;
     try {
       if (_contentCache.containsKey(url)) {
         final cached = _contentCache[url]!;
@@ -127,16 +129,8 @@ class GitHubService {
         }
       }
 
-      final response = await _client.get<String>(
-        url,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (BlackoutKitMobile/1.0)',
-          },
-        ),
-      );
-      if (response.statusCode == 200 && response.data != null) {
+      final response = await _getHttpsFeed(uri);
+      if (response != null && response.statusCode == 200 && response.data != null) {
         _contentCache[url] = CachedContent(
           content: response.data!,
           timestamp: DateTime.now(),
@@ -144,10 +138,40 @@ class GitHubService {
         return response.data!;
       }
       return null;
-    } catch (e) {
-      _log.e('Direct URL fetch error: $e');
+    } catch (_) {
+      _log.e('Direct URL fetch error');
       return null;
     }
+  }
+
+  static bool _isSafeFeedUri(Uri uri) =>
+      uri.scheme == 'https' && uri.hasAuthority && uri.host.isNotEmpty &&
+      uri.userInfo.isEmpty;
+
+  Future<Response<String>?> _getHttpsFeed(Uri uri) async {
+    for (var redirects = 0; redirects <= 5; redirects++) {
+      if (!_isSafeFeedUri(uri)) return null;
+      final response = await _client.getUri<String>(
+        uri,
+        options: Options(
+          responseType: ResponseType.plain,
+          followRedirects: false,
+          validateStatus: (status) => status == 200 ||
+              const [301, 302, 303, 307, 308].contains(status),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (BlackoutKitMobile/1.0)',
+          },
+        ),
+      );
+      if (response.statusCode == 200) return response;
+      final location = response.headers.value('location');
+      if (location == null || location.isEmpty) return null;
+      final next = uri.resolve(location);
+      // Do not send private feed requests through an HTTPS-to-HTTP downgrade.
+      if (!_isSafeFeedUri(next)) return null;
+      uri = next;
+    }
+    return null;
   }
 
   /// Fetch all releases from a repo (GitHub API)
@@ -164,14 +188,14 @@ class GitHubService {
       if (_contentCache.containsKey(key)) {
         final cached = _contentCache[key]!;
         if (DateTime.now().difference(cached.timestamp) < _repoTtl) {
-          _log.d('Cache hit: $key');
+          _log.d('Cache hit');
           return _parseReleaseAssets(cached.content);
         } else {
           _contentCache.remove(key);
         }
       }
 
-      _log.i('Fetching releases: $owner/$repo');
+      _log.i('Fetching releases');
       final response = await _client.get<Map<String, dynamic>>(url);
       if (response.statusCode == 200 && response.data != null) {
         final jsonStr = response.data.toString();
@@ -184,13 +208,13 @@ class GitHubService {
       return {};
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        _log.w('Releases not found: $owner/$repo');
+        _log.w('Releases not found');
       } else {
-        _log.e('Release fetch error: $e');
+        _log.e('Release fetch error');
       }
       return {};
     } catch (e) {
-      _log.e('Unexpected error: $e');
+      _log.e('Unexpected error');
       return {};
     }
   }
@@ -202,19 +226,40 @@ class GitHubService {
     String? filePattern,
   }) async {
     try {
-      _log.i('Fetching configs from ${source.fullId}');
+      _log.i('Fetching configs from source');
 
       // If user entered a full direct URL
       if (source.owner.startsWith('http://') || source.owner.startsWith('https://')) {
+        final uri = Uri.tryParse(source.owner);
+        if (uri == null || !_isSafeFeedUri(uri)) {
+          throw const SourceUnavailableException('Direct sources require HTTPS without URL credentials');
+        }
         final content = await fetchDirectUrl(source.owner);
         if (content != null && content.isNotEmpty) {
           final configs = ConfigParser.parseMultiple(content);
-          _log.i('Parsed ${configs.length} configs from direct URL ${source.owner}');
+          _log.i('Parsed ${configs.length} configs from direct URL');
           return configs;
         }
         throw const SourceUnavailableException(
           'Direct URL returned no content',
         );
+      }
+
+      // Protocol-specific community feed: never fall back to unrelated
+      // repository files, or import other protocols under this source name.
+      if (source.id == 'community-morpheus-wireguard' ||
+          source.id == 'community-au1rxx-wireguard') {
+        final content = await fetchRawFile(source.owner, source.repo,
+            source.filePath!, branch: source.branch ?? 'main');
+        final parsed = source.id == 'community-au1rxx-wireguard'
+            ? ConfigParser.parseWireGuardEndpointDocument(content ?? '')
+            : ConfigParser.parseMultiple(content ?? '');
+        final configs = parsed.where((c) => c.protocol == 'wireguard' || c.protocol == 'amneziawg')
+            .toList();
+        if (configs.isEmpty) {
+          throw const SourceUnavailableException('No supported WireGuard/AWG profiles in community feed');
+        }
+        return configs;
       }
 
       // An explicit filePath (set on the built-in sources) points straight at
@@ -237,7 +282,7 @@ class GitHubService {
         if (content != null && content.trim().isNotEmpty) {
           final configs = ConfigParser.parseMultiple(content);
           if (configs.isNotEmpty) {
-            _log.i('Parsed ${configs.length} configs from ${source.fullId}/$filename');
+            _log.i('Parsed ${configs.length} configs from repository');
             return configs;
           }
         }
@@ -255,7 +300,7 @@ class GitHubService {
           if (content != null && content.trim().isNotEmpty) {
             final configs = ConfigParser.parseMultiple(content);
             if (configs.isNotEmpty) {
-              _log.i('Parsed ${configs.length} configs from ${source.fullId}/$filename (master)');
+              _log.i('Parsed ${configs.length} configs from repository (master)');
               return configs;
             }
           }
@@ -271,7 +316,7 @@ class GitHubService {
     } on SourceUnavailableException {
       rethrow;
     } catch (e) {
-      _log.e('Error fetching configs: $e');
+      _log.e('Error fetching configs');
       throw SourceUnavailableException(e.toString());
     }
   }
@@ -305,7 +350,7 @@ class GitHubService {
       // This is a placeholder implementation
       return {};
     } catch (e) {
-      _log.e('Error parsing releases: $e');
+      _log.e('Error parsing releases');
       return {};
     }
   }

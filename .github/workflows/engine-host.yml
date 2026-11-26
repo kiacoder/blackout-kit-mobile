@@ -1,0 +1,34 @@
+name: Native engine host checks
+on:
+  workflow_dispatch:
+  push:
+    paths: ['android/app/src/main/kotlin/**', 'tool/kotlin/**', 'tool/test_engine_host.sh', 'tool/check_android_engine_sources.sh', '.github/workflows/engine-host.yml']
+  pull_request:
+    paths: ['android/app/src/main/kotlin/**', 'tool/kotlin/**', 'tool/test_engine_host.sh', 'tool/check_android_engine_sources.sh', '.github/workflows/engine-host.yml']
+permissions:
+  contents: read
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install pinned Kotlin compiler without lifecycle scripts
+        run: |
+          mkdir -p .cache/kotlin
+          npm pack kotlin-compiler@1.9.25 --ignore-scripts --pack-destination .cache/kotlin
+          echo 'bb497321b994d459bf611d970f85936b1f6998089dc8686b7530fcc1728b9319  .cache/kotlin/kotlin-compiler-1.9.25.tgz' | sha256sum -c -
+          tar -xzf .cache/kotlin/kotlin-compiler-1.9.25.tgz -C .cache/kotlin
+          chmod +x .cache/kotlin/package/bin/kotlinc
+          echo "KOTLINC=$PWD/.cache/kotlin/package/bin/kotlinc" >> "$GITHUB_ENV"
+      - name: Real JVM process and socket tests (not VPN connectivity)
+        run: bash tool/test_engine_host.sh
+      - name: Install Android API for narrow source check
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34"'
+      - name: Compile service and engine sources (not APK)
+        run: ANDROID_API_JAR="$ANDROID_HOME/platforms/android-34/android.jar" bash tool/check_android_engine_sources.sh

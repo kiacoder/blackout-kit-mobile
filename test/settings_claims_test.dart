@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 
 import 'package:blackout_kit_mobile/services/config_service.dart';
@@ -9,9 +8,6 @@ import 'package:blackout_kit_mobile/controllers/settings_controller.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const MethodChannel wakelockChannel = MethodChannel('dev.fluttercommunity.plus/wakelock');
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .setMockMethodCallHandler(wakelockChannel, (call) async => null);
   late Directory tempDir;
 
   setUpAll(() async {

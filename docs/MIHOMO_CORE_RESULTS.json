@@ -1,0 +1,63 @@
+{
+  "scope": "Linux core loopback fixtures, NOT Android VPN",
+  "tests": 11,
+  "passed": true,
+  "binarySha256": "0a68807c7c93963bb66d07717fe0f3ac3945b422b525f8a1e19438d278d7ae11",
+  "observations": [
+    {
+      "test": "test_controller_requires_authentication",
+      "startupMs": 43,
+      "rss": "VmRSS:\t   40524 kB"
+    },
+    {
+      "test": "test_dns_listener_uses_loopback_upstream",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   40832 kB"
+    },
+    {
+      "test": "test_domain_reject_rule_blocks_before_http",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   40536 kB"
+    },
+    {
+      "test": "test_proxy_group_selection_changes_forwarding",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   40648 kB"
+    },
+    {
+      "test": "test_restart_and_shutdown_release_ports",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   40496 kB"
+    },
+    {
+      "test": "test_restart_and_shutdown_release_ports",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   40244 kB"
+    },
+    {
+      "test": "test_restart_and_shutdown_release_ports",
+      "startupMs": 41,
+      "rss": "VmRSS:\t   40740 kB"
+    },
+    {
+      "test": "test_tcp_forwarding_by_ip",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   40844 kB"
+    },
+    {
+      "test": "test_tcp_forwarding_by_name_uses_configured_dns",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   40256 kB"
+    },
+    {
+      "test": "test_udp_forwarding",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   40388 kB"
+    },
+    {
+      "test": "test_upstream_outage_and_recovery_without_core_restart",
+      "startupMs": 42,
+      "rss": "VmRSS:\t   41068 kB"
+    }
+  ]
+}

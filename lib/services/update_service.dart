@@ -7,7 +7,11 @@
 /// Internal storage is deliberate: FileProvider maps `filesDir/updates/`
 /// through `res/xml/file_paths.xml`, whereas the external app dir is not
 /// always the volume that gets mapped ("Failed to find configured root").
+library;
+
 import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +27,7 @@ class AppUpdate {
     required this.notes,
     required this.apkUrl,
     required this.apkSize,
+    this.apkDigest,
   });
 
   final String tagName; // e.g. v1.12.3
@@ -31,6 +36,7 @@ class AppUpdate {
   final String notes;
   final String apkUrl;
   final int apkSize;
+  final String? apkDigest;
 
   /// Monotonic build number for a release tag.
   ///
@@ -56,7 +62,7 @@ class AppUpdate {
     // Accept both the v1.12.x scheme and the old beta numbering. Matching
     // only `beta.(\d+)$` meant every release after the version scheme changed
     // parsed as null, so the updater could never see an update at all.
-    final m = RegExp(r'v?(\d+)\.(\d+)\.(\d+)').firstMatch(tag);
+    final m = RegExp(r'^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.\d+)?$').firstMatch(tag);
     if (m == null) return null;
     final assets =
         (json['assets'] as List? ?? []).whereType<Map<String, dynamic>>().toList();
@@ -107,7 +113,51 @@ class AppUpdate {
       notes: (json['body'] as String? ?? ''),
       apkUrl: apk['browser_download_url'] as String,
       apkSize: (apk['size'] as num? ?? 0).toInt(),
+      apkDigest: apk['digest'] is String ? apk['digest'] as String : null,
     );
+  }
+}
+
+/// GitHub release metadata is an integrity check, not a replacement for
+/// Android's independent package and signing-certificate verification.
+class UpdateDownloadPolicy {
+  static const minBytes = 1024 * 1024;
+  static const maxBytes = 256 * 1024 * 1024;
+
+  static void validate(AppUpdate update) {
+    final uri = Uri.tryParse(update.apkUrl);
+    final segments = uri?.pathSegments ?? const <String>[];
+    if (!RegExp(r'^v?\d+\.\d+\.\d+(?:-beta\.\d+)?$')
+            .hasMatch(update.tagName) ||
+        uri == null ||
+        uri.scheme != 'https' ||
+        uri.host != 'github.com' ||
+        uri.port != 443 ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        segments.length != 6 ||
+        segments.take(5).join('/') !=
+            'kiacoder/blackout-kit-mobile/releases/download/${update.tagName}' ||
+        !RegExp(r'^[A-Za-z0-9._-]+\.apk$').hasMatch(segments.last)) {
+      throw const FormatException('Invalid official update URL or tag');
+    }
+    if (update.apkSize < minBytes || update.apkSize > maxBytes ||
+        !RegExp(r'^sha256:[a-fA-F0-9]{64}$')
+            .hasMatch(update.apkDigest ?? '')) {
+      throw const FormatException('Missing or invalid update integrity metadata');
+    }
+  }
+
+  static Future<void> verify(File file, AppUpdate update) async {
+    validate(update);
+    if (await file.length() != update.apkSize) {
+      throw const FormatException('Update download size mismatch');
+    }
+    final digest = await sha256.bind(file.openRead()).first;
+    if ('sha256:$digest' != update.apkDigest!.toLowerCase()) {
+      throw const FormatException('Update download SHA-256 mismatch');
+    }
   }
 }
 
@@ -118,6 +168,8 @@ class UpdateService extends GetxService {
 
   final status = RxString('');
   final progress = RxDouble(0.0);
+  bool _downloading = false;
+  bool _installing = false;
 
   /// The ABI the native side reports, used to choose the right APK asset.
   Future<String> deviceAbi() async {
@@ -206,60 +258,69 @@ class UpdateService extends GetxService {
 
   /// Downloads the APK into the FileProvider-mapped internal updates dir.
   Future<String> downloadApk(AppUpdate update) async {
-    // getApplicationSupportDirectory() is filesDir on Android, which is what
-    // <files-path> in file_paths.xml maps. No permissions involved.
-    final base = await getApplicationSupportDirectory();
-    final updatesDir = Directory('${base.path}/updates')
-      ..createSync(recursive: true);
-    final file = File('${updatesDir.path}/blackout-${update.tagName}.apk');
-
-    // A stale or partial file from an earlier attempt must not be installed.
-    if (await file.exists()) {
+    UpdateDownloadPolicy.validate(update);
+    if (_downloading || _installing) {
+      throw StateError('An update operation is already running');
+    }
+    _downloading = true;
+    Directory? staging;
+    Dio? client;
+    try {
+      final base = await getApplicationSupportDirectory();
+      final updatesDir = Directory('${base.path}/updates')
+        ..createSync(recursive: true);
+      final destination = File(
+        '${updatesDir.path}/blackout-${update.tagName}.apk',
+      );
+      staging = await updatesDir.createTemp('partial-');
+      final partial = File('${staging.path}/download.part');
+      final cancel = CancelToken();
+      status.value = 'Downloading ${update.tagName}...';
+      progress.value = 0;
+      client = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(minutes: 5),
+      ));
+      await client.download(
+        update.apkUrl,
+        partial.path,
+        cancelToken: cancel,
+        onReceiveProgress: (done, total) {
+          if (done > update.apkSize || total > update.apkSize) {
+            cancel.cancel('Update exceeds advertised size');
+          }
+          progress.value = (done / update.apkSize).clamp(0.0, 1.0).toDouble();
+        },
+        options: Options(headers: {'User-Agent': 'blackout-kit-mobile'}),
+      );
+      await UpdateDownloadPolicy.verify(partial, update);
+      // Publish only a verified file, within the same private filesystem.
+      await partial.rename(destination.path);
+      status.value = 'Download complete';
+      return destination.path;
+    } finally {
+      client?.close(force: true);
       try {
-        await file.delete();
-      } catch (_) {}
+        if (staging != null) await staging.delete(recursive: true);
+      } finally {
+        _downloading = false;
+      }
     }
-
-    status.value = 'Downloading ${update.tagName}...';
-    progress.value = 0;
-    await Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 20),
-      receiveTimeout: const Duration(minutes: 5),
-    )).download(
-      update.apkUrl,
-      file.path,
-      onReceiveProgress: (done, total) {
-        if (total > 0) progress.value = done / total;
-      },
-      options: Options(headers: {'User-Agent': 'blackout-kit-mobile'}),
-    );
-
-    // GitHub answers a rate-limited or failed download with HTML, not an APK.
-    // Catching that here produces "not a valid APK" instead of the installer's
-    // "problem parsing the package".
-    final size = await file.length();
-    if (update.apkSize > 0 && size != update.apkSize) {
-      throw Exception(
-        'Download incomplete: $size of ${update.apkSize} bytes. Try again.',
-      );
-    }
-    if (size < 1024 * 1024) {
-      throw Exception(
-        'The downloaded file is only $size bytes — the server did not send an APK.',
-      );
-    }
-    status.value = 'Download complete';
-    return file.path;
   }
 
   /// Hands the APK to Android's package installer (user confirms the install).
-  Future<void> installApk(String path) async {
+  Future<void> installApk(String path, AppUpdate update) async {
+    if (_downloading || _installing) {
+      throw StateError('An update operation is already running');
+    }
+    _installing = true;
     try {
+      // Permission retries may happen long after the original download.
+      // Verify the actual bytes again before handing the APK to Android.
+      await UpdateDownloadPolicy.verify(File(path), update);
       await _channel.invokeMethod('installApk', {'path': path});
-    } on PlatformException catch (e) {
-      // The native side already explains ALLOW_UNKNOWN_SOURCES and BAD_APK;
-      // keep that wording instead of flattening it into a generic failure.
-      throw Exception(e.message ?? 'install failed (${e.code})');
+    } finally {
+      _installing = false;
     }
   }
 }

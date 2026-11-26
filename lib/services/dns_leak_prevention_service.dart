@@ -147,7 +147,7 @@ class DNSLeakPreventionService extends GetxService {
       for (final server in resolvers) {
         results[server] = await _canConnect(server, 53, timeout);
       }
-      _logger.i('Resolver probe: $results');
+      _logger.i('Resolver probe completed');
       return results;
     } finally {
       isProbing.value = false;
@@ -160,7 +160,7 @@ class DNSLeakPreventionService extends GetxService {
       socket.destroy();
       return true;
     } catch (e) {
-      _logger.w('Resolver $host:$port did not answer: $e');
+      _logger.w('Resolver did not answer');
       return false;
     }
   }

@@ -2,6 +2,13 @@
 
 Thank you for your interest in contributing! This document outlines how to get started, coding standards, and the contribution process.
 
+## Repository governance
+
+Read [GOVERNANCE.md](GOVERNANCE.md) before opening a PR. Main requires a pull
+request and passing required tests. Changes affecting security, CI, signing or
+native engines require explicit risk and test evidence. A green build alone
+is not release approval.
+
 ## Getting Started
 
 ### Prerequisites
@@ -24,11 +31,20 @@ flutter pub get
 flutter test
 ```
 
+## Local quality checks
+
+Install Ruff using `python -m pip install --require-hashes --no-deps -r tool/requirements-quality.txt`
+and install the Rust components with `rustup component add clippy rustfmt`.
+On Windows, run `powershell -File tool/check_quality.ps1` before opening a PR.
+The script does not install hooks or change source. CI also runs independent
+quality checks. Existing informational lint and formatting debt is tracked
+in the Ascension roadmap; do not add new suppressions to conceal failures.
+
 ## Code Standards
 
 ### Dart Style Guide
 - Follow [Effective Dart](https://dart.dev/guides/language/effective-dart)
-- Use `flutter format` to auto-format code: `flutter format lib/`
+- Use `dart format` to format changed Dart files: `dart format path/to/file.dart`
 - Use `flutter analyze` to check for issues: `flutter analyze`
 
 ### Naming Conventions
@@ -42,7 +58,7 @@ flutter test
 
 ### Code Patterns
 - **State Management**: Use GetX (Rx observables, controllers, bindings)
-- **Persistence**: Use Hive for encrypted key-value storage
+- **Persistence**: Use Hive for key-value storage; encryption at rest is planned, not currently guaranteed
 - **Services**: Keep business logic in GetX services, not widgets
 - **Validation**: Validate at system boundaries (user input, external APIs)
 - **Error Handling**: Use ErrorHandler service for consistent error messages

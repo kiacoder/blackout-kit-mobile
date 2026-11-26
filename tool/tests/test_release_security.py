@@ -1,0 +1,205 @@
+import hashlib
+import json
+import os
+import subprocess
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+from unittest.mock import patch
+from tool.release_security import (inventory, package_identity, scanner_summary, signer_digest,
+                                   verify_apks, verify_keystore_certificate, verify_variant_consistency)
+
+class ReleaseSecurityTests(unittest.TestCase):
+    def apk(self, folder, abi='arm64-v8a', extra=None, omit=None):
+        path = folder / 'blackout-kit-test-arm64-v8a.apk'
+        with zipfile.ZipFile(path, 'w') as z:
+            z.writestr('AndroidManifest.xml', b'manifest')
+            z.writestr('classes.dex', b'dex')
+            for lib in ('libflutter.so', 'libapp.so', 'libgojni.so', 'libblackout_core.so',
+                        'libsingbox.so', 'libtun2socks.so', 'libfdlauncher.so'):
+                if lib != omit:
+                    z.writestr(f'lib/{abi}/{lib}', b'lib')
+            if extra: z.writestr(extra, b'unexpected')
+        return path
+
+    def test_valid_inventory(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(len(inventory(self.apk(Path(d)), {'arm64-v8a'})), 7)
+
+    def test_experimental_library_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name in ('libblackout-tunnels.so', 'libprocess_guard.so', 'libprocess_guard_fixture.so'):
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    inventory(self.apk(Path(d), extra=f'lib/arm64-v8a/{name}'), {'arm64-v8a'})
+
+    def test_missing_fallback_engine_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            for name in ('libsingbox.so', 'libtun2socks.so', 'libfdlauncher.so'):
+                with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'Missing required library'):
+                    inventory(self.apk(Path(d), omit=name), {'arm64-v8a'})
+
+    def variant_records(self):
+        arm64 = {'lib/arm64-v8a/libapp.so': 'a'*64}
+        armv7 = {'lib/armeabi-v7a/libapp.so': 'b'*64}
+        return [
+            {'name': 'app-test-arm64-v8a.apk', 'native_libraries': arm64},
+            {'name': 'app-test-armeabi-v7a.apk', 'native_libraries': armv7},
+            {'name': 'app-test-universal.apk', 'native_libraries': {**arm64, **armv7}},
+        ]
+
+    def test_variant_native_inventory_matches(self):
+        verify_variant_consistency(self.variant_records())
+
+    def test_variant_native_inventory_mismatch(self):
+        for change in ('digest', 'extra', 'missing'):
+            records = self.variant_records()
+            libs = records[0]['native_libraries']
+            key = 'lib/arm64-v8a/libapp.so'
+            if change == 'digest':
+                libs[key] = 'c'*64
+            elif change == 'extra':
+                libs['lib/arm64-v8a/libunexpected.so'] = 'd'*64
+            else:
+                del libs[key]
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'inventory differs'):
+                verify_variant_consistency(records)
+
+    def test_variant_mixed_build_labels_rejected(self):
+        records = self.variant_records()
+        records[1]['name'] = 'app-other-armeabi-v7a.apk'
+        with self.assertRaisesRegex(ValueError, 'one build label'):
+            verify_variant_consistency(records)
+
+    def test_wrong_abi_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(ValueError):
+                inventory(self.apk(Path(d)), {'armeabi-v7a'})
+
+    def test_signer_count(self):
+        line = 'Signer #1 certificate SHA-256 digest: ' + 'a'*64
+        report = 'Verifies\nNumber of signers: 1\n' + line
+        self.assertEqual(signer_digest(report), 'a'*64)
+        for invalid in (line, report + '\n' + line.replace('#1','#2'),
+                        report.replace('signers: 1','signers: 2'),
+                        report.replace('certificate SHA-256','public key SHA-256')):
+            with self.assertRaises(ValueError):
+                signer_digest(invalid)
+
+    def test_numbered_leaf_certificate(self):
+        report = ('Verifies\nNumber of signers: 1\n'
+                  'Signer #1 certificate #1 SHA-256 digest: ' + 'AB'*32 + '\n'
+                  'Signer #1 public key SHA-256 digest: ' + 'cd'*32 + '\n')
+        self.assertEqual(signer_digest(report), 'ab'*32)
+
+    def test_distribution_package_identity(self):
+        report = "package: name='com.blackoutkit.vpn' versionCode='123' versionName='1.2.3'"
+        self.assertEqual(package_identity(report), {
+            'package': 'com.blackoutkit.vpn', 'version_code': '123', 'version_name': '1.2.3'})
+
+    def test_distribution_rejects_experiment_and_debuggable(self):
+        report = "package: name='com.blackoutkit.vpn' versionCode='123' versionName='1.2.3'"
+        for invalid in (report.replace('.vpn', '.vpn.nativetest'),
+                        report + '\napplication-debuggable',
+                        report + '\n' + report, 'no package'):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                package_identity(invalid)
+
+    def test_keystore_certificate_pin_and_password_transport(self):
+        cert = b'synthetic DER certificate'
+        expected = hashlib.sha256(cert).hexdigest()
+        with patch.dict(os.environ, {'ANDROID_KEY_ALIAS': 'fixture',
+                                    'ANDROID_KEYSTORE_PASSWORD': 'synthetic-secret'}):
+            with patch('tool.release_security.subprocess.run',
+                       return_value=subprocess.CompletedProcess([], 0, cert, b'')) as run:
+                verify_keystore_certificate(Path('fixture.jks'), expected)
+                self.assertNotIn('synthetic-secret', run.call_args.args[0])
+                self.assertIn('-storepass:env', run.call_args.args[0])
+                with self.assertRaisesRegex(ValueError, 'differs from pinned'):
+                    verify_keystore_certificate(Path('fixture.jks'), '0' * 64)
+            with patch('tool.release_security.subprocess.run',
+                       return_value=subprocess.CompletedProcess([], 1, b'', b'secret error')):
+                with self.assertRaisesRegex(ValueError, '^Could not read signing certificate$'):
+                    verify_keystore_certificate(Path('fixture.jks'), expected)
+
+    def test_keystore_requires_pin_and_credentials(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ValueError, 'ANDROID_RELEASE_CERT_SHA256'):
+                verify_keystore_certificate(Path('fixture.jks'), '')
+            with self.assertRaisesRegex(ValueError, 'Missing signing alias'):
+                verify_keystore_certificate(Path('fixture.jks'), 'a' * 64)
+
+    def test_tag_requires_existing_certificate(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(ValueError, 'ANDROID_RELEASE_CERT_SHA256'):
+                verify_apks(Path(d), 'apksigner', True, '')
+
+class ScannerEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.folder = Path(temp.name)
+        self.records = [
+            {"name": "app-" + abi + ".apk", "sha256": digit * 64}
+            for abi, digit in (("arm64-v8a", "a"), ("armeabi-v7a", "b"), ("universal", "c"))
+        ]
+        self.vt = [{"file": r["name"], "sha256": r["sha256"], "status": "unknown-file"}
+                   for r in self.records]
+        self.write("VIRUSTOTAL_REPORT.json", self.vt)
+        self.write("MOBSF_STATUS.json", {"status": "completed-review-required"})
+        self.mobsf = {"sha256": "c" * 64, "appsec": {
+            "high": [{"title": "fixture rule", "section": "code", "description": "synthetic secret value"}], "warning": [], "info": [], "secure": [], "hotspot": [],
+            "security_score": 46,
+        }}
+        self.write("MOBSF_REPORT.json", self.mobsf)
+        (self.folder / "CLAMAV_REPORT.txt").write_text("Scanned files: 3\nInfected files: 0\n")
+
+    def write(self, name, value):
+        (self.folder / name).write_text(json.dumps(value))
+
+    def test_unknown_virustotal_is_not_clean(self):
+        result = scanner_summary(self.folder, self.records)
+        self.assertTrue(result["review_required"])
+        self.assertEqual(result["virustotal"][0]["status"], "unknown-file")
+        self.assertEqual(result["mobsf"]["counts"]["high"], 1)
+
+    def test_compact_findings_do_not_copy_descriptions(self):
+        first = scanner_summary(self.folder, self.records)["mobsf"]["findings"][0]
+        self.assertEqual(first["title"], "fixture rule")
+        self.assertNotIn("synthetic secret value", json.dumps(first))
+        self.mobsf["appsec"]["high"][0]["description"] = "different affected files"
+        self.write("MOBSF_REPORT.json", self.mobsf)
+        second = scanner_summary(self.folder, self.records)["mobsf"]["findings"][0]
+        self.assertEqual(first["rule_sha256"], second["rule_sha256"])
+        self.assertNotEqual(first["evidence_sha256"], second["evidence_sha256"])
+
+    def test_malformed_finding_rejected(self):
+        self.mobsf["appsec"]["high"][0]["description"] = None
+        self.write("MOBSF_REPORT.json", self.mobsf)
+        with self.assertRaisesRegex(ValueError, "finding fields"):
+            scanner_summary(self.folder, self.records)
+
+    def test_clamav_partial_scan_or_detection_rejected(self):
+        for value in ("Scanned files: 2\nInfected files: 0", "Scanned files: 3\nInfected files: 1",
+                      "Scanned files: 3\nInfected files: 0\nTotal errors: 1"):
+            (self.folder / "CLAMAV_REPORT.txt").write_text(value)
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                scanner_summary(self.folder, self.records)
+
+    def test_virustotal_mismatched_digest_rejected(self):
+        self.vt[0]["sha256"] = "0" * 64
+        self.write("VIRUSTOTAL_REPORT.json", self.vt)
+        with self.assertRaisesRegex(ValueError, "exact APK"):
+            scanner_summary(self.folder, self.records)
+
+    def test_mobsf_stale_report_rejected(self):
+        self.mobsf["sha256"] = "a" * 64
+        self.write("MOBSF_REPORT.json", self.mobsf)
+        with self.assertRaisesRegex(ValueError, "universal APK"):
+            scanner_summary(self.folder, self.records)
+        self.write("MOBSF_STATUS.json", {"status": "not-configured"})
+        with self.assertRaisesRegex(ValueError, "stale report"):
+            scanner_summary(self.folder, self.records)
+
+if __name__ == '__main__':
+    unittest.main()

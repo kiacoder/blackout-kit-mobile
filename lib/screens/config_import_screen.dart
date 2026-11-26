@@ -34,6 +34,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   // dialogs stack on each other faster than they can be dismissed.
   bool _dialogOpen = false;
   bool _saving = false;
+  bool _pickingFile = false;
   String? _lastCode;
   DateTime? _lastHandledAt;
 
@@ -44,8 +45,14 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     _tabController.addListener(_handleTabChange);
     _configController = Get.find<ConfigController>();
 
-    _autoCheckClipboard();
-    _consumeIntentPayload();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ConfigImportScreen.pendingPayload != null) {
+        _consumeIntentPayload();
+      } else {
+        _autoCheckClipboard();
+      }
+    });
   }
 
   /// Ingests a payload received via "Open with" / share (see IntentService).
@@ -68,7 +75,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       } else {
         return;
       }
-      if (!mounted || content.trim().isEmpty) return;
+      if (!mounted || _dialogOpen || _saving || _pickingFile ||
+          content.trim().isEmpty || content.length > 5 * 1024 * 1024) return;
       final multiple = ConfigParser.parseMultiple(content);
       final single = multiple.length > 1
           ? null
@@ -157,7 +165,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       // The clipboard read is an await; the screen can be gone by now.
-      if (!mounted) return;
+      if (!mounted || _dialogOpen || _saving) return;
       if (data != null && data.text != null && data.text!.isNotEmpty) {
         final text = data.text!.trim();
         final configs = _parsePayload(text);
@@ -175,10 +183,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           // on tab changes and resume, so an open dialog plus one more tick
           // stacked a second copy of the same list.
           if (!_dialogOpen && !_saving) {
-            _dialogOpen = true;
-            _showMultipleParsedDialog(configs).whenComplete(() {
-              if (mounted) _dialogOpen = false;
-            });
+            _showMultipleParsedDialog(configs);
           }
         }
       }
@@ -190,7 +195,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     // while a QR is in view: without them each dismissal instantly spawned
     // the next popup and the dialogs stacked faster than they could be
     // dismissed.
-    if (!_isScanning || _dialogOpen || _saving) return;
+    if (!mounted || !_isScanning || _dialogOpen || _saving || _pickingFile) return;
     if (_tabController.index != 0) return; // scan tab not visible
 
     final barcodes = capture.barcodes;
@@ -214,7 +219,6 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
 
         _lastCode = code;
         _lastHandledAt = now;
-        _dialogOpen = true;
         setState(() {
           _isScanning = false;
           _parsedConfig = configs.first;
@@ -233,7 +237,8 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _pickFile() async {
-    if (_dialogOpen || _saving) return; // one import dialog at a time
+    if (!mounted || _dialogOpen || _saving || _pickingFile) return;
+    _pickingFile = true;
     try {
       // FileType.custom + allowedExtensions is a trap on Android: SAF matches
       // by MIME type, .conf/.ovpn have no standard MIME, so Gmail/downloaded
@@ -245,8 +250,15 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         withData: true,
       );
 
+      if (!mounted || _dialogOpen || _saving) return;
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
+        const maxImportBytes = 5 * 1024 * 1024;
+        if (file.size > maxImportBytes) {
+          Get.snackbar('File Too Large'.tr, 'This file is larger than 5 MB'.tr,
+              backgroundColor: Colors.red, colorText: Colors.white);
+          return;
+        }
         String content = '';
 
         if (file.bytes != null) {
@@ -260,7 +272,6 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
 
         // Parsing is synchronous and runs on the UI isolate: a huge file would
         // freeze the app. 5 MB is far beyond any real subscription.
-        const maxImportBytes = 5 * 1024 * 1024;
         if (content.length > maxImportBytes) {
           if (!mounted) return;
           Get.snackbar(
@@ -287,7 +298,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           // The picker and the file read are both awaits: the user can leave
           // this screen while the system dialog is up, and setState on a
           // disposed State throws.
-          if (!mounted) return;
+          if (!mounted || _dialogOpen || _saving) return;
           final filename = file.name;
           final multiple = ConfigParser.parseMultiple(content);
           // A subscription file starts with a URI; parse() then happily treats
@@ -320,23 +331,29 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         }
       }
     } catch (e) {
+      if (!mounted) return;
       Get.snackbar(
         'File Error'.tr,
         'Failed to read file: $e',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
+    } finally {
+      _pickingFile = false;
     }
   }
 
-  Future<void> _saveConfig(Config config) async {
+  Future<void> _saveConfig(Config config, {BuildContext? dialogContext}) async {
     if (_saving) return; // double-tap guard: one save per dialog
     _saving = true;
     try {
       final success = await _configController.configService.saveConfig(config);
     if (success) {
       await _configController.loadConfigs();
-      Get.back();
+      if (!mounted) return;
+      final target = dialogContext ?? context;
+      if (!target.mounted || ModalRoute.of(target)?.isCurrent != true) return;
+      Navigator.of(target).pop();
       Get.snackbar(
         'Config Saved'.tr,
         '${config.displayName} added to Library',
@@ -344,6 +361,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         colorText: Colors.white,
       );
     } else {
+      if (!mounted) return;
       // saveConfig() returns false for a duplicate AND for a failed write.
       // Look at what is actually stored before blaming the user for a dupe.
       final alreadyStored = _configController.allConfigs
@@ -362,13 +380,14 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     }
   }
 
-  Future<void> _saveMultipleConfigs(List<Config> configs) async {
+  Future<void> _saveMultipleConfigs(List<Config> configs, {required BuildContext dialogContext}) async {
     if (_saving) return; // double-tap guard
     _saving = true;
     try {
       final savedCount = await _configController.configService.saveConfigs(configs);
       await _configController.loadConfigs();
-      Get.back();
+      if (!mounted || !dialogContext.mounted || ModalRoute.of(dialogContext)?.isCurrent != true) return;
+      Navigator.of(dialogContext).pop();
       if (savedCount == 0) {
         // Every entry already existed. The old message still said
         // "Successfully added 0 configs", which reads like a success.
@@ -394,8 +413,12 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _showParsedDialog(Config config) async {
-    await Get.dialog(
-      AlertDialog(
+    if (!mounted || _dialogOpen || _saving) return;
+    _dialogOpen = true;
+    try {
+      await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
         title: Row(
           children: [
             const Icon(Icons.verified, color: Colors.green),
@@ -427,11 +450,11 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           TextButton(
             // Scanning stays off after Cancel: the camera is paused and the
             // QR is probably still in view - Rescan resumes deliberately.
-            onPressed: () => Get.back(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text('cancel'.tr),
           ),
           ElevatedButton.icon(
-            onPressed: _saving ? null : () => _saveConfig(config),
+            onPressed: _saving ? null : () => _saveConfig(config, dialogContext: dialogContext),
             icon: Icon(Icons.add),
             label: Text('add_to_library'.tr),
             style: ElevatedButton.styleFrom(
@@ -443,13 +466,19 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       ),
     );
     // The dialog is closed (added, imported or cancelled): allow the next one.
-    _dialogOpen = false;
-    if (mounted) setState(() {});
+    } finally {
+      _dialogOpen = false;
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _showMultipleParsedDialog(List<Config> configs) async {
-    await Get.dialog(
-      AlertDialog(
+    if (!mounted || _dialogOpen || _saving) return;
+    _dialogOpen = true;
+    try {
+      await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
         title: Text('${configs.length} ${'configs'.tr}'),
         content: SizedBox(
           width: double.maxFinite,
@@ -468,11 +497,11 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text('cancel'.tr),
           ),
           ElevatedButton(
-            onPressed: _saving ? null : () => _saveMultipleConfigs(configs),
+            onPressed: _saving ? null : () => _saveMultipleConfigs(configs, dialogContext: dialogContext),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               foregroundColor: Colors.white,
@@ -482,8 +511,10 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         ],
       ),
     );
-    _dialogOpen = false;
-    if (mounted) setState(() {});
+    } finally {
+      _dialogOpen = false;
+      if (mounted) setState(() {});
+    }
   }
 
   @override
@@ -631,10 +662,20 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
               ),
               ElevatedButton.icon(
                 onPressed: () async {
-                  final data = await Clipboard.getData(Clipboard.kTextPlain);
+                  final ClipboardData? data;
+                  try {
+                    data = await Clipboard.getData(Clipboard.kTextPlain);
+                  } catch (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Clipboard unavailable'.tr)),
+                    );
+                    return;
+                  }
+                  if (!mounted) return;
                   final text = data?.text?.trim() ?? '';
                   if (text.isEmpty) return;
-                  // This button parsed with ConfigParser.parse(), so a
+                  // This button used the single-profile parser, so a
                   // clipboard holding several links collapsed to the first one
                   // (or to nothing). The text field and the auto-detect path
                   // already use _parsePayload; paste must too.
@@ -646,10 +687,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
                   }
                   setState(() => _parsedConfig = configs.first);
                   if (configs.length > 1 && !_dialogOpen && !_saving) {
-                    _dialogOpen = true;
-                    _showMultipleParsedDialog(configs).whenComplete(() {
-                      if (mounted) _dialogOpen = false;
-                    });
+                    _showMultipleParsedDialog(configs);
                   }
                 },
                 icon: const Icon(Icons.content_paste, size: 18),
@@ -674,10 +712,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
               if (configs.length > 1) {
                 setState(() => _parsedConfig = configs.first);
                 if (!_dialogOpen && !_saving) {
-                  _dialogOpen = true;
-                  _showMultipleParsedDialog(configs).whenComplete(() {
-                    if (mounted) _dialogOpen = false;
-                  });
+                  _showMultipleParsedDialog(configs);
                 }
               } else {
                 setState(() =>

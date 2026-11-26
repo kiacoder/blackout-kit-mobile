@@ -1,12 +1,12 @@
 name: Build APK
 
-# Least privilege at the workflow level; the build job escalates to
-# contents: write because it attaches the APKs to a Release.
+# Build jobs are read-only apart from attestations; publication is isolated.
 permissions:
   contents: read
 
 on:
   push:
+    branches: ['arena/**']
     tags:
       - 'v*'
   # Manual build. Lets you produce APKs from any commit (from the Actions tab,
@@ -19,14 +19,29 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      # Needed by softprops/action-gh-release to attach the APKs.
-      contents: write
+      contents: read
+      id-token: write
+      attestations: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate release ref
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+          test "$GITHUB_REF_NAME" = "v$version"
+
+
+      - name: Verify checked-in binary inventory and action pins
+        run: python3 tool/verify_supply_chain.py
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           # Must be 17: android/app/build.gradle sets sourceCompatibility 17 and
           # jvmTarget "17". This was '11' and could not compile the project.
@@ -56,13 +71,19 @@ jobs:
 
       - name: Release gate — Dart analyze + unit tests
         # A tag must not publish unless the Dart layer is clean and the unit
-        # suite passes. Same policy as test.yml (--no-fatal-* keeps infos and
-        # warnings non-fatal). This is the hard gate: a failure here aborts
+        # suite passes. Same policy as test.yml: informational lints remain
+        # visible, but warnings and errors fail the build. This is the hard gate: a failure here aborts
         # the whole release, before anything is attached.
         run: |
           set -e
-          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter analyze --no-fatal-infos
           flutter test
+
+      - name: Release gate — Android app unit tests
+        # Covers the Android service/native lifecycle and strict WG/AWG config
+        # boundary that flutter test cannot execute.
+        working-directory: android
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest
 
       - name: Set up Rust & Android targets
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable, commit-pinned (CodeQL: non-immutable action)
@@ -70,7 +91,7 @@ jobs:
           targets: aarch64-linux-android,armv7-linux-androideabi
 
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+        run: cargo install cargo-ndk --locked --version 3.5.4
 
       - name: Release gate — Rust core host tests
         # The blackout-core netstack is embedded into the release APK; run
@@ -79,15 +100,16 @@ jobs:
         run: |
           set -e
           cd native/blackout-core
-          cargo test
+          cargo test --locked
 
       - name: Build in-house Rust core (libblackout_core.so)
         run: |
           set -e
           cd native/blackout-core
-          cargo ndk -t arm64-v8a -t armeabi-v7a -o ../../android/app/src/main/jniLibs build --release
+          cargo ndk -t arm64-v8a -t armeabi-v7a -o ../../android/app/src/main/jniLibs build --release --locked
 
-      - name: Set up release signing (optional)
+      - name: Set up release signing (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
         # Without stable signing every CI run signs with a FRESH debug keystore —
         # hosted runners are ephemeral, so each build gets a different debug key.
         # The result is the classic update failure: installing the new APK over an
@@ -99,21 +121,18 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
         run: |
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            # A tagged build becomes a published release. Signing it with the
-            # throwaway debug key would ship an APK that can never update an
-            # installed build (INSTALL_FAILED_UPDATE_INCOMPATIBLE), and the
-            # in-app updater relies on signature continuity - so fail instead
-            # of publishing something broken.
-            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-              echo "::error::ANDROID_KEYSTORE_* secrets are not set. Refusing to publish a debug-signed release: it could never update an installed build. Configure the secrets, or build a non-tagged artifact for testing."
+          set -eu
+          umask 077
+          for key in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing release signing secret $key"
               exit 1
             fi
-            echo "::warning::ANDROID_KEYSTORE_* secrets are not set - this untagged build falls back to the debug key and must not be published as a release."
-            exit 0
-          fi
+          done
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release-keystore.jks"
+          python3 tool/release_security.py --keystore "$RUNNER_TEMP/release-keystore.jks"
           printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$RUNNER_TEMP/release-keystore.jks" \
             "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" \
@@ -137,69 +156,104 @@ jobs:
             --target-platform android-arm,android-arm64
           flutter build apk --release
 
-      - name: Name the APKs for the release
-        # softprops/action-gh-release does not support the `path#newname`
-        # syntax (it treats the whole string as a glob), so rename here.
-        run: |
-          set -e
-          cd build/app/outputs/flutter-apk
-          cp app-release.apk             "blackout-kit-${GITHUB_REF_NAME}-universal.apk"
-          cp app-arm64-v8a-release.apk   "blackout-kit-${GITHUB_REF_NAME}-arm64-v8a.apk"
-          cp app-armeabi-v7a-release.apk "blackout-kit-${GITHUB_REF_NAME}-armeabi-v7a.apk"
-          ls -la blackout-kit-*.apk
+      - name: Remove signing material
+        if: always()
+        run: rm -f android/key.properties "$RUNNER_TEMP/release-keystore.jks"
 
-      - name: Upload APK artifacts
-        # Always, so workflow_dispatch runs still yield something downloadable.
-        uses: actions/upload-artifact@v4
+      - name: Stage exact distribution APKs
+        run: |
+          set -eu
+          mkdir -p dist
+          label="$GITHUB_SHA"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then label="$GITHUB_REF_NAME"; fi
+          for abi in universal arm64-v8a armeabi-v7a; do
+            src="app-$abi-release.apk"
+            if [[ "$abi" == universal ]]; then src=app-release.apk; fi
+            cp "build/app/outputs/flutter-apk/$src" "dist/blackout-kit-$label-$abi.apk"
+          done
+
+      - name: Verify APK signatures and inventory
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          set -eu
+          signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          if [ ! -x "$signer" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0"
+          fi
+          test -x "$signer"
+          python3 tool/release_security.py --apk-dir dist --apksigner "$signer" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt"
+
+      - name: Install antivirus and refresh signatures
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clamav clamav-freshclam
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam
+      - name: Scan exact APKs for malware
+        run: |
+          set -eo pipefail
+          clamscan --version | tee dist/CLAMAV_VERSION.txt
+          clamscan --infected --recursive --max-filesize=256M --max-scansize=512M --alert-exceeds-max=yes dist/*.apk | tee dist/CLAMAV_REPORT.txt
+
+      - name: Generate repository dependency SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/SBOM.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: VirusTotal hash reports (no APK upload)
+        env:
+          # Only the maintainer-owned integration branch, main, or release tags.
+          # No pull_request or fork secret access.
+          VT_API_KEY: ${{ (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/d58a3d0b-blackout-kit-mobile') && secrets.VIRUSTOTAL_API_KEY || '' }}
+        run: python3 tool/virustotal_reports.py dist
+
+      - name: MobSF static analysis (pinned official image)
+        env:
+          MOBSF_IMAGE: ${{ vars.MOBSF_IMAGE }}
+        run: bash tool/scan_mobsf.sh dist
+
+      - name: Prepare security report
+        run: |
+          set -eu
+          test -s dist/SBOM.spdx.json
+          python3 tool/release_security.py --report-dir dist
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+
+      - name: Attest APK provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: dist/*.apk
+
+      - name: Attest security evidence
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: dist/*.json
+
+      - name: Upload compact security evidence for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: blackout-kit-security-summary
+          path: |
+            dist/SECURITY_REPORT.json
+            dist/APK_INVENTORY.json
+            dist/CLAMAV_VERSION.txt
+            dist/CLAMAV_REPORT.txt
+            dist/MOBSF_STATUS.json
+            dist/VIRUSTOTAL_REPORT.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload APK artifacts and evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: blackout-kit-mobile-apks
-          path: build/app/outputs/flutter-apk/*.apk
+          path: dist/
           if-no-files-found: error
-
-      - name: Prepare release notes and title
-        id: relmeta
-        # Tag pushes only: extracts THIS version's changelog section and derives the
-        # title ("<tag> — <first bold bullet>") so release naming stays consistent.
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
-          awk -v ver="$VERSION" '
-            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
-            found && /^## \[/ { exit }
-            found { print }
-          ' CHANGELOG.md > release_notes.md
-          if [ ! -s release_notes.md ]; then
-            printf 'See CHANGELOG.md for the full history. Release %s.\n' "$TAG" > release_notes.md
-          fi
-          TITLE="$TAG"
-          JOINED_NOTES="$(tr '\n' ' ' < release_notes.md)"
-          # head -1: the joined changelog is ONE line containing many **bold**
-          # items; grep -o emits every match on it, and a multi-line summary
-          # breaks the GITHUB_OUTPUT file format.
-          SUMMARY="$(echo "$JOINED_NOTES" | grep -m1 -oE '[-*][[:space:]]*\*\*[^*]+\*\*' | sed -E 's/^[-*][[:space:]]*\*\*([^*]+)\*\*/\1/' | head -1)"
-          [ -n "$SUMMARY" ] && TITLE="$TAG — $SUMMARY"
-          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
-          echo "Release notes prepared for $TAG (title: $TITLE)"
-
-      - name: Upload APKs to Release
-        # Single owner of release creation (release.yml was removed — its
-        # ncipollo step raced this one and could mint a second, empty release).
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ steps.relmeta.outputs.title }}
-          body_path: release_notes.md
-          # All three artifacts, under names that say which device they are for.
-          # A single owner: nothing else may attach APKs to a release, or the
-          # same version ships twice under different signing keys.
-          files: |
-            build/app/outputs/flutter-apk/blackout-kit-${{ github.ref_name }}-universal.apk
-            build/app/outputs/flutter-apk/blackout-kit-${{ github.ref_name }}-arm64-v8a.apk
-            build/app/outputs/flutter-apk/blackout-kit-${{ github.ref_name }}-armeabi-v7a.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-ios:
     # Restored 2026-11-02: the iOS native layer exists (PacketTunnelProvider,
@@ -207,16 +261,16 @@ jobs:
     # green on every push. This job ships the compiled app on the releases
     # page as an UNSIGNED IPA — a build deliverable, not an installable app
     # (signing is ios-release.yml's job, gated on Apple account secrets).
-    needs: build-apk
     runs-on: macos-15
     timeout-minutes: 90
 
     permissions:
-      # Needed by softprops/action-gh-release to attach the IPA.
-      contents: write
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -228,9 +282,10 @@ jobs:
         run: flutter pub get
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.23'
+          cache: false
 
       - name: Build Libbox.xcframework
         # The script installs sing-box's PINNED gomobile fork itself
@@ -265,26 +320,52 @@ jobs:
           echo "packaging: $APP"
           mkdir -p build/ios/ipa/Payload
           cp -R "$APP" build/ios/ipa/Payload/Runner.app
-          (cd build/ios/ipa && zip -qry "blackout-kit-${GITHUB_REF_NAME}-ios-unsigned.ipa" Payload)
-          du -h "build/ios/ipa/blackout-kit-${GITHUB_REF_NAME}-ios-unsigned.ipa"
+          label="$GITHUB_SHA"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then label="$GITHUB_REF_NAME"; fi
+          (cd build/ios/ipa && zip -qry "blackout-kit-$label-ios-unsigned.ipa" Payload)
+          du -h "build/ios/ipa/blackout-kit-$label-ios-unsigned.ipa"
 
       - name: Upload IPA artifact
         # Always, so workflow_dispatch runs still yield something downloadable.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: blackout-kit-mobile-ios-ipa
           path: build/ios/ipa/blackout-kit-*-ios-unsigned.ipa
           if-no-files-found: error
 
-      - name: Upload IPA to Release
-        # Attaches to the release the APK job created for this tag.
-        # needs: build-apk guarantees the release already exists, so this
-        # step only ever uploads — no second-owner creation race, and the
-        # release only publishes when both platforms build.
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-apk, build-ios]
+    runs-on: ubuntu-latest
+    environment: production-release
+    permissions:
+      contents: write
+      attestations: read
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          tag_name: ${{ github.ref_name }}
-          files: build/ios/ipa/blackout-kit-${{ github.ref_name }}-ios-unsigned.ipa
+          name: blackout-kit-mobile-apks
+          path: dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: blackout-kit-mobile-ios-ipa
+          path: dist
+      - name: Validate evidence and stage draft release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          for apk in dist/*.apk; do
+            gh attestation verify "$apk" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/build.yml" --source-digest "$GITHUB_SHA"
+          done
+          for evidence in dist/*.json; do
+            gh attestation verify "$evidence" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/build.yml" --source-digest "$GITHUB_SHA"
+          done
+          # Refuse to overwrite any existing release. A separate human review
+          # publishes the draft only after security reports and device tests.
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release already exists; refusing to overwrite"
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "$GITHUB_REF_NAME" --notes "Review the attached security evidence and device acceptance results before publishing. The iOS IPA is unsigned."

@@ -1,0 +1,206 @@
+{
+  "scope": "Native and JVM/Linux evidence only; no APK or Android execution",
+  "overallPercent": 26,
+  "logs": [
+    {
+      "path": ".buildlog/awg-barrier-before.txt",
+      "sha256": "e6f3c7331e8a2acae93edbf7e4b30311d8dde423eb516d6d46b7f567c16f38eb"
+    },
+    {
+      "path": ".buildlog/awg-barrier-fixed-stress.jsonl",
+      "sha256": "4dd6b43b087fd13d1117e5e55623f7f07ee8fbf331a51504560926f2d53551ed",
+      "testEvents": {
+        "pass": 80
+      },
+      "topLevel": {
+        "pass": 40
+      }
+    },
+    {
+      "path": ".buildlog/awg-patched-full-race.jsonl",
+      "sha256": "439f0f7d176c91de9941711eee4813db89e5ca170182d88657a24afc2cde29fb",
+      "testEvents": {
+        "pass": 50,
+        "skip": 2
+      },
+      "topLevel": {
+        "pass": 22,
+        "skip": 2
+      }
+    },
+    {
+      "path": ".buildlog/awg-patched-core-rerun.jsonl",
+      "sha256": "599e6f0b1faf6bd5fbe3aa98ba221aa6d0986ecb545f8521a33374328a9667ae",
+      "testEvents": {
+        "pass": 52,
+        "skip": 2
+      },
+      "topLevel": {
+        "pass": 24,
+        "skip": 2
+      }
+    },
+    {
+      "path": ".buildlog/awg-patched-stress-rerun.jsonl",
+      "sha256": "43b8792d32cae9aa586836afb2815ec4061167c2cda77a629870a9fd82072ff3",
+      "testEvents": {
+        "pass": 80
+      },
+      "topLevel": {
+        "pass": 40
+      }
+    },
+    {
+      "path": ".buildlog/awg-padding-variants.jsonl",
+      "sha256": "1b50eb20dc3544a9c98c94061a883706c348ae83b8cdfc8c8115e4d0a5ba6758",
+      "testEvents": {},
+      "topLevel": {}
+    },
+    {
+      "path": ".buildlog/awg-padding-variants-fixed.jsonl",
+      "sha256": "46a342019b39ffb93b3704289f84bbcaaa44d90125d31008786385a6ad4074b8",
+      "testEvents": {
+        "pass": 25
+      },
+      "topLevel": {
+        "pass": 5
+      }
+    },
+    {
+      "path": ".buildlog/wireguard-patched-core-rerun.jsonl",
+      "sha256": "401ca631866264017600d25ef9c40678658a99198dd60b9c72659b419dedb665",
+      "testEvents": {
+        "pass": 46,
+        "skip": 1
+      },
+      "topLevel": {
+        "pass": 20,
+        "skip": 1
+      }
+    },
+    {
+      "path": ".buildlog/awg-patched-android-build.txt",
+      "sha256": "460f518cd80bc9bf785f69f96262460d3c879049b758af8718a141078a88b5b6"
+    },
+    {
+      "path": ".buildlog/wg-hardened-android-build.txt",
+      "sha256": "e15e9899cb86c392d878d165a659180d1eb9eeee8e5958e0d17bea7b44e09059"
+    },
+    {
+      "path": ".buildlog/native-config-tests.txt",
+      "sha256": "6c488872baee048d70e9e268079155a3323f43a3306f4d0854f1c005e984dc8e"
+    },
+    {
+      "path": ".buildlog/host-current.txt",
+      "sha256": "725e95b7e415c3aca368c386008e695d4e2ea96cdb17d9bae44593b491646d03"
+    },
+    {
+      "path": ".buildlog/python-current.txt",
+      "sha256": "07744367aa00c5a1c54fcc1ac8f0066eec48c7b9fe48837466765b5f1ace92d1"
+    }
+  ],
+  "artifacts": [
+    {
+      "engine": "awg",
+      "abi": "arm64-v8a",
+      "path": ".cache/awg-patched-build/arm64-v8a/libwg-go.so",
+      "bytes": 5080512,
+      "sha256": "c64661326108bd550923a04c803968df368ca219a62bbd95adad8dd7f6b13532",
+      "status": "compiled only, not packaged or Android-executed"
+    },
+    {
+      "engine": "awg",
+      "abi": "armeabi-v7a",
+      "path": ".cache/awg-patched-build/armeabi-v7a/libwg-go.so",
+      "bytes": 4858468,
+      "sha256": "397388a2a249fd531d934cf21554c5d0c26a5b60ec8bd1aecceca52723c2d530",
+      "status": "compiled only, not packaged or Android-executed"
+    },
+    {
+      "engine": "wireguard",
+      "abi": "arm64-v8a",
+      "path": ".cache/wg-hardened-build/arm64-v8a/libwg-go.so",
+      "bytes": 4871992,
+      "sha256": "0dfd0052ea334b53d389656d9bca7571b2a542caef867fa56dedfaf4c5d6ad37",
+      "status": "compiled only, not packaged or Android-executed"
+    },
+    {
+      "engine": "wireguard",
+      "abi": "armeabi-v7a",
+      "path": ".cache/wg-hardened-build/armeabi-v7a/libwg-go.so",
+      "bytes": 4666984,
+      "sha256": "182484eaa7499194600bb597091407890aa38b525ee130f070cffe38942179e2",
+      "status": "compiled only, not packaged or Android-executed"
+    }
+  ],
+  "kernel": {
+    "awg": {
+      "engine": "awg",
+      "scope": "Linux isolated kernel TUN; NOT Android",
+      "passed": true,
+      "checks": [
+        "cycle-1: TCP through kernel TUN",
+        "cycle-1: UDP DNS through kernel TUN",
+        "outer link outage blocks traffic; recovery forwards again",
+        "cycle-1: both kernel TUNs removed on shutdown",
+        "cycle-2: TCP through kernel TUN",
+        "cycle-2: UDP DNS through kernel TUN",
+        "cycle-2: both kernel TUNs removed on shutdown",
+        "cycle-3: TCP through kernel TUN",
+        "cycle-3: UDP DNS through kernel TUN",
+        "cycle-3: both kernel TUNs removed on shutdown"
+      ],
+      "tunCounters": [
+        {
+          "cycle": 1,
+          "rxBytes": 521,
+          "txBytes": 502
+        },
+        {
+          "cycle": 2,
+          "rxBytes": 481,
+          "txBytes": 442
+        },
+        {
+          "cycle": 3,
+          "rxBytes": 481,
+          "txBytes": 442
+        }
+      ]
+    },
+    "wireguard": {
+      "engine": "wireguard",
+      "scope": "Linux isolated kernel TUN; NOT Android",
+      "passed": true,
+      "checks": [
+        "cycle-1: TCP through kernel TUN",
+        "cycle-1: UDP DNS through kernel TUN",
+        "outer link outage blocks traffic; recovery forwards again",
+        "cycle-1: both kernel TUNs removed on shutdown",
+        "cycle-2: TCP through kernel TUN",
+        "cycle-2: UDP DNS through kernel TUN",
+        "cycle-2: both kernel TUNs removed on shutdown",
+        "cycle-3: TCP through kernel TUN",
+        "cycle-3: UDP DNS through kernel TUN",
+        "cycle-3: both kernel TUNs removed on shutdown"
+      ],
+      "tunCounters": [
+        {
+          "cycle": 1,
+          "rxBytes": 521,
+          "txBytes": 502
+        },
+        {
+          "cycle": 2,
+          "rxBytes": 481,
+          "txBytes": 442
+        },
+        {
+          "cycle": 3,
+          "rxBytes": 481,
+          "txBytes": 442
+        }
+      ]
+    }
+  }
+}

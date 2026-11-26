@@ -571,3 +571,27 @@ Open-source under the MIT License. See [LICENSE](LICENSE) for details.
 - 🔒 **Security vulnerabilities** → [private advisory](https://github.com/kiacoder/blackout-kit-mobile/security/advisories/new) — never a public issue
 - ♿ **Accessibility barriers** → issues tagged `accessibility` (see [ACCESSIBILITY.md](ACCESSIBILITY.md))
 - 📜 Everyone interacting here agrees to the [Code of Conduct](.github/CODE_OF_CONDUCT.md)
+
+## Multi-engine expansion work (2026-11-16)
+
+This branch adds safer protocol identification, bounded subprocess shutdown,
+application batch JSON/v2rayN clipboard export and a tested offline configuration
+packager. It does **not** deliver new working Mihomo, AWG or OpenVPN runtimes.
+Start with [CURRENT_STATUS.md](CURRENT_STATUS.md), [ENGINE_SUPPORT.md](ENGINE_SUPPORT.md),
+[CONFIGURATION_FORMATS.md](CONFIGURATION_FORMATS.md) and [TESTING.md](TESTING.md).
+The [audit](docs/EXPANSION_AUDIT.md), [server report](SERVER_DEPLOYMENT.md) and
+[handoff](HANDOFF.md) distinguish source implementation from unperformed builds,
+deployments and connection verification. No real server configuration collection
+or new APK was generated in this restricted environment.
+
+Milestone 2 adds an experimental, default-OFF Mihomo Android adapter and full-document
+profile path, plus installed-engine validation. **23 real JVM/process/socket host tests
+pass; eight native service/engine source files pass a narrow API compile check.**
+Neither result is an APK build or a VPN forwarding test. See
+[toolchain evidence](docs/TOOLCHAIN_PROGRESS.md) and the updated current status before
+attempting to enable the adapter. AWG/native-WG/OpenVPN remain unintegrated.
+
+Continuation: 11 verified Mihomo Linux core integration tests, 30 JVM host tests,
+29 factory tests plus four artifact checks, and an eleven-file Android API check including plugin declarations
+now pass. These are NOT a full Flutter/Gradle build or Android VPN test. See
+[review and unresolved build gates](docs/CONTINUATION_REVIEW.md).

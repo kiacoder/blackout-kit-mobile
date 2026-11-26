@@ -1,0 +1,16 @@
+test_controller_requires_authentication (__main__.CoreTests.test_controller_requires_authentication) ... ok
+test_dns_listener_uses_loopback_upstream (__main__.CoreTests.test_dns_listener_uses_loopback_upstream) ... ok
+test_domain_reject_rule_blocks_before_http (__main__.CoreTests.test_domain_reject_rule_blocks_before_http) ... ok
+test_invalid_config_is_rejected (__main__.CoreTests.test_invalid_config_is_rejected) ... ok
+test_proxy_group_selection_changes_forwarding (__main__.CoreTests.test_proxy_group_selection_changes_forwarding) ... ok
+test_restart_and_shutdown_release_ports (__main__.CoreTests.test_restart_and_shutdown_release_ports) ... ok
+test_tcp_forwarding_by_ip (__main__.CoreTests.test_tcp_forwarding_by_ip) ... ok
+test_tcp_forwarding_by_name_uses_configured_dns (__main__.CoreTests.test_tcp_forwarding_by_name_uses_configured_dns) ... ok
+test_udp_forwarding (__main__.CoreTests.test_udp_forwarding) ... ok
+test_upstream_outage_and_recovery_without_core_restart (__main__.CoreTests.test_upstream_outage_and_recovery_without_core_restart) ... ok
+test_version_and_native_config_validation (__main__.CoreTests.test_version_and_native_config_validation) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 4.392s
+
+OK

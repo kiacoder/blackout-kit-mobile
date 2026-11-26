@@ -42,8 +42,12 @@ impl PacketHeader {
             if proto != 6 && proto != 17 {
                 return None;
             }
-            let src_ip = IpAddr::V4(Ipv4Addr::new(packet[12], packet[13], packet[14], packet[15]));
-            let dst_ip = IpAddr::V4(Ipv4Addr::new(packet[16], packet[17], packet[18], packet[19]));
+            let src_ip = IpAddr::V4(Ipv4Addr::new(
+                packet[12], packet[13], packet[14], packet[15],
+            ));
+            let dst_ip = IpAddr::V4(Ipv4Addr::new(
+                packet[16], packet[17], packet[18], packet[19],
+            ));
 
             if total_len < ihl + 4 || packet.len() < ihl + 4 {
                 return None;
@@ -110,7 +114,7 @@ impl PacketHeader {
     }
 
     /// Returns the TCP flags byte of the packet, if it is a valid TCP packet.
-    pub fn tcp_flags<'p>(&self, packet: &'p [u8]) -> Option<u8> {
+    pub fn tcp_flags(&self, packet: &[u8]) -> Option<u8> {
         if self.protocol != 6 || packet.len() < self.payload_offset + 14 {
             return None;
         }
@@ -237,7 +241,8 @@ pub fn udp_payload<'p>(packet: &'p [u8], header: &PacketHeader) -> Option<&'p [u
     if packet.len() < l4_start + 8 {
         return None;
     }
-    let declared_udp_len = u16::from_be_bytes([packet[l4_start + 4], packet[l4_start + 5]]) as usize;
+    let declared_udp_len =
+        u16::from_be_bytes([packet[l4_start + 4], packet[l4_start + 5]]) as usize;
     if declared_udp_len < 8 {
         return None;
     }

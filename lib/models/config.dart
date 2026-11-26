@@ -3,7 +3,9 @@
 /// V2 extensibility: Add V2Ray, Trojan, NaïveProxy subclasses without UI changes.
 
 import 'dart:convert';
+import 'dart:io' show InternetAddress;
 import 'package:crypto/crypto.dart';
+import 'package:yaml/yaml.dart';
 
 /// Canonical RFC 4122 UUID shape: 8-4-4-4-12 hex digits.
 ///
@@ -1031,7 +1033,7 @@ class Hysteria2Config extends Config {
   static Hysteria2Config? fromUri(String uri, {String? customName}) {
     try {
       uri = ConfigParser.normalizeScheme(uri.trim());
-      if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://') && !uri.startsWith('hysteria://')) return null;
+      if (!uri.startsWith('hy2://') && !uri.startsWith('hysteria2://')) return null;
       // The official Hysteria 2 syntax allows a comma-separated port LIST or
       // a RANGE in the authority (`:443,8443`, `:20000-30000`). Uri parsing
       // can't make an int of that — tryParseUri throws FormatException and
@@ -1723,6 +1725,153 @@ class ConfigParser {
     return low == '1' || low == 'true' || low == 'yes';
   }
 
+  /// Extract single-peer WireGuard endpoints from sing-box subscription JSON.
+  /// Do not execute the document or adopt its routing rules. Reject endpoint
+  /// extensions we cannot faithfully translate into a native IP profile.
+  static List<Config> parseWireGuardEndpointDocument(String text) {
+    try {
+      final data = jsonDecode(text);
+      if (data is! Map || data['endpoints'] is! List) return [];
+      final configs = <Config>[];
+      final seen = <String>{};
+      for (final entry in (data['endpoints'] as List).take(4000)) {
+        if (entry is! Map || entry['type'] != 'wireguard' ||
+            entry.keys.any((k) => !const ['type','tag','address','private_key','peers','mtu'].contains(k))) continue;
+        final peers = entry['peers'];
+        if (peers is! List || peers.length != 1 || peers.first is! Map) continue;
+        final peer = peers.first as Map;
+        if (peer.keys.any((k) => !const ['address','port','public_key','pre_shared_key','allowed_ips','reserved','persistent_keepalive_interval'].contains(k))) continue;
+        final host = peer['address'];
+        final port = peer['port'];
+        final secret = entry['private_key'];
+        final addresses = entry['address'];
+        final allowed = peer['allowed_ips'];
+        final pub = peer['public_key'];
+        if (host is! String || port is! int || secret is! String ||
+            pub is! String || addresses is! List || allowed is! List ||
+            addresses.any((v) => v is! String) || allowed.any((v) => v is! String)) continue;
+        final reserved = peer['reserved'];
+        if (reserved != null && (reserved is! List || reserved.length != 3 ||
+            reserved.any((v) => v != 0))) continue;
+        try {
+          final uri = Uri(scheme: 'wireguard', userInfo: Uri.encodeComponent(secret),
+              host: host, port: port, queryParameters: {
+                'address': addresses.join(','),
+                'allowedips': allowed.join(','),
+                'publickey': pub,
+                if (peer['pre_shared_key'] != null) 'presharedkey': peer['pre_shared_key'].toString(),
+                if (peer['persistent_keepalive_interval'] != null) 'keepalive': peer['persistent_keepalive_interval'].toString(),
+                if (entry['mtu'] != null) 'mtu': entry['mtu'].toString(),
+              });
+          final config = _parseWireGuardLink(uri.toString(),
+              customName: entry['tag'] is String ? entry['tag'] as String : null);
+          if (config != null && config.validate() && seen.add(config.rawUri)) configs.add(config);
+        } catch (_) { /* Skip this malformed endpoint only. */ }
+      }
+      return configs;
+    } catch (_) { return []; }
+  }
+
+  /// Import authority-style WireGuard share links without losing extensions.
+  /// Only parameters understood by our native .conf path are accepted.
+  /// Unsupported transport extensions must not silently become plain WG.
+  static Config? _parseWireGuardLink(String text, {String? customName}) {
+    final uri = Uri.parse(text);
+    if (uri.host.isEmpty || !uri.hasPort || uri.port < 1 ||
+        uri.port > 65535 || uri.userInfo.isEmpty ||
+        (uri.path.isNotEmpty && uri.path != '/')) return null;
+    final q = <String, String>{};
+    for (final entry in uri.queryParametersAll.entries) {
+      final k = entry.key.toLowerCase();
+      if (q.containsKey(k) || entry.value.length != 1) return null;
+      final v = entry.value.single;
+      if (v.contains(RegExp(r'[\x00-\x1f\x7f#]'))) return null;
+      q[k] = v.trim();
+    }
+    const awg = ['jc','jmin','jmax','s1','s2','s3','s4','h1','h2','h3','h4','i1','i2','i3','i4','i5'];
+    const known = ['address','publickey','presharedkey','dns','mtu',
+      'allowedips','keepalive','persistent_keepalive','persistent-keepalive',
+      'persistentkeepalive','reserved','udp', ...awg];
+    if (q.keys.any((k) => !known.contains(k))) return null;
+    // Reserved bytes are not supported by the current native engine.
+    if (q.containsKey('reserved') &&
+        !RegExp(r'^0\s*,\s*0\s*,\s*0$').hasMatch(q['reserved']!)) return null;
+    if (q.containsKey('udp') && !['1','true'].contains(q['udp']!.toLowerCase())) return null;
+    String? key(String? value) {
+      if (value == null || value.isEmpty) return null;
+      try {
+        final bytes = base64.decode(base64.normalize(value));
+        if (bytes.length != 32 || bytes.every((b) => b == 0)) return null;
+        return base64.encode(bytes);
+      } catch (_) { return null; }
+    }
+    final secret = key(Uri.decodeComponent(uri.userInfo));
+    final peer = key(q['publickey']);
+    if (secret == null || peer == null) return null;
+    final psk = key(q['presharedkey']);
+    if (q.containsKey('presharedkey') && psk == null) return null;
+    String? networks(String? value) {
+      if (value == null || value.isEmpty) return null;
+      final result = <String>[];
+      for (final entry in value.split(',')) {
+        final fields = entry.trim().split('/');
+        final ip = InternetAddress.tryParse(fields.first);
+        if (ip == null || fields.length > 2) return null;
+        final max = ip.rawAddress.length * 8;
+        final prefix = fields.length == 1 ? max : int.tryParse(fields.last);
+        if (prefix == null || prefix < 0 || prefix > max) return null;
+        result.add('${ip.address}/$prefix');
+      }
+      return result.join(', ');
+    }
+    final address = networks(q['address']);
+    final routes = networks(q['allowedips'] ?? '0.0.0.0/0, ::/0');
+    if (address == null || routes == null) return null;
+    final mtu = q['mtu'];
+    if (mtu != null && ((int.tryParse(mtu) ?? 0) < 1280 ||
+        (int.tryParse(mtu) ?? 0) > 9000)) return null;
+    final dns = q['dns'];
+    if (dns != null && dns.split(',').any((v) => InternetAddress.tryParse(v.trim()) == null)) return null;
+    final keeps = ['keepalive','persistent_keepalive','persistent-keepalive','persistentkeepalive']
+        .where(q.containsKey).map((k) => q[k]!).toSet();
+    if (keeps.length > 1) return null;
+    final keep = keeps.firstOrNull;
+    if (keep != null && ((int.tryParse(keep) ?? -1) < 0 ||
+        (int.tryParse(keep) ?? -1) > 65535)) return null;
+    final isAwg = awg.any(q.containsKey);
+    for (final field in ['jc','jmin','jmax','s1','s2','s3','s4']) {
+      if (q.containsKey(field)) {
+        final n = int.tryParse(q[field]!);
+        if (n == null || n < 0 || n > 65535) return null;
+      }
+    }
+    for (final field in ['h1','h2','h3','h4']) {
+      if (q.containsKey(field)) {
+        final parts = q[field]!.split('-').map(int.tryParse).toList();
+        if (parts.isEmpty || parts.length > 2 ||
+            parts.any((n) => n == null || n < 0 || n > 4294967295) ||
+            (parts.length == 2 && parts.first! > parts.last!)) return null;
+      }
+    }
+    final endpoint = uri.host.contains(':') ? '[${uri.host}]:${uri.port}' : '${uri.host}:${uri.port}';
+    if (endpoint.contains(RegExp(r'[\s#/@]'))) return null;
+    final lines = <String>[
+      '[Interface]', 'PrivateKey = $secret', 'Address = $address',
+      if (dns != null) 'DNS = $dns',
+      if (mtu != null) 'MTU = $mtu',
+      for (final field in awg)
+        if (q.containsKey(field)) '${field[0].toUpperCase()}${field.substring(1)} = ${q[field]}',
+      '', '[Peer]', 'PublicKey = $peer',
+      if (psk != null) 'PresharedKey = $psk',
+      'Endpoint = $endpoint', 'AllowedIPs = $routes',
+      if (keep != null) 'PersistentKeepalive = $keep',
+    ];
+    final conf = lines.join('\n');
+    final name = customName ?? (uri.fragment.isEmpty ? null : uri.fragment);
+    return isAwg ? AmneziaWGConfig.fromUri(conf, customName: name)
+        : WireGuardConfig.fromUri(conf, customName: name);
+  }
+
   static Config? parse(String text, {String? customName}) {
     try {
       // Normalise the scheme before dispatching: the guards below are
@@ -1730,18 +1879,22 @@ class ConfigParser {
       // community config lists do — used to be dropped silently. Only the
       // scheme is touched; credentials and base64 payloads stay byte-identical.
       final trimmed = ConfigParser.normalizeScheme(text.trim());
+      if (MihomoConfig.looksLikeDocument(trimmed)) {
+        return MihomoConfig.fromDocument(trimmed, customName: customName);
+      }
       // URI-based single-line protocols
       if (trimmed.startsWith('sni://'))         return SniRelayConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('mhrv://'))        return MhrvRelayConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vless://'))       return VlessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vmess://'))       return VmessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('trojan://'))      return TrojanConfig.fromUri(trimmed, customName: customName);
-      if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://') || trimmed.startsWith('hysteria://'))
+      if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://'))
                                                 return Hysteria2Config.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('tuic://'))        return TuicConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('anytls://'))      return AnyTlsConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('shadowtls://'))   return ShadowTlsConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('ss://'))          return ShadowsocksConfig.fromUri(trimmed, customName: customName);
+      if (trimmed.startsWith('wireguard://')) return _parseWireGuardLink(trimmed, customName: customName);
       if (trimmed.startsWith('awg://') || trimmed.startsWith('amneziawg://'))
                                                 return AmneziaWGConfig.fromUri(awgUriToConf(trimmed), customName: customName);
       // File/block content protocols. A bare substring match meant any text
@@ -1799,7 +1952,10 @@ class ConfigParser {
   static bool _looksLikeAmnezia(String content) {
     final lower = content.toLowerCase();
     if (lower.contains('junk_count')) return true;
-    for (final key in const ['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4']) {
+    for (final key in const [
+      'jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4',
+      'h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5',
+    ]) {
       // Match `key = value` at the start of a line, ignoring leading spaces.
       if (RegExp('^\\s*${key}\\s*=', multiLine: true, caseSensitive: false)
           .hasMatch(content)) {
@@ -1824,6 +1980,12 @@ class ConfigParser {
     if (text.trim().isEmpty) return [];
 
     var rawText = text.trim();
+    // Preserve a full engine document as one profile; never extract incidental
+    // share links from proxy-provider URLs/comments or split its YAML lines.
+    if (MihomoConfig.looksLikeDocument(rawText)) {
+      final profile = MihomoConfig.fromDocument(rawText);
+      return profile == null ? [] : [profile];
+    }
 
     // 0. Subscriptions wrapped by a client: sub://BASE64 / subscription://BASE64.
     //    These contain `://` after de-framing, so the whole-payload base64
@@ -1920,7 +2082,7 @@ class ConfigParser {
       // character class keeps `]` so a bracketed IPv6 authority
       // (`vless://id@[2001:db8::1]:443`) is not truncated at the bracket.
       final uriRegex = RegExp(
-        r'(vless|vmess|trojan|ss|hy2|hysteria2|hysteria|tuic|awg|amneziawg|anytls|shadowtls|sni|mhrv)://[^\s<>"|]+',
+        r'(vless|vmess|trojan|ss|hy2|hysteria2|tuic|wireguard|awg|amneziawg|anytls|shadowtls|sni|mhrv)://[^\s<>"|]+',
         caseSensitive: false,
       );
       final matches = uriRegex.allMatches(trimmed);
@@ -1960,5 +2122,96 @@ class ConfigParser {
     }
 
     return list;
+  }
+}
+
+
+/// Full Mihomo document; runtime availability is separate from import support.
+/// Kept verbatim in the encrypted profile vault. Native checker is authoritative.
+class MihomoConfig extends Config {
+  @override final String rawUri;
+  @override final String displayName;
+  final Map<String, dynamic> document;
+  MihomoConfig._(this.rawUri, this.displayName, this.document);
+  @override String get protocol => 'mihomo';
+  // A rule/group profile has no single network endpoint to latency-probe.
+  @override String get address => '';
+  @override int get port => 0;
+  @override bool validate() => document.isNotEmpty;
+  @override Future<bool> connect() async => false;
+  @override Future<void> disconnect() async {}
+  @override Future<bool> isRunning() async => false;
+
+  static bool looksLikeDocument(String text) =>
+      RegExp(r'^(proxies|proxy-providers|proxy-groups)\s*:', multiLine: true).hasMatch(text) ||
+      (text.startsWith('{') && RegExp(r'"(?:proxies|proxy-providers|proxy-groups)"\s*:').hasMatch(text));
+
+  static MihomoConfig? fromDocument(String text, {String? customName}) {
+    if (utf8.encode(text).length > 1024 * 1024) return null;
+    try {
+      // Convert YAML maps/lists into JSON-compatible data with a depth bound.
+      // The YAML package rejects duplicate mapping keys. Cyclic aliases hit
+      // the depth bound rather than overflowing the stack.
+      var nodes = 0;
+      dynamic plain(dynamic value, int depth) {
+        if (++nodes > 20000) throw const FormatException('Document expansion limit');
+        if (depth > 32) throw const FormatException('Document nesting limit');
+        if (value is Map) return value.map((k, v) {
+          if (k is! String) throw const FormatException('String keys required');
+          return MapEntry(k, plain(v, depth + 1));
+        });
+        if (value is List) return value.map((v) => plain(v, depth + 1)).toList();
+        if (value == null || value is String || value is num || value is bool) return value;
+        throw const FormatException('Invalid document value');
+      }
+      // YAML is also a JSON superset; use one duplicate-key-aware parser.
+      final value = plain(loadYaml(text), 0);
+      if (value is! Map || (value['proxies'] is! List && value['proxy-providers'] is! Map)) return null;
+      return MihomoConfig._(text, customName ?? 'Mihomo profile', Map<String, dynamic>.from(value));
+    } catch (_) {
+      return null; // Never echo credentials from parser exceptions.
+    }
+  }
+
+  /// SOCKS-bridge mode only. Keep proxy groups/rules intact, but the Android
+  /// service, not arbitrary imported listeners, owns the tunnel and ports.
+  String buildRuntimeJson({int socksPort = 10808}) {
+    if (socksPort < 1 || socksPort > 65535) throw ArgumentError('Invalid SOCKS port');
+    final data = Map<String, dynamic>.from(jsonDecode(jsonEncode(document)) as Map);
+    if (data['listeners'] != null || data['script'] != null || data['tunnels'] != null) {
+      throw ArgumentError('Custom listeners, tunnels and scripts are not supported by the Android bridge.');
+    }
+    for (final key in ['proxy-providers', 'rule-providers']) {
+      final providers = data[key];
+      if (providers is! Map) continue;
+      for (final entry in providers.entries) {
+        final value = entry.value;
+        if (value is! Map || value['type'] != 'http' ||
+            Uri.tryParse(value['url']?.toString() ?? '')?.scheme != 'https') {
+          throw ArgumentError('Only HTTPS providers are supported; local file providers are refused.');
+        }
+        final identity = sha256.convert(utf8.encode('$key:${entry.key}:${value['url']}'));
+        value['path'] = 'providers/$identity.yaml';
+      }
+    }
+    for (final key in ['external-controller', 'external-controller-tls',
+      'external-controller-unix', 'external-controller-pipe', 'external-ui',
+      'external-ui-url', 'external-ui-name', 'interface-name', 'routing-mark']) {
+      data.remove(key);
+    }
+    data.addAll({
+      'socks-port': socksPort, 'port': 0, 'mixed-port': 0,
+      'redir-port': 0, 'tproxy-port': 0, 'allow-lan': false,
+      'bind-address': '127.0.0.1', 'tun': {'enable': false},
+      'authentication': <String>[], 'log-level': 'warning',
+    });
+    final dns = data['dns'];
+    if (dns is Map) {
+      dns.remove('listen'); // No extra listening socket outside the VPN owner.
+      if (dns['enhanced-mode'] == 'fake-ip') {
+        throw ArgumentError('Fake-IP DNS requires a native TUN integration; use redir-host for the SOCKS bridge.');
+      }
+    }
+    return jsonEncode(data);
   }
 }

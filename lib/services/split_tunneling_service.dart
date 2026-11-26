@@ -112,7 +112,7 @@ class SplitTunnelingService extends GetxService {
       return const [];
     } catch (e) {
       lastError.value = 'Could not list installed apps: $e';
-      _logger.e('Error fetching installed apps: $e');
+      _logger.e('Error fetching installed apps');
       return const [];
     } finally {
       isLoadingApps.value = false;
@@ -132,7 +132,7 @@ class SplitTunnelingService extends GetxService {
       if (encoded == null || encoded.isEmpty) return null;
       return base64.decode(encoded);
     } catch (e) {
-      _logger.w('No icon for $packageName: $e');
+      _logger.w('App icon unavailable');
       return null;
     }
   }

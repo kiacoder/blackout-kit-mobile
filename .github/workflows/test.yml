@@ -1,6 +1,7 @@
 name: Tests
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, develop]
     # Full unit suite also runs for release tags, in parallel with the
@@ -18,7 +19,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Verify checked-in binary inventory and action pins
+        run: python3 tool/verify_supply_chain.py
+
+      - name: Set up Java
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
@@ -34,19 +46,25 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
-        # Errors only — infos and warnings are not fatal.
-        #
-        # This is the only static check the project gets. `dart analyze` cannot
-        # run on the dev machine (the Dart VM there cannot spawn child
-        # processes), and the unit tests below only import models and services,
-        # never screens or controllers — so a syntax or type error anywhere in
-        # lib/ used to go completely unchecked until a release build failed.
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        # Errors and warnings are fatal. Existing informational lint debt
+        # remains visible and is tracked in docs/PROJECT_ASCENSION.md.
+        run: flutter analyze --no-fatal-infos
 
       - name: Run unit tests
         # --coverage is what produces coverage/lcov.info. Without it the Codecov
         # step below uploaded a file that was never generated.
         run: flutter test test/ --coverage
+
+      - name: Run Android app unit tests
+        # Native lifecycle/config tests live under android/app/src/test and are
+        # not executed by flutter test. Keep them as a hard PR gate.
+        working-directory: android
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest
+
+      - name: Run Android lint
+        # Fail on lint errors; warning remediation is tracked independently.
+        working-directory: android
+        run: bash ./gradlew --no-daemon :app:lintDebug
 
       - name: Run integration tests
         # UNVERIFIED. These drive `app.main()`, which calls Hive.initFlutter()

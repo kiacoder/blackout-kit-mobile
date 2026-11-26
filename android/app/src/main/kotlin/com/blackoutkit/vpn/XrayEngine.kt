@@ -1,16 +1,16 @@
 package com.blackoutkit.vpn
 
 import android.content.Context
-import android.os.Build
-import android.provider.Settings
 import android.util.Base64
 import android.util.Log
 import go.Seq
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.Libv2ray
-import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
+
+private const val XUDP_KEY_BYTES = 32
 
 /**
  * In-process wrapper around the bundled Xray core (libv2ray /
@@ -46,7 +46,6 @@ import java.util.concurrent.atomic.AtomicBoolean
  *     interface CoreCallbackHandler { long onEmitStatus(long, String); long shutdown(); long startup(); }
  */
 object XrayEngine {
-
     private const val TAG = "BlackoutXrayEngine"
 
     /** `tunFd == 0` means "do not use TUN" on the native side. */
@@ -54,10 +53,6 @@ object XrayEngine {
 
     @Volatile
     var lastError: String? = null
-        private set
-
-    @Volatile
-    var lastConfigJson: String? = null
         private set
 
     /**
@@ -70,12 +65,19 @@ object XrayEngine {
 
     private val envInitialized = AtomicBoolean(false)
 
-    // Written from the establish worker thread, cleared from the main thread
-    // (teardown / onRevoke / onDestroy). Without @Volatile the main thread can
-    // observe a stale null and skip stopLoop(), leaving the core running
-    // against a closed TUN fd.
-    @Volatile
-    private var controller: CoreController? = null
+    private val owner =
+        EmbeddedCoreOwner<CoreController> { current ->
+            stoppingIntentionally = true
+            try {
+                embeddedCall { current.stopLoop() }.getOrElse { failure ->
+                    lastError = "Xray core cleanup failed; retry cleanup before starting another core"
+                    Log.w(TAG, "Core stop failed: ${failure.javaClass.simpleName}")
+                    error(lastError!!)
+                }
+            } finally {
+                stoppingIntentionally = false
+            }
+        }
 
     /** Set immediately before an intentional stop so the callback can tell the difference. */
     @Volatile
@@ -99,21 +101,26 @@ object XrayEngine {
             if (!stoppingIntentionally) {
                 Log.e(TAG, "core stopped without being asked to - treating as a failure")
                 unexpectedStopListener?.invoke(
-                    "The Xray core stopped unexpectedly"
+                    "The Xray core stopped unexpectedly",
                 )
             }
             return 0
         }
 
-        override fun onEmitStatus(code: Long, message: String?): Long {
-            Log.i(TAG, "core status [$code] $message")
+        override fun onEmitStatus(
+            code: Long,
+            message: String?,
+        ): Long {
+            Log.i(TAG, "core status [$code]")
             return 0
         }
     }
 
     /** True when the core has been brought up and not yet torn down. */
     val isRunning: Boolean
-        get() = controller?.isRunning == true
+        get() = owner.current?.isRunning == true
+
+    internal val hasOwnedCore: Boolean get() = owner.current != null
 
     /**
      * One-time environment setup.
@@ -139,54 +146,57 @@ object XrayEngine {
      * `!geo*.dat` entries from `ignoreAssetsPattern` first.
      */
     private fun ensureEnv(context: Context): Boolean {
-        if (envInitialized.get()) return true
-        synchronized(this) {
-            if (envInitialized.get()) return true
-            return try {
-                Seq.setContext(context.applicationContext)
-                // First argument becomes `xray.location.asset` — the on-disk
-                // root the geodata loader probes before falling back to the
-                // AssetManager set above. filesDir is normally empty of geo
-                // files, so the fallback is what would serve them; see the
-                // note above on why nothing does today.
-                // Second argument becomes `xray.xudp.basekey`.
-                Libv2ray.initCoreEnv(context.filesDir.absolutePath, xudpBaseKey(context))
-                envInitialized.set(true)
-                Log.i(TAG, "core env initialised, ${version()}")
-                true
-            } catch (t: Throwable) {
-                lastError = "Could not initialise the Xray core environment: ${t.message}"
-                Log.e(TAG, lastError, t)
-                false
-            }
+        if (!GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
+            lastError = GoRuntimeAdmission.RESTART_REQUIRED
+            return false
         }
+        return envInitialized.get() ||
+            synchronized(this) {
+                envInitialized.get() || initializeEnvironment(context)
+            }
     }
 
-    /**
-     * XUDP reads this setting as unpadded URL-safe Base64 and decodes it to a
-     * 32-byte per-install key. URL-safe Base64 remains ASCII across gomobile's
-     * Java-to-Go string conversion.
-     */
-    private fun xudpBaseKey(context: Context): String {
-        val seed = try {
-            Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ANDROID_ID
-            )
-        } catch (t: Throwable) {
-            null
-        } ?: "blackout-kit"
-        val digest = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray())
-        return Base64.encodeToString(digest, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+    private fun initializeEnvironment(context: Context): Boolean =
+        try {
+            Seq.setContext(context.applicationContext)
+            // First argument becomes `xray.location.asset` — the on-disk
+            // root the geodata loader probes before falling back to the
+            // AssetManager set above. filesDir is normally empty of geo
+            // files, so the fallback is what would serve them; see the
+            // note above on why nothing does today.
+            // Second argument becomes `xray.xudp.basekey`.
+            Libv2ray.initCoreEnv(context.filesDir.absolutePath, xudpBaseKey(context))
+            envInitialized.set(true)
+            Log.i(TAG, "core env initialised, ${version()}")
+            true
+        } catch (t: LinkageError) {
+            environmentFailure(t)
+        } catch (t: IllegalStateException) {
+            environmentFailure(t)
+        } catch (t: SecurityException) {
+            environmentFailure(t)
+        } catch (t: ClassCastException) {
+            environmentFailure(t)
+        }
+
+    private fun environmentFailure(failure: Throwable): Boolean {
+        lastError = "Could not initialise the Xray core environment"
+        Log.w(TAG, "Core environment failure: ${failure.javaClass.simpleName}")
+        return false
     }
 
     /** Human-readable core version, or null if the AAR is missing. */
-    fun version(): String? = try {
-        Libv2ray.checkVersionX()
-    } catch (t: Throwable) {
-        Log.w(TAG, "checkVersionX failed: ${t.javaClass.name}: ${t.message}", t)
-        null
-    }
+    fun version(): String? =
+        try {
+            if (GoRuntimeAdmission.process.claim(GoRuntimeAdmission.Family.EMBEDDED)) {
+                Libv2ray.checkVersionX()
+            } else {
+                null
+            }
+        } catch (t: LinkageError) {
+            Log.w(TAG, "checkVersionX failed: ${t.javaClass.simpleName}")
+            null
+        }
 
     /**
      * Starts the core against [tunFd].
@@ -200,94 +210,88 @@ object XrayEngine {
      *   installed by the time this returns, so a false positive black-holes all
      *   traffic on the device.
      */
-    fun start(context: Context, configJson: String, tunFd: Int): Boolean {
+    fun start(
+        context: Context,
+        configJson: String,
+        tunFd: Int,
+    ): Boolean {
         if (configJson.isBlank()) {
             lastError = "Refusing to start the Xray core with an empty config"
-            Log.e(TAG, lastError!!)
+            Log.e(TAG, "Xray configuration empty")
             return false
         }
-        if (!ensureEnv(context)) return false
-
-        stop()
-
-        // The controller handle must outlive the try below: the catch needs it
-        // to stop a core that threw half-way through startLoop. Declaring it
-        // inside the try would make it invisible to the catch.
-        val created = try {
-            Libv2ray.newCoreController(CoreCallback)
-        } catch (t: Throwable) {
-            lastError = "Could not create the Xray core controller: ${t.message}"
-            Log.e(TAG, lastError, t)
-            return false
-        }
-
-        return try {
-            lastConfigJson = configJson
-            created.startLoop(configJson, tunFd)
-
-            if (!created.isRunning) {
-                // A half-started controller must be stopped explicitly —
-                // leaving it unassigned means teardown() has no handle and
-                // the native core keeps running with nobody owning it.
-                try {
-                    created.stopLoop()
-                } catch (t: Throwable) {
-                    Log.w(TAG, "stopLoop after failed start: ${t.message}")
-                }
-                lastError = "Xray core reported that it failed to start"
-                Log.e(TAG, lastError!!)
-                return false
-            }
-
-            controller = created
-            lastError = null
-            Log.i(TAG, "core running, tunFd=$tunFd")
-            true
-        } catch (t: Throwable) {
-            // A config parse error surfaces here as an exception from
-            // startLoop; the message is the most useful thing we can show.
-            lastError = "Xray core rejected the configuration: ${t.message}"
-            Log.e(TAG, lastError, t)
-            // startLoop can throw AFTER the core has partially started. The
-            // non-throwing failure path above stops the half-started
-            // controller explicitly; this path used to return without doing
-            // so, leaving a running core with no owner — nothing would ever
-            // call stopLoop on it, and the next connect started a second one.
-            try {
-                created.stopLoop()
-            } catch (stopError: Throwable) {
-                Log.w(TAG, "stopLoop after failed start: ${stopError.message}")
-            }
-            false
-        }
+        return ensureEnv(context) && startInitializedCore(configJson, tunFd)
     }
+
+    private fun startInitializedCore(
+        configJson: String,
+        tunFd: Int,
+    ): Boolean =
+        owner.start(
+            create = {
+                embeddedCall { Libv2ray.newCoreController(CoreCallback) }.getOrElse { failure ->
+                    lastError = "Could not create the Xray core controller"
+                    Log.w(TAG, "Core creation failed: ${failure.javaClass.simpleName}")
+                    null
+                }
+            },
+            activate = { created ->
+                val started =
+                    embeddedCall {
+                        created.startLoop(configJson, tunFd)
+                        created.isRunning
+                    }.getOrElse { failure ->
+                        Log.w(TAG, "Core startup failed: ${failure.javaClass.simpleName}")
+                        false
+                    }
+                lastError = if (started) null else "Xray core rejected the configuration or failed to start"
+                started
+            },
+        )
 
     /**
      * Starts the core in "no tunnel" mode so it can serve the loopback SOCKS
      * port only. Used by the connection tester, which probes a config without
      * touching the device's routing.
      */
-    fun startProxyOnly(context: Context, configJson: String): Boolean =
-        start(context, configJson, NO_TUN)
+    fun startProxyOnly(
+        context: Context,
+        configJson: String,
+    ): Boolean = start(context, configJson, NO_TUN)
 
     /** Tears the core down. Safe to call when nothing is running. */
     fun stop() {
-        synchronized(this) {
-            val current = controller ?: return
-            controller = null
-            stoppingIntentionally = true
-            try {
-                current.stopLoop()
-                Log.i(TAG, "core stopped")
-            } catch (t: Throwable) {
-                Log.w(TAG, "error stopping core: ${t.message}")
-            } finally {
-                stoppingIntentionally = false
-            }
-        }
+        owner.stop()
     }
 
     /** True when this device can actually run the bundled core. */
-    fun isSupported(): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && version() != null
+    fun isSupported(): Boolean = version() != null
+}
+
+/**
+ * XUDP reads this setting as unpadded URL-safe Base64 and decodes it to a
+ * 32-byte per-install key. URL-safe Base64 remains ASCII across gomobile's
+ * Java-to-Go string conversion.
+ */
+private fun xudpBaseKey(context: Context): String {
+    // Called under the initialization lock. Persist an independent random
+    // key instead of deriving one from a device ID or a public fallback.
+    val preferences = context.getSharedPreferences("xudp_private", Context.MODE_PRIVATE)
+    val flags = Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
+    val existing = preferences.getString("base_key", null)
+    if (existing != null) {
+        val decoded =
+            try {
+                Base64.decode(existing, flags)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+        if (decoded?.size == XUDP_KEY_BYTES) return existing
+    }
+    val key = ByteArray(XUDP_KEY_BYTES).apply { SecureRandom().nextBytes(this) }
+    val encoded = Base64.encodeToString(key, flags)
+    check(preferences.edit().putString("base_key", encoded).commit()) {
+        "Could not persist the XUDP installation key"
+    }
+    return encoded
 }

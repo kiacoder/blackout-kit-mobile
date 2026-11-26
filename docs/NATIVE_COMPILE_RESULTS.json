@@ -1,0 +1,91 @@
+{
+  "status": "Development compile evidence only",
+  "artifacts": [
+    {
+      "developmentCachePath": ".cache/native-build/arm64-v8a/libfdlauncher.so",
+      "sha256": "479dd0b556de7758c2974a8aa4bd61156534c1a72657ab6e016436f0079b99fc",
+      "bytes": 30656,
+      "metadataGateExitCode": 0,
+      "metadataGateOutput": "PASS metadata gate: API 24, 64-bit ELF DYN\nDevice execution, dependent symbols, page-size compatibility and VPN forwarding NOT tested.",
+      "packaged": false,
+      "androidExecuted": false
+    },
+    {
+      "developmentCachePath": ".cache/native-build/armeabi-v7a/libfdlauncher.so",
+      "sha256": "61d4a4acb85e9681ef25d14d2e46ccbf517b8bf9cfba139a595b9734765b2c22",
+      "bytes": 28180,
+      "metadataGateExitCode": 0,
+      "metadataGateOutput": "PASS metadata gate: API 24, 32-bit ELF DYN\nDevice execution, dependent symbols, page-size compatibility and VPN forwarding NOT tested.",
+      "packaged": false,
+      "androidExecuted": false
+    },
+    {
+      "developmentCachePath": ".cache/awg-final-build/arm64-v8a/libwg-go.so",
+      "sha256": "b8f5b63b202ace4cbc340fc3cb3a53ebf843216ecb8fd836e9aa7a86d4a628c7",
+      "bytes": 5194320,
+      "metadataGateExitCode": 0,
+      "metadataGateOutput": "PASS metadata gate: API 24, 64-bit ELF DYN\nDevice execution, dependent symbols, page-size compatibility and VPN forwarding NOT tested.",
+      "packaged": false,
+      "androidExecuted": false,
+      "jniExports": [
+        "Java_org_amnezia_awg_GoBackend_awgGetConfig",
+        "Java_org_amnezia_awg_GoBackend_awgGetSocketV4",
+        "Java_org_amnezia_awg_GoBackend_awgGetSocketV6",
+        "Java_org_amnezia_awg_GoBackend_awgTurnOff",
+        "Java_org_amnezia_awg_GoBackend_awgTurnOn",
+        "Java_org_amnezia_awg_GoBackend_awgVersion"
+      ]
+    },
+    {
+      "developmentCachePath": ".cache/awg-final-build/armeabi-v7a/libwg-go.so",
+      "sha256": "81727436ead029298b3b65790ca84c78a9831405bbd30a5787c63ef6ae2dacfe",
+      "bytes": 4967524,
+      "metadataGateExitCode": 0,
+      "metadataGateOutput": "PASS metadata gate: API 24, 32-bit ELF DYN\nDevice execution, dependent symbols, page-size compatibility and VPN forwarding NOT tested.",
+      "packaged": false,
+      "androidExecuted": false,
+      "jniExports": [
+        "Java_org_amnezia_awg_GoBackend_awgGetConfig",
+        "Java_org_amnezia_awg_GoBackend_awgGetSocketV4",
+        "Java_org_amnezia_awg_GoBackend_awgGetSocketV6",
+        "Java_org_amnezia_awg_GoBackend_awgTurnOff",
+        "Java_org_amnezia_awg_GoBackend_awgTurnOn",
+        "Java_org_amnezia_awg_GoBackend_awgVersion"
+      ]
+    },
+    {
+      "developmentCachePath": ".cache/wg-final-build/arm64-v8a/libwg-go.so",
+      "sha256": "098cb0ea6b210c9c737aca1650a6fcdd4ced9837e2090619526ce484b4624b01",
+      "bytes": 4987824,
+      "metadataGateExitCode": 0,
+      "metadataGateOutput": "PASS metadata gate: API 24, 64-bit ELF DYN\nDevice execution, dependent symbols, page-size compatibility and VPN forwarding NOT tested.",
+      "packaged": false,
+      "androidExecuted": false,
+      "jniExports": [
+        "Java_com_wireguard_android_backend_GoBackend_wgGetConfig",
+        "Java_com_wireguard_android_backend_GoBackend_wgGetSocketV4",
+        "Java_com_wireguard_android_backend_GoBackend_wgGetSocketV6",
+        "Java_com_wireguard_android_backend_GoBackend_wgTurnOff",
+        "Java_com_wireguard_android_backend_GoBackend_wgTurnOn",
+        "Java_com_wireguard_android_backend_GoBackend_wgVersion"
+      ]
+    },
+    {
+      "developmentCachePath": ".cache/wg-final-build/armeabi-v7a/libwg-go.so",
+      "sha256": "dc513e567c1c79bdf2cb14e40c8db912bab80fe9c49f4af85b4b1a56bb28edfa",
+      "bytes": 4776676,
+      "metadataGateExitCode": 0,
+      "metadataGateOutput": "PASS metadata gate: API 24, 32-bit ELF DYN\nDevice execution, dependent symbols, page-size compatibility and VPN forwarding NOT tested.",
+      "packaged": false,
+      "androidExecuted": false,
+      "jniExports": [
+        "Java_com_wireguard_android_backend_GoBackend_wgGetConfig",
+        "Java_com_wireguard_android_backend_GoBackend_wgGetSocketV4",
+        "Java_com_wireguard_android_backend_GoBackend_wgGetSocketV6",
+        "Java_com_wireguard_android_backend_GoBackend_wgTurnOff",
+        "Java_com_wireguard_android_backend_GoBackend_wgTurnOn",
+        "Java_com_wireguard_android_backend_GoBackend_wgVersion"
+      ]
+    }
+  ]
+}

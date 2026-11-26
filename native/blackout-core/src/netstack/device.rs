@@ -33,10 +33,9 @@ pub struct IngressToken(pub Vec<u8>);
 impl smoltcp::phy::RxToken for IngressToken {
     fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> R,
+        F: FnOnce(&[u8]) -> R,
     {
-        let mut packet = self.0;
-        f(&mut packet)
+        f(&self.0)
     }
 }
 

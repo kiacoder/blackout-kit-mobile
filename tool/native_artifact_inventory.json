@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "artifacts": [
+    {
+      "path": "android/app/libs/libcores.aar",
+      "sha256": "6061c5f55786b0d7916f9a8721b5824fc9fe9ce44ccb67c7d8cd42f4c386bcb0",
+      "bytes": 60716371,
+      "provenance": "merged Xray/libbox historical binary; see docs/NATIVE_ARTIFACTS.md; not reproducible-source verified",
+      "native_members": {
+        "jni/arm64-v8a/libgojni.so": "4dd807a2ac500274a5f3ac10d0db57ce9a7604883a6b65079fd6415e2c70558c",
+        "jni/armeabi-v7a/libgojni.so": "ff7ca3e6698059685852c04f8582fa3d233b1d4acd05f220e075aa2b38188e6f"
+      }
+    },
+    {
+      "path": "android/app/src/main/jniLibs/arm64-v8a/libblackout_core.so",
+      "sha256": "f6d801e8f22384754d9eeda4b14cb6cd3b51c5c3a4f62371493c29f3e43046d2",
+      "bytes": 1465584,
+      "provenance": "historical Rust snapshot; CI rebuilds both Android ABIs from locked source"
+    },
+    {
+      "path": "android/app/src/main/jniLibs/arm64-v8a/libsingbox.so",
+      "sha256": "ebb9a7c7949b3e29a45ea425baefaaa897f9a4dd36da71db74b55fb18649f594",
+      "bytes": 47804824,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    },
+    {
+      "path": "android/app/src/main/jniLibs/arm64-v8a/libtun2socks.so",
+      "sha256": "455f5e48b62c15f76cc102008ab20c0832b845235e3bcff02bd2f4660ff2266b",
+      "bytes": 12372024,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    },
+    {
+      "path": "android/app/src/main/jniLibs/armeabi-v7a/libsingbox.so",
+      "sha256": "dfc42411c850e0d08ba05c43f40ec76457375fe54d97fbcaeaafdab2a9ca7b74",
+      "bytes": 44749144,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    },
+    {
+      "path": "android/app/src/main/jniLibs/armeabi-v7a/libtun2socks.so",
+      "sha256": "59d706c60dd080e8301b9af0b9a05d78e2284429c2bb6936fdbd543e83f3285e",
+      "bytes": 11709376,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    },
+    {
+      "path": "android/gradle/wrapper/gradle-wrapper.jar",
+      "sha256": "16caeaf66d57a0d1d2087fef6a97efa62de8da69afa5b908f40db35afc4342da",
+      "bytes": 53636,
+      "provenance": "Gradle wrapper; validate against official wrapper checksums"
+    },
+    {
+      "path": "releases/blackout-kit-v1.12.4-arm64-v8a-debug-signed.apk",
+      "sha256": "52515b2f0715ce07dc578a4f8739eb40ca3bd04453ad1cb3d6dad9050d31a7b3",
+      "bytes": 45291487,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    },
+    {
+      "path": "releases/blackout-kit-v1.17.0-arm64-v8a.apk",
+      "sha256": "36734a4e5d8a91549b9f020367084f3215ec85b4ba5447f39b0dbf481bf8a227",
+      "bytes": 45392071,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    },
+    {
+      "path": "releases/blackout-kit-v1.17.0-armeabi-v7a.apk",
+      "sha256": "e36e3826e091e2d8bbfa5f7e36a678f991b2c58bad764efa311f92e33341d1da",
+      "bytes": 45809533,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    },
+    {
+      "path": "releases/blackout-kit-v1.17.2-arm64-v8a.apk",
+      "sha256": "0cc38b80f5b97409ed207391e0940fca0a47475d0841e4e7ce05342c5d0a4972",
+      "bytes": 45394943,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    },
+    {
+      "path": "releases/blackout-kit-v1.17.2-armeabi-v7a.apk",
+      "sha256": "1d99717c43afebbc65dd4122a31178ff8191cc72d43b3a9ec04e088ff91c9713",
+      "bytes": 45812729,
+      "provenance": "historical-checkout-baseline; upstream origin still requires independent verification"
+    }
+  ]
+}

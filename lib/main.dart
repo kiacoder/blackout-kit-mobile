@@ -1,6 +1,7 @@
 /// Blackout Kit Mobile - Main entry point
 /// Flutter VPN app with config-based architecture
 /// GetX for state management, Hive for local persistence
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -43,6 +44,10 @@ void main() async {
 
   // Initialize config service (opens Hive boxes)
   await configService.initialize();
+  if (configService.isVaultLocked) {
+    runApp(const StorageRecoveryApp());
+    return;
+  }
 
   // Initialize VPN service (platform channels)
   vpnService.initialize();
@@ -135,7 +140,7 @@ void main() async {
 }
 
 class BlackoutKitApp extends StatelessWidget {
-  const BlackoutKitApp({Key? key}) : super(key: key);
+  const BlackoutKitApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -202,5 +207,82 @@ class BlackoutKitApp extends StatelessWidget {
         ),
       );
     });
+  }
+}
+
+/// Recovery mode deliberately does not initialize import or connection
+/// controllers. The user can restore access and relaunch without data loss.
+class StorageRecoveryApp extends StatefulWidget {
+  const StorageRecoveryApp({super.key});
+
+  @override
+  State<StorageRecoveryApp> createState() => _StorageRecoveryAppState();
+}
+
+class _StorageRecoveryAppState extends State<StorageRecoveryApp> {
+  Locale? _locale;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      locale: _locale,
+      supportedLocales: LocalizationService.supportedLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: ThemeData(useMaterial3: true),
+      darkTheme: ThemeData.dark(useMaterial3: true),
+      home: Builder(
+        builder: (context) {
+          final language = Localizations.localeOf(context).languageCode;
+          String text(String key) =>
+              LocalizationService.translate(key, language: language);
+          return Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.lock_outline, size: 48),
+                      const SizedBox(height: 16),
+                      Text(
+                        text('storage_recovery_title'),
+                        style: Theme.of(context).textTheme.titleLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        text('storage_recovery_body'),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      DropdownButton<String>(
+                        key: const Key('recovery-language'),
+                        value: language,
+                        items: LocalizationService.supportedLanguages.entries
+                            .map((entry) => DropdownMenuItem(
+                                  value: entry.key,
+                                  child: Text(entry.value),
+                                ))
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _locale = Locale(value));
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

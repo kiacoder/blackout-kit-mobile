@@ -169,6 +169,27 @@ class TrustedSources {
       filePath: 'Eternity.txt',
       // ~200 lines: ss, trojan, vmess.
     ),
+    // Public community feed, not an audited VPN provider. Shared WireGuard
+    // credentials are not private and may conflict between simultaneous users.
+    // Listed by default, but explicitly opt-in to avoid automatic use.
+    ConfigSource(
+      id: 'community-morpheus-wireguard',
+      name: 'Community WireGuard (shared keys; opt-in)',
+      owner: 'morpheusadam',
+      repo: 'v2ray-config',
+      branch: 'main',
+      filePath: 'subs/bundles/wireguard.txt',
+      isEnabled: false,
+    ),
+    ConfigSource(
+      id: 'community-au1rxx-wireguard',
+      name: 'Community Au1rxx WireGuard (shared keys; opt-in)',
+      owner: 'Au1rxx',
+      repo: 'free-vpn-subscriptions',
+      branch: 'main',
+      filePath: 'output/protocol/wireguard/singbox-0001.json',
+      isEnabled: false,
+    ),
   ];
 
   /// IDs of the built-in sources, so stored user state can be matched to them.

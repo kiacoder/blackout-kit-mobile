@@ -36,7 +36,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
 
   Future<void> _loadAvailability() async {
     try {
-      final info = await Get.find<VPNService>().getEngineInfo();
+      final info = await Get.find<VPNService>().getEngineInfo().timeout(const Duration(seconds: 5));
       if (!mounted) return;
       setState(() => _availability = info);
     } catch (_) {
@@ -67,6 +67,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     if (engine.engine == EngineType.singbox_proxy && _availability?.singboxVersion != null) {
       return _availability!.singboxVersion;
     }
+    if (_availability?.packagedCapabilities == true) return null;
     return engine.version;
   }
 
@@ -113,6 +114,9 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
   String _engineUnavailableMessage(EngineCapability engine) {
     if (_isEndpointGated(engine)) {
       return 'This profile format is configurable, but this build cannot connect it until a compatible endpoint and runtime are available.'.tr;
+    }
+    if (engine.compatibleProtocols.any((_availability?.restartRequiredProtocols ?? const <String>[]).contains)) {
+      return 'This runtime may require a full app restart before switching engine families.'.tr;
     }
     return 'This engine is not bundled in this build, so it cannot connect. Configs are still listed so you can review them.'.tr;
   }
@@ -195,7 +199,11 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                           Text(
                             _capabilityUnknown
                                 ? 'Engine support could not be determined on this platform'.tr
-                                : 'Engines without a bundled runtime are shown greyed out'.tr,
+                                : _availability?.runtimeRestartRequired == true
+                                    ? 'Fully restart the app before switching VPN runtime families.'.tr
+                                    : _availability?.packagedCapabilities == true
+                                        ? 'Packaged engines; runtime checked at connection.'.tr
+                                        : 'Engines without a bundled runtime are shown greyed out'.tr,
                             style: TextStyle(fontSize: 12, color: theme.hintColor),
                           ),
                         ],
@@ -210,10 +218,10 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                   child: Row(
                     children: [
                       _buildCategoryChip('All'),
-                      _buildCategoryChip('Core VPN'.tr),
-                      _buildCategoryChip('Proxy Core'.tr),
-                      _buildCategoryChip('DPI Obfuscation'.tr),
-                      _buildCategoryChip('Relay / Mesh'.tr),
+                      _buildCategoryChip('Core VPN'),
+                      _buildCategoryChip('Proxy Core'),
+                      _buildCategoryChip('DPI Obfuscation'),
+                      _buildCategoryChip('Relay / Mesh'),
                     ],
                   ),
                 ),
@@ -224,6 +232,11 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
           // Engine Cards List
           Expanded(
             child: Obx(() {
+              // Subscribe even when the selected category has no entries.
+              final counts = <String, int>{};
+              for (final config in _configController.allConfigs.toList()) {
+                counts.update(config.protocol, (count) => count + 1, ifAbsent: () => 1);
+              }
               return ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
@@ -253,7 +266,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                       ),
                     ),
                     for (final engine in entry.value) ...[
-                      _buildEngineCard(context, engine),
+                      _buildEngineCard(context, engine, counts),
                       const SizedBox(height: 8),
                     ],
                   ],
@@ -271,7 +284,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: ChoiceChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)),
+        label: Text(label.tr, style: const TextStyle(fontSize: 12)),
         selected: selected,
         onSelected: (val) {
           if (val) setState(() => _selectedCategory = label);
@@ -280,10 +293,10 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
     );
   }
 
-  Widget _buildEngineCard(BuildContext context, EngineCapability engine) {
+  Widget _buildEngineCard(BuildContext context, EngineCapability engine, Map<String, int> counts) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final configCount = _getConfigCountForEngine(engine);
+    final configCount = engine.compatibleProtocols.toSet().fold<int>(0, (sum, protocol) => sum + (counts[protocol] ?? 0));
     final runnable = _isRunnable(engine);
     final catColor = runnable ? _getCategoryColor(engine.category) : theme.disabledColor;
     final version = _versionFor(engine);
@@ -349,17 +362,19 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                             ),
                             const SizedBox(width: 8),
                             if (!runnable)
-                              Container(
+                              Flexible(child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: theme.disabledColor.withOpacity(0.15),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  _isEndpointGated(engine) ? 'Endpoint gated'.tr : 'Not bundled'.tr,
+                                  _isEndpointGated(engine) ? 'Endpoint gated'.tr : 'Unavailable'.tr,
                                   style: TextStyle(fontSize: 10, color: theme.hintColor),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              )
+                              ))
                             else if (version != null)
                               Flexible(
                                 child: Container(
@@ -414,7 +429,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Wrap(
+                  Expanded(child: Wrap(
                     spacing: 4,
                     children: engine.compatibleProtocols.map((p) {
                       final protocolServed = !_capabilityUnknown && _availability!.canConnect(p);
@@ -433,7 +448,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       );
                     }).toList(),
-                  ),
+                  )),
                   Icon(Icons.chevron_right, size: 18, color: theme.hintColor),
                 ],
               ),

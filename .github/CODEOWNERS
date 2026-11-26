@@ -1,0 +1,13 @@
+# The repository owner is currently the sole maintainer.
+# Ownership requests review; it is not a substitute for independent approval.
+* @kiacoder
+/.github/ @kiacoder
+/android/ @kiacoder
+/ios/ @kiacoder
+/native/ @kiacoder
+/tool/ @kiacoder
+/lib/controllers/ @kiacoder
+/lib/services/ @kiacoder
+/SECURITY.md @kiacoder
+/GOVERNANCE.md @kiacoder
+/docs/RELEASE_SECURITY.md @kiacoder

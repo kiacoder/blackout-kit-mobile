@@ -5,6 +5,7 @@
 library;
 
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -14,6 +15,7 @@ import 'package:blackout_kit_mobile/controllers/config_controller.dart';
 import 'package:blackout_kit_mobile/controllers/connection_controller.dart';
 import 'package:blackout_kit_mobile/controllers/settings_controller.dart';
 import 'package:blackout_kit_mobile/models/config.dart';
+import 'package:blackout_kit_mobile/models/config_source.dart';
 import 'package:blackout_kit_mobile/models/test_result.dart';
 import 'package:blackout_kit_mobile/services/config_service.dart';
 import 'package:blackout_kit_mobile/services/debug_service.dart';
@@ -165,6 +167,36 @@ void main() {
       expect(added.repo, 'configs');
       // It is persisted and visible in the list.
       expect(controller.sources.map((s) => s.id), contains(added.id));
+    });
+
+    test('parallel bulk imports preserve attribution and count only new records', () async {
+      final config = vless('parallel.example.com', 'Parallel');
+      final other = vless('another.example.com', 'Other');
+      final counts = await Future.wait([
+        service.saveConfigs([config], sourceId: 's1'),
+        service.saveConfigs([config, other], sourceId: 's2'),
+      ]);
+      expect(counts, [1, 1]);
+      expect(service.loadHashToSourceIds()[config.getHash()], {'s1', 's2'});
+      expect(await service.saveConfigs([config, other], sourceId: 's3'), 0);
+      expect(service.getAllConfigs(), hasLength(2));
+    });
+
+    test('source toggle survives a delayed refresh and duplicate refresh is ignored', () async {
+      final github = _DelayedGitHub();
+      final ctrl = ConfigController(configService: service, githubService: github,
+          testerService: TesterService());
+      await ctrl.loadSources();
+      final source = ctrl.sources.first;
+      final fetch = ctrl.fetchFromSource(source);
+      expect(await ctrl.fetchFromSource(source), 0);
+      expect(await ctrl.removeSource(source.id), isFalse);
+      await ctrl.toggleSource(source.id, false);
+      github.pending.complete([vless('refresh.example.com', 'Refresh')]);
+      expect(await fetch, 1);
+      expect(ctrl.sources.firstWhere((s) => s.id == source.id).isEnabled, isFalse);
+      expect(service.getAllSources().firstWhere((s) => s.id == source.id).isEnabled, isFalse);
+      expect(github.calls, 1);
     });
 
     test('a duplicate from a second source keeps both attributions (BK-035)',
@@ -418,11 +450,123 @@ void main() {
           reason: 'IP/location lookups are informational, not tunnel liveness');
     });
 
-    test('failed website liveness check opens explicit recovery', () async {
+    test('native AmneziaWG is accepted when its traffic verifier succeeds', () async {
+      final vpn = _RecordingVpnService()..nativeTunnel = true;
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = true;
+      final controller = _controller(vpn,
+          siteCheckService: _FakeSiteCheckService(vpn, settings, alive: true));
+      final config = ConfigParser.parse("""
+[Interface]
+PrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+Address = 10.89.0.2/32
+DNS = 1.1.1.1
+Jc = 4
+Jmin = 40
+Jmax = 70
+[Peer]
+PublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
+AllowedIPs = 0.0.0.0/0
+Endpoint = 127.0.0.1:9
+""")!;
+      expect(config, isA<AmneziaWGConfig>());
+      expect(await controller.connect(config), isTrue);
+      expect(controller.isConnected, isTrue);
+      expect(vpn.disconnectCalls, 0);
+      expect(controller.lastKnownWorkingConfig.value, config);
+    });
+
+    test('direct connect refuses tunnel that starts but cannot load websites',
+        () async {
       final vpn = _RecordingVpnService();
       final settings = Get.find<SettingsController>();
       settings.siteCheckEnabled.value = true;
       final checker = _FakeSiteCheckService(vpn, settings, alive: false);
+      final controller = _controller(vpn, siteCheckService: checker);
+      final prior = vless('prior.example.com', 'Prior');
+      controller.lastKnownWorkingConfig.value = prior;
+      expect(await controller.connect(vless('dead.example.com', 'Dead')), isFalse);
+      expect(controller.isConnected, isFalse);
+      expect(vpn.disconnectCalls, 1);
+      expect(controller.statusMessage.value, contains('nothing loads'));
+      expect(controller.lastKnownWorkingConfig.value, prior);
+    });
+
+    test('first candidate mode verifies traffic before accepting a tunnel', () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      settings.autoSelectFastest.value = false;
+      settings.siteCheckEnabled.value = true;
+      final controller = _controller(vpn,
+          siteCheckService: _FakeSiteCheckService(vpn, settings, alive: false));
+      expect(await controller.connectFastest([vless('dead.example.com', 'Dead')]), isFalse);
+      expect(vpn.disconnectCalls, 1);
+      expect(controller.isConnected, isFalse);
+    });
+
+    test('late failed liveness probe cannot disconnect a replacement tunnel', () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = true;
+      final checker = _DelayedSiteCheck(vpn, settings);
+      final controller = _controller(vpn, siteCheckService: checker);
+      controller.debugSetConnectedForTest(vless('old.example.com', 'Old'));
+      final probe = controller.debugVerifyTunnelAliveForTest();
+      await checker.started.future;
+      settings.siteCheckEnabled.value = false;
+      expect(await controller.disconnect(), isTrue);
+      final replacement = vless('new.example.com', 'New');
+      expect(await controller.connect(replacement), isTrue);
+      checker.pending.complete(false);
+      await probe;
+      expect(controller.isConnected, isTrue);
+      expect(controller.selectedConfig.value, replacement);
+      expect(vpn.disconnectCalls, 1);
+    });
+
+    test('cancel during website verification discards the late success', () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = true;
+      settings.siteCheckUrls.assignAll(['check.example.com']);
+      settings.autoSelectFastest.value = true;
+      final checker = _DelayedSiteCheck(vpn, settings);
+      final controller = _controller(vpn, siteCheckService: checker);
+      final scan = controller.connectFastest([vless('cancel.example.com', 'Cancel')]);
+      await checker.started.future;
+      expect(controller.cancelScan(), isTrue);
+      checker.pending.complete(true);
+      expect(await scan, isFalse);
+      expect(controller.isConnected, isFalse);
+      expect(controller.candidateConfig.value, isNull);
+      expect(controller.lastKnownWorkingConfig.value, isNull);
+      expect(vpn.disconnectCalls, 1);
+    });
+
+    test('manual connection check cannot declare a dead tunnel working', () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      final controller = _controller(vpn,
+          siteCheckService: _FakeSiteCheckService(vpn, settings, alive: false));
+      controller.debugSetConnectedForTest(vless('manual.example.com', 'Manual'));
+      expect(await controller.testConnection(), isFalse);
+      expect(controller.isConnected, isFalse);
+      expect(vpn.disconnectCalls, 1);
+    });
+
+    test('unknown status reply is not proof that tunnel has stopped', () async {
+      final vpn = _RecordingVpnService();
+      final controller = _controller(vpn);
+      controller.debugSetConnectedForTest(vless('active.example.com', 'Active'));
+      await controller.reconcileWithNativeService();
+      expect(controller.isConnected, isTrue);
+    });
+
+    test('failed website liveness check opens explicit recovery', () async {
+      final vpn = _RecordingVpnService();
+      final settings = Get.find<SettingsController>();
+      settings.siteCheckEnabled.value = true;
+      final checker = _SequenceSiteCheckService(vpn, settings, outcomes: [true, false]);
       final controller = _controller(vpn, siteCheckService: checker);
       final config = vless('dead-tunnel.example.com', 'Dead tunnel');
       expect(await controller.connect(config), isTrue);
@@ -479,6 +623,33 @@ void main() {
 }
 
 // ── fakes ─────────────────────────────────────────────────────────────────
+
+class _DelayedGitHub extends GitHubService {
+  final pending = Completer<List<Config>>();
+  int calls = 0;
+  @override
+  Future<List<Config>> fetchConfigsFromSource(ConfigSource source, {String? filePattern}) {
+    calls++;
+    return pending.future;
+  }
+}
+
+class _DelayedSiteCheck extends SiteCheckService {
+  final started = Completer<void>();
+  final pending = Completer<bool>();
+  _DelayedSiteCheck(VPNService vpn, SettingsController settings)
+      : super(vpnService: vpn, settings: settings);
+  @override
+  Future<bool> verifyLiveConnection({Duration timeout = const Duration(seconds: 8)}) {
+    if (!started.isCompleted) started.complete();
+    return pending.future;
+  }
+  @override
+  Future<List<SiteCheckOutcome>> checkLiveConnection({Duration timeout = const Duration(seconds: 10)}) async {
+    final alive = await verifyLiveConnection();
+    return [for (final host in liveCheckHosts) SiteCheckOutcome(host: host, ok: alive)];
+  }
+}
 
 class _SequenceSiteCheckService extends SiteCheckService {
   final List<bool> outcomes;
@@ -542,6 +713,13 @@ ConnectionController _controller(
 /// Records calls and always succeeds.
 class _RecordingVpnService extends VPNService {
   _RecordingVpnService() : super();
+  bool nativeTunnel = false;
+
+  @override
+  Future<Map<String, dynamic>> getStatus() async => {
+    'activeNativeTunnel': nativeTunnel,
+  };
+
   int connectCalls = 0;
   int disconnectCalls = 0;
   String? lastConnectedProtocol;

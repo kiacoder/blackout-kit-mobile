@@ -33,7 +33,8 @@ pub mod android {
             Ok(c) => c,
             Err(_) => return BLACKOUT_ERR_CONFIG_PARSE,
         };
-        blackout_start(tun_fd, c_config.as_ptr())
+        // SAFETY: CString owns the NUL-terminated input for the entire call.
+        unsafe { blackout_start(tun_fd, c_config.as_ptr()) }
     }
 
     #[no_mangle]
@@ -49,7 +50,11 @@ pub mod android {
         _env: JNIEnv,
         _class: JClass,
     ) -> jboolean {
-        if blackout_is_running() { 1 } else { 0 }
+        if blackout_is_running() {
+            1
+        } else {
+            0
+        }
     }
 
     #[no_mangle]
@@ -85,9 +90,13 @@ pub mod android {
         }
 
         let mut raw_buf = vec![0u8; bounded_len as usize];
-        let copied = blackout_get_last_error(raw_buf.as_mut_ptr() as *mut c_char, bounded_len);
+        // SAFETY: raw_buf has bounded_len exclusively writable bytes.
+        let copied =
+            unsafe { blackout_get_last_error(raw_buf.as_mut_ptr() as *mut c_char, bounded_len) };
         if copied > 0 {
-            let slice: &[i8] = unsafe { std::slice::from_raw_parts(raw_buf.as_ptr() as *const i8, copied as usize) };
+            let slice: &[i8] = unsafe {
+                std::slice::from_raw_parts(raw_buf.as_ptr() as *const i8, copied as usize)
+            };
             if env.set_byte_array_region(&buffer, 0, slice).is_err() {
                 return BLACKOUT_ERR_INVALID_PARAM;
             }

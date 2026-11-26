@@ -1,0 +1,17 @@
+warning: [options] bootstrap class path not set in conjunction with -source 8
+.cache/references/junit4/src/main/java/org/junit/internal/runners/statements/FailOnTimeout.java:145: warning: [removal] isDaemon() in ThreadGroup has been deprecated and marked for removal
+        if (!threadGroup.isDaemon()) {
+                        ^
+.cache/references/junit4/src/main/java/org/junit/internal/runners/statements/FailOnTimeout.java:151: warning: [removal] setDaemon(boolean) in ThreadGroup has been deprecated and marked for removal
+                threadGroup.setDaemon(true);
+                           ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+3 warnings
+JUnit version 4.13.2-SNAPSHOT
+.......
+Time: 0.049
+
+OK (7 tests)

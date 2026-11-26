@@ -68,12 +68,15 @@ void main() {
   group('BKM-001 the capability report matches what Dart can build', () {
     test('the native list advertises only buildable sing-box protocols', () {
       final kt = _source(
-        'android/app/src/main/kotlin/com/blackoutkit/vpn/VpnPlugin.kt',
+        'android/app/src/main/kotlin/com/blackoutkit/vpn/EngineCatalogue.kt',
       );
       final advertised = RegExp(
-        r'"singboxProtocols" to\s*if \(singboxAvailable\)\s*listOf\(([^)]*)\)',
+        r'val singboxProtocols\s*=\s*listOf\(([^)]*)\)',
       ).firstMatch(kt);
       expect(advertised, isNotNull);
+      expect(kt, matches(RegExp(
+        r'"singboxProtocols"\s+to\s+if\s*\(singboxAvailable\)\s*\{\s*singboxProtocols\s*\}\s*else\s*\{\s*emptyList<String>\(\)\s*\}',
+      )));
 
       final names = RegExp(r'"([a-z0-9]+)"')
           .allMatches(advertised!.group(1)!)
@@ -90,11 +93,27 @@ void main() {
       final kt = _source(
         'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt',
       );
+      final subprocess = kt
+          .split('private fun startSingboxSubprocess(')
+          .last
+          .split('private inner class DnsSetup')
+          .first;
+      final refusal = RegExp(
+        r'singboxConfig\.isNullOrBlank\(\)\s*->\s*\{[^}]*\bfalse\s*\}',
+      );
       expect(
-        kt.contains('if (singboxConfig.isNullOrBlank())'),
+        refusal.hasMatch(subprocess),
         isTrue,
         reason: 'a null config must not fall through to the stale-file path',
       );
+      expect(subprocess.indexOf('singboxConfig.isNullOrBlank()'),
+          lessThan(subprocess.indexOf('EngineRunner.start(')));
+      expect(subprocess, contains('json = singboxConfig'));
+      final runner = _source(
+        'android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt',
+      );
+      expect(runner, contains('configOwner.stage(configDir(context), json)'));
+      expect(runner, contains('configOwner.release()'));
     });
 
     test('connect() refuses a protocol that yields no config', () {

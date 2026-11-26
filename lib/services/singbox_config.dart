@@ -5,9 +5,7 @@
 /// - Hysteria 2 (hy2://, hysteria2://)
 /// - TUIC v5 (tuic://)
 /// - AnyTLS (anytls://)
-/// - ShadowTLS v3 (shadowtls://)
-/// - AmneziaWG (obfuscated WireGuard with junk packets)
-/// - Cloudflare WARP
+/// ShadowTLS-only links, AmneziaWG and WARP profiles are not runnable here.
 ///
 /// Inbound exposes a local SOCKS5 proxy on `127.0.0.1:$socksPort`, which
 /// [EngineRunner] bridges to the TUN interface via [libtun2socks.so].

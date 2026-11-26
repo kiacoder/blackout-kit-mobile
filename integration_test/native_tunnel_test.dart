@@ -5,17 +5,22 @@
 /// happened to the 1,053 lines of mock Kotlin that commit `4e73204` removed.
 /// This file is the one that actually talks to `android.net.VpnService`.
 ///
-/// This is the test that closes the project's top open risk. It has **never been
-/// run**, because no Android hardware has been available.
+/// These are local lifecycle smoke checks, not peer handshake or traffic tests.
+/// Run each runtime family in a fresh Android process.
 ///
 /// ```bash
 /// # Plug in a device with USB debugging on, then:
 /// adb devices                                     # confirm it is listed
 /// adb shell appops set com.blackoutkit.vpn ACTIVATE_VPN allow   # skip the consent dialog
+/// # Standard Xray/VpnService acceptance:
 /// flutter test integration_test/native_tunnel_test.dart -d <device-id>
+/// # WG/AWG JNI acceptance (requires staged native libraries):
+/// GRADLE_OPTS="-Dorg.gradle.project.enableNativeTunnels=true" \
+///   flutter test integration_test/native_tunnel_test.dart -d <device-id> \
+///   --dart-define=BLACKOUT_NATIVE_ACCEPTANCE=true
 /// ```
 ///
-/// While the third test holds the tunnel open for 20 seconds, confirm the
+/// While the fourth test holds the tunnel open for 20 seconds, confirm the
 /// interface from another shell:
 ///
 /// ```bash
@@ -36,6 +41,8 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  const nativeAcceptance =
+      bool.fromEnvironment('BLACKOUT_NATIVE_ACCEPTANCE', defaultValue: false);
   final vpn = VPNService();
 
   /// A structurally valid VLESS config.
@@ -71,15 +78,94 @@ void main() {
     expect(
       info.xrayAvailable,
       isTrue,
-      reason: 'libv2ray.aar did not load. Either libgojni.so is missing for this '
-          'ABI, or Seq.setContext/initCoreEnv failed.',
+      reason: 'Packaged libgojni.so is missing for this ABI.',
     );
     expect(info.xrayProtocols, contains('vless'));
-    expect(info.singboxAvailable, isFalse,
-        reason: 'this build bundles no sing-box runtime');
     expect(info.canConnect('vless'), isTrue);
-    expect(info.canConnect('hysteria2'), isFalse);
+    if (info.singboxAvailable) {
+      expect(info.canConnect('hysteria2'), isTrue);
+    } else {
+      expect(info.canConnect('hysteria2'), isFalse);
+    }
   });
+
+  testWidgets('native WG/AWG packaged capability reads remain stable on this device', (tester) async {
+    // These reads must not load any native library; actual WG/AWG startup
+    // below is the JNI exercise. The two Go families require fresh processes.
+    for (var i = 0; i < 20; i++) {
+      final info = await vpn.getEngineInfo();
+      expect(info.nativeWireguardAvailable, isTrue,
+          reason: 'WireGuard packaged capability missing at iteration $i.');
+      expect(info.nativeAmneziawgAvailable, isTrue,
+          reason: 'AmneziaWG packaged capability missing at iteration $i.');
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  }, skip: !nativeAcceptance);
+
+  testWidgets('native WireGuard starts and tears down without a peer handshake',
+      (tester) async {
+    final config = ConfigParser.parse('''
+[Interface]
+PrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+Address = 10.88.0.2/32
+DNS = 1.1.1.1
+MTU = 1420
+
+[Peer]
+PublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
+AllowedIPs = 0.0.0.0/0
+Endpoint = 127.0.0.1:9
+PersistentKeepalive = 1
+''');
+
+    expect(config, isA<WireGuardConfig>());
+    expect(await vpn.prepare(), isTrue);
+    expect(await vpn.connect(config!), isTrue,
+        reason: 'native WireGuard local device/socket startup failed');
+    expect(await vpn.isRunning(), isTrue);
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(await vpn.disconnect(), isTrue);
+    expect(await vpn.isRunning(), isFalse);
+  }, skip: !nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('native AmneziaWG starts and tears down without a peer handshake',
+      (tester) async {
+    final config = ConfigParser.parse('''
+[Interface]
+PrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+Address = 10.89.0.2/32
+DNS = 1.1.1.1
+MTU = 1420
+Jc = 4
+Jmin = 40
+Jmax = 70
+
+[Peer]
+PublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=
+AllowedIPs = 0.0.0.0/0
+Endpoint = 127.0.0.1:9
+PersistentKeepalive = 1
+''');
+
+    expect(config, isA<AmneziaWGConfig>());
+    expect(await vpn.prepare(), isTrue);
+    expect(await vpn.connect(config!), isTrue,
+        reason: 'native AmneziaWG local device/socket startup failed');
+    expect(await vpn.isRunning(), isTrue);
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(await vpn.disconnect(), isTrue);
+    expect(await vpn.isRunning(), isFalse);
+  }, skip: !nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('embedded runtime is unavailable after native runtime claim',
+      (tester) async {
+    final info = await vpn.getEngineInfo();
+    expect(info.runtimeRestartRequired, isTrue);
+    expect(info.restartRequiredProtocols, contains('vless'));
+    expect(info.xrayAvailable, isFalse);
+    expect(await vpn.connect(ConfigParser.parse(probeUri)!), isFalse);
+    expect(await vpn.isRunning(), isFalse);
+  }, skip: !nativeAcceptance);
 
   testWidgets('VpnService.prepare() succeeds', (tester) async {
     final prepared = await vpn.prepare();
@@ -122,7 +208,7 @@ void main() {
 
     expect(await vpn.isRunning(), isTrue,
         reason: 'the tunnel died while it was supposed to be up');
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, skip: nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('disconnect tears the tunnel down', (tester) async {
     final config = ConfigParser.parse(probeUri);
@@ -135,26 +221,25 @@ void main() {
     expect(await vpn.disconnect(), isTrue);
     expect(await vpn.isRunning(), isFalse,
         reason: 'disconnect() reported success but the tunnel is still running');
-  }, timeout: const Timeout(Duration(minutes: 2)));
+  }, skip: nativeAcceptance, timeout: const Timeout(Duration(minutes: 2)));
 
-  testWidgets('an unbundled protocol is refused, not black-holed', (tester) async {
-    // hysteria2 needs a sing-box runtime that this build does not bundle. The
-    // service must refuse rather than install a default route it cannot serve —
-    // a tunnel that comes up with no working engine black-holes all traffic.
-    final config = ConfigParser.parse(
-      'hysteria2://password@127.0.0.1:1?sni=example.com#UnbundledProbe',
-    );
+  testWidgets('an unavailable protocol is refused, not black-holed', (tester) async {
+    // OpenVPN is explicitly reported unavailable by the Android engine-info
+    // layer. The service must refuse it rather than install a default route it
+    // cannot serve; a tunnel with no working engine would black-hole traffic.
+    final config = ConfigParser.parse('''
+client
+dev tun
+proto udp
+remote 127.0.0.1 1
+''');
 
-    if (config == null) {
-      // The parser may not produce a Hysteria2Config; nothing to assert.
-      return;
-    }
-
+    expect(config, isNotNull, reason: 'OpenVPN probe profile did not parse');
     expect(await vpn.prepare(), isTrue);
-    final connected = await vpn.connect(config);
+    final connected = await vpn.connect(config!);
 
     expect(connected, isFalse,
-        reason: 'a protocol with no bundled engine must not report success');
+        reason: 'an explicitly unavailable protocol must not report success');
     expect(await vpn.isRunning(), isFalse,
         reason: 'a refused connection must not leave a tunnel up');
   }, timeout: const Timeout(Duration(minutes: 2)));

@@ -3,6 +3,7 @@
 /// Replicates CLI's ConnectionService state machine pattern.
 
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart';
@@ -177,9 +178,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   /// Foreground-only liveness watchdog (see [_startLivenessWatchdog]).
   Timer? _livenessTimer;
+  bool _livenessInFlight = false;
+  bool _closed = false;
+  bool _scanInFlight = false;
 
-  /// Cached native capability report. Engine support is fixed for the lifetime
-  /// of the process, so probing once is enough. It is an Rx so the library
+  /// Latest passive capability report. Runtime admission can change after the
+  /// first connection, so refresh before selection/connection. It is an Rx so the library
   /// tiles' Obx rebuilds when the async probe lands — as a plain field the
   /// Connect buttons built before the answer stayed tappable forever (CON-06).
   final _engineAvailability = Rx<EngineAvailability?>(null);
@@ -245,7 +249,14 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         if (_canAdopt) reconcileWithNativeService();
         break;
       case 'disconnected':
+        if (state.value == ConnectionState.testing && _operationInFlight) {
+          _sessionEpoch++;
+          state.value = ConnectionState.error;
+          statusMessage.value = LocalizationService.t('status_tunnel_ended');
+          break;
+        }
         if (isConnected) {
+          _sessionEpoch++;
           final failedDuringScan = _recoveryRequested;
           state.value = ConnectionState.idle;
           statusMessage.value = LocalizationService.t('status_tunnel_ended');
@@ -263,6 +274,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         break;
       case 'error':
       case 'blocked':
+        if (state.value == ConnectionState.testing && _operationInFlight) {
+          _sessionEpoch++;
+          state.value = ConnectionState.error;
+          statusMessage.value = error ?? LocalizationService.t('status_tunnel_ended');
+          break;
+        }
         // While scanning, this status belongs to the active candidate only.
         // Do not let a native start rejection create recovery for an older
         // working session; _connectImpl returns that candidate's diagnostic
@@ -279,6 +296,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         // interface open) or the tunnel was torn down. Say so, and stop the
         // uptime that would otherwise keep ticking over a dead tunnel.
         if (isConnected || state.value == ConnectionState.connecting) {
+          _sessionEpoch++;
           state.value = ConnectionState.error;
           statusMessage.value = error ??
               LocalizationService.t(
@@ -316,8 +334,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       _log.i('Auto-connect is on — starting a scan');
       debugService.logAction('auto_connect');
       await connectFastest(configs);
-    } catch (e) {
-      _log.w('Auto-connect skipped: $e');
+    } catch (_) {
+      _log.w('Auto-connect skipped');
     }
   }
 
@@ -337,26 +355,15 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       return;
     }
     if (minutes <= 0) return;
-    _livenessTimer = Timer.periodic(Duration(minutes: minutes), (_) async {
-      if (!isConnected) return;
-      final verify = siteCheckService;
-      if (verify == null || !verify.enabled) return;
-      final alive = await verify.verifyLiveConnection();
-      if (alive || !isConnected) return;
-      _log.w('Liveness check failed on a connected tunnel');
-      debugService.logAction('liveness_failed');
-      // Paint the error AND close the interface. Leaving it up left the app
-      // claiming failure while the system VPN stayed established, so traffic
-      // kept being routed into a tunnel that carries nothing.
-      await _failTunnel(
-        'The tunnel is up but nothing loads — reconnect to pick another server',
-      );
-      _requestRecovery(statusMessage.value);
+    _livenessTimer = Timer.periodic(Duration(minutes: minutes), (_) {
+      _verifyTunnelAlive();
     });
   }
 
   @override
   void onClose() {
+    _closed = true;
+    _sessionEpoch++;
     WidgetsBinding.instance.removeObserver(this);
     vpnService.onStatusChanged = null;
     _livenessTimer?.cancel();
@@ -383,19 +390,31 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   Future<void> debugVerifyTunnelAliveForTest() => _verifyTunnelAlive();
 
   Future<void> _verifyTunnelAlive() async {
-    if (!isConnected) return;
+    if (_closed || _operationInFlight || _livenessInFlight ||
+        !isConnected || isDnsOnly.value || Platform.isIOS) return;
     final verify = siteCheckService;
     if (verify == null || !verify.enabled) return;
-    final alive = await verify.verifyLiveConnection();
-    if (alive || !isConnected) return;
-    debugService.logAction('liveness_failed', {'trigger': 'resume'});
-    // Same reason as the watchdog: an error state with a live interface is a
-    // lie the user pays for in dropped traffic - and a tunnel torn down
-    // without unwinding the session is the same lie in the other direction.
-    await _failTunnel(
-      'The tunnel is up but nothing loads — reconnect to pick another server',
-    );
-    _requestRecovery(statusMessage.value);
+    final epoch = _sessionEpoch;
+    _livenessInFlight = true;
+    try {
+      final alive = await verify.verifyLiveConnection();
+      if (alive || _closed || _operationInFlight ||
+          epoch != _sessionEpoch || !isConnected) return;
+      _operationInFlight = true;
+      try {
+        debugService.logAction('liveness_failed');
+        await _failTunnel(
+          'The tunnel is up but nothing loads ? reconnect to pick another server',
+        );
+        if (!_closed) _requestRecovery(statusMessage.value);
+      } finally {
+        _operationInFlight = false;
+      }
+    } catch (_) {
+      _log.w('Live verification could not complete');
+    } finally {
+      _livenessInFlight = false;
+    }
   }
 
   /// Closes a tunnel that failed its liveness check and unwinds the session.
@@ -424,7 +443,11 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// Safe to call at any time; a no-op when the two already agree.
   Future<void> reconcileWithNativeService() async {
     try {
+      if (_closed || _operationInFlight) return;
+      final epoch = _sessionEpoch;
       final status = await vpnService.getStatus();
+      if (_closed || _operationInFlight || epoch != _sessionEpoch ||
+          status['isRunning'] is! bool) return;
       final nativeRunning = status['isRunning'] == true;
 
       if (nativeRunning && _canAdopt && !isConnected) {
@@ -446,10 +469,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           // ConfigController not registered yet — adopt without the object.
         }
 
+        _sessionEpoch++;
         selectedConfig.value = config;
-        if (config != null && lastKnownWorkingConfig.value == null) {
-          lastKnownWorkingConfig.value = config;
-        }
         isDnsOnly.value = dnsOnlySession;
         state.value = ConnectionState.connected;
         statusMessage.value = dnsOnlySession
@@ -466,11 +487,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             ? DateTime.fromMillisecondsSinceEpoch(startedAtMs)
             : DateTime.now();
         _startUptimeCounter();
-        if (config != null) {
-          try {
-            Get.find<ConfigController>().markConnected(config);
-          } catch (_) {}
-        }
+        // An adopted interface has not yet passed a fresh traffic check.
+        // Do not promote its profile to last-known-working.
         // Nothing to resolve: a DNS-only interface has no exit to describe.
         if (!dnsOnlySession) _fetchConnectedIP();
 
@@ -482,6 +500,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           'protocol': protocol ?? 'unknown',
         });
       } else if (!nativeRunning && isConnected) {
+        _sessionEpoch++;
         state.value = ConnectionState.idle;
         statusMessage.value = LocalizationService.t('status_tunnel_ended');
         isDnsOnly.value = false;
@@ -500,7 +519,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
     } catch (e) {
       // Reconciliation is a repair, never a blocker.
-      _log.w('State reconciliation failed: $e');
+      _log.w('State reconciliation failed');
     }
   }
 
@@ -535,8 +554,10 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     if (isConnected) return;
     final service = ipInfoService;
     if (service == null) return;
+    final epoch = _sessionEpoch;
     final fresh = await service.fetchHome();
-    if (!fresh.isEmpty) homeIpInfo.value = fresh;
+    if (!_closed && epoch == _sessionEpoch && !isConnected &&
+        !fresh.isEmpty) homeIpInfo.value = fresh;
   }
 
   /// Connect with fastest available config
@@ -550,6 +571,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       return false;
     }
     _operationInFlight = true;
+    _scanInFlight = true;
     _cancelRequested = false;
     _recoveryRequested =
         _requestedResumeCursor != null || _recoveryPromptPending;
@@ -563,8 +585,12 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           testResults: testResults);
     } finally {
       _operationInFlight = false;
+      _scanInFlight = false;
+      _candidateAttemptInFlight = false;
+      candidateConfig.value = null;
       _cancelRequested = false;
       _recoveryRequested = false;
+      _requestedResumeCursor = null;
     }
   }
 
@@ -596,6 +622,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       // Drop anything no bundled engine can serve, otherwise "fastest" can
       // select a config that connect() is then obliged to refuse.
       final candidates = await _servableConfigs(availableConfigs);
+      if (_cancelRequested) return _finishCancelledScan();
       if (candidates.isEmpty) {
         state.value = ConnectionState.error;
         statusMessage.value = availableConfigs.isEmpty
@@ -614,7 +641,10 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         statusMessage.value = LocalizationService.t(
             'status_connecting_to', {'name': chosen.displayName});
         final connected = await _connectImpl(chosen);
-        if (connected) lastKnownWorkingConfig.value = chosen;
+        if (_cancelRequested) {
+          if (connected) await _disconnectImpl();
+          return _finishCancelledScan();
+        }
         return connected;
       }
 
@@ -641,6 +671,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         _resumeCursor = 0;
       }
       final totalBatches = (toScan.length / batchSize).ceil();
+      var attemptedCount = 0;
       scanBatchCount.value = totalBatches;
       scanItemsTotal.value = toScan.length;
       scanItemsDone.value = 0;
@@ -687,7 +718,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           // event at the end — counting both reported double progress.
           if (status == TestStatus.testing) return;
           probed++;
-          scanItemsDone.value = batchIndex * batchSize + probed;
+          scanItemsDone.value = batchStart + probed;
           statusMessage.value = LocalizationService.t(
               'Pinging @label... @done/@total', {
             'label': batchLabel,
@@ -741,7 +772,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         }
 
         final verify = siteCheckService;
-        final liveVerifyEnabled = verify != null &&
+        final liveVerifyEnabled = !Platform.isIOS && verify != null &&
             verify.enabled &&
             settings.siteCheckUrls.isNotEmpty;
         final mode = settings.connectVerificationStrategy.value;
@@ -803,11 +834,16 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
               'Connecting (@label, config @n)...',
               {'label': batchLabel, 'n': '${attempt + 1}'});
           scanPhase.value = 'connect';
+          attemptedCount++;
           final connected = await _connectImpl(
             config,
             testResult: result,
             markAsWorking: !liveVerifyEnabled,
           );
+          if (_cancelRequested) {
+            if (connected || vpnService.isConnected) await _disconnectImpl();
+            return _finishCancelledScan();
+          }
           if (!connected) {
             _candidateAttemptInFlight = false;
             final diagnostic = candidateError.value.isNotEmpty
@@ -820,7 +856,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
             selectedConfigResult.value = null;
             if (vpnService.isConnected ||
                 vpnService.status == VPNStatus.connecting) {
-              await _disconnectImpl();
+              if (!await _disconnectImpl()) return false;
             }
             state.value = ConnectionState.selecting;
             scanPhase.value = 'connect';
@@ -833,18 +869,25 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           if (liveVerifyEnabled) {
             state.value = ConnectionState.testing;
             scanPhase.value = 'websites';
-            scanSitesTotal.value = settings.siteCheckUrls.length;
+            final hosts = verify.liveCheckHosts;
+            final threshold = settings.connectWebsitePassThreshold.value;
+            scanSitesTotal.value = hosts.length;
             statusMessage.value = LocalizationService.t(
                 'Checking websites through the tunnel (@label, config @n)...',
                 {'label': batchLabel, 'n': '${attempt + 1}'});
+            final epoch = _sessionEpoch;
             final outcomes = await verify.checkLiveConnection();
+            if (_cancelRequested) {
+              await _disconnectImpl();
+              return _finishCancelledScan();
+            }
+            if (epoch != _sessionEpoch || state.value != ConnectionState.testing) {
+              if (!await _disconnectImpl()) return false;
+              state.value = ConnectionState.selecting;
+              continue;
+            }
             scanSitesDone.value = outcomes.length;
-            final passed = outcomes.where((outcome) => outcome.ok).length;
-            final threshold = settings.connectWebsitePassThreshold.value;
-            accepted = outcomes.isNotEmpty &&
-                (threshold < 0
-                    ? passed == outcomes.length
-                    : passed >= threshold.clamp(1, outcomes.length));
+            accepted = SiteCheckService.meetsThreshold(hosts, outcomes, threshold);
           }
 
           if (accepted) {
@@ -882,10 +925,10 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           }
 
           candidateConfig.value = null;
-          await _disconnectImpl();
+          if (!await _disconnectImpl()) return false;
           state.value = ConnectionState.selecting;
           scanPhase.value = 'connect';
-          _log.w('Website threshold not met for ${config.displayName} '
+          _log.w('Website threshold not met for config '
               '($batchLabel: $scanSitesDone/@$scanSitesTotal passed)');
         }
         _resumeCursor = batchStart + batch.length;
@@ -898,21 +941,32 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       scanPhase.value = 'failed';
       final check2 = siteCheckService;
       final verificationOn =
-          check2 != null && check2.enabled && settings.siteCheckUrls.isNotEmpty;
+          !Platform.isIOS && check2 != null && check2.enabled && settings.siteCheckUrls.isNotEmpty;
       statusMessage.value = verificationOn
           ? LocalizationService.t(
-              'Scanned all @count configs but none could load websites. Refresh your sources or disable the site check to connect anyway.',
-              {'count': '${toScan.length}'})
+              'None of the @count attempted configurations passed website verification.',
+              {'count': '$attemptedCount'})
           : LocalizationService.t('No working configs found');
-      debugService.logAction('scan_exhausted', {'configs': toScan.length});
+      debugService.logAction('scan_exhausted', {'configs': toScan.length, 'attempted': attemptedCount});
       return false;
     } catch (e) {
       state.value = ConnectionState.error;
       statusMessage.value =
           LocalizationService.t('status_error', {'error': '$e'});
-      _log.e('Error connecting to fastest: $e');
+      _log.e('Error connecting to fastest');
       return false;
     }
+  }
+
+  bool _finishCancelledScan() {
+    candidateConfig.value = null;
+    candidateError.value = '';
+    scanPhase.value = 'idle';
+    if (state.value != ConnectionState.error) {
+      state.value = ConnectionState.idle;
+      statusMessage.value = LocalizationService.t('status_scan_stopped');
+    }
+    return false;
   }
 
   /// True while a connect/disconnect/scan is running.
@@ -932,7 +986,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   /// Stops a running scan. Returns true when there was one to stop.
   bool cancelScan() {
-    if (!_operationInFlight) return false;
+    if (!_scanInFlight) return false;
     _cancelRequested = true;
     statusMessage.value = LocalizationService.t('status_stopping');
     return true;
@@ -982,7 +1036,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           candidateError.value = refusal;
         }
         debugService
-            .logError('Connect refused for ${config.protocol}: $refusal');
+            .logError('Connect refused');
         return false;
       }
 
@@ -995,7 +1049,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       selectedConfig.value = config;
       selectedConfigResult.value = testResult;
 
-      _log.i('Connecting to ${config.displayName}');
+      _log.i('Connecting to config');
 
       // Android shows a system consent dialog before the first tunnel.
       final prepared = await vpnService.prepare();
@@ -1026,25 +1080,55 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         if (_candidateAttemptInFlight) {
           candidateError.value = optionProblem;
         }
-        debugService.logError('Session options rejected: $optionProblem');
+        debugService.logError('Session options rejected');
         return false;
       }
 
       final success = await vpnService.connect(config, options: options);
 
       if (success) {
+        if (_cancelRequested) {
+          await _disconnectImpl();
+          return false;
+        }
+        // The scanner already verifies its candidate after this method returns.
+        // Direct and first-candidate connections used to skip that same gate.
+        // iOS does not implement the Android SOCKS site-check channel.
+        final verify = siteCheckService;
+        final shouldVerify = !_candidateAttemptInFlight &&
+            !Platform.isIOS &&
+            verify != null &&
+            verify.enabled &&
+            verify.liveCheckHosts.isNotEmpty;
+        if (shouldVerify) {
+          state.value = ConnectionState.testing;
+          statusMessage.value = LocalizationService.t('Checking websites through the tunnel...');
+          final epoch = _sessionEpoch;
+          final alive = await verify.verifyLiveConnection();
+          if (_cancelRequested || epoch != _sessionEpoch ||
+              state.value != ConnectionState.testing) {
+            await _disconnectImpl();
+            return false;
+          }
+          if (!alive) {
+            const message = 'The tunnel started but nothing loads. Website verification failed.';
+            debugService.logWarning(message);
+            await _failTunnel(message);
+            return false;
+          }
+        }
         state.value = ConnectionState.connected;
         statusMessage.value = LocalizationService.t(
-            'status_connected_to', {'name': config.displayName});
+            shouldVerify ? 'status_connected_verified' : 'status_connected_to',
+            {'name': config.displayName});
         debugService.logAction('connected', {
           'config': config.displayName,
           'protocol': config.protocol,
         });
         _connectionStartTime = DateTime.now();
         _startUptimeCounter();
-        // The tunnel is live, so this config is working by definition. Without
-        // this the library badge kept whatever a failed probe had stored and
-        // read "Failed" under an active tunnel.
+        // Scanner candidates are marked only after their configured check.
+        // Direct connections also pass the enabled check above before marking.
         if (markAsWorking) {
           try {
             Get.find<ConfigController>().markConnected(config);
@@ -1056,10 +1140,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         _fetchConnectedIP();
 
         debugService.logInfo(
-          'VPN connected to ${config.displayName} - '
-          'split tunneling: ${splitTunnelingService.describe()}, '
-          'DNS: ${dnsLeakPreventionService.describe()}, '
-          'kill switch: ${killSwitchService.describe()}',
+          'VPN connected',
         );
 
         // The live tunnel now carries the current selection.
@@ -1093,7 +1174,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       if (_candidateAttemptInFlight && candidateError.value.isEmpty) {
         candidateError.value = statusMessage.value;
       }
-      _log.e('Error connecting: $e');
+      _log.e('Error connecting');
       return false;
     }
   }
@@ -1104,9 +1185,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// the per-connect check in [connect] still guards the actual attempt.
   Future<List<Config>> _servableConfigs(List<Config> configs) async {
     try {
-      _engineAvailability.value ??= await vpnService.getEngineInfo();
+      _engineAvailability.value = await vpnService.getEngineInfo();
     } catch (e) {
-      _log.w('Engine capability probe failed, testing all configs: $e');
+      _log.w('Engine capability probe failed, testing all configs');
       return configs;
     }
 
@@ -1133,17 +1214,16 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     return availability.canConnect(protocol);
   }
 
-  /// Runs the engine capability probe if it has not answered yet.
+  /// Refreshes the passive engine capability inventory.
   ///
   /// The library calls this so its tiles can grey out protocols this build
   /// cannot run *before* the user taps Connect and gets a red error for
   /// something the app already knew.
   Future<void> ensureEngineAvailability() async {
-    if (_engineAvailability.value != null) return;
     try {
       _engineAvailability.value = await vpnService.getEngineInfo();
-    } catch (e) {
-      _log.w('Engine capability probe failed: $e');
+    } catch (_) {
+      _log.w('Engine capability probe failed');
     }
   }
 
@@ -1155,9 +1235,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// blocking a connection that might have worked.
   Future<String?> _engineRefusal(Config config) async {
     try {
-      _engineAvailability.value ??= await vpnService.getEngineInfo();
+      _engineAvailability.value = await vpnService.getEngineInfo();
     } catch (e) {
-      _log.w('Engine capability probe failed, continuing: $e');
+      _log.w('Engine capability probe failed, continuing');
       return null;
     }
 
@@ -1208,6 +1288,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     final availability = _engineAvailability.value!;
     if (!availability.isKnown) return null;
     if (availability.canConnect(config.protocol)) return null;
+    if (availability.restartRequiredProtocols.contains(config.protocol)) {
+      return 'This engine is unavailable in the current process. Fully restart the app before switching runtime families.';
+    }
 
     final supported = availability.supportedProtocols;
     final supportedLabel = supported.isEmpty
@@ -1274,7 +1357,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       state.value = ConnectionState.error;
       statusMessage.value =
           LocalizationService.t('status_disconnect_error', {'error': '$e'});
-      _log.e('Error disconnecting: $e');
+      _log.e('Error disconnecting');
       return false;
     }
   }
@@ -1311,38 +1394,34 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   /// Test current connection
   Future<bool> testConnection() async {
-    if (selectedConfig.value == null) {
-      _log.w('No active connection to test');
+    final config = selectedConfig.value;
+    final verify = siteCheckService;
+    // A server-port probe cannot establish whether a current VPN carries
+    // traffic, especially for UDP protocols.
+    if (_operationInFlight || _livenessInFlight || !isConnected ||
+        config == null || isDnsOnly.value || verify == null || Platform.isIOS) {
       return false;
     }
-
+    _operationInFlight = true;
+    final epoch = _sessionEpoch;
     try {
-      state.value = ConnectionState.testing;
       statusMessage.value = LocalizationService.t('status_testing_connection');
-
-      final result = await testerService.testConfig(selectedConfig.value!);
-      selectedConfigResult.value = result;
-
-      if (result.isWorking) {
-        state.value = ConnectionState.connected;
-        // Report the real measured figure. Throughput is not measured by the
-        // tester, so the previous "Connected (43.2Mbps)" was fabricated.
-        statusMessage.value = result.latencyMs != null
-            ? LocalizationService.t('Connected (@ms ms to the server)',
-                {'ms': '${result.latencyMs}'})
-            : LocalizationService.t('status_connected');
-        return true;
-      } else {
-        state.value = ConnectionState.error;
-        statusMessage.value =
-            LocalizationService.t('status_connection_test_failed');
+      final alive = await verify.verifyLiveConnection();
+      if (_closed || epoch != _sessionEpoch || !isConnected) return false;
+      if (!alive) {
+        await _failTunnel(LocalizationService.t('status_connection_test_failed'));
         return false;
       }
-    } catch (e) {
-      state.value = ConnectionState.error;
-      statusMessage.value =
-          LocalizationService.t('status_test_error', {'error': '$e'});
+      statusMessage.value = LocalizationService.t('status_connected_verified',
+          {'name': config.displayName});
+      return true;
+    } catch (_) {
+      if (!_closed && epoch == _sessionEpoch && isConnected) {
+        statusMessage.value = LocalizationService.t('status_connection_test_failed');
+      }
       return false;
+    } finally {
+      _operationInFlight = false;
     }
   }
 
@@ -1363,14 +1442,14 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
 
       debugService.logInfo(
-          'DNS leak prevention: ${dnsLeakPreventionService.describe()}');
+          'DNS leak prevention updated');
       if (next && isConnected) {
         statusMessage.value = LocalizationService.t('status_dns_applies');
       }
       return true;
     } catch (e) {
-      _log.e('Error toggling DNS leak prevention: $e');
-      debugService.logError('Error toggling DNS leak prevention: $e');
+      _log.e('Error toggling DNS leak prevention');
+      debugService.logError('Error toggling DNS leak prevention');
       return false;
     }
   }
@@ -1394,8 +1473,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
       return true;
     } catch (e) {
-      _log.e('Error toggling kill switch: $e');
-      debugService.logError('Error toggling kill switch: $e');
+      _log.e('Error toggling kill switch');
+      debugService.logError('Error toggling kill switch');
       return false;
     }
   }
@@ -1417,8 +1496,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
       return true;
     } catch (e) {
-      _log.e('Error toggling split tunneling: $e');
-      debugService.logError('Error toggling split tunneling: $e');
+      _log.e('Error toggling split tunneling');
+      debugService.logError('Error toggling split tunneling');
       return false;
     }
   }
@@ -1496,7 +1575,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     statusMessage.value = LocalizationService.t('dns_only_started');
     _connectionStartTime = DateTime.now();
     _startUptimeCounter();
-    debugService.logInfo('DNS-only session: ${resolvers.join(", ")}');
+    debugService.logInfo('DNS-only session started');
     return true;
   }
 
@@ -1567,7 +1646,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           }
         }
       } catch (e) {
-        _log.w('Exit lookup attempt $attempt/$attempts failed: $e');
+        _log.w('Exit lookup attempt $attempt/$attempts failed');
       }
       // 1s, 2s, 3s, 4s, 5s - long enough for the upstream handshake.
       await Future<void>.delayed(Duration(seconds: attempt));

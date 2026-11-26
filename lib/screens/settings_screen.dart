@@ -1549,6 +1549,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
   /// debug-signed build trying to take a release-signed update). Retry can
   /// NEVER succeed here, so the tile swaps to a recovery panel instead.
   bool _signerMismatch = false;
+  bool _pendingInstallSession = false;
 
   @override
   void initState() {
@@ -1562,6 +1563,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
       _phase = 'checking';
       _error = '';
       _signerMismatch = false;
+      _pendingInstallSession = false;
     });
     try {
       final info = await PackageInfo.fromPlatform();
@@ -1602,6 +1604,10 @@ class _UpdateSectionState extends State<_UpdateSection> {
           _apkPath = null;
           _phase = 'error';
           _error = 'installer_failed'.tr + e.toString();
+        } else if (code == 'UPDATE_SESSION_ACTIVE') {
+          _phase = 'error';
+          _pendingInstallSession = true;
+          _error = 'update_session_active'.tr;
         } else if (code == 'SIGNER_MISMATCH') {
           // The native check refused BEFORE the installer ran: the update is
           // keyed differently (debug-signed install taking a release-signed
@@ -1616,6 +1622,39 @@ class _UpdateSectionState extends State<_UpdateSection> {
         }
       });
     });
+  }
+
+  Future<void> _cancelPendingInstall() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('update_cancel_title'.tr),
+        content: Text('update_cancel_body'.tr),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('cancel'.tr),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('update_cancel_action'.tr),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await _service.cancelPendingUpdate();
+      if (!mounted) return;
+      setState(() {
+        _pendingInstallSession = false;
+        _phase = _apkPath == null ? 'available' : 'ready';
+        _error = '';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
   }
 
   Future<void> _downloadAndInstall() async {
@@ -1733,6 +1772,10 @@ class _UpdateSectionState extends State<_UpdateSection> {
                   );
                 },
                 child: Text('copy_release_link'.tr),
+              ),
+            'error' when _pendingInstallSession => TextButton(
+                onPressed: _cancelPendingInstall,
+                child: Text('update_cancel_action'.tr),
               ),
             'error' => TextButton(onPressed: _check, child: Text('retry'.tr)),
             _ => IconButton(onPressed: _check, icon: const Icon(Icons.refresh)),

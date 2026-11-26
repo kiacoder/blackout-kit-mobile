@@ -4,9 +4,8 @@
 /// matches this device's ABI into the app's internal files dir, and hands it
 /// to Android's package installer through the UpdatePlugin platform channel.
 ///
-/// Internal storage is deliberate: FileProvider maps `filesDir/updates/`
-/// through `res/xml/file_paths.xml`, whereas the external app dir is not
-/// always the volume that gets mapped ("Failed to find configured root").
+/// Internal storage is deliberate: native code verifies the private archive
+/// and streams the exact verified bytes into a user-confirmed install session.
 library;
 
 import 'dart:io';
@@ -308,7 +307,20 @@ class UpdateService extends GetxService {
     }
   }
 
-  /// Hands the APK to Android's package installer (user confirms the install).
+  /// Cancels a previous app-owned installation only after the user asks.
+  Future<void> cancelPendingUpdate() async {
+    if (_downloading || _installing) {
+      throw StateError('An update operation is already running');
+    }
+    _installing = true;
+    try {
+      await _channel.invokeMethod('cancelPendingUpdate');
+    } finally {
+      _installing = false;
+    }
+  }
+
+  /// Submits the APK to Android's package installer (user confirms the install).
   Future<void> installApk(String path, AppUpdate update) async {
     if (_downloading || _installing) {
       throw StateError('An update operation is already running');

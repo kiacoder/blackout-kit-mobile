@@ -33,6 +33,23 @@ void main() {
     });
   });
 
+  group('Android HTTPS trust policy', () {
+    test('uses system trust and does not override certificate or hostname verification', () {
+      final policy = source('android/app/src/main/res/xml/network_security_config.xml');
+      expect(policy, contains('<certificates src="system" />'));
+      expect(policy, isNot(contains('src="user"')));
+      expect(policy, isNot(contains('overridePins="true"')));
+      for (final name in ['SiteProbeRunner', 'VpnPlugin']) {
+        final code = source('android/app/src/main/kotlin/com/blackoutkit/vpn/$name.kt');
+        expect(code, contains('instanceFollowRedirects = false'), reason: name);
+        expect(code, isNot(matches(RegExp(r'(setHostnameVerifier|setSSLSocketFactory|setDefaultHostnameVerifier|setDefaultSSLSocketFactory|X509TrustManager|hostnameVerifier\s*=|sslSocketFactory\s*=)'))), reason: name);
+      }
+      final endpoints = source('android/app/src/main/kotlin/com/blackoutkit/vpn/TunnelDiagnosticPolicy.kt');
+      expect(endpoints, contains('"https://api.ipify.org"'));
+      expect(endpoints, contains('"https://ipwho.is"'));
+    });
+  });
+
   group('Native diagnostic privacy', () {
     test('engine errors are kept out of Android system logs', () {
       for (final name in [

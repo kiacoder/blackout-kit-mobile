@@ -107,6 +107,25 @@ void main() {
       expect(installerCalls, 2);
     });
 
+    test('explicit session cancellation uses only the native cancellation method', () async {
+      const channel = MethodChannel('com.blackoutkit.vpn/update');
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      var calls = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'cancelPendingUpdate');
+        expect(call.arguments, isNull);
+        calls++;
+        if (calls == 1) throw PlatformException(code: 'CANCEL_FAILED');
+        return true;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final service = UpdateService();
+      await expectLater(service.cancelPendingUpdate(),
+          throwsA(isA<PlatformException>().having((e) => e.code, 'code', 'CANCEL_FAILED')));
+      await service.cancelPendingUpdate();
+      expect(calls, 2);
+    });
+
     test('parses official GitHub SHA-256 metadata', () {
       final release = releaseWith({'app-arm64-v8a-release.apk': data.length});
       (release['assets'] as List).first['digest'] = expected;

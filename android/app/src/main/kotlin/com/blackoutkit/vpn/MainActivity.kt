@@ -38,6 +38,7 @@ class MainActivity : FlutterActivity() {
 
         // In-app self-update: hands downloaded APKs to the package installer.
         UpdatePlugin(applicationContext).register(flutterEngine.dartExecutor.binaryMessenger)
+        UpdateConfirmation.attach(this)
 
         // Share / Open-with receive bridge: Gmail attachments ("Open with"),
         // shared links from the browser share sheet. Dart polls consumePending

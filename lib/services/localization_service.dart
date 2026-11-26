@@ -375,6 +375,10 @@ class LocalizationService extends GetxService implements Translations {
           'Plaintext VLESS (security: none) to a raw public IP is prohibited by Xray for security (leaks UUID in cleartext). Use a domain address or TLS.',
       'not_available_in_build': 'Not available in this build',
       'signer_mismatch_title': 'Different signing key',
+      'update_session_active': 'Finish the Android installer or cancel the pending update.',
+      'update_cancel_title': 'Cancel pending update?',
+      'update_cancel_body': 'Your installed app and its data will be kept.',
+      'update_cancel_action': 'Cancel update',
       'signer_mismatch_body':
           'The installed app and this update use different signing keys. Android cannot update in place. Keep the installed app and your saved configurations. Contact the maintainer to obtain an update signed with the correct key.',
       'copy_release_link': 'Copy release link',
@@ -968,6 +972,10 @@ class LocalizationService extends GetxService implements Translations {
           'اتصال VLESS رمزنگاری‌نشده (بدون TLS) به یک IP عمومی توسط هسته برای امنیت رد می‌شود (UUID فاش می‌شود). از دامنه یا TLS استفاده کنید.',
       'not_available_in_build': 'در این نسخه در دسترس نیست',
       'signer_mismatch_title': 'کلید امضای متفاوت',
+      'update_session_active': 'نصب اندروید را تکمیل کنید یا به‌روزرسانی در انتظار را لغو کنید.',
+      'update_cancel_title': 'به‌روزرسانی در انتظار لغو شود؟',
+      'update_cancel_body': 'برنامه نصب‌شده و داده‌های آن حفظ می‌شوند.',
+      'update_cancel_action': 'لغو به‌روزرسانی',
       'signer_mismatch_body':
           'برنامه نصب‌شده و این به‌روزرسانی با کلیدهای متفاوتی امضا شده‌اند. اندروید نمی‌تواند برنامه را درجا به‌روزرسانی کند. برنامه فعلی و پیکربندی‌های ذخیره‌شده را حفظ کنید و برای دریافت به‌روزرسانی با امضای صحیح با توسعه‌دهنده تماس بگیرید.',
       'copy_release_link': 'کپی لینک انتشار',
@@ -1525,6 +1533,10 @@ class LocalizationService extends GetxService implements Translations {
           '出于安全原因，Xray 禁止使用明文 VLESS（无 TLS）连接原生公共 IP（会泄漏明文 UUID）。请使用域名或启用 TLS。',
       'not_available_in_build': '此版本不可用',
       'signer_mismatch_title': '签名密钥不同',
+      'update_session_active': '请完成 Android 安装，或取消待处理的更新。',
+      'update_cancel_title': '取消待处理的更新？',
+      'update_cancel_body': '已安装的应用及其数据将保留。',
+      'update_cancel_action': '取消更新',
       'signer_mismatch_body':
           '已安装的应用与此更新使用不同的签名密钥，Android 无法直接更新。请保留已安装的应用和已保存的配置，并联系维护者获取使用正确密钥签名的更新。',
       'copy_release_link': '复制发布链接',

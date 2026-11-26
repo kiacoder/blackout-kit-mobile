@@ -4,6 +4,7 @@ on:
   push:
     branches: ['arena/**']
     paths:
+      - 'lib/services/secure_vault.dart'
       - 'tool/prepare_storage_migration_experiment.py'
       - 'tool/patch_storage_backup_fixture.py'
       - 'tool/run_storage_migration_acceptance.py'
@@ -77,7 +78,7 @@ jobs:
             python3 tool/prepare_storage_migration_experiment.py --create --mode "$mode" --folder "$folder"
             seed=false
             interrupt=false
-            if [ "$mode" = candidate ]; then interrupt=true; fi
+            if [ "$mode" != legacy ]; then interrupt=true; fi
             if [ "$mode" = legacy ]; then seed=true; fi
             (
               cd "$folder"

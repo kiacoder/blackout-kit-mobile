@@ -79,4 +79,21 @@ if (( SECONDS >= deadline )); then
   exit 1
 fi
 "$adb" -s "$serial" shell input keyevent 82
+# Boot completion alone is not proof that credential-encrypted storage or
+# the activity manager is ready. Check system readiness before any install.
+ready_deadline=$((SECONDS + 90))
+while (( SECONDS < ready_deadline )); do
+  ce_state=$(timeout 5 "$adb" -s "$serial" shell getprop sys.user.0.ce_available 2>/dev/null | tr -d '\r' || true)
+  # Older system images do not always expose the CE property.
+  user_state=$(timeout 5 "$adb" -s "$serial" shell dumpsys activity users 2>/dev/null || true)
+  if { [[ "$ce_state" == true ]] || grep -Eq 'User #0: state=RUNNING_UNLOCKED' <<< "$user_state"; } &&
+     timeout 5 "$adb" -s "$serial" shell pm path android >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+if (( SECONDS >= ready_deadline )); then
+  echo "Credential storage/package manager readiness not confirmed" >&2
+  exit 1
+fi
 python3 tool/run_storage_migration_acceptance.py --folder .cache/storage-fixtures-output --aapt "$tools/aapt" --apksigner "$tools/apksigner" --adb "$adb" --serial "$serial" --mode "$mode" --output migration-result.json

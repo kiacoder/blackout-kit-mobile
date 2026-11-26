@@ -68,7 +68,10 @@ def accept(folder, adb, serial, mode=None):
         device("logcat", "-c")
         result = device("shell", "am", "start", "-W", "-n", PACKAGE + "/.MainActivity")
         if "Status: ok" not in result:
-            raise ValueError("Fixture failed to launch")
+            # Retain a fixed diagnostic classification, never raw app logs.
+            status = re.search(r"(?m)^Status: (ok|timeout|error)$", result)
+            raise ValueError("Fixture failed to launch (status: " +
+                             (status[1] if status else "unknown") + ")")
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             try:
@@ -101,12 +104,11 @@ def accept(folder, adb, serial, mode=None):
             stage = "candidate-install"
             if device("install", "-r", "-t", str(folder / (mode + ".apk")), timeout=240).splitlines()[-1:] != ["Success"]:
                 raise ValueError("Candidate update failed")
-            if mode == "candidate":
-                stage = "interrupt-after-key"
-                digest = launch("STORAGE_KEY_READY")
-                device("shell", "am", "force-stop", PACKAGE)
-                if digest != original_digest:
-                    raise ValueError("Encrypted file changed at interruption boundary")
+            stage = "interrupt-after-key"
+            digest = launch("STORAGE_KEY_READY")
+            device("shell", "am", "force-stop", PACKAGE)
+            if digest != original_digest:
+                raise ValueError("Encrypted file changed at interruption boundary")
             stage = "upgrade-launch"
             if launch("STORAGE_MIGRATION_PASS") != original_digest:
                 raise ValueError("Encrypted fixture file changed during upgrade")
@@ -114,8 +116,7 @@ def accept(folder, adb, serial, mode=None):
             if launch("STORAGE_MIGRATION_PASS") != original_digest:
                 raise ValueError("Encrypted fixture file changed during restart")
             device("shell", "am", "force-stop", PACKAGE)
-            results[mode] = ("upgrade-interruption-and-restart-passed"
-                             if mode == "candidate" else "upgrade-and-restart-passed")
+            results[mode] = "upgrade-interruption-and-restart-passed"
         except (ValueError, subprocess.SubprocessError) as error:
             results[mode] = "failed at " + stage + ": " + str(error)
         finally:
@@ -146,9 +147,8 @@ def main():
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
     if isinstance(report["results"], dict) and any(
-            value != ("upgrade-interruption-and-restart-passed" if mode == "candidate"
-                      else "upgrade-and-restart-passed")
-            for mode, value in report["results"].items()):
+            value != "upgrade-interruption-and-restart-passed"
+            for value in report["results"].values()):
         raise SystemExit(1)
 
 

@@ -126,3 +126,17 @@ physical Android/iOS picker checks and the next APK scan remain required.
 Local Flutter tests: 614/614 (cached dependencies); focused vault: 18/18.
 Latest hosted regression tests on 33e4f53 (45827658258) passed with the
 reviewed lockfile. Independent physical-device acceptance remains open.
+
+## Migration matrix follow-up
+
+Run 45826558705: full-app candidate compile and fixture compile passed;
+API 24 candidate/backup and API 34 candidate passed. API 34 backup failed
+at legacy-launch before candidate installation; cause not established. Do
+not record that case as passed or as an encryption failure. Require user-0
+unlock/credential-storage readiness and package-manager readiness on the
+fresh emulator, with a bounded deadline and explicit launch status on failure.
+Extend the post-key interruption gate to both backup and non-backup paths,
+retain SHA-256 verification of the unchanged encrypted library, and rerun
+fixtures whenever secure_vault.dart changes. This remains a synthetic test,
+not an interruption inside the upstream native migration transaction. No
+production storage dependency or scanner configuration changed.

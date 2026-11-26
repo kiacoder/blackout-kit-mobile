@@ -174,3 +174,18 @@ Sources: https://pub.dev/packages/flutter_secure_storage/changelog ;
 https://github.com/juliansteenbakker/flutter_secure_storage/blob/develop/flutter_secure_storage/pubspec.yaml ;
 https://developer.android.com/reference/android/content/Context#checkUriPermission(android.net.Uri,int,int,int) ;
 https://docs.flutter.dev/platform-integration/platform-channels .
+
+## CI failure follow-up
+
+Run 45832122237: both API34 modes passed including interruption and restart.
+Both API24 jobs stopped before fixture installation because the readiness
+probe did not recognize the older image's user-state output. Android 7
+UserController.dump and UserState.dump in AOSP android-7.0.0_r1 emit
+"User #0: state=RUNNING_UNLOCKED" in the full activity dump. Use that dump
+as the API24 fallback, and require a positive package-manager path. Keep the
+bounded readiness deadline and all original fixture checks. This is a
+candidate infrastructure fix until the next emulator matrix passes.
+Standalone iOS run 45833521156 was cancelled before runner acquisition;
+GitHub check annotations report macOS arm64 capacity constraints. Combined
+build 45833509159 passed both Android and iOS for f976da8. Do not weaken or
+remove the standalone check in response to runner capacity.

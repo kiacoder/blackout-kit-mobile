@@ -84,10 +84,20 @@ fi
 ready_deadline=$((SECONDS + 90))
 while (( SECONDS < ready_deadline )); do
   ce_state=$(timeout 5 "$adb" -s "$serial" shell getprop sys.user.0.ce_available 2>/dev/null | tr -d '\r' || true)
-  # Older system images do not always expose the CE property.
-  user_state=$(timeout 5 "$adb" -s "$serial" shell dumpsys activity users 2>/dev/null || true)
-  if { [[ "$ce_state" == true ]] || grep -Eq 'User #0: state=RUNNING_UNLOCKED' <<< "$user_state"; } &&
-     timeout 5 "$adb" -s "$serial" shell pm path android >/dev/null 2>&1; then
+  # Android 7 does not expose the same targeted dumpsys activity users
+  # command as newer releases. Its full ActivityManager dump contains
+  # UserController.dump's explicit "User #0: state=RUNNING_UNLOCKED" line.
+  user_state=""
+  if [[ "$ce_state" != true ]]; then
+    if [[ "$api" == 24 ]]; then
+      user_state=$(timeout 10 "$adb" -s "$serial" shell dumpsys activity 2>/dev/null || true)
+    else
+      user_state=$(timeout 5 "$adb" -s "$serial" shell dumpsys activity users 2>/dev/null || true)
+    fi
+  fi
+  package_state=$(timeout 5 "$adb" -s "$serial" shell pm path android 2>/dev/null | tr -d '\r' || true)
+  if { [[ "$ce_state" == true ]] || grep -Eq '^[[:space:]]*User #0: state=RUNNING_UNLOCKED([[:space:]]|$)' <<< "$user_state"; } &&
+     grep -Eq '^package:/.+' <<< "$package_state"; then
     break
   fi
   sleep 2

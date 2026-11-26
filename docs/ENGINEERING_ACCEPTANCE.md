@@ -42,3 +42,37 @@ structural test now requires zero cleartext exceptions. A fresh APK/MobSF scan
 and Android device checks (Xray, sing-box, site probes and exit-IP lookup) are
 required before promoting this change. Keep this candidate on the hardening
 branch; no minSdk or storage dependency change in this increment.
+
+## Reproducibility and physical measurements
+
+Android release and Rust cross-check workflows now use the existing quality
+compiler pin (1.99.1), not a floating stable Rust release. Cargo manifests,
+Cargo.lock, Flutter dependencies and action SHAs are unchanged. This does not
+make the complete APK reproducible: NDK, JDK patch, SDK/runner images, signing
+and ZIP metadata still require controlled independent-build evidence.
+Run tool/apk_compare.py on two equivalent APKs; only exact byte matches pass.
+
+For an authorized lab device, select the serial explicitly and use
+`python tool/device_metrics.py --serial TEST_DEVICE --scenario idle` (then
+repeat under matched connected and recovery workloads). The tool reads PSS,
+package CPU samples and coarse whole-device battery fields without emitting
+raw dumps, serials or network addresses. Missing readings remain null. It does
+not modify the device, generate traffic, measure energy, or establish a
+throughput result. Record device model/OS, temperature, power state, screen
+state and test duration separately. For throughput, use a controlled lab
+endpoint and a known synthetic payload, compare bytes / elapsed time with
+and without VPN, repeat and report variance. Never use production user data.
+
+Physical acceptance sequence: fresh install; save synthetic configs; restart;
+upgrade with the same signer; verify configs and preferences; interrupt only
+on disposable fixtures; verify recovery without deleting prior data; then
+exercise offline/reconnect, Wi-Fi/mobile handover, screen lock, revoke,
+process death, DNS and IPv6 policy. Observe kill-switch behavior from an
+independent controlled endpoint. No device was attached at this checkpoint.
+
+External audit evidence package: source commit, release APK hashes, pinned
+signer certificate, SBOM and native component inventory, threat model,
+full scanner reports, known exceptions, migration evidence, independent
+build results, physical/network failure matrix and benchmark methodology.
+A named external reviewer must validate and retest the findings; this document
+is preparation, not an audit certificate.

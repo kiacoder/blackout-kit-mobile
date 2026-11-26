@@ -236,11 +236,10 @@ private class LibboxPlatform(
         }
     }
 
-    @Suppress("DEPRECATION")
     override fun getInterfaces(): NetworkInterfaceIterator {
         val list = mutableListOf<NetworkInterface>()
         try {
-            for (network in cm.allNetworks) {
+            for (network in vpnService.availableNetworks.snapshot()) {
                 describeNetwork(cm, network)?.let(list::add)
             }
         } catch (_: SecurityException) {

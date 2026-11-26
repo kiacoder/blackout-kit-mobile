@@ -182,3 +182,41 @@ ktlint, Detekt and 12 integrity checks pass. Standard TLS certificate
 and hostname validation is unchanged. This reduces the diagnostic
 surface, but does not implement certificate pinning or close #43 by
 itself. Fresh Android CI and device testing remain required.
+
+### Remaining CodeQL findings: network and updater review
+
+#45: Replace ConnectivityManager.getAllNetworks with a passive, service-owned
+NetworkCallback registry. Track available/lost network handles, deduplicate,
+return snapshots, and reject callbacks after close. Initial callbacks are
+asynchronous: an empty live registry falls back to the active network only.
+Register once on service creation and unregister on destruction. No network
+binding or route changes. Existing interface capability/name checks remain.
+See https://developer.android.com/reference/android/net/ConnectivityManager
+and https://developer.android.com/develop/connectivity/network-ops/reading-network-state.
+This candidate changes the initial multi-network snapshot semantics and needs
+physical Android acceptance for Wi-Fi/cellular transitions, reconnect,
+revocation, and teardown while the embedded core starts or stops. The registry
+JVM tests pass (2/2) and the monitor compiles against the Android API 34 jar;
+these are not device tests.
+
+#42/#43: Android recommends against certificate pinning for general apps,
+and OWASP recommends pinning only controlled remote endpoints. The site probe
+intentionally supports user-selected destinations; the IP diagnostic fetch
+has an exact two-endpoint allowlist but the app does not control their keys.
+The manifest network security configuration uses system trust anchors only,
+blocks non-loopback cleartext, and HTTPS calls preserve normal hostname and
+certificate checks. Do not add arbitrary leaf pins without a rotation plan.
+Sources: https://developer.android.com/privacy-and-security/security-ssl
+and https://mas.owasp.org/MASTG/0x04f-Testing-Network-Communication/.
+These two findings remain visible, not dismissed.
+
+#44: CodeQL's own guidance recommends PackageInstaller or a private file
+exposed via FileProvider, rather than an externally writable archive:
+https://codeql.github.com/codeql-query-help/java/java-android-arbitrary-apk-installation/.
+The current updater uses filesDir/updates, canonical path confinement,
+release-tag selection, native digest/size/package/version/signer checks and
+read-only URI grants to Android's user-confirmed installer. The provider is
+not exported. The remaining alert does not establish a successful arbitrary
+installation; a real Android negative acceptance suite (tampered, foreign
+signer, wrong package/version and path attempts) is still required before a
+final disposition. Do not dismiss the alert solely because CI is green.

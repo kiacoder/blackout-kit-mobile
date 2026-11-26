@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.ConnectivityManager
 import android.net.VpnService
 import android.os.Build
 import android.os.Handler
@@ -194,6 +195,9 @@ class BlackoutVpnService : VpnService() {
     private val dns = DnsSetup()
     private val monitor = EngineMonitor()
     private val notification = ForegroundNotification()
+    internal val availableNetworks by lazy {
+        AvailableNetworkMonitor(getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager)
+    }
 
     private var tun: ParcelFileDescriptor? = null
 
@@ -220,6 +224,7 @@ class BlackoutVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         notification.createNotificationChannel()
+        availableNetworks.start()
         // A tunnel held for traffic blocking survives the process: restore the
         // flag so the app reports "blocked" instead of "stopped".
         //
@@ -362,6 +367,7 @@ class BlackoutVpnService : VpnService() {
         // A startup still in native code must finish on its owner thread
         // before cleanup; never close its TUN concurrently on the main thread.
         sessions.stop(cleanup = ::teardown, close = true)
+        availableNetworks.close()
         super.onDestroy()
     }
 

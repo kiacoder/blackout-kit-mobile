@@ -46,7 +46,7 @@ if [[ "${CHECK_FLUTTER_PLUGIN:-false}" == true ]]; then
   while IFS= read -r -d '' file; do EXTRA_SOURCES+=("$file"); done < <(find .cache/flutter-api-source -name '*.java' -print0)
 fi
 "$KOTLINC" \
-  android/app/src/main/kotlin/com/blackoutkit/vpn/{NativeChildStop,VpnSessionExecutor,OneShotCallbackSlot,EngineCommands,ProcessCompat,EngineRunner,EngineSessionAdmission,TransientEngineConfig,LegacyEngineConfigs,SubprocessLifecycle,LocalSocksReadiness,BlackoutVpnService,TunnelCleanup,BlackoutCoreEngine,EmbeddedCoreOwner,LibboxEngine,XrayEngine,NativeTunnelConfig,NativeTunnelEngine,NativeTunnelLifecycle,GoRuntimeAdmission}.kt \
+  android/app/src/main/kotlin/com/blackoutkit/vpn/{AvailableNetworkRegistry,AvailableNetworkMonitor,NativeChildStop,VpnSessionExecutor,OneShotCallbackSlot,EngineCommands,ProcessCompat,EngineRunner,EngineSessionAdmission,TransientEngineConfig,LegacyEngineConfigs,SubprocessLifecycle,LocalSocksReadiness,BlackoutVpnService,TunnelCleanup,BlackoutCoreEngine,EmbeddedCoreOwner,LibboxEngine,XrayEngine,NativeTunnelConfig,NativeTunnelEngine,NativeTunnelLifecycle,GoRuntimeAdmission}.kt \
   android/app/src/main/kotlin/com/wireguard/android/backend/GoBackend.kt \
   android/app/src/main/kotlin/org/amnezia/awg/GoBackend.kt \
   .cache/android-api-check/Generated.kt "${EXTRA_SOURCES[@]}" \

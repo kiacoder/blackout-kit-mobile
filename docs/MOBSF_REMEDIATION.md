@@ -227,3 +227,36 @@ The identical Gradle invocation must pass; other errors propagate unchanged.
 Four synthetic tests verify success, retry, retry failure, and ordinary test
 failure without retry. No version changes, alternate artifact repositories,
 or weakened gates. A fresh hosted build is necessary to verify recovery.
+
+## Vault initialization ownership and integrity review
+
+Run 45840558194 on edfed88 passed the Android and iOS builds; hosted tests,
+quality and supply-chain workflows passed, and 45840558180 passed all six
+synthetic migration jobs. The APK MobSF report remains 51/100 (debug signed,
+3 high, 9 warning, 1 info, 2 secure, 1 hotspot). Dependency removal did not
+remove the legacy CBC code finding. The earlier build failure is no longer
+reproduced; this does not establish that the retry was exercised.
+
+Hive 2.2.3 returns a previously opened box without validating the new cipher.
+ConfigService now serializes initialization, admits one owner of the three
+library boxes, starts in the locked state, and exposes the library only after
+all three opens succeed. A competing service cannot borrow the owner's boxes,
+even with a different key. A partial failure closes only boxes opened by that
+attempt and preserves the files; repeated initialization of the same live
+owner is idempotent. Tests now close the library when simulating restart.
+Added wrong-key/open-box, concurrent-owner and partial-open regressions.
+Local tests: 618/618, with cached dependencies; analyzer: 195 informational
+issues, zero fatal errors/warnings. Hosted verification of this change is
+still required. This is an in-isolate ownership boundary, not a new cipher.
+
+The actual Hive 2.2.3 HiveAesCipher uses AES-256-CBC with random IV and PKCS7
+padding. Its key CRC and frame CRC are not cryptographic authentication.
+Do not claim tamper-resistant authenticated encryption from that format.
+A future authenticated-encryption replacement must use a reviewed AEAD
+implementation, separate versioned storage, unique nonces, authenticated
+record context, durable readback, and interrupted-upgrade tests. It must
+preserve legacy ciphertext until validated, handle skipped releases and
+never treat a failed authentication as an empty library. Replay/deletion
+protection needs its own design. No cipher or dependency version is changed
+by this increment. The separate flutter_secure_storage CBC finding and
+physical-device migration gate remain open.

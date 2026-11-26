@@ -284,6 +284,7 @@ Endpoint = [2001:db8::5]:51820
       final config = vless('rt.example.com', 'RoundTrip');
       await first.saveConfig(config);
 
+      await Hive.close();
       final second = ConfigService(keyStore: store);
       await second.initialize();
       expect(second.isEncryptedAtRest, isTrue);

@@ -247,6 +247,56 @@ void main() {
     await migrated.close();
   });
 
+  test('an already-open library cannot bypass a different vault key', () async {
+    final store = MemoryKeyStore();
+    final owner = ConfigService(keyStore: store);
+    await owner.initialize();
+    expect(await owner.saveConfig(vless('owner.example.com', 'Owner')), isTrue);
+    final wrong = MemoryKeyStore();
+    await wrong.write('blackout_config_vault_key', List.filled(64, '0').join());
+    final other = ConfigService(keyStore: wrong);
+    await other.initialize();
+    expect(other.isVaultLocked, isTrue);
+    expect(other.isEncryptedAtRest, isFalse);
+    expect(await other.saveConfig(vless('other.example.com', 'Other')), isFalse);
+    expect(owner.getAllConfigs().map((c) => c.displayName), ['Owner']);
+    await owner.initialize();
+    expect(owner.isEncryptedAtRest, isTrue);
+  });
+
+  test('concurrent initialization admits only one library owner', () async {
+    final store = MemoryKeyStore();
+    final first = ConfigService(keyStore: store);
+    final second = ConfigService(keyStore: store);
+    await Future.wait([first.initialize(), second.initialize()]);
+    expect(first.isEncryptedAtRest, isTrue);
+    expect(second.isVaultLocked, isTrue);
+    expect(await first.saveConfig(vless('owner.example.com', 'Owner')), isTrue);
+    expect(await second.saveConfig(vless('other.example.com', 'Other')), isFalse);
+    expect(first.getAllConfigs().map((c) => c.displayName), ['Owner']);
+  });
+
+  test('failed partial library open closes only its own boxes', () async {
+    final store = MemoryKeyStore();
+    final key = await SecureVault(store: store).getOrCreateKey();
+    final good = await Hive.openBox<Map>('configs_v2',
+        encryptionCipher: HiveAesCipher(key!));
+    await good.put('fixture', {'value': 'preserve'});
+    await good.close();
+    final wrong = await Hive.openBox<Map>('sources_v2',
+        encryptionCipher: HiveAesCipher(List.filled(32, 0)));
+    await wrong.put('fixture', {'value': 'preserve'});
+    await wrong.close();
+    final sourceFile = File('${dir.path}/sources_v2.hive');
+    final before = await sourceFile.readAsBytes();
+    final service = ConfigService(keyStore: store);
+    await service.initialize();
+    expect(service.isVaultLocked, isTrue);
+    expect(Hive.isBoxOpen('configs_v2'), isFalse);
+    expect(await sourceFile.readAsBytes(), before);
+    expect(await Hive.boxExists('test_results_v2'), isFalse);
+  });
+
   test('a lost key keeps the data and reports a locked vault', () async {
     // First run: key created, config saved, boxes encrypted.
     final store = MemoryKeyStore();

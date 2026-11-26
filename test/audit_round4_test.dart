@@ -70,6 +70,7 @@ void main() {
 
       // A restart with the SAME key store: the key is still there, so the
       // encrypted boxes are readable and nothing is re-migrated.
+      await Hive.close();
       final again = ConfigService(keyStore: store);
       await again.initialize();
       expect(again.isEncryptedAtRest, isTrue);
@@ -85,6 +86,7 @@ void main() {
       final saved = await service.saveConfig(config);
       expect(saved, isTrue);
 
+      await Hive.close();
       final reloaded = ConfigService(keyStore: store);
       await reloaded.initialize();
       expect(

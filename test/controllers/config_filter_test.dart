@@ -43,6 +43,7 @@ void main() {
   });
 
   setUp(() async {
+    await Hive.close();
     service = ConfigService(keyStore: store);
     await service.initialize();
     controller = ConfigController(

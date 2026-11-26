@@ -6,6 +6,8 @@
 /// - Config validation before storage
 library;
 
+import 'dart:async';
+
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logger/logger.dart';
@@ -42,7 +44,9 @@ class ConfigService {
 
   /// Encrypted storage is unavailable. Preserve all files and reject writes
   /// until a usable key and successful migration are confirmed.
-  bool _vaultLocked = false;
+  bool _vaultLocked = true;
+  static Future<void> _initializationQueue = Future<void>.value();
+  bool _ownsLibrary = false;
   final KeyStore? _keyStore;
   final Logger _log;
 
@@ -53,14 +57,32 @@ class ConfigService {
   /// Initialize without opening or replacing plaintext when an existing
   /// encrypted library needs recovery.
   Future<void> initialize() async {
+    final previous = _initializationQueue;
+    final completion = Completer<void>();
+    _initializationQueue = completion.future;
+    await previous;
+    try {
+      await _initializeLibrary();
+    } finally {
+      completion.complete();
+    }
+  }
+
+  Future<void> _initializeLibrary() async {
+    if (_ownsLibrary &&
+        _configStorage.isOpen &&
+        _sourceStorage.isOpen &&
+        _resultStorage.isOpen) {
+      return;
+    }
+    _ownsLibrary = false;
     _vaultActive = false;
-    _vaultLocked = false;
+    _vaultLocked = true;
+    final opened = <Box<Map>>[];
     final vault = SecureVault(store: _keyStore);
     try {
       final report = await vault.migrate();
-      _vaultActive = report.active;
-      _vaultLocked = report.locked || !report.active;
-      if (_vaultLocked) {
+      if (report.locked || !report.active) {
         _log.w('Config library requires recovery; storage left untouched');
         return;
       }
@@ -70,23 +92,36 @@ class ConfigService {
         _vaultLocked = true;
         return;
       }
+      final names = [_configBoxName, _sourceBoxName, _resultBoxName]
+          .map(SecureVault.encryptedNameFor)
+          .toList();
+      // Hive returns an open box without checking the supplied cipher.
+      // Never borrow a box opened by another owner.
+      if (names.any(Hive.isBoxOpen)) {
+        throw StateError('Library already open');
+      }
       final cipher = HiveAesCipher(vaultKey);
-      final configBox = await openPreservingBox<Map>(
-          SecureVault.encryptedNameFor(_configBoxName),
-          cipher: cipher);
-      final sourceBox = await openPreservingBox<Map>(
-          SecureVault.encryptedNameFor(_sourceBoxName),
-          cipher: cipher);
-      final resultBox = await openPreservingBox<Map>(
-          SecureVault.encryptedNameFor(_resultBoxName),
-          cipher: cipher);
-      _configStorage = configBox;
-      _sourceStorage = sourceBox;
-      _resultStorage = resultBox;
+      for (final name in names) {
+        opened.add(await openPreservingBox<Map>(name, cipher: cipher));
+      }
+      _configStorage = opened[0];
+      _sourceStorage = opened[1];
+      _resultStorage = opened[2];
+      _ownsLibrary = true;
+      _vaultActive = true;
+      _vaultLocked = false;
       _log.i('ConfigService initialized (encrypted at rest: $_vaultActive)');
     } catch (_) {
+      _ownsLibrary = false;
       _vaultActive = false;
       _vaultLocked = true;
+      for (final box in opened.reversed) {
+        try {
+          await box.close();
+        } catch (_) {
+          _log.w('Config storage cleanup incomplete');
+        }
+      }
       _log.w('Config storage could not be safely opened; recovery required');
     }
   }

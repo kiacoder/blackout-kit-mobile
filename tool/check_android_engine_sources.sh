@@ -8,11 +8,29 @@ cd "$(dirname "$0")/.."
 : "${ANDROID_API_JAR:?Set ANDROID_API_JAR to Android API 34 android.jar}"
 KOTLINC="${KOTLINC:-kotlinc}"
 mkdir -p .cache/android-api-check
+# AndroidX already ships in the app. Type-check against those exact pinned
+# artifacts rather than inventing stub implementations of compatibility APIs.
+for artifact in core core-ktx; do
+  case "$artifact" in
+    core) digest=2c27de199535675005553066597a4b20fa1eea7c228ab4ef6b32b5fe39ca1f59 ;;
+    core-ktx) digest=19ba50d094c7368ede1b4ccf1195ceb83e35970736593f823e5af716f8d05d70 ;;
+  esac
+  archive=".cache/android-api-check/$artifact.aar"
+  if [[ ! -f "$archive" ]]; then
+    curl --fail --location --retry 3 --max-time 120 \
+      "https://dl.google.com/dl/android/maven2/androidx/core/$artifact/1.13.1/$artifact-1.13.1.aar" -o "$archive"
+  fi
+  printf '%s  %s\n' "$digest" "$archive" | sha256sum -c -
+done
 python3 - <<'PY'
 import zipfile
 with zipfile.ZipFile('android/app/libs/libcores.aar') as archive:
     with open('.cache/android-api-check/cores.jar', 'wb') as output:
         output.write(archive.read('classes.jar'))
+for name in ('core', 'core-ktx'):
+    with zipfile.ZipFile(f'.cache/android-api-check/{name}.aar') as archive:
+        with open(f'.cache/android-api-check/{name}.jar', 'wb') as output:
+            output.write(archive.read('classes.jar'))
 PY
 cat > .cache/android-api-check/Generated.kt <<'KOTLIN'
 package com.blackoutkit.vpn
@@ -32,6 +50,6 @@ fi
   android/app/src/main/kotlin/com/wireguard/android/backend/GoBackend.kt \
   android/app/src/main/kotlin/org/amnezia/awg/GoBackend.kt \
   .cache/android-api-check/Generated.kt "${EXTRA_SOURCES[@]}" \
-  -cp "$ANDROID_API_JAR:.cache/android-api-check/cores.jar" \
+  -cp "$ANDROID_API_JAR:.cache/android-api-check/cores.jar:.cache/android-api-check/core.jar:.cache/android-api-check/core-ktx.jar" \
   -jvm-target 17 -d .cache/android-api-check/service.jar
 echo "Android source API check passed (plugin declarations: ${CHECK_FLUTTER_PLUGIN:-false}). NOT an APK build, Flutter Java/Dart compilation or device test."

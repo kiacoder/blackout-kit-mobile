@@ -13,6 +13,8 @@ import android.graphics.drawable.Drawable
 import android.provider.Settings
 import android.util.Base64
 import android.util.Log
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -150,9 +152,9 @@ class NetworkPlugin :
 
     private fun Drawable.toBitmap(sizePx: Int): Bitmap {
         if (this is BitmapDrawable && bitmap != null) {
-            return Bitmap.createScaledBitmap(bitmap, sizePx, sizePx, true)
+            return bitmap.scale(sizePx, sizePx, true)
         }
-        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         setBounds(0, 0, sizePx, sizePx)
         draw(canvas)

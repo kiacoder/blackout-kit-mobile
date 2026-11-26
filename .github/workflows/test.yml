@@ -64,7 +64,27 @@ jobs:
       - name: Run Android lint
         # Fail on lint errors; warning remediation is tracked independently.
         working-directory: android
-        run: bash ./gradlew --no-daemon :app:lintDebug
+        run: |
+          status=0
+          bash ./gradlew --no-daemon :app:lintDebug || status=$?
+          if [ "$status" -ne 0 ]; then
+            report=../build/app/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+            if [ -f "$report" ]; then
+              cat "$report"
+            fi
+          fi
+          exit "$status"
+
+      - name: Upload Android lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-lint-diagnostics
+          path: |
+            build/app/reports/lint-results-debug.*
+            build/app/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Run integration tests
         # UNVERIFIED. These drive `app.main()`, which calls Hive.initFlutter()

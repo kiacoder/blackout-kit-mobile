@@ -43,7 +43,7 @@ jobs:
           channel: stable
 
       - name: Get dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Analyze
         # Errors and warnings are fatal. Existing informational lint debt

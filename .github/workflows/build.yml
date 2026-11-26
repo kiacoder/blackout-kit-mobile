@@ -67,7 +67,7 @@ jobs:
           channel: stable
 
       - name: Get dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Release gate — Dart analyze + unit tests
         # A tag must not publish unless the Dart layer is clean and the unit
@@ -186,6 +186,17 @@ jobs:
           test -x "$signer"
           python3 tool/release_security.py --apk-dir dist --apksigner "$signer" --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt"
 
+      - name: Verify no broad storage permissions in distribution APKs
+        run: |
+          set -euo pipefail
+          for apk in dist/*.apk; do
+            permissions=$("$ANDROID_HOME/build-tools/36.0.0/aapt" dump permissions "$apk")
+            if grep -Eq 'android.permission.(READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE)' <<< "$permissions"; then
+              echo "::error::Unexpected broad storage permission in $(basename "$apk")"
+              exit 1
+            fi
+          done
+
       - name: Install antivirus and refresh signatures
         run: |
           sudo apt-get update -qq
@@ -236,6 +247,19 @@ jobs:
         with:
           subject-path: dist/*.json
 
+      - name: Upload full scanner review evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mobsf-review-evidence
+          path: |
+            dist/MOBSF_REPORT.json
+            dist/MOBSF_STATUS.json
+            dist/SECURITY_REPORT.json
+            dist/APK_INVENTORY.json
+            build/app/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload compact security evidence for review
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -281,7 +305,7 @@ jobs:
           channel: stable
 
       - name: Get dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5

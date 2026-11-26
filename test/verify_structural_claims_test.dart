@@ -17,6 +17,24 @@ void main() {
   final repo = Directory.current.path;
   String source(String relative) => _read('$repo/$relative');
 
+  group('Android shared document boundary', () {
+    test('provider reads require explicit grants and run off the activity thread', () {
+      final src = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/MainActivity.kt');
+      expect(src, contains('messenger.makeBackgroundTaskQueue()'));
+      expect(src, contains('pendingImport.getAndSet(null)'));
+      expect(src, contains('provider.applicationInfo.uid != Process.myUid()'));
+      expect(src, contains('checkUriPermission('));
+      expect(src, contains('Intent.FLAG_GRANT_READ_URI_PERMISSION'));
+      expect(src, contains('PackageManager.PERMISSION_GRANTED'));
+      expect(src, contains('if (isSafeImportUri(uri)) readImport(uri) else null'));
+      final capture = src.substring(src.indexOf('private fun captureIntent'),
+          src.indexOf('private fun readSharedText'));
+      expect(capture, isNot(contains('readImport(')));
+      expect(capture, isNot(contains('readSharedText(')));
+    });
+  });
+
   group('Android cleartext network policy', () {
     test('Android HTTP clients have no cleartext exceptions', () {
       final policy = source(

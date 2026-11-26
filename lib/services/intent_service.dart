@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 /// .conf/.ovpn attachment (ACTION_VIEW), or a shared vless:// link from the
 /// browser share sheet (ACTION_SEND).
 ///
-/// The native side reads a bounded UTF-8 document while the provider grant
+/// The native background channel reads a bounded UTF-8 document while the provider grant
 /// is live. No filesystem path or credential-bearing cache copy crosses the channel.
 /// Poll, don't stream: the cold-start payload is queued in a static holder
 /// before the Flutter engine exists, and warm intents (singleTop onNewIntent)

@@ -1,27 +1,39 @@
 package com.blackoutkit.vpn
 
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ProviderInfo
 import android.net.Uri
+import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.Process
 import android.os.RemoteException
 import android.util.Log
 import androidx.core.content.IntentCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.StandardMethodCodec
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 
 class MainActivity : FlutterActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val MAX_IMPORT_BYTES = 5L * 1024 * 1024
 
-        // Payload waiting for Dart: set on cold start (onCreate intent) and on
-        // warm start (onNewIntent), consumed exactly once by the Dart side.
-        // A static holder is the only way to bridge the gap where the engine
-        // is not yet running during a cold start.
-        @Volatile
-        var pendingPayload: Map<String, String>? = null
+        private val pendingImport = AtomicReference<PendingImport?>(null)
+    }
+
+    // Avoid generated toString() methods for credential-bearing payloads.
+    private sealed interface PendingImport {
+        class Text(
+            val value: String,
+        ) : PendingImport
+
+        class Document(
+            val uri: Uri,
+        ) : PendingImport
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -42,15 +54,25 @@ class MainActivity : FlutterActivity() {
         // Share / Open-with receive bridge: Gmail attachments ("Open with"),
         // shared links from the browser share sheet. Dart polls consumePending
         // on launch and on every app resume.
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
         MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
+            messenger,
             "com.blackoutkit.vpn/intent",
+            StandardMethodCodec.INSTANCE,
+            messenger.makeBackgroundTaskQueue(),
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "consumePending" -> {
-                    val payload = pendingPayload
-                    pendingPayload = null
-                    result.success(payload)
+                    if (!removeObsoleteImportCopies(cacheDir)) {
+                        Log.w(TAG, "Obsolete import cache cleanup incomplete")
+                    }
+                    val text =
+                        when (val pending = pendingImport.getAndSet(null)) {
+                            is PendingImport.Text -> pending.value
+                            is PendingImport.Document -> readSharedText(pending.uri)
+                            null -> null
+                        }
+                    result.success(text?.let { mapOf("type" to "text", "text" to it) })
                 }
                 else -> result.notImplemented()
             }
@@ -76,7 +98,7 @@ class MainActivity : FlutterActivity() {
                     val text = intent.getStringExtra(Intent.EXTRA_TEXT)
                     when {
                         !text.isNullOrBlank() && text.length <= MAX_IMPORT_BYTES ->
-                            mapOf("type" to "text", "text" to text)
+                            PendingImport.Text(text)
                         else -> {
                             val uri =
                                 IntentCompat.getParcelableExtra(
@@ -84,7 +106,7 @@ class MainActivity : FlutterActivity() {
                                     Intent.EXTRA_STREAM,
                                     Uri::class.java,
                                 )
-                            readSharedText(uri)?.let { mapOf("type" to "text", "text" to it) }
+                            uri?.let { PendingImport.Document(it) }
                         }
                     }
                 }
@@ -95,22 +117,22 @@ class MainActivity : FlutterActivity() {
                         // permission-scoped to this activity: it must be resolved
                         // through ContentResolver here, never passed to dart:io.
                         // file:// is rejected by isSafeImportUri below.
-                        readSharedText(uri)?.let { mapOf("type" to "text", "text" to it) }
+                        PendingImport.Document(uri)
                     } else {
                         null
                     }
                 }
                 else -> null
             } ?: return
-        pendingPayload = payload
+        pendingImport.set(payload)
     }
 
     // Read while the provider grant is live. No credential-bearing cache file
     // is created; only a bounded UTF-8 string crosses the in-process channel.
     private fun readSharedText(uri: Uri?): String? {
-        if (uri == null || !isSafeImportUri(uri)) return null
+        if (uri == null) return null
         return try {
-            readImport(uri)
+            if (isSafeImportUri(uri)) readImport(uri) else null
         } catch (_: SecurityException) {
             Log.w(TAG, "Import provider access denied")
             null
@@ -141,21 +163,32 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // / CodeQL High #20 — the URI comes from an external intent, so a hostile
-    // / sender controls it completely. Two hard rules before any resolution:
-    // /
-    // / 1. `file://` is rejected: it is a raw filesystem path, and copying it
-    // /    into the app would turn a share-sheet tap into an
-    // /    arbitrary-file reader (the document content is surfaced to Dart).
-    // / 2. Our own package's authorities are rejected: a crafted self-URI
-    // /    could copy engine state through the import path.
-    // /
-    // / Everything else must be a `content://` URI covered by the sender's
-    // / FLAG_GRANT_READ_URI_PERMISSION, which is scoped to that exact URI —
-    // / cross-app reads fail closed at the resolver.
+    // The integer overload is required only on Android 7–12L.
+    @Suppress("DEPRECATION")
+    private fun resolveImportProvider(authority: String): ProviderInfo? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.resolveContentProvider(authority, PackageManager.ComponentInfoFlags.of(0))
+        } else {
+            packageManager.resolveContentProvider(authority, 0)
+        }
+
+    // Require a real URI-specific grant, not just general provider access.
+    // Reject providers running under our own UID, including alternate authorities.
     private fun isSafeImportUri(uri: Uri): Boolean {
-        val authority = uri.authority ?: return false
-        return uri.scheme.equals("content", ignoreCase = true) &&
-            !authority.equals(packageName, ignoreCase = true)
+        val authority = uri.authority
+        val provider =
+            if (authority != null && uri.scheme.equals("content", ignoreCase = true) && '@' !in authority) {
+                resolveImportProvider(authority)
+            } else {
+                null
+            }
+        return provider != null &&
+            provider.applicationInfo.uid != Process.myUid() &&
+            checkUriPermission(
+                uri,
+                Process.myPid(),
+                Process.myUid(),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            ) == PackageManager.PERMISSION_GRANTED
     }
 }

@@ -1,6 +1,7 @@
 package com.blackoutkit.vpn
 
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -39,3 +40,23 @@ internal fun readBoundedImportText(
         .decode(ByteBuffer.wrap(output.toByteArray()))
         .toString()
 }
+
+private val obsoleteImportName = Regex("import--?[0-9]+\\.cfg")
+
+/** Only obsolete app-created cache copies, never the original selected document. */
+internal fun removeObsoleteImportCopies(cache: File): Boolean =
+    try {
+        val root = cache.canonicalFile
+        val copies = root.listFiles { file -> obsoleteImportName.matches(file.name) }
+        var clean = copies != null
+        for (copy in copies.orEmpty()) {
+            if (copy.canonicalFile != copy || !copy.isFile || !copy.delete()) {
+                clean = false
+            }
+        }
+        clean
+    } catch (_: IOException) {
+        false
+    } catch (_: SecurityException) {
+        false
+    }

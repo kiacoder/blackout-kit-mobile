@@ -13,6 +13,22 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// file_picker 8.0.0+1 declares compileSdk 33, but its resolved AndroidX
+// dependencies require API 34. AGP 8.13 checks that metadata in library lint.
+// Align this one library with the app; do not lower dependency requirements
+// or modify minSdk/targetSdk. Remove when the picker upgrade owns this pin.
+subprojects { subproject ->
+    if (subproject.name == "file_picker") {
+        subproject.pluginManager.withPlugin("com.android.library") {
+            subproject.extensions.getByName("androidComponents").finalizeDsl { dsl ->
+                if (dsl.compileSdk == null || dsl.compileSdk < 34) {
+                    dsl.compileSdk = 34
+                }
+            }
+        }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }

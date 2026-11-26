@@ -1532,3 +1532,20 @@ for the reviewed log call patterns, not a runtime logcat proof. Full Flutter
 3f5c64c hosted jobs were still running at inspection. No ARM device
 attached; no native runtime or storage migration acceptance, fresh MobSF
 score, production signing, merge or release claimed.
+
+## Phase 3 secure-storage backup migration correction experiment (2026-11-26)
+
+Upstream issue #1293 (open) matches the exact 9.2.4 ESP to 10.3.4
+backup-mode failure; earlier #1289 reference was wrong (web race).
+Retrieved v10.3.4 Java source via official GitHub API, SHA256
+15319336c69dfcfe10b359ea01f317bf7a0f51882c19de61baeb2b073fb0ab47.
+Experimental patch prevents markerless fresh-install shortcut when legacy
+ESP keysets remain and ESP migration is not marked complete. Patch only
+the backup synthetic fixture's dedicated pub cache after exact source hash
+and anchor checks; no shared cache or shipping dependency changes. Local
+patch application against the actual tag produces SHA256
+bccad5477b6c171de11ba2656d5b4a5d161d31b76ccead7a8c681d966350fb0e.
+Three regression tests; Linux Python 118/118 and 12 binary/action checks
+passed. Hosted compile and emulator migration result still required.
+No claim of native crash recovery, ARM acceptance, new MobSF score or
+production release. Retain prior unpatched failures as baseline evidence.

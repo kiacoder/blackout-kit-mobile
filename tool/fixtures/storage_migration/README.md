@@ -24,10 +24,14 @@ specific synthetic migration, not proof of all upgrade or crash-recovery paths.
 Record the Android API level, APK hashes, backup setting, and outcomes. Test
 interrupted migration separately before approving any production upgrade.
 
-Upstream reports an issue involving the exact legacy-to-candidate migration with
-backup enabled (issue #1289); neither backup setting is approved by this fixture
-until device results are available:
-https://github.com/juliansteenbakker/flutter_secure_storage/issues/1289
+Upstream issue #1293 documents the exact legacy-to-10.3.4 backup-enabled
+migration failure. Earlier references to #1289 were incorrect (that issue
+concerns web encryption). The backup fixture now applies an experimental
+markerless-migration correction in an isolated pub cache after verifying the
+exact v10.3.4 Java source SHA-256. The candidate without backup remains
+unmodified. No production dependency upgrade or migration approval follows
+from the patch alone. Historical unpatched backup failures remain evidence.
+https://github.com/juliansteenbakker/flutter_secure_storage/issues/1293
 
 
 Automated acceptance now runs on disposable hosted API 24 and 34

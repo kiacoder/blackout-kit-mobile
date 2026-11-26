@@ -37,6 +37,37 @@ class UpdateArchivePolicyTest {
     }
 
     @Test
+    fun releaseTagSelectsOnlyExpectedPrivateFile() {
+        val root = temporary.newFolder("updates").canonicalFile
+        val expected = File(root, "blackout-v1.2.3.apk").apply { writeText("fixture") }
+        assertEquals(expected, UpdateArchivePolicy.resolveRelease(root, "v1.2.3"))
+        assertNull(UpdateArchivePolicy.resolveRelease(root, "v1.2.4"))
+        for (tag in listOf("../v1.2.3", "v1.2.3.apk", "v1.2.3/extra", "file:///v1.2.3", "")) {
+            assertFalse(UpdateArchivePolicy.validTag(tag))
+            assertNull(UpdateArchivePolicy.resolveRelease(root, tag))
+        }
+    }
+
+    @Test
+    fun nativeDigestRejectsWrongSizeAndSameSizeTamper() {
+        val root = temporary.newFolder("updates").canonicalFile
+        val bytes = ByteArray(1024 * 1024) { 42 }
+        val file = File(root, "blackout-v1.2.3.apk").apply { writeBytes(bytes) }
+        val sha =
+            "sha256:" +
+                java.security.MessageDigest
+                    .getInstance("SHA-256")
+                    .digest(bytes)
+                    .joinToString("") { "%02x".format(it) }
+        assertTrue(UpdateArchivePolicy.matchesDigest(file, bytes.size.toLong(), sha))
+        assertFalse(UpdateArchivePolicy.matchesDigest(file, bytes.size.toLong() - 1, sha))
+        assertFalse(UpdateArchivePolicy.matchesDigest(file, bytes.size.toLong(), "invalid"))
+        bytes[0] = 43
+        file.writeBytes(bytes)
+        assertFalse(UpdateArchivePolicy.matchesDigest(file, bytes.size.toLong(), sha))
+    }
+
+    @Test
     fun requiresExactNonemptySignerSet() {
         assertTrue(UpdateArchivePolicy.sameSigners(setOf("a", "b"), setOf("b", "a")))
         assertFalse(UpdateArchivePolicy.sameSigners(setOf("a"), setOf("a", "b")))

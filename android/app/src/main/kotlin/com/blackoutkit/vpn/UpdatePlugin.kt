@@ -7,13 +7,17 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import io.flutter.plugin.common.StandardMethodCodec
 import java.io.File
+import java.security.MessageDigest
 
 private const val BYTES_PER_KIB = 1024L
 
@@ -45,9 +49,12 @@ class UpdatePlugin(
     private val appContext: Context,
 ) : MethodCallHandler {
     private val signerVerifier = ApkSignerVerifier(appContext)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun register(messenger: io.flutter.plugin.common.BinaryMessenger) {
-        val channel = MethodChannel(messenger, CHANNEL)
+        // Hash large APKs and inspect signing metadata off the UI thread.
+        val channel =
+            MethodChannel(messenger, CHANNEL, StandardMethodCodec.INSTANCE, messenger.makeBackgroundTaskQueue())
         channel.setMethodCallHandler(this)
     }
 
@@ -70,24 +77,36 @@ class UpdatePlugin(
         call: MethodCall,
         result: MethodChannel.Result,
     ) {
-        val path = call.argument<String>("path")
-        if (path.isNullOrBlank()) {
-            result.error("INVALID_ARGS", "path is required", null)
+        val tag = call.argument<String>("tag")
+        if (tag == null || !UpdateArchivePolicy.validTag(tag)) {
+            result.error("INVALID_ARGS", "A valid release tag is required", null)
             return
         }
-        val file = UpdateArchivePolicy.resolve(File(appContext.filesDir, "updates"), File(path))
+        val root = File(appContext.filesDir, "updates")
+        val file = UpdateArchivePolicy.resolveRelease(root, tag)
         if (file == null) {
             result.error("BAD_APK_PATH", "The update must be a nonempty APK in private update storage.", null)
             return
         }
 
-        if (validateArchive(file, result) && requireInstallPermission(result)) {
-            launchInstaller(file, result)
+        val expectedBytes = call.argument<Number>("size")?.toLong()
+        val expectedDigest = call.argument<String>("digest")
+        if (expectedBytes == null ||
+            expectedDigest == null ||
+            !UpdateArchivePolicy.matchesDigest(file, expectedBytes, expectedDigest)
+        ) {
+            result.error("BAD_APK_DIGEST", "The update failed native integrity verification.", null)
+        } else if (validateArchive(file, tag, result)) {
+            // Installer and permission UI must be launched on the main thread.
+            mainHandler.post {
+                if (requireInstallPermission(result)) launchInstaller(file, result)
+            }
         }
     }
 
     private fun validateArchive(
         file: File,
+        tag: String,
         result: MethodChannel.Result,
     ): Boolean {
         // A truncated download or a GitHub error page is not installable; say so
@@ -97,7 +116,7 @@ class UpdatePlugin(
         // available for the checks below.
         val archive =
             try {
-                appContext.packageManager.getPackageArchiveInfo(file.absolutePath, signerVerifier.signatureFlags())
+                signerVerifier.archiveInfo(file)
             } catch (_: IllegalArgumentException) {
                 Log.w(CHANNEL, "APK archive parser rejected input")
                 null
@@ -128,6 +147,9 @@ class UpdatePlugin(
                     "Nothing was installed.",
                 null,
             )
+            false
+        } else if (archive.versionName != tag.removePrefix("v")) {
+            result.error("WRONG_VERSION", "APK version does not match the requested release.", null)
             false
         } else {
             val signerCheck = signerVerifier.verifySameSigner(archive)
@@ -238,6 +260,28 @@ private class ApkSignerVerifier(
             android.content.pm.PackageManager.GET_SIGNATURES
         }
 
+    @Suppress("DEPRECATION")
+    fun archiveInfo(file: File): android.content.pm.PackageInfo? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            appContext.packageManager.getPackageArchiveInfo(
+                file.absolutePath,
+                PackageManager.PackageInfoFlags.of(signatureFlags().toLong()),
+            )
+        } else {
+            appContext.packageManager.getPackageArchiveInfo(file.absolutePath, signatureFlags())
+        }
+
+    @Suppress("DEPRECATION")
+    private fun installedInfo(): android.content.pm.PackageInfo =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            appContext.packageManager.getPackageInfo(
+                appContext.packageName,
+                PackageManager.PackageInfoFlags.of(signatureFlags().toLong()),
+            )
+        } else {
+            appContext.packageManager.getPackageInfo(appContext.packageName, signatureFlags())
+        }
+
     /** Every signer digest on [info], newest API first, legacy as fallback. */
     @Suppress("DEPRECATION")
     private fun signerDigests(info: android.content.pm.PackageInfo): Set<String> {
@@ -264,7 +308,7 @@ private class ApkSignerVerifier(
     fun verifySameSigner(archive: android.content.pm.PackageInfo): String? {
         val installed =
             try {
-                appContext.packageManager.getPackageInfo(appContext.packageName, signatureFlags())
+                installedInfo()
             } catch (_: PackageManager.NameNotFoundException) {
                 null
             } catch (_: SecurityException) {
@@ -294,6 +338,67 @@ private class ApkSignerVerifier(
 
 /** Narrow policy for files passed to the package installer. */
 internal object UpdateArchivePolicy {
+    private const val MAX_TAG_LENGTH = 64
+    private const val MIN_APK_BYTES = 1024L * 1024
+    private const val MAX_APK_BYTES = 256L * 1024 * 1024
+    private val releaseTag = Regex("^v?[0-9]+\\.[0-9]+\\.[0-9]+(?:-beta\\.[0-9]+)?$")
+    private val sha256Pattern = Regex("^sha256:[a-f0-9]{64}$")
+
+    fun validTag(tag: String): Boolean = tag.length <= MAX_TAG_LENGTH && releaseTag.matches(tag)
+
+    fun matchesDigest(
+        file: File,
+        expectedBytes: Long,
+        expectedDigest: String,
+    ): Boolean {
+        if (expectedBytes !in MIN_APK_BYTES..MAX_APK_BYTES ||
+            !sha256Pattern.matches(expectedDigest) ||
+            file.length() != expectedBytes
+        ) {
+            return false
+        }
+        return try {
+            readDigest(file, expectedBytes) == expectedDigest && file.length() == expectedBytes
+        } catch (_: java.io.IOException) {
+            false
+        } catch (_: SecurityException) {
+            false
+        }
+    }
+
+    private fun readDigest(
+        file: File,
+        expectedBytes: Long,
+    ): String? {
+        val hash = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0L
+        var count: Int
+        file.inputStream().use { input ->
+            count = input.read(buffer)
+            while (count > 0 && total <= expectedBytes) {
+                total += count
+                hash.update(buffer, 0, count)
+                count = input.read(buffer)
+            }
+        }
+        return if (total == expectedBytes && count == -1) {
+            "sha256:" + hash.digest().joinToString("") { "%02x".format(it) }
+        } else {
+            null
+        }
+    }
+
+    fun resolveRelease(
+        root: File,
+        tag: String,
+    ): File? =
+        if (validTag(tag)) {
+            resolve(root, File(root, "blackout-$tag.apk"))
+        } else {
+            null
+        }
+
     fun resolve(
         root: File,
         candidate: File,

@@ -18,18 +18,12 @@ void main() {
   String source(String relative) => _read('$repo/$relative');
 
   group('Android cleartext network policy', () {
-    test('only loopback hosts are exempt from the HTTPS default', () {
+    test('Android HTTP clients have no cleartext exceptions', () {
       final policy = source(
           'android/app/src/main/res/xml/network_security_config.xml');
       expect(policy, contains('<base-config cleartextTrafficPermitted="false">'));
-      final domains = RegExp(r'<domain includeSubdomains="false">([^<]+)</domain>')
-          .allMatches(policy)
-          .map((match) => match.group(1))
-          .toList();
-      expect(domains, unorderedEquals(['127.0.0.1', 'localhost']));
-      expect(RegExp(r'cleartextTrafficPermitted="true"').allMatches(policy),
-          hasLength(1));
-      expect(RegExp(r'<domain\s').allMatches(policy), hasLength(2));
+      expect(policy, isNot(contains('cleartextTrafficPermitted="true"')));
+      expect(policy, isNot(contains('<domain-config')));
     });
   });
 

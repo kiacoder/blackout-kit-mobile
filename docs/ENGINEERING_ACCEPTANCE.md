@@ -31,3 +31,14 @@ Report: 50/100, 3 high, 10 warning, 1 info. Do not infer new-release findings fr
 ## Initial branch changes
 
 Extract engine capability policy with reactive inventory preserved; add focused test. Redact Rust endpoint logging and misleading transport-success text. Add byte/ZIP-payload comparator; equal payloads do not establish identical APKs. All further gates remain open until evidenced. No dependency change in this increment.
+
+## Loopback policy candidate
+
+Source review found raw loopback SOCKS readiness and HTTPS-over-SOCKS calls,
+not a current app-side HTTP URL targeting localhost. Remove the Android HTTP
+cleartext exception, while preserving the engine's raw local socket transport.
+Native engine traffic is outside the Android HTTP network policy. The previous
+structural test now requires zero cleartext exceptions. A fresh APK/MobSF scan
+and Android device checks (Xray, sing-box, site probes and exit-IP lookup) are
+required before promoting this change. Keep this candidate on the hardening
+branch; no minSdk or storage dependency change in this increment.

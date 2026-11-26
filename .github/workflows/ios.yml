@@ -49,8 +49,8 @@ jobs:
       - name: Dart analyze + tests
         run: |
           flutter pub get --enforce-lockfile
-          # Errors and warnings remain fatal; informational lint debt is visible.
-          flutter analyze --no-fatal-infos
+          # All analyzer diagnostics are fatal.
+          flutter analyze
           flutter test
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5

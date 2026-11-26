@@ -1,6 +1,6 @@
 # Engineering hardening — acceptance criteria (2026-11-26)
 
-Baseline: main 81e613a, published v1.19.3, v1.19.4 candidate on main.
+Baseline: main 81e613a, published v1.19.3, v1.19.4 candidate with additional PR #27 hardening.
 Do not claim production acceptance from static analysis, a host test, or compilation alone.
 
 | Workstream | Required evidence |
@@ -153,3 +153,17 @@ The record and generation suites passed all 15 tests; the complete Dart suite
 passed all 636 tests, strict Dart analysis and supply-chain inventory passed. No production code or dependency versions changed. Whole-generation
 rollback, durable filesystem transactions, platform key management and
 on-device migration remain unverified. See VAULT_V3_EXPERIMENT.md.
+
+### Release documentation reconciliation
+
+The release guide now matches the tag-to-draft workflow, existing pinned
+signer, exact artifact verification and manual publication policy. Current
+status, test and Android guides distinguish the November 16 historical
+evidence from the current candidate. iOS build artifacts are explicitly
+unsigned; DNS routing does not establish leak-proof operation. The
+shipping vault remains CBC, and dependency popularity is not a security
+verdict. Relative Markdown link targets were checked across all 48 tracked
+Markdown files; no missing file targets found (external URLs and anchors
+not validated). CodeQL alerts 42 and 43 remain open and visible; see
+RELEASE_SECURITY.md for rationale. No physical device acceptance or final
+release approval is claimed.

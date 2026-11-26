@@ -1,4 +1,10 @@
-# Testing — 2026-11-16
+# Testing: current verification and historical evidence
+
+Current candidate: v1.19.4, PR #27. Local strict Dart analysis and 636 Dart tests passed at 0e1208d. Native lifecycle and vault regression evidence is recorded in [engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md). Hosted checks must be verified on the final revision. No current physical-device acceptance is claimed.
+
+## Historical checkpoint: 2026-11-16
+
+The following sections preserve historical test results; they do not describe the current toolchain or release status.
 
 > **Local-only access confirmed — still 26%:** no external build/device environment
 > available. Native runtime parser/routing validation hardened; 24 parser,

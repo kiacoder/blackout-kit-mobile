@@ -34,7 +34,8 @@ Get up and running with Blackout Kit Mobile in 5 minutes. 🚀
 | App won't connect | Ensure you're connected to internet first |
 | No configs found | Check Settings → Repositories, refresh manually |
 | Connection slow | Try different server in Library screen |
-| App crashes | Check Android/iOS logs: `adb logcat` or Xcode console |
+| Storage recovery screen | Do not clear data or uninstall. Restore access to the original keystore and restart; contact support if migration was interrupted. |
+| App crashes | Review Android/iOS diagnostics locally; redact credentials, endpoints and identifiers before sharing. |
 
 ---
 
@@ -56,7 +57,7 @@ git clone https://github.com/kiacoder/blackout-kit-mobile.git
 cd blackout-kit-mobile
 
 # Get dependencies
-flutter pub get
+flutter pub get --enforce-lockfile
 
 # Run tests to verify setup
 flutter test

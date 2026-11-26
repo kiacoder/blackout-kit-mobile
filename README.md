@@ -37,10 +37,10 @@ default-off. OpenVPN is configuration-only. See [ENGINE_SUPPORT.md](ENGINE_SUPPO
 - **Accessibility** is a tracked requirement, not an afterthought — see
   [ACCESSIBILITY.md](ACCESSIBILITY.md) for what we support, what we know is
   missing, and how to report a barrier.
-- **Servers are tested before they are used** — a dead config is skipped instead
-  of becoming a "connected but nothing loads" tunnel.
-- **DNS leak prevention** with per-provider selection, including the Iranian
-  resolvers (شکن، بگزار، رادار، الکترو) that exist to get around sanctions.
+- **Connection testing** checks candidate reachability and configured website
+  checks; a successful probe alone does not guarantee all traffic works.
+- **DNS routing controls** include per-provider resolver selection. Leak
+  prevention must be verified per engine and device; no absolute guarantee.
 
 ### Install
 
@@ -231,7 +231,7 @@ git clone https://github.com/kiacoder/blackout-kit-mobile.git
 cd blackout-kit-mobile
 
 # Get dependencies
-flutter pub get
+flutter pub get --enforce-lockfile
 
 # Run the app (Android)
 flutter run --release

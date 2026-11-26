@@ -25,7 +25,7 @@ git clone https://github.com/<your-username>/blackout-kit-mobile.git
 cd blackout-kit-mobile
 
 # Get dependencies
-flutter pub get
+flutter pub get --enforce-lockfile
 
 # Run tests to verify setup
 flutter test

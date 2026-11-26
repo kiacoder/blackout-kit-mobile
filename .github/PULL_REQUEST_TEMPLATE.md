@@ -16,7 +16,7 @@
 
 ## Checklist
 
-- [ ] `flutter analyze --no-fatal-infos` passes
+- [ ] `flutter analyze` passes
 - [ ] `flutter test` passes (and new behavior has a regression test where it makes sense)
 - [ ] For native/Rust changes: `cargo test` passes in `native/blackout-core`
 - [ ] No secrets, keystore files, or personal data in the diff

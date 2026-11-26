@@ -1,6 +1,6 @@
 # iOS Support — what works today, and the three paths to a working install
 
-Updated: 2026-11-01
+Current status: the stable v1.19.3 release provides an unsigned IPA, not a verified installable VPN. Signed device testing remains outstanding. The provisioning notes below originate from 2026-11-01 and need current Apple-policy verification before use.
 
 ## What already works (no account needed)
 
@@ -11,7 +11,7 @@ The **build** is fully solved in CI:
   `Libbox.xcframework` (pinned gomobile fork via `tool/build_libbox.sh`),
   runs `flutter build ios --no-codesign`, and verifies the
   `BlackoutTunnel.appex` is built **and** embedded in `Runner.app`.
-  Green on every push that touches `ios/` or `lib/`.
+  Check the exact revision in GitHub Actions; historical build success is not current device acceptance.
 - Signing plumbing is ready: both targets carry entitlements
   (`packet-tunnel-provider` + App Group `group.com.blackoutkit.vpn`),
   and `.github/workflows/ios-release.yml` produces a **signed IPA** the

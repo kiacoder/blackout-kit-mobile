@@ -94,14 +94,14 @@ Do not assume a UI status alone proves fail-closed traffic behavior.
 
 Security review checklist for dependencies:
 
-| Package | Purpose | Risk | Mitigation |
+| Package | Purpose | Review concern | Mitigation |
 |---------|---------|------|-----------|
-| **GetX** | State management | Low | Popular, 30M+ downloads, MIT license |
-| **Hive** | Local storage | Low | Encrypted, popular, pure Dart |
-| **http** | HTTP requests | Low | Official Dart package |
-| **logger** | Logging | Low | No network access, pure Dart |
-| **connectivity_plus** | Check network | Low | Official, handles permissions |
-| **path_provider** | File paths | Low | Official, secure temp directories |
+| **GetX** | State management | Review lifecycle and ownership | Pin via lockfile |
+| **Hive** | Local storage | CBC lacks record authentication | Preserve data on migration failure; v3 is experimental |
+| **http / dio** | HTTP requests | Network input and redirects | Bounded requests, validate destinations and TLS |
+| **logger** | Logging | Sensitive diagnostic exposure | Redact credential-bearing details |
+| **flutter_secure_storage** | Vault key | Platform storage and migration | No reset on error; validate key persistence |
+| **path_provider** | File paths | Temporary-file exposure | App-private paths and explicit ownership |
 
 ### Dependency Updates
 - Security patches: Applied immediately
@@ -114,7 +114,7 @@ Security review checklist for dependencies:
 ### Before Each Release
 1. Run full test suite (`flutter test`)
 2. Run static analysis (`flutter analyze`)
-3. Check for new vulnerabilities: `flutter pub outdated --dependency-overrides`
+3. Review dependency advisories, locked versions, CodeQL and scanner findings. `flutter pub outdated` reports versions, not vulnerability status.
 4. Manual testing on real device
 5. Code review by at least one contributor
 

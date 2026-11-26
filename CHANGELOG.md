@@ -5,6 +5,14 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.4] - Security remediation candidate
+
+- Update Gradle to 8.14.8 with verified wrapper/distribution checksums, refresh Android compatibility APIs and dependency pins.
+- Replace deprecated network enumeration with a service-owned callback registry.
+- Verify official update bytes, exact package, signing certificate and increasing version code before staging a user-confirmed PackageInstaller session. Handle interrupted sessions and explicit cancellation without deleting installed app data.
+- Preserve system certificate trust and hostname verification for third-party diagnostic HTTPS destinations. Reviewed pinning findings are separate from code fixes.
+- Physical Android update and network-switching acceptance is deferred at the maintainer's request. Hosted CI, security review and production release approval remain required.
+
 ## [1.19.3] - Release candidate
 
 ### Security and stability

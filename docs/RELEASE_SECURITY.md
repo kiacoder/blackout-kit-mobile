@@ -213,3 +213,18 @@ dismissal or published release change.
 
 References: https://developer.android.com/reference/android/content/pm/PackageInstaller.Session
 and https://codeql.github.com/codeql-query-help/java/java-android-arbitrary-apk-installation/.
+
+### Installer follow-up and v1.19.4 candidate
+
+The first branch CodeQL Java/Kotlin scan no longer reports #44, but reported
+#54 for the old parcelable API. Use AndroidX IntentCompat instead. The
+confirmation coordinator validates a system activity and an app-owned session,
+launches confirmation only from a resumed Activity, and uses an optional
+notification to return to the app when not resumed. A fresh verified request
+cleans up inactive app-owned sessions; an active session requires explicit
+user cancellation before replacement. Localized cancellation is available
+in English, Persian and Chinese. The platform ultimately controls install
+success and cancellation. Android device/OEM acceptance is deferred by the
+maintainer, not marked passed. System TLS trust policy remains intentionally
+unpinned for dynamic or third-party diagnostic destinations; documented
+review and scanner exceptions are distinct from vulnerability fixes.

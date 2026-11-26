@@ -39,6 +39,7 @@ class UpdatePlugin(
     ) {
         when (call.method) {
             "installApk" -> installApk(call, result)
+            "cancelPendingUpdate" -> cancelPendingUpdate(result)
             // Which release asset fits this device. A 32-bit phone cannot
             // install the arm64 APK (INSTALL_FAILED_NO_MATCHING_ABIS), so the
             // download must pick by ABI instead of assuming arm64.
@@ -73,7 +74,14 @@ class UpdatePlugin(
             result.error("BAD_APK_DIGEST", "The update failed native integrity verification.", null)
         } else if (validateArchive(file, tag, result)) {
             if (!canInstallPackages()) {
-                mainHandler.post { requireInstallPermission(result) }
+                mainHandler.post {
+                    openUnknownSourcesSettings()
+                    result.error(
+                        "ALLOW_UNKNOWN_SOURCES",
+                        "Allow installation from Blackout Kit in Android settings, then retry.",
+                        null,
+                    )
+                }
             } else {
                 submitSession(file, expectedBytes, expectedDigest, result)
             }
@@ -134,22 +142,6 @@ class UpdatePlugin(
         }
     }
 
-    private fun requireInstallPermission(result: MethodChannel.Result): Boolean {
-        if (!canInstallPackages()) {
-            // Send the user straight to this app's toggle, then let them retry.
-            openUnknownSourcesSettings()
-            result.error(
-                "ALLOW_UNKNOWN_SOURCES",
-                "Android needs permission to install updates from Blackout Kit. " +
-                    "Turn on \"Allow from this source\" on the screen that just opened, " +
-                    "then tap Update again.",
-                null,
-            )
-            return false
-        }
-        return true
-    }
-
     private fun submitSession(
         file: File,
         expectedBytes: Long,
@@ -166,8 +158,23 @@ class UpdatePlugin(
             result.error("INSTALL_FAILED", "Android denied the installation session.", null)
         } catch (_: IllegalArgumentException) {
             result.error("INSTALL_FAILED", "Android rejected the installation session.", null)
+        } catch (_: ActiveUpdateSessionException) {
+            result.error("UPDATE_SESSION_ACTIVE", "Finish or cancel the previous update session.", null)
         } catch (_: IllegalStateException) {
-            result.error("INSTALL_FAILED", "Finish or cancel the previous update session.", null)
+            result.error("INSTALL_FAILED", "Android could not start the update session.", null)
+        }
+    }
+
+    private fun cancelPendingUpdate(result: MethodChannel.Result) {
+        try {
+            sessionInstaller.cancelPending()
+            result.success(true)
+        } catch (_: SecurityException) {
+            result.error("CANCEL_FAILED", "Android denied cancellation of the update.", null)
+        } catch (_: IllegalArgumentException) {
+            result.error("CANCEL_FAILED", "The update session changed; check again.", null)
+        } catch (_: IllegalStateException) {
+            result.error("CANCEL_FAILED", "Android is processing the update.", null)
         }
     }
 

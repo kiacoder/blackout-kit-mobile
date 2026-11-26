@@ -10,6 +10,8 @@ import androidx.core.net.toUri
 import java.io.File
 import java.io.IOException
 
+internal class ActiveUpdateSessionException : IllegalStateException("An update session is already active")
+
 /** Stages verified bytes with the platform installer; never requests silent installation. */
 internal class UpdateSessionInstaller(
     private val context: Context,
@@ -21,9 +23,12 @@ internal class UpdateSessionInstaller(
         expectedBytes: Long,
         expectedDigest: String,
     ) {
-        check(installer.mySessions.none { it.appPackageName == context.packageName }) {
-            "An update session already exists. Finish or cancel the previous installation."
-        }
+        // This runs only after a new explicit install request and verification.
+        // Clear inactive sessions left by an interrupted previous staging attempt;
+        // never disturb a session the platform is actively processing.
+        val previous = installer.mySessions.filter { it.appPackageName == context.packageName }
+        if (previous.any { it.isActive }) throw ActiveUpdateSessionException()
+        previous.forEach { installer.abandonSession(it.sessionId) }
         val params =
             PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
                 setAppPackageName(context.packageName)
@@ -44,6 +49,13 @@ internal class UpdateSessionInstaller(
         } finally {
             if (!committed) abandon(id)
         }
+    }
+
+    /** Only called by an explicit user cancellation action. */
+    fun cancelPending() {
+        installer.mySessions
+            .filter { it.appPackageName == context.packageName }
+            .forEach { installer.abandonSession(it.sessionId) }
     }
 
     private fun stage(

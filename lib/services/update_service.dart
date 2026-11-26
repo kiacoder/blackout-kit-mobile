@@ -307,7 +307,20 @@ class UpdateService extends GetxService {
     }
   }
 
-  /// Hands the APK to Android's package installer (user confirms the install).
+  /// Cancels a previous app-owned installation only after the user asks.
+  Future<void> cancelPendingUpdate() async {
+    if (_downloading || _installing) {
+      throw StateError('An update operation is already running');
+    }
+    _installing = true;
+    try {
+      await _channel.invokeMethod('cancelPendingUpdate');
+    } finally {
+      _installing = false;
+    }
+  }
+
+  /// Submits the APK to Android's package installer (user confirms the install).
   Future<void> installApk(String path, AppUpdate update) async {
     if (_downloading || _installing) {
       throw StateError('An update operation is already running');

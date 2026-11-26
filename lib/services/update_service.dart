@@ -318,7 +318,11 @@ class UpdateService extends GetxService {
       // Permission retries may happen long after the original download.
       // Verify the actual bytes again before handing the APK to Android.
       await UpdateDownloadPolicy.verify(File(path), update);
-      await _channel.invokeMethod('installApk', {'path': path});
+      await _channel.invokeMethod('installApk', {
+        'tag': update.tagName,
+        'size': update.apkSize,
+        'digest': update.apkDigest!.toLowerCase(),
+      });
     } finally {
       _installing = false;
     }

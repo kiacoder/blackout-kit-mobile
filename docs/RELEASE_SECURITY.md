@@ -140,3 +140,34 @@ registry changes lifecycle semantics and requires device testing.
 Review actual MobSF and VirusTotal evidence and CodeQL after the new CI run.
 Do not merge before actionable findings are resolved and remaining risks
 are reviewed. No release is approved by this entry.
+
+## Post-v1.19.3 CodeQL remediation (2026-11-26)
+
+Reviewed the ten open main-branch alerts #42–51. #44 (arbitrary APK
+installation): native installer now accepts a validated release tag instead
+of a caller-controlled path, derives the private archive filename, checks
+bounded exact size and SHA-256 independently of Dart, checks the archive
+package and requested version, and retains exact nonempty installed signer
+matching plus Android's user-confirmed installer. Hashing and package
+inspection run on the channel's serial background queue; the installer UI
+runs on main. The digest metadata is supplied by the official-release Dart
+flow, not an independent publisher signature; the installed signer remains
+the independent trust boundary. No claim that this eliminates every file
+mutation race or that CodeQL will recognize the guards. No alerts dismissed.
+
+#51 reuses a lazily created SecureRandom for the XUDP key; #47 uses
+ContentProviderClient.close() (API 24+); #49/#50 use the API 33+ typed
+PackageInfoFlags overload with necessary API 24–32 fallback. #46 and #48
+likewise have existing older-API compatibility branches. #45 is synchronous
+network enumeration, whose callback replacement requires lifecycle/device
+verification. #42/#43 retain normal HTTPS system trust and hostname checks
+without trust overrides; arbitrary website targets cannot use a fixed pin
+set, and the diagnostic endpoints require certificate-rotation planning
+before optional pins. No change to minSdk or intentional TLS policy.
+
+Verification: 605 Flutter tests, analyzer 0 warnings/errors (196 infos),
+ktlint/Detekt, 12 integrity checks; direct Kotlin 1.9.25 compile of UpdatePlugin
+and its test with Android API 34, actual Flutter engine jar and AndroidX
+core 1.13.1, then JUnit 5/5. Full local Gradle blocked by missing offline
+AGP 8.5.2 resolution; hosted Android build/lint, fresh CodeQL and device
+update acceptance required. Published v1.19.3 unchanged.

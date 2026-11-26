@@ -11,6 +11,7 @@ import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val XUDP_KEY_BYTES = 32
+private val xudpRandom by lazy { SecureRandom() }
 
 /**
  * In-process wrapper around the bundled Xray core (libv2ray /
@@ -288,7 +289,7 @@ private fun xudpBaseKey(context: Context): String {
             }
         if (decoded?.size == XUDP_KEY_BYTES) return existing
     }
-    val key = ByteArray(XUDP_KEY_BYTES).apply { SecureRandom().nextBytes(this) }
+    val key = ByteArray(XUDP_KEY_BYTES).apply { xudpRandom.nextBytes(this) }
     val encoded = Base64.encodeToString(key, flags)
     check(preferences.edit().putString("base_key", encoded).commit()) {
         "Could not persist the XUDP installation key"

@@ -83,7 +83,11 @@ void main() {
       var installerCalls = 0;
       messenger.setMockMethodCallHandler(channel, (call) async {
         expect(call.method, 'installApk');
-        expect(call.arguments['path'], file.path);
+        expect(call.arguments, {
+          'tag': 'v1.2.3',
+          'size': data.length,
+          'digest': expected,
+        });
         installerCalls++;
         if (installerCalls == 1) {
           throw PlatformException(code: 'ALLOW_UNKNOWN_SOURCES');

@@ -206,6 +206,7 @@ class IpInfoService {
             await client.getUrl(Uri.parse(_lookupUrl)).timeout(
                   const Duration(seconds: 8),
                 );
+        request.followRedirects = false;
         final response = await request.close().timeout(
               const Duration(seconds: 8),
             );

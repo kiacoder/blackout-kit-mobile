@@ -16,10 +16,10 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 import java.io.File
-import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 
 /**
  * Bridges `com.blackoutkit.vpn/service` to [BlackoutVpnService].
@@ -696,16 +696,20 @@ class VpnPlugin :
                 Log.w(TAG, "Refusing to dial an out-of-range SOCKS port: $socksPort")
                 return null
             }
-            var conn: HttpURLConnection? = null
+            var conn: HttpsURLConnection? = null
             return try {
+                val target = URL(urlStr)
+                require(target.protocol == "https" && target.host.isNotBlank() && target.userInfo == null) {
+                    "Tunnel diagnostics require an HTTPS URL without user information"
+                }
                 val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
                 conn =
-                    (URL(urlStr).openConnection(proxy) as HttpURLConnection).apply {
+                    (target.openConnection(proxy) as HttpsURLConnection).apply {
                         connectTimeout = timeoutMs
                         readTimeout = timeoutMs
                         requestMethod = "GET"
                         doInput = true
-                        instanceFollowRedirects = true
+                        instanceFollowRedirects = false
                     }
                 val code = conn.responseCode
                 if (code !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {

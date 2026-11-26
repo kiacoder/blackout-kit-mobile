@@ -1504,3 +1504,19 @@ MobSF 46/100, 4 high and 10 warnings; ClamAV zero detections, VT unknown.
 Storage backup-mode migration still fails API24/34; no promotion. No ARM
 ADB device connected; no native physical acceptance or production signing
 claim. PR remains draft; no merge, release, or credential rotation.
+
+## Phase 3 HTTPS diagnostic and subscription transport (2026-11-26)
+
+Direct subscription feeds now reject non-HTTPS and URL userinfo before
+any request or cache access. Follow at most five redirects, validating
+HTTPS and no userinfo at each hop. Four interceptor-based regressions
+cover initial rejection, safe redirect/cache, downgrade and loop limits.
+Native SOCKS diagnostic HTTP fetch now requires HTTPS with no userinfo,
+uses HttpsURLConnection and disables redirects; direct IP lookup also
+disables redirects. Existing HTTP-only sources are intentionally rejected;
+redirecting IP lookup endpoints may return unresolved. No VPN data-plane
+protocol changes. Full Flutter suite 604/604, full Dart analyzer no
+errors/warnings (196 infos), Kotlin quality and 12 integrity checks pass.
+Android runtime verification remains outstanding. Retain loopback network
+policy until actual ARM traffic acceptance; no new MobSF score claimed.
+No physical ADB device, storage upgrade or production merge/release.

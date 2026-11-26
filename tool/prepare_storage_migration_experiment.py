@@ -53,8 +53,8 @@ def app_toolchain(root):
     wrapper = (root / "android/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
     app = (root / "android/app/build.gradle").read_text(encoding="utf-8")
     if all(pin in settings for pin in ('version "8.13.2"', 'version "2.4.21"')) and all(
-        pin in wrapper for pin in ("gradle-8.14.7-bin.zip",
-                                   "903bfc4bc7622323124054c10f509246212a1902948bdaf26c379cca8735e856")
+        pin in wrapper for pin in ("gradle-8.14.8-bin.zip",
+                                   "94da89692fc3ca6d2d0ce6bb48548762ea0f1897ba444286f5c7f3759c7af651")
     ) and "buildConfig = true" in app:
         return
     edits = {

@@ -273,7 +273,11 @@ object XrayEngine {
  * XUDP reads this setting as unpadded URL-safe Base64 and decodes it to a
  * 32-byte per-install key. URL-safe Base64 remains ASCII across gomobile's
  * Java-to-Go string conversion.
+ *
+ * KTX edit(commit = true) discards the commit result. The persisted key
+ * must not be returned unless the synchronous write succeeds.
  */
+@android.annotation.SuppressLint("UseKtx")
 private fun xudpBaseKey(context: Context): String {
     // Called under the initialization lock. Persist an independent random
     // key instead of deriving one from a device ID or a public fallback.

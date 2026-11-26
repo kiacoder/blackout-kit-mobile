@@ -20,21 +20,10 @@ internal class TransientEngineConfig(
         text: String,
     ): File {
         check(owned == null) { "Previous engine configuration still needs cleanup" }
-        val file = File.createTempFile("session-", ".json", privateDirectory(directory))
+        val file = File.createTempFile("session-", ".json", privateEngineDirectory(directory))
         owned = file
         writeOwnedFile(file, text)
         return file
-    }
-
-    private fun privateDirectory(directory: File): File {
-        val absolute = directory.absoluteFile
-        // Android may alias the app data root. Resolve the trusted parent,
-        // but do not follow a replacement link at the engine-directory name.
-        val root = File(absolute.parentFile?.canonicalFile, absolute.name)
-        if (root.canonicalFile != root || (!root.isDirectory && !root.mkdirs())) {
-            throw IOException("Cannot create private engine directory")
-        }
-        return root
     }
 
     private fun writeOwnedFile(
@@ -59,7 +48,7 @@ internal class TransientEngineConfig(
 
     private fun removeOwnedFile(file: File): Boolean =
         try {
-            file.canonicalFile == file && (!file.exists() || (file.isFile && file.delete()))
+            isPrivateEnginePath(file) && (!file.exists() || (file.isFile && file.delete()))
         } catch (_: IOException) {
             false
         } catch (_: SecurityException) {

@@ -285,3 +285,28 @@ native readers still require a plaintext app-private file, and process-death
 orphan recovery and on-device validation remain open. It is not secure
 flash erasure or a resolution of the entire MobSF temporary-file rule.
 No dependencies or cryptographic formats changed.
+
+## Engine directory cleanup boundary
+
+Legacy fixed-name cleanup previously resolved the engine directory before
+validating its identity. A substituted directory symlink could therefore
+redirect deletion of obsolete filenames. Validate the app-private directory
+before either legacy cleanup or temporary configuration creation. Keep
+canonical-path checks on API 24/25 and explicitly detect symbolic links on
+API 26+. Reuse the same path check for owned configuration removal.
+
+A synthetic symlink regression initially failed on Windows JVM canonical
+resolution, then passed with explicit link detection. Ten focused JVM
+tests passed with compiler warnings treated as errors (including bounded
+checker lifecycle, interruption and temporary-file ownership). The two
+redundant Kotlin initializer warnings in EngineCommands were removed
+without changing the cleanup finally block. This does not address orphan
+files left after process death or prove Android device behavior.
+
+## QR scanner dependency review
+
+The official mobile_scanner 6.0.11 archive was verified against its pub.dev
+SHA-256 metadata. It still uses deprecated RenderScript APIs and raises the
+minimum iOS target to 15.5. Upgrading solely to silence RenderScript warnings
+would not solve them and would change platform compatibility. No scanner
+dependency or iOS deployment target was changed in this increment.

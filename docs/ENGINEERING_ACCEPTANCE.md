@@ -97,3 +97,12 @@ The preceding CodeQL Kotlin scan failed during dependency resolution;
 the rerun completed successfully. All hosted checks must be repeated on the final
 head. No physical device was attached. No merge or release approval is
 implied by this checkpoint.
+
+### Follow-up: native cleanup
+
+The prior PR head 6c6b5a3 reached 40 successful hosted checks with no
+reported failures, but 12 remained in progress at inspection. This follow-up
+adds path-boundary hardening and removes two native compiler warnings.
+Ten local focused JVM tests passed with -Werror. The revised head requires
+fresh hosted checks; physical device, scanner upgrade and authenticated
+vault migration gates remain open. See MOBSF_REMEDIATION.md for details.

@@ -84,6 +84,8 @@ android {
         } else if (project.findProperty("enableOpenVpnCandidate") == "true") {
             testInstrumentationRunner "com.blackoutkit.vpn.OpenVpnCandidateAcceptance"
         }
+        buildConfigField "boolean", "ENABLE_EXPERIMENTAL_OPENVPN",
+                (project.findProperty("enableOpenVpnCandidate") == "true").toString()
         // Opt-in development adapter, NOT a shipped/verified engine. No binary
         // is downloaded at runtime. Supply reviewed GPL-compliant artifacts.
         buildConfigField "boolean", "ENABLE_EXPERIMENTAL_MIHOMO",
@@ -203,6 +205,7 @@ android {
             // Never enable an unverified tunnel in a distribution build.
             buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"
             buildConfigField "boolean", "ENABLE_EXPERIMENTAL_MIHOMO", "false"
+            buildConfigField "boolean", "ENABLE_EXPERIMENTAL_OPENVPN", "false"
             signingConfig = hasReleaseKey ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources = true

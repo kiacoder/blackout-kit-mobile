@@ -8,6 +8,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import '../models/config.dart';
+import '../models/openvpn_profile.dart';
 import '../models/vpn_session_options.dart';
 import 'xray_config.dart';
 import 'singbox_config.dart';
@@ -239,6 +240,25 @@ class VPNService {
           return false;
         }
       }
+      String? openVpnConfig;
+      if (config is OpenVpnConfig) {
+        final availability = await getEngineInfo();
+        if (!Platform.isAndroid || !availability.openVpnAvailable ||
+            !OpenVpnProfile.admitsRuntime(config.configContent) ||
+            session.hasSplitTunnel) {
+          _status = VPNStatus.error;
+          _lastError = 'OpenVPN requires a private Android candidate, a self-contained profile and full-tunnel mode.';
+          return false;
+        }
+        final profile = OpenVpnProfile.parse(config.configContent);
+        if (profile == null || profile.directives.contains('auth-user-pass') ||
+            !profile.inlineBlocks.containsAll({'ca', 'cert', 'key'})) {
+          _status = VPNStatus.error;
+          _lastError = 'The initial OpenVPN candidate requires inline CA, certificate and key without interactive authentication.';
+          return false;
+        }
+        openVpnConfig = config.configContent;
+      }
       String? mihomoJson;
       if (config is MihomoConfig) {
         final availability = await getEngineInfo();
@@ -320,7 +340,7 @@ class VPNService {
       // config document built here. A protocol that produces neither is one
       // this build cannot dial - say so instead of handing the native layer a
       // connect request it will serve from a stale config file.
-      if (nativeTunnelConfig == null && xrayJson == null && singboxJson == null && mihomoJson == null) {
+      if (nativeTunnelConfig == null && openVpnConfig == null && xrayJson == null && singboxJson == null && mihomoJson == null) {
         _status = VPNStatus.error;
         _lastError = 'This build cannot dial "${config.protocol}" configs. '
             'Use a VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC or AnyTLS '
@@ -343,6 +363,7 @@ class VPNService {
         if (singboxJson != null) 'singboxConfig': singboxJson,
         if (libboxJson != null) 'libboxConfig': libboxJson,
         if (mihomoJson != null) 'mihomoConfig': mihomoJson,
+        if (openVpnConfig != null) 'openVpnConfig': openVpnConfig,
         if (nativeTunnelConfig != null) 'nativeTunnelConfig': nativeTunnelConfig,
       });
 
@@ -644,6 +665,7 @@ class EngineAvailability {
   final bool singboxAvailable;
   final String? singboxVersion;
   final bool mihomoAvailable;
+  final bool openVpnAvailable;
   final bool nativeWireguardAvailable;
   final bool nativeAmneziawgAvailable;
   final List<String> singboxProtocols;
@@ -669,6 +691,7 @@ class EngineAvailability {
     required this.singboxAvailable,
     this.singboxVersion,
     this.mihomoAvailable = false,
+    this.openVpnAvailable = false,
     this.nativeWireguardAvailable = false,
     this.nativeAmneziawgAvailable = false,
     required this.singboxProtocols,
@@ -687,6 +710,7 @@ class EngineAvailability {
         xrayProtocols = const [],
         singboxAvailable = false,
         mihomoAvailable = false,
+        openVpnAvailable = false,
         nativeWireguardAvailable = false,
         nativeAmneziawgAvailable = false,
         singboxVersion = null,
@@ -709,6 +733,7 @@ class EngineAvailability {
       singboxAvailable: map['singboxAvailable'] == true,
       singboxVersion: map['singboxVersion'] as String?,
       mihomoAvailable: map['mihomoAvailable'] == true,
+      openVpnAvailable: map['openVpnAvailable'] == true,
       nativeWireguardAvailable: map['nativeWireguardAvailable'] == true,
       nativeAmneziawgAvailable: map['nativeAmneziawgAvailable'] == true,
       singboxProtocols: strings('singboxProtocols'),
@@ -723,6 +748,7 @@ class EngineAvailability {
         if (xrayAvailable) ...xrayProtocols,
         if (singboxAvailable) ...singboxProtocols,
         if (mihomoAvailable) 'mihomo',
+        if (openVpnAvailable) 'openvpn',
         if (nativeWireguardAvailable) 'wireguard',
         if (nativeAmneziawgAvailable) 'amneziawg',
       ];
@@ -742,6 +768,7 @@ class EngineAvailability {
     }
     final bundled = <String>[
       if (mihomoAvailable) 'Mihomo (experimental)',
+      if (openVpnAvailable) 'OpenVPN (experimental, certificate-only)',
       if (nativeWireguardAvailable) 'WireGuard native (experimental)',
       if (nativeAmneziawgAvailable) 'AmneziaWG native (experimental)',
       if (xrayAvailable) 'Xray ${xrayVersion ?? ""}'.trim(),

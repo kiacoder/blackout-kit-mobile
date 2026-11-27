@@ -7,7 +7,7 @@ Baseline: maintainer update, 2026-11-27. This is a planning ledger, not an audit
 | Xray / VLESS / VMess / Trojan / Shadowsocks | Existing runtime; preserve regressions |
 | sing-box / Hysteria2 / TUIC / AnyTLS | Maintainer reports working; exact build and protocol evidence required for release |
 | Native WireGuard and AmneziaWG | Maintainer reports working; this branch still has a debug acceptance gate |
-| OpenVPN | Profile import only; native runtime integration in progress |
+| OpenVPN | Private certificate-only Android service candidate; no device verification |
 | Mihomo | Experimental adapter; API 24 artifacts built; Android traffic pending |
 | Tor, Psiphon, Geph, Lantern, WARP/MASQUE | Planned or catalogue-only; feasibility and licensing review required |
 | Independent Rust core | Experimental; not a complete replacement |

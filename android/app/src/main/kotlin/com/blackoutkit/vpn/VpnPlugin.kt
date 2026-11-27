@@ -403,6 +403,7 @@ class VpnPlugin :
                     ArrayList(call.argument<List<String>>("disallowedApps") ?: emptyList()),
                 )
                 putExtra(BlackoutVpnService.EXTRA_NATIVE_TUNNEL_CONFIG, call.argument<String>("nativeTunnelConfig"))
+                putExtra(BlackoutVpnService.EXTRA_OPENVPN_CONFIG, call.argument<String>("openVpnConfig"))
                 putExtra(BlackoutVpnService.EXTRA_MIHOMO_CONFIG, call.argument<String>("mihomoConfig"))
                 putExtra(BlackoutVpnService.EXTRA_DNS_ONLY, dnsOnly)
             }
@@ -608,6 +609,7 @@ class VpnPlugin :
                 GoRuntimeAdmission.process.current(),
                 BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS,
                 BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO,
+                BuildConfig.ENABLE_EXPERIMENTAL_OPENVPN,
             ).report()
     }
 

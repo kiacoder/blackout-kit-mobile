@@ -98,7 +98,9 @@ public:
                                 (!ipv6 || cb.route("::", 0)));
     }
     bool tun_builder_exclude_route(const std::string&, int, int, bool) override { return gate(false); }
-    bool tun_builder_set_allow_family(int, bool allow) override { return gate(!allow); }
+    // OpenVPN calls this even for full-tunnel profiles and ignores its return.
+    // Android never calls Builder.allowFamily; unconfigured families stay blocked.
+    bool tun_builder_set_allow_family(int, bool) override { return active(); }
     bool tun_builder_set_dns_options(const openvpn::DnsOptions& options) override {
         using Server = openvpn::DnsServer;
         if (!options.search_domains.empty()) return gate(false);

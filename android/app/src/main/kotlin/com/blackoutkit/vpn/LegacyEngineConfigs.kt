@@ -7,10 +7,12 @@ import java.nio.file.Files
 
 private const val NIO_MIN_API = 26
 
-/** Canonical checks cover Android API 24 and 25; newer APIs can also detect dangling links. */
+/** Canonical checks cover Android API 24 and 25; newer APIs can detect dangling links.
+ * The local JVM's mock Android SDK reports zero; use its available NIO API.
+ */
 internal fun isPrivateEnginePath(file: File): Boolean =
     file.canonicalFile == file &&
-        (Build.VERSION.SDK_INT < NIO_MIN_API || !Files.isSymbolicLink(file.toPath()))
+        (Build.VERSION.SDK_INT in 1 until NIO_MIN_API || !Files.isSymbolicLink(file.toPath()))
 
 /** Resolve the trusted parent, not a substituted engine-directory symlink. */
 internal fun privateEngineDirectory(directory: File): File {

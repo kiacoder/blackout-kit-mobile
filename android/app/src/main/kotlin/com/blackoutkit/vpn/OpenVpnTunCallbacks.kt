@@ -16,6 +16,8 @@ internal class OpenVpnTunCallbacks(
     private val report: (Boolean) -> Unit,
 ) {
     private var builder: VpnService.Builder? = null
+
+    @Volatile
     private var retained: ParcelFileDescriptor? = null
     private val routes = mutableListOf<NativeTunnelConfig.Network>()
     private val dnsServers = mutableListOf<InetAddress>()
@@ -23,7 +25,7 @@ internal class OpenVpnTunCallbacks(
 
     fun reset(): Boolean =
         checked {
-            builder = service.Builder().setSession("OpenVPN").setBlocking(true)
+            builder = service.Builder().setSession("OpenVPN").setBlocking(false)
             routes.clear()
             dnsServers.clear()
             addressCount = 0
@@ -106,6 +108,9 @@ internal class OpenVpnTunCallbacks(
     fun connected(value: Boolean) {
         if (current()) report(value)
     }
+
+    val hasTunnel: Boolean
+        get() = retained != null
 
     /** Call only after the native worker has exited. */
     fun closeAfterJoin() {

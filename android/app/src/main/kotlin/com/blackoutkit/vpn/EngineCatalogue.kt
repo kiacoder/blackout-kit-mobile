@@ -8,6 +8,7 @@ internal class EngineCatalogue(
     private val owner: GoRuntimeAdmission.Family?,
     nativeEnabled: Boolean,
     mihomoEnabled: Boolean,
+    openVpnEnabled: Boolean = false,
 ) {
     private fun bundled(name: String) = directory?.let { File(it, name).isFile } == true
 
@@ -24,6 +25,8 @@ internal class EngineCatalogue(
             listOf("libmihomo.so", "libtun2socks.so", "libfdlauncher.so").all {
                 directory?.let { dir -> File(dir, it).canExecute() } == true
             }
+
+    private val openVpnAvailable = openVpnEnabled && bundled("libopenvpn-candidate.so")
 
     private val xrayProtocols = listOf("vless", "vmess", "trojan", "shadowsocks", "wireguard")
     private val singboxProtocols = listOf("hysteria2", "tuic", "anytls")
@@ -42,7 +45,8 @@ internal class EngineCatalogue(
 
     private fun unavailableProtocols(): List<String> =
         buildList {
-            addAll(listOf("openvpn", "psiphon", "shadowtls", "warp", "sni", "mhrv"))
+            if (!openVpnAvailable) add("openvpn")
+            addAll(listOf("psiphon", "shadowtls", "warp", "sni", "mhrv"))
             if (!nativeCandidate) add("amneziawg")
             if (!singboxAvailable) addAll(singboxProtocols)
         }
@@ -55,6 +59,7 @@ internal class EngineCatalogue(
             "restartRequiredProtocols" to restartRequired(),
             "capabilitySource" to "packaged",
             "mihomoAvailable" to mihomoAvailable,
+            "openVpnAvailable" to openVpnAvailable,
             "xrayAvailable" to xrayAvailable,
             "xrayVersion" to null,
             "xrayProtocols" to xrayProtocols,

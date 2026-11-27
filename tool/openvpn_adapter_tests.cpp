@@ -33,6 +33,8 @@ int main() {
         assert(c.tun_builder_add_address("192.0.2.2", 24, "", false, false));
         assert(c.tun_builder_add_address("2001:db8::2", 64, "", true, false));
         assert(c.tun_builder_reroute_gw(true, true, 0));
+        assert(c.tun_builder_set_allow_family(AF_INET, true));
+        assert(c.tun_builder_set_allow_family(AF_INET6, true));
         assert(c.tun_builder_set_dns_options(dns_options()));
         assert(c.tun_builder_establish() == 42);
         assert(f.routes == 2 && f.established_count == 1 && f.protected_count == 1);

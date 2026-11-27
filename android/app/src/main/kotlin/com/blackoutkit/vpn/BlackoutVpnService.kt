@@ -39,6 +39,8 @@ class BlackoutVpnService : VpnService() {
     companion object {
         private const val TAG = "BlackoutVpnService"
         private const val NATIVE_MONITOR_INTERVAL_MS = 2000L
+        private const val OPENVPN_CONNECT_MS = 30_000L
+        private const val OPENVPN_STOP_MS = 5_000L
 
         private const val PREFS = "blackout_vpn_state"
         private const val KEY_HELD_BLOCKING = "held_blocking"
@@ -78,6 +80,7 @@ class BlackoutVpnService : VpnService() {
         /** Full sing-box JSON document, built by the Dart side. */
         const val EXTRA_SINGBOX_CONFIG = "singboxConfig"
         const val EXTRA_NATIVE_TUNNEL_CONFIG = "nativeTunnelConfig"
+        const val EXTRA_OPENVPN_CONFIG = "openVpnConfig"
         const val EXTRA_MIHOMO_CONFIG = "mihomoConfig"
 
         /**
@@ -190,6 +193,7 @@ class BlackoutVpnService : VpnService() {
     private val sessionOwner = Any()
     private val sessions = VpnSessionExecutor(dispatch = { action -> mainHandler.post { action() } })
     private val native = NativeSetup()
+    private val openVpn = OpenVpnSetup()
     private val proxy = ProxySetup()
     private val engines = EngineSelection()
     private val dns = DnsSetup()
@@ -200,6 +204,8 @@ class BlackoutVpnService : VpnService() {
     }
 
     private var tun: ParcelFileDescriptor? = null
+    private var openVpnSession: OpenVpnSession? = null
+    private var openVpnCallbacks: OpenVpnTunCallbacks? = null
 
     /**
      * The engine's own duplicate of the tun descriptor. Kept so teardown can
@@ -300,9 +306,11 @@ class BlackoutVpnService : VpnService() {
         val mihomoConfig = intent?.getStringExtra(EXTRA_MIHOMO_CONFIG)
         val libboxConfig = intent?.getStringExtra(EXTRA_LIBBOX_CONFIG)
         val nativeConfig = intent?.getStringExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
+        val openVpnConfig = intent?.getStringExtra(EXTRA_OPENVPN_CONFIG)
 
         init {
             intent?.removeExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
+            intent?.removeExtra(EXTRA_OPENVPN_CONFIG)
         }
 
         val dnsOnly = intent?.getBooleanExtra(EXTRA_DNS_ONLY, false) ?: false
@@ -323,6 +331,7 @@ class BlackoutVpnService : VpnService() {
                         "Another engine session is active or awaiting cleanup. Stop it before connecting.",
                     )
                 request.dnsOnly -> dns.establishDnsOnly(request.dnsServers, request.displayName, ticket)
+                request.protocol == "openvpn" -> openVpn.establish(request, ticket)
                 request.nativeConfig != null -> native.establishNative(request, request.nativeConfig, ticket)
                 else -> proxy.establish(request, ticket)
             }
@@ -389,6 +398,7 @@ class BlackoutVpnService : VpnService() {
                         BlackoutCoreEngine::stop,
                         LibboxEngine::stop,
                         NativeTunnelEngine::stop,
+                        openVpn::stop,
                     ),
                 release = ::releaseTunnelDescriptors,
             )
@@ -443,6 +453,73 @@ class BlackoutVpnService : VpnService() {
 
     private fun notifyStatus(status: String) {
         statusListener?.invoke(status)
+    }
+
+    private inner class OpenVpnSetup {
+        fun establish(
+            request: StartRequest,
+            ticket: VpnSessionExecutor.Ticket,
+        ): Boolean {
+            lastError = null
+            val profile = request.openVpnConfig
+            val fullTunnel = request.allowed.isEmpty() && request.disallowed.isEmpty()
+            return when {
+                !BuildConfig.ENABLE_EXPERIMENTAL_OPENVPN ->
+                    setupFailure(ticket, "OpenVPN candidate is not enabled in this build")
+                profile == null || !OpenVpnCandidateProfile.admits(profile) || !fullTunnel ->
+                    setupFailure(
+                        ticket,
+                        "OpenVPN candidate requires a self-contained certificate profile and full-tunnel mode",
+                    )
+                else -> startOpenVpn(request, profile, ticket)
+            }
+        }
+
+        private fun startOpenVpn(
+            request: StartRequest,
+            profile: String,
+            ticket: VpnSessionExecutor.Ticket,
+        ): Boolean {
+            OpenVpnNativeBridge.loadCandidate()
+            val handle = OpenVpnNativeBridge.nativeCreate()
+            check(handle > 0)
+            val backend = OpenVpnAndroidBackend(handle, profile, this@BlackoutVpnService, ticket::isCurrent)
+            openVpnCallbacks = backend.callbacks
+            val session = OpenVpnSession(backend, ticket::isCurrent)
+            openVpnSession = session
+            session.start()
+            return if (session.awaitConnected(OPENVPN_CONNECT_MS)) {
+                publishOpenVpn(request, ticket)
+                true
+            } else {
+                setupFailure(ticket, "OpenVPN did not establish a verified native session")
+            }
+        }
+
+        private fun publishOpenVpn(
+            request: StartRequest,
+            ticket: VpnSessionExecutor.Ticket,
+        ) {
+            activeNativeTunnel = true
+            activeProtocol = request.protocol
+            activeName = request.displayName
+            activeProtocolId = request.protocol
+            activeDisplayName = request.displayName
+            holdTunnelOnFailure = request.holdOnFailure
+            connectedAtMs = System.currentTimeMillis()
+            isRunning = true
+            ticket.publish {
+                monitor.startOpenVpnMonitor(ticket)
+                notifyStatus("connected")
+            }
+        }
+
+        fun stop() {
+            openVpnSession?.stop(OPENVPN_STOP_MS)
+            openVpnSession = null
+            openVpnCallbacks?.closeAfterJoin()
+            openVpnCallbacks = null
+        }
     }
 
     private inner class NativeSetup {
@@ -926,7 +1003,7 @@ class BlackoutVpnService : VpnService() {
         ) {
             sessions.forCurrent(ticket) {
                 lastError = reason
-                if (holdTunnelOnFailure && tun != null) {
+                if (holdTunnelOnFailure && (tun != null || openVpnCallbacks?.hasTunnel == true)) {
                     isRunning = false
                     getSharedPreferences(PREFS, MODE_PRIVATE).edit {
                         putBoolean(KEY_HELD_BLOCKING, true)
@@ -983,6 +1060,38 @@ class BlackoutVpnService : VpnService() {
                                     if (nativeMonitor ===
                                         self
                                     ) {
+                                        mainHandler.postDelayed(self, NATIVE_MONITOR_INTERVAL_MS)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            nativeMonitor?.let { mainHandler.removeCallbacks(it) }
+            nativeMonitor = poll
+            mainHandler.postDelayed(poll, NATIVE_MONITOR_INTERVAL_MS)
+        }
+
+        fun startOpenVpnMonitor(ticket: VpnSessionExecutor.Ticket) {
+            val poll =
+                object : Runnable {
+                    override fun run() {
+                        if (nativeMonitor !== this || !ticket.isCurrent()) return
+                        val self = this
+                        sessions.forCurrent(ticket) {
+                            val session = openVpnSession
+                            if (session?.isConnected() != true) {
+                                try {
+                                    session?.stop(OPENVPN_STOP_MS)
+                                    openVpnSession = null
+                                } catch (_: Exception) {
+                                } catch (_: LinkageError) {
+                                }
+                                ticket.publish { if (nativeMonitor === self) nativeMonitor = null }
+                                onEngineDied("OpenVPN connection ended or requires reconnection", ticket)
+                            } else {
+                                ticket.publish {
+                                    if (nativeMonitor === self) {
                                         mainHandler.postDelayed(self, NATIVE_MONITOR_INTERVAL_MS)
                                     }
                                 }

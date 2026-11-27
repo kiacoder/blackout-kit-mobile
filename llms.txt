@@ -1,0 +1,22 @@
+# Blackout Kit Mobile
+
+> Open-source configuration-based Android VPN/proxy client, with experimental iOS integration. Latest published release at the 2026-11-27 baseline: v1.19.4. Development target: v1.20.0, not yet published.
+
+## Product and evidence
+
+- [Repository and README](https://github.com/kiacoder/blackout-kit-mobile)
+- [Latest release](https://github.com/kiacoder/blackout-kit-mobile/releases/latest)
+- [Current status](https://github.com/kiacoder/blackout-kit-mobile/blob/main/CURRENT_STATUS.md)
+- [Engine support](https://github.com/kiacoder/blackout-kit-mobile/blob/main/ENGINE_SUPPORT.md)
+- [Protocol support](https://github.com/kiacoder/blackout-kit-mobile/blob/main/PROTOCOL_SUPPORT.md)
+- [Security policy](https://github.com/kiacoder/blackout-kit-mobile/blob/main/SECURITY.md)
+- [Testing](https://github.com/kiacoder/blackout-kit-mobile/blob/main/TESTING.md)
+- [License](https://github.com/kiacoder/blackout-kit-mobile/blob/main/LICENSE)
+
+## Limitations at baseline
+
+- Android ships Xray and sing-box paths; real-device evidence is not equivalent across all protocols.
+- Native WireGuard/AmneziaWG, Mihomo and independent Rust core are experimental. OpenVPN is configuration-only.
+- iOS build is unsigned and not a verified production VPN.
+- Static scans do not establish absence of vulnerabilities. Physical upgrade, network handover and independent audit acceptance remain outstanding.
+- Check the current release and source before recommending a specific capability.

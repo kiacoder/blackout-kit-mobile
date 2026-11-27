@@ -167,3 +167,28 @@ Markdown files; no missing file targets found (external URLs and anchors
 not validated). CodeQL alerts 42 and 43 remain open and visible; see
 RELEASE_SECURITY.md for rationale. No physical device acceptance or final
 release approval is claimed.
+
+### Final CI deprecation and security review (2026-11-27)
+
+At 860fad3, hosted checks reported 40 successes, five skips and zero failures.
+The Android log reported Node 20 action runtime deprecations, mobile_scanner
+4.0.1 RenderScript deprecations, an Espresso manifest warning and Gradle
+9 compatibility notices. Upgrade checkout to v5.0.0, upload-artifact to v6.0.0
+and download-artifact to v7.0.0 at verified upstream commit SHAs; all three
+manifests declare node24. These are runtime-transition versions, not claims
+of newest releases. The artifact actions include upstream punycode fixes.
+No signing, scanner, permission, artifact path or publishing gate changed.
+Fresh hosted checks must establish upload/download and build compatibility.
+Scanner camera, Gradle and SDK upgrades remain separate compatibility work;
+no warning suppression or claim of zero build warnings.
+
+Rechecked open CodeQL #42/#43 against the final Kotlin source: HTTPS,
+no redirect following, and system-only Android trust with cleartext denied.
+Keep both alerts open; fixed pins are not appropriate for arbitrary or
+independently managed endpoints without an operational rotation plan.
+The residual CA compromise risk, legacy CBC, supported old Android versions,
+and interrupted engine-file lifecycle remain documented risks. ADB reported
+no attached devices; physical migration, VPN and updater acceptance remain
+unverified. The release must remain unpublished until the exact production
+APK and device gates are satisfied. See RELEASE_SECURITY.md and
+MOBSF_REMEDIATION.md.

@@ -60,7 +60,7 @@ internal object OpenVpnCandidateProfile {
         )
     private val tag = Regex("^<(/?)([a-z0-9-]+)>$")
     private val safe = Regex("[A-Za-z0-9_:.+/=,@% -]+")
-    private val blockText = Regex("[A-Za-z0-9+/= -]+")
+    private val blockText = Regex("[A-Za-z0-9+/=:, -]+")
 
     fun admits(profile: String): Boolean =
         try {

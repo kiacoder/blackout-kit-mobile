@@ -45,7 +45,7 @@ public:
         cancelled.store(true);
         cancellation.stop();
     }
-    bool prepare(const std::string& profile, const std::string& user, const std::string& password) {
+    bool prepare(const std::string& profile, const std::string& user, const std::string& password, const std::string& keyPassword = {}) {
         if (cancelled.load() || profile.empty() || profile.size() > 1048576 ||
             profile.find('\0') != std::string::npos) return false;
         openvpn::ClientAPI::OpenVPNClientHelper helper;
@@ -60,7 +60,7 @@ public:
         config.compressionMode = "no";
         config.tlsVersionMinOverride = "tls_1_2";
         auto eval = helper.eval_config(config);
-        if (eval.error || eval.privateKeyPasswordRequired ||
+        if (eval.error || eval.privateKeyPasswordRequired != !keyPassword.empty() ||
             !eval.staticChallenge.empty()) return false;
         // The service requires a complete inline cert/key pair or explicit
         // user/password mode. A credential-only profile may omit the client cert.
@@ -69,6 +69,7 @@ public:
             config.disableClientCert = true;
 
         }
+        config.privateKeyPassword = keyPassword;
         eval = eval_config(config);
         if (eval.error) return false;
         if (!eval.autologin) {
@@ -80,8 +81,8 @@ public:
         }
         return !cancelled.load();
     }
-    int run(const std::string& profile, const std::string& user, const std::string& password) {
-        if (!prepare(profile, user, password)) return 1;
+    int run(const std::string& profile, const std::string& user, const std::string& password, const std::string& keyPassword = {}) {
+        if (!prepare(profile, user, password, keyPassword)) return 1;
         const auto status = connect();
         cb.connected(false);
         return status.error || failed ? 1 : 0;

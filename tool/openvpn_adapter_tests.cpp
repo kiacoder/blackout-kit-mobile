@@ -2,6 +2,8 @@
 #include "../android/app/src/main/cpp/openvpn_client_adapter.hpp"
 #include <cassert>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 
 struct Fake final : blackout::OpenVpnCallbacks {
     int protected_count = 0, established_count = 0, routes = 0;
@@ -22,7 +24,7 @@ openvpn::DnsOptions dns_options() {
     options.servers[0].addresses.push_back(addr);
     return options;
 }
-int main() {
+int main(int argc, char** argv) {
     {
         Fake f;
         openvpn::Stop stop;
@@ -108,6 +110,21 @@ int main() {
         blackout::OpenVpnClient c(f, stop, flag);
         assert(c.prepare(profile, "fixture-user", "fixture-password"));
         assert(f.protected_count == 0 && f.established_count == 0);
+    }
+    if (argc == 2) {
+        std::ifstream fixture(argv[1]);
+        assert(fixture.good());
+        std::ostringstream text;
+        text << fixture.rdbuf();
+        Fake f;
+        openvpn::Stop stop;
+        std::atomic<bool> flag{false};
+        blackout::OpenVpnClient missing(f, stop, flag);
+        assert(!missing.prepare(text.str(), "", ""));
+        blackout::OpenVpnClient supplied(f, stop, flag);
+        assert(supplied.prepare(text.str(), "", "", "fixture-key-password"));
+        assert(f.protected_count == 0 && f.established_count == 0);
+        std::cout << "2 encrypted PEM preparation cases passed (no network)\n";
     }
     std::cout << "8 OpenVPN callback and authentication preparation tests passed\n";
 }

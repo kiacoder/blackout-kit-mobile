@@ -9,6 +9,14 @@ class OpenVpnProfile {
   const OpenVpnProfile._(
       this.host, this.port, this.directives, this.inlineBlocks);
 
+  /// Detect standard encrypted PEM formats within the inline key block.
+  static bool needsKeyPassword(String text) {
+    final key = RegExp(r'<key>\s*([\s\S]*?)</key>').firstMatch(text)?.group(1);
+    return key != null &&
+        (key.contains('-----BEGIN ENCRYPTED PRIVATE KEY-----') ||
+            key.contains('Proc-Type: 4,ENCRYPTED'));
+  }
+
   static OpenVpnProfile? parse(String text) {
     if (text.length > 1024 * 1024 || text.contains('\u0000')) return null;
     String? block;

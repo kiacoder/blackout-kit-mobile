@@ -24,8 +24,8 @@ public final class OpenVpnCandidateAcceptance extends Instrumentation {
                 require(bridge.nativeCreate() == 0);
                 require(!bridge.nativeRelease(handle + 1));
                 bridge.nativeCancel(handle);
-                require(bridge.nativeRun(handle, null, empty, empty, empty) != 0);
-                require(bridge.nativeRun(handle, null, empty, empty, empty) != 0);
+                require(bridge.nativeRunV3(handle, null, empty, new byte[][] {empty, empty, empty}) != 0);
+                require(bridge.nativeRunV3(handle, null, empty, new byte[][] {empty, empty, empty}) != 0);
             } finally {
                 require(bridge.nativeRelease(handle));
             }
@@ -34,7 +34,7 @@ public final class OpenVpnCandidateAcceptance extends Instrumentation {
             require(next > handle);
             try {
                 bridge.nativeCancel(handle);
-                require(bridge.nativeRun(handle, null, empty, empty, empty) != 0);
+                require(bridge.nativeRunV3(handle, null, empty, new byte[][] {empty, empty, empty}) != 0);
             } finally {
                 require(bridge.nativeRelease(next));
             }

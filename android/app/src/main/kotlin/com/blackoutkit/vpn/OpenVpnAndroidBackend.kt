@@ -17,12 +17,15 @@ internal class OpenVpnAndroidBackend(
         this.report = report
         val bytes = profile.toByteArray(Charsets.UTF_8)
         try {
-            OpenVpnNativeBridge.nativeRun(
+            OpenVpnNativeBridge.nativeRunV3(
                 handle,
                 callbacks,
                 bytes,
-                credentials?.username ?: ByteArray(0),
-                credentials?.password ?: ByteArray(0),
+                arrayOf(
+                    credentials?.username ?: ByteArray(0),
+                    credentials?.password ?: ByteArray(0),
+                    credentials?.keyPassword ?: ByteArray(0),
+                ),
             )
         } finally {
             bytes.fill(0)

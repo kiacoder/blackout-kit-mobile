@@ -274,9 +274,11 @@ class VPNService {
           _lastError = 'OpenVPN requires an inline CA and either a certificate/key pair or interactive authentication.';
           return false;
         }
-        if (interactive && credentials?.valid != true) {
+        final encryptedKey = OpenVpnProfile.needsKeyPassword(config.configContent);
+        if ((interactive || encryptedKey) &&
+            credentials?.validFor(interactive: interactive, encryptedKey: encryptedKey) != true) {
           _status = VPNStatus.error;
-          _lastError = 'OpenVPN requires username and password. Connect directly to enter credentials.';
+          _lastError = 'OpenVPN requires authentication material. Connect directly to enter credentials.';
           return false;
         }
         openVpnConfig = config.configContent;
@@ -389,6 +391,7 @@ class VPNService {
         if (openVpnConfig != null && credentials != null) ...{
           'openVpnUsername': credentials.username,
           'openVpnPassword': credentials.password,
+          'openVpnKeyPassword': credentials.keyPassword,
         },
         if (nativeTunnelConfig != null) 'nativeTunnelConfig': nativeTunnelConfig,
       });

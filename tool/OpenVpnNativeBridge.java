@@ -3,7 +3,7 @@ package com.blackoutkit.vpn;
 // Host JNI ABI smoke test; deliberately never opens a real network connection.
 public final class OpenVpnNativeBridge {
     private native long nativeCreate();
-    private native int nativeRun(long handle, Object callbacks, byte[] profile, byte[] user, byte[] password);
+    private native int nativeRunV3(long handle, Object callbacks, byte[] profile, byte[][] authentication);
     private native void nativeCancel(long handle);
     private native boolean nativeRelease(long handle);
 
@@ -32,19 +32,25 @@ public final class OpenVpnNativeBridge {
         require(api.nativeCreate() == 0);
         require(!api.nativeRelease(first + 1));
         api.nativeCancel(first);
-        require(api.nativeRun(first, cb, empty, empty, empty) != 0);
-        require(api.nativeRun(first, cb, empty, empty, empty) != 0);
+        require(api.nativeRunV3(first, cb, empty, new byte[][] {empty, empty, empty}) != 0);
+        require(api.nativeRunV3(first, cb, empty, new byte[][] {empty, empty, empty}) != 0);
         require(api.nativeRelease(first));
         require(!api.nativeRelease(first));
         long second = api.nativeCreate();
         require(second > first);
         api.nativeCancel(first);
-        require(api.nativeRun(first, cb, empty, empty, empty) != 0);
-        require(api.nativeRun(second, cb, new byte[1048577], empty, empty) != 0);
+        require(api.nativeRunV3(first, cb, empty, new byte[][] {empty, empty, empty}) != 0);
+        require(api.nativeRunV3(second, cb, new byte[1048577], new byte[][] {empty, empty, empty}) != 0);
         require(api.nativeRelease(second));
         long third = api.nativeCreate();
-        require(api.nativeRun(third, new Object(), empty, empty, empty) != 0);
+        require(api.nativeRunV3(third, new Object(), empty, new byte[][] {empty, empty, empty}) != 0);
         require(api.nativeRelease(third));
+        long fourth = api.nativeCreate();
+        require(api.nativeRunV3(fourth, cb, empty, new byte[][] {empty}) != 0);
+        require(api.nativeRelease(fourth));
+        long fifth = api.nativeCreate();
+        require(api.nativeRunV3(fifth, cb, empty, new byte[][] {empty, empty, new byte[4097]}) != 0);
+        require(api.nativeRelease(fifth));
         System.out.println("PASS host JNI single-owner, stale handle, cancellation, bounded input and callback failure");
     }
 }

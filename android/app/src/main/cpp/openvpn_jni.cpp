@@ -101,6 +101,20 @@ bool read(JNIEnv* env, jbyteArray array, std::string& out, int limit) {
     }
     return out.find('\0') == std::string::npos;
 }
+// Kotlin declares Array<ByteArray>; reject null, wrong arity and oversized fields.
+bool read_auth(JNIEnv* env, jobjectArray values, std::string& user,
+               std::string& password, std::string& keyPassword) {
+    if (!values || env->GetArrayLength(values) != 3) return false;
+    std::string* fields[] = {&user, &password, &keyPassword};
+    for (jsize i = 0; i < 3; ++i) {
+        auto item = static_cast<jbyteArray>(env->GetObjectArrayElement(values, i));
+        if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+        const bool ok = read(env, item, *fields[i], 4096);
+        if (item) env->DeleteLocalRef(item);
+        if (!ok) return false;
+    }
+    return true;
+}
 struct Sensitive {
     std::string value;
     ~Sensitive() {
@@ -125,8 +139,8 @@ Java_com_blackoutkit_vpn_OpenVpnNativeBridge_nativeCreate(JNIEnv*, jobject) {
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_blackoutkit_vpn_OpenVpnNativeBridge_nativeRun(
-    JNIEnv* env, jobject, jlong id, jobject target, jbyteArray profile, jbyteArray user, jbyteArray password) {
+Java_com_blackoutkit_vpn_OpenVpnNativeBridge_nativeRunV3(
+    JNIEnv* env, jobject, jlong id, jobject target, jbyteArray profile, jobjectArray authentication) {
     std::shared_ptr<Session> current;
     {
         std::lock_guard<std::mutex> guard(lock);
@@ -136,12 +150,12 @@ Java_com_blackoutkit_vpn_OpenVpnNativeBridge_nativeRun(
     }
     int result = 1;
     try {
-        Sensitive raw, name, secret;
+        Sensitive raw, name, secret, keySecret;
         if (target && read(env, profile, raw.value, 1048576) &&
-            read(env, user, name.value, 4096) && read(env, password, secret.value, 4096)) {
+            read_auth(env, authentication, name.value, secret.value, keySecret.value)) {
             Callbacks callbacks(env, target);
             blackout::OpenVpnClient client(callbacks, current->stop, current->cancelled);
-            result = client.run(raw.value, name.value, secret.value);
+            result = client.run(raw.value, name.value, secret.value, keySecret.value);
         }
     } catch (...) { result = 1; }
     {

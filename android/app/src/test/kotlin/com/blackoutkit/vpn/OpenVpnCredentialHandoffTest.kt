@@ -8,6 +8,18 @@ import org.junit.Test
 
 class OpenVpnCredentialHandoffTest {
     @Test
+    fun supportsKeyOnlyAndRejectsIncompleteLogin() {
+        val key = OpenVpnCredentials(ByteArray(0), ByteArray(0), byteArrayOf(1))
+        assertTrue(key.isValid())
+        val token = OpenVpnCredentialHandoff.stage(key)
+        OpenVpnCredentialHandoff.discard(token)
+        assertFalse(key.isValid())
+        val partial = OpenVpnCredentials(byteArrayOf(1), ByteArray(0), byteArrayOf(2))
+        assertFalse(partial.isValid())
+        partial.clear()
+    }
+
+    @Test
     fun consumesOnlyMatchingTokenOnce() {
         val credentials = OpenVpnCredentials(byteArrayOf(1), byteArrayOf(2))
         val token = OpenVpnCredentialHandoff.stage(credentials)

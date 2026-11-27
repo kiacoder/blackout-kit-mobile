@@ -11,12 +11,11 @@ internal object OpenVpnNativeBridge {
 
     external fun nativeCreate(): Long
 
-    external fun nativeRun(
+    external fun nativeRunV3(
         handle: Long,
         callbacks: OpenVpnTunCallbacks,
         profile: ByteArray,
-        username: ByteArray,
-        password: ByteArray,
+        authentication: Array<ByteArray>,
     ): Int
 
     external fun nativeCancel(handle: Long)

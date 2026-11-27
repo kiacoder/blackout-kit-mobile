@@ -1089,15 +1089,36 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       }
 
       final bool success;
-      if (config is OpenVpnConfig &&
-          OpenVpnProfile.parse(config.configContent)?.directives.contains('auth-user-pass') == true &&
-          !_candidateAttemptInFlight) {
+      final interactive = config is OpenVpnConfig &&
+          OpenVpnProfile.parse(config.configContent)?.directives.contains('auth-user-pass') == true;
+      final encryptedKey = config is OpenVpnConfig &&
+          OpenVpnProfile.needsKeyPassword(config.configContent);
+      if (config is OpenVpnConfig && (interactive || encryptedKey) && !_candidateAttemptInFlight) {
+        final library = Get.isRegistered<ConfigController>()
+            ? Get.find<ConfigController>().configService : null;
+        final canRemember = interactive && library?.canRememberOpenVpn(config) == true;
+        final saved = canRemember ? library?.readOpenVpnLogin(config) : null;
         final context = Get.context;
-        final credentials = context == null || !context.mounted ? null : await requestOpenVpnCredentials(context);
+        final credentials = context == null || !context.mounted ? null :
+            await requestOpenVpnCredentials(context, interactive: interactive,
+                encryptedKey: encryptedKey, canRemember: canRemember, saved: saved);
+        saved?.clear();
         if (credentials == null || _cancelRequested) {
           credentials?.clear();
           state.value = ConnectionState.idle;
           statusMessage.value = LocalizationService.t('openvpn_auth_cancelled');
+          return false;
+        }
+        try {
+          if (canRemember) await library!.updateOpenVpnLogin(config, credentials);
+        } catch (_) {
+          credentials.clear();
+          state.value = ConnectionState.error;
+          statusMessage.value = LocalizationService.t('openvpn_auth_storage_error');
+          return false;
+        }
+        if (_cancelRequested) {
+          credentials.clear();
           return false;
         }
         success = await vpnService.connectAuthenticatedOpenVpn(config, credentials, options: options);

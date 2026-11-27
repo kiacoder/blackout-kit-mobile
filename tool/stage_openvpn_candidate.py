@@ -15,7 +15,7 @@ ABIS = ("arm64-v8a", "armeabi-v7a")
 LIB = "libopenvpn-candidate.so"
 PACKAGE = "com.blackoutkit.vpn.openvpntest"
 SYMBOLS = tuple("Java_com_blackoutkit_vpn_OpenVpnNativeBridge_native" + name
-                for name in ("Create", "Run", "Cancel", "Release"))
+                for name in ("Create", "RunV3", "Cancel", "Release"))
 
 
 def sha(path):

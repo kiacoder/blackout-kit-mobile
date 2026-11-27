@@ -374,8 +374,14 @@ class VpnPlugin :
             if (dnsOnly || call.argument<String>("protocol") != "openvpn") return
             val username = call.argument<ByteArray>("openVpnUsername")
             val password = call.argument<ByteArray>("openVpnPassword")
-            if (username == null && password == null) return
-            val credentials = OpenVpnCredentials(username ?: ByteArray(0), password ?: ByteArray(0))
+            val keyPassword = call.argument<ByteArray>("openVpnKeyPassword")
+            if (username == null && password == null && keyPassword == null) return
+            val credentials =
+                OpenVpnCredentials(
+                    username ?: ByteArray(0),
+                    password ?: ByteArray(0),
+                    keyPassword ?: ByteArray(0),
+                )
             if (!credentials.isValid()) {
                 credentials.clear()
                 error("Invalid OpenVPN credentials")

@@ -22,6 +22,13 @@ for artifact in core core-ktx; do
   fi
   printf '%s  %s\n' "$digest" "$archive" | sha256sum -c -
 done
+# Keep annotations used by the native JNI bridge; pin the compile API.
+annotation=".cache/android-api-check/annotation.jar"
+if [[ ! -f "$annotation" ]]; then
+  curl --fail --location --retry 3 --max-time 120 \
+    "https://dl.google.com/dl/android/maven2/androidx/annotation/annotation-jvm/1.8.0/annotation-jvm-1.8.0.jar" -o "$annotation"
+fi
+printf '%s  %s\n' '9aab326d9492800991854360ac248f493ce7f7c3183519309b78ace9e240f6f6' "$annotation" | sha256sum -c -
 python3 - <<'PY'
 import zipfile
 with zipfile.ZipFile('android/app/libs/libcores.aar') as archive:
@@ -35,7 +42,7 @@ PY
 cat > .cache/android-api-check/Generated.kt <<'KOTLIN'
 package com.blackoutkit.vpn
 // Compile-only substitutes for AGP-generated fields and a class literal.
-object BuildConfig { const val ENABLE_EXPERIMENTAL_MIHOMO = false; const val ENABLE_EXPERIMENTAL_NATIVE_TUNNELS = false }
+object BuildConfig { const val ENABLE_EXPERIMENTAL_OPENVPN = false; const val ENABLE_EXPERIMENTAL_MIHOMO = false; const val ENABLE_EXPERIMENTAL_NATIVE_TUNNELS = false }
 object R { object drawable { const val ic_vpn_notification = 1 } }
 class MainActivity : android.app.Activity()
 KOTLIN
@@ -46,10 +53,10 @@ if [[ "${CHECK_FLUTTER_PLUGIN:-false}" == true ]]; then
   while IFS= read -r -d '' file; do EXTRA_SOURCES+=("$file"); done < <(find .cache/flutter-api-source -name '*.java' -print0)
 fi
 "$KOTLINC" \
-  android/app/src/main/kotlin/com/blackoutkit/vpn/{AvailableNetworkRegistry,AvailableNetworkMonitor,NativeChildStop,VpnSessionExecutor,OneShotCallbackSlot,EngineCommands,ProcessCompat,EngineRunner,EngineSessionAdmission,TransientEngineConfig,LegacyEngineConfigs,SubprocessLifecycle,LocalSocksReadiness,BlackoutVpnService,TunnelCleanup,BlackoutCoreEngine,EmbeddedCoreOwner,LibboxEngine,XrayEngine,NativeTunnelConfig,NativeTunnelEngine,NativeTunnelLifecycle,GoRuntimeAdmission}.kt \
+  android/app/src/main/kotlin/com/blackoutkit/vpn/{AvailableNetworkRegistry,AvailableNetworkMonitor,NativeChildStop,VpnSessionExecutor,OneShotCallbackSlot,EngineCommands,ProcessCompat,EngineRunner,EngineSessionAdmission,TransientEngineConfig,LegacyEngineConfigs,SubprocessLifecycle,LocalSocksReadiness,BlackoutVpnService,TunnelCleanup,BlackoutCoreEngine,EmbeddedCoreOwner,LibboxEngine,XrayEngine,NativeTunnelConfig,NativeTunnelEngine,NativeTunnelLifecycle,GoRuntimeAdmission,OpenVpnAndroidBackend,OpenVpnCandidateProfile,OpenVpnCredentials,OpenVpnNativeBridge,OpenVpnSession,OpenVpnTunCallbacks}.kt \
   android/app/src/main/kotlin/com/wireguard/android/backend/GoBackend.kt \
   android/app/src/main/kotlin/org/amnezia/awg/GoBackend.kt \
   .cache/android-api-check/Generated.kt "${EXTRA_SOURCES[@]}" \
-  -cp "$ANDROID_API_JAR:.cache/android-api-check/cores.jar:.cache/android-api-check/core.jar:.cache/android-api-check/core-ktx.jar" \
+  -cp "$ANDROID_API_JAR:.cache/android-api-check/cores.jar:.cache/android-api-check/core.jar:.cache/android-api-check/core-ktx.jar:.cache/android-api-check/annotation.jar" \
   -jvm-target 17 -d .cache/android-api-check/service.jar
 echo "Android source API check passed (plugin declarations: ${CHECK_FLUTTER_PLUGIN:-false}). NOT an APK build, Flutter Java/Dart compilation or device test."

@@ -6,13 +6,20 @@ import java.util.UUID
 internal class OpenVpnCredentials(
     val username: ByteArray,
     val password: ByteArray,
+    val keyPassword: ByteArray = ByteArray(0),
 ) {
     fun clear() {
         username.fill(0)
         password.fill(0)
+        keyPassword.fill(0)
     }
 
-    fun isValid(): Boolean = valid(username) && valid(password)
+    fun isValid(): Boolean {
+        val pair = valid(username) && valid(password)
+        val absent = username.isEmpty() && password.isEmpty()
+        val keyValid = valid(keyPassword)
+        return (pair || absent) && (keyValid || keyPassword.isEmpty()) && (pair || keyValid)
+    }
 
     private fun valid(bytes: ByteArray): Boolean =
         bytes.isNotEmpty() && bytes.size <= MAX_BYTES && bytes.none { it == 0.toByte() }

@@ -108,6 +108,10 @@ class LocalizationService extends GetxService implements Translations {
   static const Map<String, Map<String, String>> _translations = {
     // ───────────────────────────── English ─────────────────────────────
     'en': {
+      'openvpn_auth_remember': 'Remember login in encrypted library',
+      'openvpn_auth_key_password': 'Private key password',
+      'openvpn_auth_key_once': 'Private key password is never saved.',
+      'openvpn_auth_storage_error': 'Could not update encrypted login.',
       'openvpn_auth_title': 'OpenVPN authentication',
       'openvpn_auth_once': 'Credentials are used for this connection only.',
       'openvpn_auth_username': 'Username',
@@ -732,6 +736,10 @@ class LocalizationService extends GetxService implements Translations {
 
     // ───────────────────────────── Persian ─────────────────────────────
     'fa': {
+      'openvpn_auth_remember': 'ذخیره اطلاعات ورود در کتابخانه رمزگذاری‌شده',
+      'openvpn_auth_key_password': 'رمز کلید خصوصی',
+      'openvpn_auth_key_once': 'رمز کلید خصوصی ذخیره نمی‌شود.',
+      'openvpn_auth_storage_error': 'به‌روزرسانی اطلاعات ورود رمزگذاری‌شده ناموفق بود.',
       'openvpn_auth_title': 'احراز هویت OpenVPN',
       'openvpn_auth_once': 'اطلاعات ورود فقط برای این اتصال استفاده می‌شود.',
       'openvpn_auth_username': 'نام کاربری',
@@ -1332,6 +1340,10 @@ class LocalizationService extends GetxService implements Translations {
 
     // ───────────────────────────── Chinese ─────────────────────────────
     'zh': {
+      'openvpn_auth_remember': '在加密配置库中记住登录信息',
+      'openvpn_auth_key_password': '私钥密码',
+      'openvpn_auth_key_once': '私钥密码不会保存。',
+      'openvpn_auth_storage_error': '无法更新加密登录信息。',
       'openvpn_auth_title': 'OpenVPN 身份验证',
       'openvpn_auth_once': '凭据仅用于本次连接。',
       'openvpn_auth_username': '用户名',

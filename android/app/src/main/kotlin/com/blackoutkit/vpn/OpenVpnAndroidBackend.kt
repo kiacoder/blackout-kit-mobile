@@ -9,9 +9,10 @@ internal class OpenVpnAndroidBackend(
     service: VpnService,
     current: () -> Boolean,
     private val credentials: OpenVpnCredentials?,
+    policy: OpenVpnAppPolicy,
 ) : OpenVpnSession.Backend {
     private var report: (Boolean) -> Unit = {}
-    val callbacks = OpenVpnTunCallbacks(service, current) { report(it) }
+    val callbacks = OpenVpnTunCallbacks(service, current, policy) { report(it) }
 
     override fun run(report: (Boolean) -> Unit) {
         this.report = report

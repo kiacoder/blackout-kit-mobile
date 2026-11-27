@@ -58,6 +58,7 @@ class BlackoutVpnService : VpnService() {
         const val EXTRA_SOCKS_PORT = "socksPort"
         const val EXTRA_DNS = "dns"
         const val EXTRA_DNS_SERVERS = "dnsServers"
+        const val EXTRA_OPENVPN_CUSTOM_DNS = "openVpnCustomDns"
 
         /**
          * DNS-only session: advertise the resolvers, route nothing.
@@ -313,6 +314,7 @@ class BlackoutVpnService : VpnService() {
         val nativeConfig = intent?.getStringExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
         val openVpnConfig = intent?.getStringExtra(EXTRA_OPENVPN_CONFIG)
         val openVpnAuthToken = intent?.getStringExtra(EXTRA_OPENVPN_AUTH_TOKEN)
+        val openVpnCustomDns = intent?.getStringArrayListExtra(EXTRA_OPENVPN_CUSTOM_DNS)
 
         init {
             intent?.removeExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
@@ -470,16 +472,21 @@ class BlackoutVpnService : VpnService() {
         ): Boolean {
             lastError = null
             val profile = request.openVpnConfig
-            val fullTunnel = request.allowed.isEmpty() && request.disallowed.isEmpty()
+            val policy =
+                try {
+                    OpenVpnAppPolicy.create(packageName, request.allowed, request.disallowed, request.openVpnCustomDns)
+                } catch (_: IllegalArgumentException) {
+                    return setupFailure(ticket, "Invalid OpenVPN app routing or custom DNS settings")
+                }
             return when {
                 !BuildConfig.ENABLE_EXPERIMENTAL_OPENVPN ->
                     setupFailure(ticket, "OpenVPN candidate is not enabled in this build")
-                profile == null || !OpenVpnCandidateProfile.admits(profile) || !fullTunnel ->
+                profile == null || !OpenVpnCandidateProfile.admits(profile) ->
                     setupFailure(
                         ticket,
-                        "OpenVPN requires an exact server identity and full-tunnel mode",
+                        "OpenVPN requires a self-contained profile with exact server identity",
                     )
-                else -> startOpenVpn(request, profile, ticket)
+                else -> startOpenVpn(request, profile, ticket, policy)
             }
         }
 
@@ -487,6 +494,7 @@ class BlackoutVpnService : VpnService() {
             request: StartRequest,
             profile: String,
             ticket: VpnSessionExecutor.Ticket,
+            policy: OpenVpnAppPolicy,
         ): Boolean {
             val token = request.openVpnAuthToken
             val credentials = token?.let(OpenVpnCredentialHandoff::take)
@@ -498,7 +506,14 @@ class BlackoutVpnService : VpnService() {
                     OpenVpnNativeBridge.loadCandidate()
                     val handle = OpenVpnNativeBridge.nativeCreate()
                     check(handle > 0)
-                    OpenVpnAndroidBackend(handle, profile, this@BlackoutVpnService, ticket::isCurrent, credentials)
+                    OpenVpnAndroidBackend(
+                        handle,
+                        profile,
+                        this@BlackoutVpnService,
+                        ticket::isCurrent,
+                        credentials,
+                        policy,
+                    )
                 } catch (failure: IllegalStateException) {
                     credentials?.clear()
                     throw failure

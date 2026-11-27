@@ -445,6 +445,9 @@ class VpnPlugin :
                 )
                 putExtra(BlackoutVpnService.EXTRA_NATIVE_TUNNEL_CONFIG, call.argument<String>("nativeTunnelConfig"))
                 putExtra(BlackoutVpnService.EXTRA_OPENVPN_CONFIG, call.argument<String>("openVpnConfig"))
+                call.argument<List<String>>("openVpnCustomDns")?.let {
+                    putStringArrayListExtra(BlackoutVpnService.EXTRA_OPENVPN_CUSTOM_DNS, ArrayList(it))
+                }
                 putExtra(BlackoutVpnService.EXTRA_OPENVPN_AUTH_TOKEN, openVpnCredentialToken)
                 putExtra(BlackoutVpnService.EXTRA_MIHOMO_CONFIG, call.argument<String>("mihomoConfig"))
                 putExtra(BlackoutVpnService.EXTRA_DNS_ONLY, dnsOnly)

@@ -15,6 +15,7 @@ import java.net.InetAddress
 internal class OpenVpnTunCallbacks(
     private val service: VpnService,
     private val current: () -> Boolean,
+    private val policy: OpenVpnAppPolicy,
     private val report: (Boolean) -> Unit,
 ) {
     private var builder: VpnService.Builder? = null
@@ -81,7 +82,12 @@ internal class OpenVpnTunCallbacks(
             val pending = checkNotNull(builder)
             builder = null
             require(OpenVpnTunPolicy.admits(addresses, routes, dnsServers))
-            dnsServers.forEach { pending.addDnsServer(it) }
+            val effectiveDns = policy.effectiveDns(dnsServers)
+            require(OpenVpnTunPolicy.admits(addresses, routes, effectiveDns))
+            effectiveDns.forEach { pending.addDnsServer(it) }
+            // A missing package must fail setup, never silently widen the tunnel.
+            policy.allowed.forEach { pending.addAllowedApplication(it) }
+            policy.disallowed.forEach { pending.addDisallowedApplication(it) }
             val next = checkNotNull(pending.establish())
             try {
                 check(current())
@@ -160,5 +166,50 @@ internal object OpenVpnTunPolicy {
             safe6 &&
             dns.isNotEmpty() &&
             dns.all { ip -> !ip.isLinkLocalAddress && routes.any { it.contains(ip) } }
+    }
+}
+
+/** Immutable per-session policy, reapplied to every replacement interface. */
+internal class OpenVpnAppPolicy private constructor(
+    val allowed: List<String>,
+    val disallowed: List<String>,
+    private val customDns: List<InetAddress>?,
+) {
+    fun effectiveDns(pushed: List<InetAddress>): List<InetAddress> = customDns ?: pushed
+
+    companion object {
+        private const val MAX_APPS = 100
+        private const val MAX_DNS = 16
+        private const val MAX_PACKAGE_LENGTH = 255
+
+        fun create(
+            self: String,
+            allowed: List<String>,
+            disallowed: List<String>,
+            customDns: List<String>?,
+        ): OpenVpnAppPolicy {
+            require(allowed.size <= MAX_APPS && disallowed.size <= MAX_APPS)
+            require(allowed.isEmpty() || disallowed.isEmpty())
+            require(self !in disallowed)
+            require((allowed + disallowed).all { it.isNotBlank() && it.length <= MAX_PACKAGE_LENGTH })
+            val resolvers =
+                customDns?.let { values ->
+                    require(values.isNotEmpty() && values.size <= MAX_DNS)
+                    values.map { NativeTunnelConfig.numericAddress(it) }.distinct().also { addresses ->
+                        require(addresses.all { validResolver(it) })
+                    }
+                }
+            // Include the app for tunneled connectivity/exit-IP probes. Native
+            // transport sockets use VpnService.protect(), not UID bypass.
+            val included = if (allowed.isNotEmpty()) (allowed + self).distinct() else emptyList()
+            return OpenVpnAppPolicy(included, disallowed.distinct(), resolvers)
+        }
+
+        private fun validResolver(ip: InetAddress): Boolean =
+            ip is Inet4Address &&
+                !ip.isAnyLocalAddress &&
+                !ip.isLoopbackAddress &&
+                !ip.isMulticastAddress &&
+                !ip.isLinkLocalAddress
     }
 }

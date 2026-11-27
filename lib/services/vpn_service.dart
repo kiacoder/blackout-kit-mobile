@@ -258,10 +258,9 @@ class VPNService {
       if (config is OpenVpnConfig) {
         final availability = await getEngineInfo();
         if (!Platform.isAndroid || !availability.openVpnAvailable ||
-            !OpenVpnProfile.admitsRuntime(config.configContent) ||
-            session.hasSplitTunnel) {
+            !OpenVpnProfile.admitsRuntime(config.configContent)) {
           _status = VPNStatus.error;
-          _lastError = 'OpenVPN requires a private Android candidate, a self-contained profile with exact verify-x509-name and full-tunnel mode.';
+          _lastError = 'OpenVPN requires a private Android candidate, a self-contained profile with exact verify-x509-name rule.';
           return false;
         }
         final profile = OpenVpnProfile.parse(config.configContent);
@@ -388,6 +387,8 @@ class VPNService {
         if (libboxJson != null) 'libboxConfig': libboxJson,
         if (mihomoJson != null) 'mihomoConfig': mihomoJson,
         if (openVpnConfig != null) 'openVpnConfig': openVpnConfig,
+        if (openVpnConfig != null && session.routeDnsThroughProxy)
+          'openVpnCustomDns': session.dnsServers,
         if (openVpnConfig != null && credentials != null) ...{
           'openVpnUsername': credentials.username,
           'openVpnPassword': credentials.password,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../controllers/config_controller.dart';
 import '../models/config.dart';
 import '../services/bounded_config_import.dart';
+import '../services/scanner_operation_queue.dart';
 
 class ConfigImportScreen extends StatefulWidget {
   const ConfigImportScreen({super.key});
@@ -24,11 +26,11 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   late final TabController _tabController;
   late final ConfigController _configController;
   final TextEditingController _textController = TextEditingController();
-  final MobileScannerController _scannerController = MobileScannerController();
+  final MobileScannerController _scannerController = MobileScannerController(autoStart: false);
+  final ScannerOperationQueue _cameraQueue = ScannerOperationQueue();
 
   Config? _parsedConfig;
   bool _isScanning = true;
-  bool _torchEnabled = false;
   // Scanner discipline: the camera stream fires continuously while a QR is
   // in view, so every dialog/save path must be single-flight and gated, or
   // dialogs stack on each other faster than they can be dismissed.
@@ -48,6 +50,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      unawaited(_resumeCamera());
       if (ConfigImportScreen.pendingPayload != null) {
         _consumeIntentPayload();
       } else {
@@ -107,8 +110,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   @override
   void dispose() {
     _tabController.removeListener(_handleTabChange);
-    _pauseCamera();
-    _scannerController.dispose();
+    unawaited(_disposeCamera());
     _tabController.dispose();
     _textController.dispose();
     super.dispose();
@@ -117,23 +119,39 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   /// Camera helpers. Stopping the camera while a dialog is open is the core
   /// of the stacking fix: a stopped controller emits no detection events, so
   /// nothing can re-pop a dialog while the user is reading or tapping it.
+  Future<void> _disposeCamera() async {
+    try {
+      await _cameraQueue.close(_scannerController.dispose);
+    } catch (_) {
+      debugPrint('Camera disposal failed');
+    }
+  }
+
   Future<void> _pauseCamera() async {
     try {
-      await _scannerController.stop();
-    } catch (_) {}
+      await _cameraQueue.run(_scannerController.stop);
+    } catch (_) {
+      debugPrint('Camera stop failed');
+    }
   }
+
+  bool get _canScan => mounted && _tabController.index == 0 &&
+      _isScanning && !_dialogOpen && !_saving && !_pickingFile;
 
   Future<void> _resumeCamera() async {
     try {
-      await _scannerController.start();
-    } catch (_) {}
+      await _cameraQueue.run(() async {
+        if (_canScan) await _scannerController.start();
+      });
+    } catch (_) {
+      debugPrint('Camera start failed');
+    }
   }
 
   /// The scan tab keeps its MobileScanner alive while other tabs are shown;
   /// leaving the tab must pause the camera or detections fire while the user
   /// types on the text tab.
   void _handleTabChange() {
-    if (_tabController.indexIsChanging) return;
     if (_tabController.index != 0) {
       _pauseCamera();
     } else if (_isScanning && !_dialogOpen) {
@@ -190,7 +208,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     // the next popup and the dialogs stacked faster than they could be
     // dismissed.
     if (!mounted || !_isScanning || _dialogOpen || _saving || _pickingFile) return;
-    if (_tabController.index != 0) return; // scan tab not visible
+    if (!_canScan) return; // scan tab not visible
 
     final barcodes = capture.barcodes;
     for (final barcode in barcodes) {
@@ -406,6 +424,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   Future<void> _showParsedDialog(Config config) async {
     if (!mounted || _dialogOpen || _saving) return;
     _dialogOpen = true;
+    unawaited(_pauseCamera());
     try {
       await showDialog<void>(
       context: context,
@@ -459,13 +478,17 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     // The dialog is closed (added, imported or cancelled): allow the next one.
     } finally {
       _dialogOpen = false;
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        unawaited(_resumeCamera());
+      }
     }
   }
 
   Future<void> _showMultipleParsedDialog(List<Config> configs) async {
     if (!mounted || _dialogOpen || _saving) return;
     _dialogOpen = true;
+    unawaited(_pauseCamera());
     try {
       await showDialog<void>(
       context: context,
@@ -504,7 +527,10 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
     );
     } finally {
       _dialogOpen = false;
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        unawaited(_resumeCamera());
+      }
     }
   }
 
@@ -570,42 +596,48 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                IconButton(
-                  icon: Icon(
-                    _torchEnabled ? Icons.flash_on : Icons.flash_off,
-                    color: Colors.white,
-                  ),
-                  // Toggling the torch on a stopped controller throws.
-                  onPressed: (_isScanning && !_dialogOpen)
-                      ? () async {
-                          // toggleTorch throws on a stopped controller or a
-                          // device without a flash unit; the old code flipped
-                          // the icon anyway, so the UI claimed a torch that was
-                          // never on.
-                          try {
-                            await _scannerController.toggleTorch();
-                            if (!mounted) return;
-                            setState(() => _torchEnabled = !_torchEnabled);
-                          } catch (_) {
-                            if (!mounted) return;
-                            setState(() => _torchEnabled = false);
-                            Get.snackbar(
-                              'Torch Unavailable'.tr,
-                              'This camera does not expose a torch'.tr,
-                              backgroundColor: Colors.orange,
-                              colorText: Colors.white,
-                              duration: const Duration(seconds: 2),
-                            );
+                ValueListenableBuilder<MobileScannerState>(
+                  valueListenable: _scannerController,
+                  builder: (context, state, _) => IconButton(
+                    icon: Icon(
+                      state.torchState == TorchState.on
+                          ? Icons.flash_on
+                          : Icons.flash_off,
+                      color: Colors.white,
+                    ),
+                    onPressed: _canScan && state.isRunning &&
+                            state.torchState != TorchState.unavailable
+                        ? () async {
+                            try {
+                              await _cameraQueue.run(() async {
+                                if (_canScan && _scannerController.value.isRunning) {
+                                  await _scannerController.toggleTorch();
+                                }
+                              });
+                            } catch (_) {
+                              if (!mounted) return;
+                              Get.snackbar(
+                                'Torch Unavailable'.tr,
+                                'This camera does not expose a torch'.tr,
+                                backgroundColor: Colors.orange,
+                                colorText: Colors.white,
+                                duration: const Duration(seconds: 2),
+                              );
+                            }
                           }
-                        }
-                      : null,
+                        : null,
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.flip_camera_ios, color: Colors.white),
                   onPressed: (_isScanning && !_dialogOpen)
                       ? () async {
                           try {
-                            await _scannerController.switchCamera();
+                            await _cameraQueue.run(() async {
+                              if (_canScan && _scannerController.value.isRunning) {
+                                await _scannerController.switchCamera();
+                              }
+                            });
                           } catch (_) {
                             if (!mounted) return;
                             Get.snackbar(

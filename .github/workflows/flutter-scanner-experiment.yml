@@ -58,7 +58,9 @@ jobs:
       - name: Resolve exact dependencies and install SDK
         run: |
           python3 tool/verify_supply_chain.py
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdkmanager"
+          "$sdkmanager" "platforms;android-36" "build-tools;36.0.0"
           flutter pub get --enforce-lockfile
       - name: Compile Android and run native unit tests
         working-directory: android

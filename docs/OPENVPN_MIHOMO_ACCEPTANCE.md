@@ -29,3 +29,18 @@
 99/99 targeted Dart regressions and the full 642/642 Flutter test suite passed; flutter analyze reported no issues. 8/8 Python artifact and staging tests passed. ADB showed no attached Android device, so neither engine can be marked Android-verified. Keep the published release and existing working engines unchanged. Do not merge or ship based only on import, build, or host-test evidence.
 
 Follow-up: 645/645 full Flutter tests passed before final admission refinement; 9/9 focused Flutter tests, 13/13 artifact/packaging tests, and analyzer clean after refinement. Android device remains unavailable.
+
+## Native bridge checkpoint (2026-11-27)
+
+- Added a candidate C++ OpenVPN ClientAPI adapter, JNI handle ownership, bounded input and redacted callback diagnostics, and Android VpnService.Builder callbacks with service-side descriptor retention. The bridge is not registered with the normal VPN service.
+- Six C++ callback-contract tests passed on Linux. Host JNI smoke passed using a real Linux shared library and JVM (single owner, stale handles, cancel-before-run, bounded input and failed callback lookup). Android Kotlin compilation passed.
+- Cross-built both Android API 24 ABIs from OpenVPN 3.11.8 and candidate dependencies Mbed TLS 3.6.8 (82e69999f91126589a28b70dd75b69fbcabe2711, framework ced31491c5ec907a6be533512f19dc1779230ac1), ASIO 1.39.0 (190a8d8daf1cc62909b4e0c72ff491ba264ca98e), xxHash 0.8.4 (c87183a77d67f7d37e3d2d1b7eaac5e7c695e4f0). NDK 28.2.13676358, CMake 3.22.1. This candidate uses Mbed TLS rather than the host OpenSSL probe; dependencies and distribution notices are not release-audited.
+- ARM64 SHA-256: 7a13ab737fd0e8b99067edef460a18ba612e4a975b24cfaa76f1fdc869248b6c.
+- ARMv7 SHA-256: 29e1385027893db96cf10d97af593cb4310f7a1a4d07103a78e9f6bd027ec227.
+- Both candidates pass ELF ABI/API and all four JNI export checks. Use tool/build_openvpn_android_windows.ps1 with clean pinned sources and tool/stage_openvpn_candidate.py to stage and verify both ABIs. Opt-in Gradle property enableOpenVpnCandidate creates a separate .openvpntest debug package. It is intentionally incompatible with other experimental build flags. Normal release packaging remains unchanged.
+- This initial callback contract is limited to full-tunnel IPv4, optionally full-tunnel IPv6. No route exclusions, DNS fallback, unsupported split DNS/DoH/DoT, external PKI, encrypted private keys or interactive challenge handling. It is not a complete OpenVPN implementation. Real server handshake, Android load/traffic, cancellation races, lifecycle integration, profile admission at the actual service boundary and credential UI are outstanding. Do not advertise production support.
+- 14/14 Python candidate/artifact tests passed. No device was attached for instrumentation.
+
+Private debug APK package identity and exact binary hashes verified: 938dd9e2a07fe7e18e975a9a0a6dadfa9a87900c10137fc186751b1c7b5129b6. Android instrumentation APK built successfully after resolving an existing uncached jsr305 test-classpath artifact; SHA-256 24df24a874692ffd6440039bebc02917975beeb5d95ad462a2364e50d798fdb8. Neither APK has been installed or run on Android.
+
+Final Kotlin quality audit: zero findings after correcting six issues without suppression. Final app and instrumentation APKs rebuilt and native bytes verified.

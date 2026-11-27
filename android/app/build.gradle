@@ -81,6 +81,8 @@ android {
         applicationId "com.blackoutkit.vpn"
         if (project.findProperty("enableProcessGuardExperiment") == "true") {
             testInstrumentationRunner "com.blackoutkit.vpn.ProcessGuardAcceptance"
+        } else if (project.findProperty("enableOpenVpnCandidate") == "true") {
+            testInstrumentationRunner "com.blackoutkit.vpn.OpenVpnCandidateAcceptance"
         }
         // Opt-in development adapter, NOT a shipped/verified engine. No binary
         // is downloaded at runtime. Supply reviewed GPL-compliant artifacts.
@@ -154,6 +156,20 @@ android {
         }
         sourceSets.debug.jniLibs.srcDir mihomoDir
     }
+    if (project.findProperty("enableOpenVpnCandidate") == "true") {
+        ["enableProcessGuardExperiment", "enableMihomo", "nativeTestPackage", "enableNativeTunnels"].each { flag ->
+            if (project.findProperty(flag) == "true") {
+                throw new GradleException("OpenVPN candidate requires an isolated test build")
+            }
+        }
+        def openVpnDir = rootProject.file("../.cache/openvpn3-jni")
+        ["arm64-v8a", "armeabi-v7a"].each { abi ->
+            if (!new File(openVpnDir, "${abi}/libopenvpn-candidate.so").isFile()) {
+                throw new GradleException("Missing staged OpenVPN candidate for " + abi)
+            }
+        }
+        sourceSets.debug.jniLibs.srcDir openVpnDir
+    }
     buildTypes {
         debug {
             externalNativeBuild {
@@ -167,6 +183,9 @@ android {
             if (project.findProperty("enableProcessGuardExperiment") == "true") {
                 applicationIdSuffix ".guardtest"
                 versionNameSuffix "-guard-test"
+            } else if (project.findProperty("enableOpenVpnCandidate") == "true") {
+                applicationIdSuffix ".openvpntest"
+                versionNameSuffix "-openvpn-test.1"
             } else if (project.findProperty("enableMihomo") == "true") {
                 applicationIdSuffix ".mihomotest"
                 versionNameSuffix "-mihomo-test.1"
@@ -215,6 +234,9 @@ android {
         // APK. If you ever need them back, delete the two `exclude` lines below.
         // Extract to nativeLibraryDir at install time (see the comment above).
         jniLibs.useLegacyPackaging = true
+        if (project.findProperty("enableOpenVpnCandidate") == "true") {
+            jniLibs.keepDebugSymbols += ["**/libopenvpn-candidate.so"]
+        }
         if (project.findProperty("enableMihomo") == "true") {
             jniLibs.keepDebugSymbols += ["**/libmihomo.so"]
         }

@@ -47,7 +47,7 @@ jobs:
         run: flutter analyze
 
       - name: Run unit tests
-        # --coverage is what produces coverage/lcov.info. Without it the Codecov
+        # --coverage is what produces coverage/lcov.info. Without it the coverage artifact
         # step below uploaded a file that was never generated.
         run: flutter test test/ --coverage
 
@@ -92,9 +92,10 @@ jobs:
         continue-on-error: true
         run: flutter test integration_test/
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+      - name: Upload exact Dart coverage report
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          files: ./coverage/lcov.info
-          disable_search: true
-          fail_ci_if_error: false
+          name: dart-coverage
+          path: coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 14

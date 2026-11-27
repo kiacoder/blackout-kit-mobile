@@ -4,6 +4,7 @@
 /// - fnmatch-style asset selection
 /// - Error handling for rate limits, 404s, network issues
 /// - Config deduplication by hash
+library;
 
 import 'package:dio/dio.dart';
 import 'package:logger/logger.dart';

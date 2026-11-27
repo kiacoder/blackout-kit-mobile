@@ -4,6 +4,7 @@
 /// Catching a bad value here produces a message the user can act on; catching it
 /// inside `VpnService.Builder` produces an opaque `IllegalArgumentException`
 /// from `establish()`, or worse, a tunnel that opens and routes nothing.
+library;
 
 import 'package:flutter_test/flutter_test.dart';
 

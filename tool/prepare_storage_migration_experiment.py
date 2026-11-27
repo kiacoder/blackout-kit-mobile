@@ -19,7 +19,9 @@ def candidate_manifest(source):
         "package_info_plus: 5.0.1": "package_info_plus: " + PACKAGE_INFO_CANDIDATE,
     }
     for old, new in replacements.items():
-        if source.count(old) != 1:
+        if old.startswith("package_info_plus:") and source.count(new) == 1 and source.count(old) == 0:
+            continue
+        if source.count(old) != 1 or new in source:
             raise ValueError("Unexpected app dependency constraint: " + old)
         source = source.replace(old, new)
     return source

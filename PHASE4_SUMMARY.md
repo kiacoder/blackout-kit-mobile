@@ -163,7 +163,7 @@ git commit -am "chore: bump to v1.0.0"
 git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0
 
-# 3. Monitor CI/CD at github.com/blackout-kit/blackout-kit-mobile/actions
+# 3. Monitor CI/CD at github.com/kiacoder/blackout-kit-mobile/actions
 #    → test.yml verifies all tests pass
 #    → build.yml creates APK + IPA
 #    → release.yml creates GitHub release with artifacts

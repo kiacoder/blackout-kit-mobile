@@ -7,7 +7,7 @@ void main() {
 
   group('FLUX & AmneziaWG Configuration', () {
     test('AmneziaWGConfig parses full S1-S2 and H1-H4 obfuscation block', () {
-      final awgText = '''[Interface]
+      const awgText = '''[Interface]
 PrivateKey = aaaaaa=
 Address = 10.0.0.2/32
 Jc = 8

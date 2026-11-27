@@ -39,25 +39,32 @@ internal class SubprocessLifecycle(
         graceMs: Long = 500,
     ) {
         val children = processes.asReversed().distinct()
-        var interrupted = false
-        // Signal every child first so their grace periods can overlap.
-        for (process in children) {
-            if (isAlive(process)) process.destroy()
-        }
-        for (process in children) {
+        var interrupted = Thread.interrupted()
+
+        fun awaitExit(process: Process): Boolean =
             try {
-                if (isAlive(process) && !waitFor(process, graceMs)) {
-                    forceStop(process)
-                    waitFor(process, graceMs)
-                }
+                waitFor(process, graceMs)
             } catch (_: InterruptedException) {
-                // A monitor interrupt must not leave a core holding a SOCKS
-                // port. Continue cleanup, then restore the caller's flag.
                 interrupted = true
-                if (isAlive(process)) forceStop(process)
+                false
             }
+
+        try {
+            // Signal every child first so their grace periods can overlap.
+            for (process in children) {
+                if (isAlive(process)) process.destroy()
+            }
+            for (process in children) {
+                if (isAlive(process) && !awaitExit(process) && isAlive(process)) {
+                    forceStop(process)
+                    // Even on interruption, attempt to confirm exit after
+                    // escalation. Callers retain handles if a child is alive.
+                    awaitExit(process)
+                }
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt()
         }
-        if (interrupted) Thread.currentThread().interrupt()
     }
 
     fun waitForExit(

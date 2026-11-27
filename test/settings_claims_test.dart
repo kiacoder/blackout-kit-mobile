@@ -20,7 +20,7 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
-  test('config service opens existing plaintext Hive boxes without migration', () async {
+  test('config service refuses plaintext fallback and preserves existing records', () async {
     final existing = await Hive.openBox<Map>('configs');
     await existing.put('config_legacy-config', {
       'protocol': 'vless',
@@ -33,7 +33,9 @@ void main() {
     final service = ConfigService();
     await service.initialize();
 
-    expect(service.getConfigCount(), 1);
+    expect(service.isVaultLocked, isTrue);
+    expect(service.isEncryptedAtRest, isFalse);
+    expect(await Hive.boxExists('configs_v2'), isFalse);
     expect(existing.get('config_legacy-config')?['rawUri'], 'vless://stored-secret');
   });
 

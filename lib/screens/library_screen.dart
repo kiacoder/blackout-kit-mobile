@@ -1,6 +1,7 @@
 /// Library screen - Browse, filter, and manage VPN configs
 /// Shows all loaded configs with filtering by protocol/source/speed
 /// Allows quick connect, view details, or delete configs
+library;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -17,7 +18,7 @@ import 'config_editor_screen.dart';
 import 'profile_export_screen.dart';
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({Key? key}) : super(key: key);
+  const LibraryScreen({super.key});
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();

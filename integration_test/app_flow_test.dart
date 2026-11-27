@@ -1,5 +1,6 @@
 /// Integration tests for Blackout Kit VPN app
 /// Tests the complete user flow: fetch → test → connect
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

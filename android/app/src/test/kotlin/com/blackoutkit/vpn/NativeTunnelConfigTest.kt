@@ -146,4 +146,17 @@ class NativeTunnelConfigTest {
             reject(candidate)
         }
     }
+
+    @Test fun numericAddressesRejectMalformedLiteralsAndHostnames() {
+        for (valid in listOf("192.0.2.1", "2001:db8::1", "::1")) {
+            assertTrue(NativeTunnelConfig.numericAddress(valid).address.isNotEmpty())
+        }
+        for (invalid in listOf("", "example.invalid", "999.1.1.1", "1.2.3", "2001:::1", "1::2::3", "fe80::1%wlan0")) {
+            try {
+                NativeTunnelConfig.numericAddress(invalid)
+                fail("Expected numeric address rejection")
+            } catch (_: IllegalArgumentException) {
+            }
+        }
+    }
 }

@@ -267,7 +267,7 @@ class SiteCheckService {
     String? xrayJson;
     String? singboxJson;
     if (isXrayProtocol(config.protocol)) {
-      xrayJson = XrayConfigBuilder(
+      xrayJson = const XrayConfigBuilder(
         socksPort: probePort,
         tunEnabled: false,
       ).buildJson(config);

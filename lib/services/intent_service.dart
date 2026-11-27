@@ -4,9 +4,8 @@ import 'package:flutter/services.dart';
 /// .conf/.ovpn attachment (ACTION_VIEW), or a shared vless:// link from the
 /// browser share sheet (ACTION_SEND).
 ///
-/// The native side (MainActivity) copies content:// documents into the app
-/// cache while the provider grant is still live and hands over a real path —
-/// content URIs are NOT filesystem paths and must never reach dart:io.
+/// The native background channel reads a bounded UTF-8 document while the provider grant
+/// is live. No filesystem path or credential-bearing cache copy crosses the channel.
 /// Poll, don't stream: the cold-start payload is queued in a static holder
 /// before the Flutter engine exists, and warm intents (singleTop onNewIntent)
 /// land in the same slot, so a single `consumePending` call on launch and on
@@ -18,8 +17,7 @@ class IntentService {
       MethodChannel('com.blackoutkit.vpn/intent');
 
   /// Returns and clears the pending payload, or null.
-  /// Shapes: {'type': 'text', 'text': 'vless://…'} or
-  /// {'type': 'file', 'path': '/data/.../cache/import-….cfg'}.
+  /// Shape: {'type': 'text', 'text': 'vless://...'}.
   static Future<Map<String, String>?> consumePending() async {
     try {
       final result = await _channel.invokeMethod('consumePending');

@@ -1,6 +1,7 @@
 /// Settings controller using GetX for user preferences.
 /// Manages app-wide settings like auto-connect, kill switch, theme, etc.
 /// Persisted locally via Hive box.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';

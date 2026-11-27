@@ -9,13 +9,13 @@ class AnimatedSecurityToggle extends StatefulWidget {
   final bool isLoading;
 
   const AnimatedSecurityToggle({
-    Key? key,
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,
     required this.icon,
     this.isLoading = false,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedSecurityToggle> createState() =>

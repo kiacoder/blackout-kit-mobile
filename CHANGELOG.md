@@ -7,13 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.19.4] - Security remediation candidate
 
+- Make the config library fail closed when key storage is unavailable; verify migration copies and preserve ambiguous data for recovery.
+- Bound document imports, remove obsolete import caches, redact diagnostic material and retain ownership of failed transient configuration writes.
+- Correct all 195 initial Dart analyzer diagnostics and enforce the strict analyzer on PR and release builds.
+- Declare previously transitive imports directly; update wakelock_plus to 1.3.2 for package_info_plus 8.3.1 compatibility without overriding the latter.
+- Replace deprecated Android exit-IP matching with numeric-only address validation; update setup-java to a pinned v5 revision.
+- Harden transient config path ownership and interrupted subprocess cleanup; add vault preflight and key-persistence checks.
+- Add development-only AES-GCM record and generation verification experiments; production encryption is unchanged.
+- Reconcile security, installation and architecture documentation. The existing release, not this candidate, remains the downloadable stable version.
+
 - Update Gradle to 8.14.8 with verified wrapper/distribution checksums, refresh Android compatibility APIs and dependency pins.
 - Replace deprecated network enumeration with a service-owned callback registry.
 - Verify official update bytes, exact package, signing certificate and increasing version code before staging a user-confirmed PackageInstaller session. Handle interrupted sessions and explicit cancellation without deleting installed app data.
 - Preserve system certificate trust and hostname verification for third-party diagnostic HTTPS destinations. Reviewed pinning findings are separate from code fixes.
 - Physical Android update and network-switching acceptance is deferred at the maintainer's request. Hosted CI, security review and production release approval remain required.
 
-## [1.19.3] - Release candidate
+## [1.19.3] - 2026-11-26
 
 ### Security and stability
 - Harden configuration vault initialization and legacy migration against concurrent requests, preserve records on ambiguous storage failures, and prevent live-box migration.
@@ -1282,7 +1291,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Reporting Issues
 If you encounter bugs in any version:
-1. Check [existing issues](https://github.com/blackout-kit/blackout-kit-mobile/issues)
+1. Check [existing issues](https://github.com/kiacoder/blackout-kit-mobile/issues)
 2. Open a new issue with:
    - Device model and OS version
    - App version
@@ -1296,7 +1305,7 @@ For security vulnerabilities, please email security@blackout-kit.dev instead of 
 
 **Maintained by**: Blackout Kit Contributors  
 **License**: MIT  
-**Repository**: https://github.com/blackout-kit/blackout-kit-mobile
+**Repository**: https://github.com/kiacoder/blackout-kit-mobile
 
 ## [1.0.0-beta.13] - 2026-10-11
 

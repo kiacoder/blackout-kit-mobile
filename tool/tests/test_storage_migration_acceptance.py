@@ -76,7 +76,7 @@ class StorageAcceptanceTests(unittest.TestCase):
                 return ""
             if command[0] == "install":
                 active = Path(command[-1]).stem
-                gate = active == "candidate"
+                gate = active != "legacy"
                 return "Performing Streamed Install\nSuccess"
             if command[:3] == ("shell", "am", "start"):
                 return "Status: ok"
@@ -93,18 +93,18 @@ class StorageAcceptanceTests(unittest.TestCase):
         result = accept(self.folder, "adb", "emulator-5554")
         self.assertEqual(result["results"], {
             "candidate": "upgrade-interruption-and-restart-passed",
-            "backup": "upgrade-and-restart-passed",
+            "backup": "upgrade-interruption-and-restart-passed",
         })
         commands = [call.args[3:] for call in run.call_args_list]
-        self.assertEqual(sum(command[:3] == ("shell", "am", "start") for command in commands), 7)
+        self.assertEqual(sum(command[:3] == ("shell", "am", "start") for command in commands), 8)
         self.assertEqual(sum(command[0] == "uninstall" for command in commands), 2)
-        self.assertEqual(sum(command == ("logcat", "-c") for command in commands), 7)
+        self.assertEqual(sum(command == ("logcat", "-c") for command in commands), 8)
 
         self.assertFalse(any(command[:2] == ("shell", "run-as") for command in commands))
 
         run.reset_mock()
         result = accept(self.folder, "adb", "emulator-5554", "backup")
-        self.assertEqual(result["results"], {"backup": "upgrade-and-restart-passed"})
+        self.assertEqual(result["results"], {"backup": "upgrade-interruption-and-restart-passed"})
         commands = [call.args[3:] for call in run.call_args_list]
         self.assertEqual(sum(command[0] == "install" for command in commands), 2)
         self.assertEqual(sum(command[0] == "uninstall" for command in commands), 1)
@@ -117,7 +117,7 @@ class StorageAcceptanceTests(unittest.TestCase):
         run.side_effect = failed_key
         result = accept(self.folder, "adb", "emulator-5554", "backup")
         self.assertEqual(result["results"], {
-            "backup": "failed at upgrade-launch: Fixture reported migration failure at read_key",
+            "backup": "failed at interrupt-after-key: Fixture reported migration failure at read_key",
         })
 
 

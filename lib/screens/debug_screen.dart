@@ -4,7 +4,7 @@ import '../services/debug_service.dart';
 
 /// Debug and logging screen
 class DebugScreen extends StatefulWidget {
-  const DebugScreen({Key? key}) : super(key: key);
+  const DebugScreen({super.key});
 
   @override
   State<DebugScreen> createState() => _DebugScreenState();
@@ -37,9 +37,9 @@ class _DebugScreenState extends State<DebugScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            Tab(text: 'Logs', icon: Icon(Icons.description)),
-            Tab(text: 'Debug Info'.tr, icon: Icon(Icons.info_outline)),
-            Tab(text: 'Diagnostics', icon: Icon(Icons.medical_services)),
+            const Tab(text: 'Logs', icon: Icon(Icons.description)),
+            Tab(text: 'Debug Info'.tr, icon: const Icon(Icons.info_outline)),
+            const Tab(text: 'Diagnostics', icon: Icon(Icons.medical_services)),
           ],
         ),
       ),
@@ -217,7 +217,7 @@ class _DebugScreenState extends State<DebugScreen>
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

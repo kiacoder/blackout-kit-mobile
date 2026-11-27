@@ -9,7 +9,9 @@ def candidate_manifest(source):
         ("file_picker: ^8.0.0", "file_picker: 8.1.7"),
         ("package_info_plus: 5.0.1", "package_info_plus: 8.3.1"),
     ):
-        if source.count(old) != 1:
+        if source.count(new) == 1 and source.count(old) == 0:
+            continue
+        if source.count(old) != 1 or new in source:
             raise ValueError("Unexpected dependency constraint: " + old)
         source = source.replace(old, new)
     return source

@@ -7,11 +7,11 @@ class AnimatedLoadingOverlay extends StatefulWidget {
   final Widget? child;
 
   const AnimatedLoadingOverlay({
-    Key? key,
+    super.key,
     required this.isVisible,
     this.message = 'Loading...',
     this.child,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedLoadingOverlay> createState() =>

@@ -34,7 +34,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
 
@@ -48,10 +48,9 @@ jobs:
 
       - name: Dart analyze + tests
         run: |
-          flutter pub get
-          # Errors only — infos and warnings are not fatal (same policy as
-          # the Tests workflow).
-          flutter analyze --no-fatal-infos
+          flutter pub get --enforce-lockfile
+          # All analyzer diagnostics are fatal.
+          flutter analyze
           flutter test
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -80,7 +79,7 @@ jobs:
 
       - name: Upload libbox interface dump
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: libbox-swiftinterface
           path: /tmp/libbox-iface
@@ -135,7 +134,7 @@ jobs:
           du -h build/ios/ipa/blackout-kit-ios-unsigned.ipa
 
       - name: Upload unsigned IPA artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: blackout-kit-ios-unsigned-ipa
           path: build/ios/ipa/blackout-kit-ios-unsigned.ipa
@@ -143,7 +142,7 @@ jobs:
 
       - name: Upload build log on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xcodebuild-log
           path: ~/Library/Developer/Xcode/DerivedData/Logs/Build/*.xcactivitylog

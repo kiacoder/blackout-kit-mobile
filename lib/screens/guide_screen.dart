@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 class GuideScreen extends StatelessWidget {
-  const GuideScreen({Key? key}) : super(key: key);
+  const GuideScreen({super.key});
 
   /// Step key pairs, in order. Title and body keys stay separate so a
   /// translation can reorder or reflow the body without touching the number.

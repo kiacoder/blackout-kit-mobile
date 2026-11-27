@@ -284,6 +284,7 @@ Endpoint = [2001:db8::5]:51820
       final config = vless('rt.example.com', 'RoundTrip');
       await first.saveConfig(config);
 
+      await Hive.close();
       final second = ConfigService(keyStore: store);
       await second.initialize();
       expect(second.isEncryptedAtRest, isTrue);
@@ -291,8 +292,8 @@ Endpoint = [2001:db8::5]:51820
           contains('RoundTrip'));
     });
 
-    test('without a keystore the app still boots and reads configs', () async {
-      // A platform with no keystore must degrade to plaintext, not fail.
+    test('without a keystore existing plaintext stays untouched and writes are refused', () async {
+      // Existing files must remain available for a future safe migration.
       final legacy = await Hive.openBox<dynamic>('configs');
       await legacy.put('config_y', {
         'protocol': 'vless',
@@ -306,8 +307,11 @@ Endpoint = [2001:db8::5]:51820
       await service.initialize();
 
       expect(service.isEncryptedAtRest, isFalse);
-      expect(service.getAllConfigs().map((c) => c.displayName),
-          contains('Plain'));
+      expect(service.isVaultLocked, isTrue);
+      expect(await Hive.boxExists('configs'), isTrue);
+      expect(Hive.isBoxOpen('configs'), isFalse);
+      expect(await Hive.boxExists('configs_v2'), isFalse);
+      expect(await service.saveConfig(vless('new.example.com', 'New')), isFalse);
     });
   });
 

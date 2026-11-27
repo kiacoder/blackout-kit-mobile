@@ -21,7 +21,7 @@ void main() {
         rawUri: '',
         privateKey: 'priv',
         peers: [
-          WireGuardPeer(publicKey: 'pub', endpoint: 'wg.example.com:51820'),
+          const WireGuardPeer(publicKey: 'pub', endpoint: 'wg.example.com:51820'),
         ],
       );
       expect(noAddress.validate(), isFalse);
@@ -34,7 +34,7 @@ void main() {
         privateKey: 'priv',
         localAddresses: ['10.0.0.2/32'],
         peers: [
-          WireGuardPeer(publicKey: 'pub', endpoint: 'wg.example.com:51820'),
+          const WireGuardPeer(publicKey: 'pub', endpoint: 'wg.example.com:51820'),
         ],
       );
       expect(ok.validate(), isTrue);

@@ -160,9 +160,9 @@ void main() {
         )!;
 
     test('the pair leads and the DoH endpoints follow', () {
-      final doc = XrayConfigBuilder(
+      final doc = const XrayConfigBuilder(
         routeDnsThroughProxy: true,
-        dnsServers: const ['178.22.122.100', '185.51.200.2'],
+        dnsServers: ['178.22.122.100', '185.51.200.2'],
       ).build(config());
 
       final servers = ((doc['dns'] as Map)['servers'] as List).cast<String>();
@@ -171,9 +171,9 @@ void main() {
     });
 
     test('the DoH fallbacks are still there and still leak nothing', () {
-      final doc = XrayConfigBuilder(
+      final doc = const XrayConfigBuilder(
         routeDnsThroughProxy: true,
-        dnsServers: const ['9.9.9.9'],
+        dnsServers: ['9.9.9.9'],
       ).build(config());
 
       final servers = ((doc['dns'] as Map)['servers'] as List).cast<String>();

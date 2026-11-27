@@ -1,3 +1,9 @@
+# Engine support — current evidence (2026-11-26)
+
+Stable v1.19.3 ships the existing Xray and sing-box paths. Xray has prior Android traffic evidence; successful builds are not per-protocol hardware interoperability evidence. Native WG/AWG and Mihomo remain experimental/default-off. OpenVPN is configuration-only. The independent Rust core has IPv4 TCP netstack, direct UDP and plain-TCP VLESS experiments, not full authenticated protocol, proxied UDP, IPv6 or Android end-to-end acceptance. Unsupported protocols refuse rather than direct-dial. iOS unsigned build does not establish a usable device tunnel. See [current status](CURRENT_STATUS.md) and [acceptance gates](docs/ENGINEERING_ACCEPTANCE.md).
+
+The following 2026-11-16 table is historical source-audit evidence.
+
 # Engine support — source audit, 2026-11-16
 
 > **2026-11-16 continuation update (supersedes older evidence below):** overall ~26%.

@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 
 def start(guard, code):
@@ -23,10 +24,40 @@ def wait_gone(pid):
             # A killed orphan may be a zombie until its new parent reaps it.
             if path.read_text().rsplit(")", 1)[1].split()[0] == "Z":
                 return
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
+            # Linux may return ENOENT at open or ESRCH during a procfs read
+            # when the process is reaped between the two operations.
             return
         time.sleep(0.01)
     raise AssertionError("Child remained alive")
+
+
+def test_procfs_reap_race():
+    # Deterministic regression for ENOENT and ESRCH, not arbitrary I/O errors.
+    for error in (FileNotFoundError, ProcessLookupError):
+        with patch.object(Path, "read_text", side_effect=error):
+            wait_gone(123)
+    with patch.object(Path, "read_text", return_value="123 (fixture) Z"):
+        wait_gone(123)
+    with patch.object(Path, "read_text", side_effect=PermissionError):
+        try:
+            wait_gone(123)
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("Permission failure must not prove process exit")
+    # A live child must not be considered gone before the deadline.
+    with (
+        patch.object(Path, "read_text", return_value="123 (fixture) S"),
+        patch.object(time, "monotonic", side_effect=[0, 1, 4]),
+        patch.object(time, "sleep"),
+    ):
+        try:
+            wait_gone(123)
+        except AssertionError as error:
+            assert str(error) == "Child remained alive"
+        else:
+            raise AssertionError("Live process incorrectly accepted")
 
 
 def test_shutdown(guard, action):
@@ -90,12 +121,13 @@ def main():
     guard = str(Path(sys.argv[1]).resolve())
     with start(guard, "raise SystemExit(23)") as proc:
         assert proc.wait(timeout=5) == 23
+    test_procfs_reap_race()
     test_shutdown(guard, lambda proc: proc.stdin.close())
     test_shutdown(guard, lambda proc: proc.send_signal(signal.SIGTERM))
     test_shutdown(guard, lambda proc: proc.kill())
     test_thread_turnover(guard)
     test_owner_death(guard)
-    print("Six process-supervisor regressions passed.")
+    print("Seven process-supervisor regressions passed.")
 
 
 if __name__ == "__main__":

@@ -7,10 +7,10 @@ class AnimatedStatusIndicator extends StatefulWidget {
   final String statusMessage;
 
   const AnimatedStatusIndicator({
-    Key? key,
+    super.key,
     required this.state,
     required this.statusMessage,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedStatusIndicator> createState() =>

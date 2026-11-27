@@ -1,6 +1,7 @@
 /// VPN Config model replicating Blackout Kit CLI's ProxyConfig dataclass.
 /// Supports: WireGuard, OpenVPN, Shadowsocks protocols.
 /// V2 extensibility: Add V2Ray, Trojan, NaïveProxy subclasses without UI changes.
+library;
 
 import 'dart:convert';
 import 'dart:io' show InternetAddress;
@@ -162,9 +163,12 @@ class WireGuardPeer {
 /// Served by the bundled sing-box core (libsingbox.so).
 class AnyTlsConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String password;
+  @override
   final String address;
+  @override
   final int port;
   final String? sni;
   final bool insecure;
@@ -212,9 +216,12 @@ class AnyTlsConfig extends Config {
 /// shadowed domain, not a proxy.
 class ShadowTlsConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String password;
+  @override
   final String address;
+  @override
   final int port;
   final String? sni;
   final bool insecure;
@@ -264,6 +271,7 @@ class ShadowTlsConfig extends Config {
 /// (`xray.proxy.wireguard`), so no separate sing-box binary is required.
 class WireGuardConfig extends Config {
   final String name;
+  @override
   final String rawUri;
 
   /// `[Interface] PrivateKey` — this device's static private key.
@@ -430,9 +438,12 @@ class WireGuardConfig extends Config {
 /// OpenVPN config
 class OpenVpnConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String configContent;
+  @override
   final String address;
+  @override
   final int port;
 
   OpenVpnConfig({
@@ -506,8 +517,11 @@ class OpenVpnConfig extends Config {
 /// Shadowsocks config
 class ShadowsocksConfig extends Config {
   final String name;
+  @override
   final String rawUri;
+  @override
   final String address;
+  @override
   final int port;
   final String method;
   final String password;
@@ -673,9 +687,12 @@ class ShadowsocksConfig extends Config {
 // ─────────────────────────────────────────────────────────────────────────────
 class VlessConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String uuid;
+  @override
   final String address;
+  @override
   final int port;
   final String security;   // none / tls / reality
   final String? flow;
@@ -809,9 +826,12 @@ class VlessConfig extends Config {
 // ─────────────────────────────────────────────────────────────────────────────
 class VmessConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String uuid;
+  @override
   final String address;
+  @override
   final int port;
   final String alterId;
   final String cipher;
@@ -911,9 +931,12 @@ class VmessConfig extends Config {
 // ─────────────────────────────────────────────────────────────────────────────
 class TrojanConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String password;
+  @override
   final String address;
+  @override
   final int port;
   final String? sni;
   final String? security; // 'tls' (default) or 'none' for plain-WS CDN trojan
@@ -1000,9 +1023,12 @@ class TrojanConfig extends Config {
 // ─────────────────────────────────────────────────────────────────────────────
 class Hysteria2Config extends Config {
   final String name;
+  @override
   final String rawUri;
   final String password;
+  @override
   final String address;
+  @override
   final int port;
   final String? sni;
   final bool insecure;
@@ -1106,10 +1132,13 @@ class Hysteria2Config extends Config {
 // ─────────────────────────────────────────────────────────────────────────────
 class TuicConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String uuid;
   final String password;
+  @override
   final String address;
+  @override
   final int port;
   final String? sni;
   final bool insecure;
@@ -1168,8 +1197,11 @@ class TuicConfig extends Config {
 // ─────────────────────────────────────────────────────────────────────────────
 class AmneziaWGConfig extends Config {
   final String name;
+  @override
   final String rawUri;
+  @override
   final String address;
+  @override
   final int port;
   final String endpoint;
   final String privateKey;
@@ -1282,8 +1314,11 @@ class AmneziaWGConfig extends Config {
 /// contract must agree on `http-connect` before a runtime is enabled.
 class SniRelayConfig extends Config {
   final String name;
+  @override
   final String rawUri;
+  @override
   final String address;
+  @override
   final int port;
   final String serverName;
   final String transport;
@@ -1363,6 +1398,7 @@ class SniRelayConfig extends Config {
 /// but deliberately does not claim connectability until that contract exists.
 class MhrvRelayConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final Uri endpoint;
   final String? bearerToken;
@@ -1420,6 +1456,7 @@ class MhrvRelayConfig extends Config {
 // ─────────────────────────────────────────────────────────────────────────────
 class WarpConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String privateKey;
   final String accountId;
@@ -1461,6 +1498,7 @@ class WarpConfig extends Config {
 // ─────────────────────────────────────────────────────────────────────────────
 class PsiphonConfig extends Config {
   final String name;
+  @override
   final String rawUri;
   final String? serverAddress;
   final String? configJson;
@@ -1888,33 +1926,40 @@ class ConfigParser {
       if (trimmed.startsWith('vless://'))       return VlessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('vmess://'))       return VmessConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('trojan://'))      return TrojanConfig.fromUri(trimmed, customName: customName);
-      if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://'))
-                                                return Hysteria2Config.fromUri(trimmed, customName: customName);
+      if (trimmed.startsWith('hy2://') || trimmed.startsWith('hysteria2://')) {
+        return Hysteria2Config.fromUri(trimmed, customName: customName);
+      }
       if (trimmed.startsWith('tuic://'))        return TuicConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('anytls://'))      return AnyTlsConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('shadowtls://'))   return ShadowTlsConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('ss://'))          return ShadowsocksConfig.fromUri(trimmed, customName: customName);
       if (trimmed.startsWith('wireguard://')) return _parseWireGuardLink(trimmed, customName: customName);
-      if (trimmed.startsWith('awg://') || trimmed.startsWith('amneziawg://'))
-                                                return AmneziaWGConfig.fromUri(awgUriToConf(trimmed), customName: customName);
+      if (trimmed.startsWith('awg://') || trimmed.startsWith('amneziawg://')) {
+        return AmneziaWGConfig.fromUri(awgUriToConf(trimmed), customName: customName);
+      }
       // File/block content protocols. A bare substring match meant any text
       // whose comment mentioned "remote " (e.g. "# remote server is in DE")
       // was classified as OpenVPN. Require a real directive at line start.
-      if (_hasOpenVpnDirective(trimmed) || trimmed.contains('BEGIN CERTIFICATE'))
-                                                return OpenVpnConfig.fromUri(trimmed, customName: customName);
+      if (_hasOpenVpnDirective(trimmed) || trimmed.contains('BEGIN CERTIFICATE')) {
+        return OpenVpnConfig.fromUri(trimmed, customName: customName);
+      }
       // Case-insensitive: `jc = 5` is as valid as `Jc = 5`, and the old
       // case-sensitive test sent every lowercase conf to plain WireGuard,
       // where the obfuscation parameters were dropped.
-      if (_looksLikeAmnezia(trimmed))
-                                                return AmneziaWGConfig.fromUri(trimmed, customName: customName);
-      if (trimmed.contains('[Interface]') || trimmed.contains('PrivateKey'))
-                                                return WireGuardConfig.fromUri(trimmed, customName: customName);
+      if (_looksLikeAmnezia(trimmed)) {
+        return AmneziaWGConfig.fromUri(trimmed, customName: customName);
+      }
+      if (trimmed.contains('[Interface]') || trimmed.contains('PrivateKey')) {
+        return WireGuardConfig.fromUri(trimmed, customName: customName);
+      }
       // A psiphon document is JSON and does not have to contain the word
       // "psiphon"; a link does. Both are handled by the parser's own checks.
-      if (trimmed.toLowerCase().contains('psiphon') || trimmed.startsWith('{'))
-                                                return PsiphonConfig.fromUri(trimmed, customName: customName);
-      if (trimmed.toLowerCase().contains('warp'))
-                                                return WarpConfig.fromUri(trimmed, customName: customName);
+      if (trimmed.toLowerCase().contains('psiphon') || trimmed.startsWith('{')) {
+        return PsiphonConfig.fromUri(trimmed, customName: customName);
+      }
+      if (trimmed.toLowerCase().contains('warp')) {
+        return WarpConfig.fromUri(trimmed, customName: customName);
+      }
       return null;
     } catch (e) {
       return null;
@@ -1957,7 +2002,7 @@ class ConfigParser {
       'h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5',
     ]) {
       // Match `key = value` at the start of a line, ignoring leading spaces.
-      if (RegExp('^\\s*${key}\\s*=', multiLine: true, caseSensitive: false)
+      if (RegExp('^\\s*$key\\s*=', multiLine: true, caseSensitive: false)
           .hasMatch(content)) {
         return true;
       }
@@ -2156,10 +2201,12 @@ class MihomoConfig extends Config {
       dynamic plain(dynamic value, int depth) {
         if (++nodes > 20000) throw const FormatException('Document expansion limit');
         if (depth > 32) throw const FormatException('Document nesting limit');
-        if (value is Map) return value.map((k, v) {
+        if (value is Map) {
+          return value.map((k, v) {
           if (k is! String) throw const FormatException('String keys required');
           return MapEntry(k, plain(v, depth + 1));
         });
+        }
         if (value is List) return value.map((v) => plain(v, depth + 1)).toList();
         if (value == null || value is String || value is num || value is bool) return value;
         throw const FormatException('Invalid document value');

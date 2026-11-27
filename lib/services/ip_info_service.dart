@@ -82,7 +82,7 @@ class IpInfo {
   /// Two-letter flag emoji from the ISO country code (ⓐ + regional indicator).
   String get flag {
     if (countryCode.length != 2) return '';
-    final base = 0x1F1E6;
+    const base = 0x1F1E6;
     final a = countryCode.toUpperCase().codeUnitAt(0) - 0x41;
     final b = countryCode.toUpperCase().codeUnitAt(1) - 0x41;
     if (a < 0 || a > 25 || b < 0 || b > 25) return '';

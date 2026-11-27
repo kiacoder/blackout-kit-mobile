@@ -100,6 +100,48 @@ class SubprocessLifecycleTest {
     }
 
     @Test
+    fun interruptedWaitStillConfirmsExitAfterEscalation() {
+        val child = FakeProcess(alive = true, ignoreTerminate = true)
+        var waits = 0
+        val lifecycle =
+            SubprocessLifecycle(
+                waitFor = { process, _ ->
+                    waits++
+                    if (waits == 1) throw InterruptedException()
+                    !process.isAlive
+                },
+                forceStop = { it.destroyForcibly() },
+            )
+        try {
+            lifecycle.stop(listOf(child))
+            assertEquals(2, waits)
+            assertEquals(false, child.isAlive)
+            assertEquals(true, Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    @Test
+    fun cleanupFailureDoesNotLoseCallerInterrupt() {
+        val child = FakeProcess(alive = true, ignoreTerminate = true)
+        val lifecycle =
+            SubprocessLifecycle(
+                waitFor = { _, _ -> false },
+                forceStop = { throw SecurityException("synthetic") },
+            )
+        Thread.currentThread().interrupt()
+        try {
+            val result = runCatching { lifecycle.stop(listOf(child)) }
+            assertEquals(true, result.isFailure)
+            assertEquals(true, child.isAlive)
+            assertEquals(true, Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    @Test
     fun compatibleWaitRecognizesExitedAndRunningProcesses() {
         val child = FakeProcess(alive = true, code = 7)
         assertEquals(true, ProcessCompat.isAlive(child))

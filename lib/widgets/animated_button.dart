@@ -6,11 +6,11 @@ class AnimatedConnectButton extends StatefulWidget {
   final VoidCallback onPressed;
 
   const AnimatedConnectButton({
-    Key? key,
+    super.key,
     required this.isConnected,
     required this.isLoading,
     required this.onPressed,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedConnectButton> createState() => _AnimatedConnectButtonState();
@@ -104,11 +104,11 @@ class FadeInAnimation extends StatefulWidget {
   final Curve curve;
 
   const FadeInAnimation({
-    Key? key,
+    super.key,
     required this.child,
     this.duration = const Duration(milliseconds: 500),
     this.curve = Curves.easeIn,
-  }) : super(key: key);
+  });
 
   @override
   State<FadeInAnimation> createState() => _FadeInAnimationState();
@@ -155,12 +155,12 @@ class SlideInAnimation extends StatefulWidget {
   final Curve curve;
 
   const SlideInAnimation({
-    Key? key,
+    super.key,
     required this.child,
     this.duration = const Duration(milliseconds: 500),
     this.beginOffset = const Offset(0, 0.3),
     this.curve = Curves.easeOut,
-  }) : super(key: key);
+  });
 
   @override
   State<SlideInAnimation> createState() => _SlideInAnimationState();
@@ -208,10 +208,10 @@ class PulseAnimation extends StatefulWidget {
   final Duration duration;
 
   const PulseAnimation({
-    Key? key,
+    super.key,
     required this.child,
     this.duration = const Duration(seconds: 2),
-  }) : super(key: key);
+  });
 
   @override
   State<PulseAnimation> createState() => _PulseAnimationState();
@@ -254,10 +254,10 @@ class LoadingIndicator extends StatelessWidget {
   final Color? color;
 
   const LoadingIndicator({
-    Key? key,
+    super.key,
     this.message = 'Loading...',
     this.color,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -281,10 +281,10 @@ class RetryButton extends StatelessWidget {
   final String label;
 
   const RetryButton({
-    Key? key,
+    super.key,
     required this.onPressed,
     this.label = 'Retry',
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -301,10 +301,10 @@ class ErrorWidget extends StatelessWidget {
   final VoidCallback? onRetry;
 
   const ErrorWidget({
-    Key? key,
+    super.key,
     required this.message,
     this.onRetry,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

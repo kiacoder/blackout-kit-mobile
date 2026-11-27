@@ -1,5 +1,6 @@
 /// Config tile widget - displays a single VPN config in a list
 /// Shows protocol, address, speed, reliability, and actions
+library;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -19,14 +20,14 @@ class ConfigTile extends StatelessWidget {
   final VoidCallback? onDelete;
 
   const ConfigTile({
-    Key? key,
+    super.key,
     required this.config,
     this.testResult,
     this.onTap,
     this.onConnect,
     this.connectBlockedReason,
     this.onDelete,
-  }) : super(key: key);
+  });
 
   static String _badgeLabel(TestStatus status) => switch (status) {
         TestStatus.success => '✓ Working'.tr,

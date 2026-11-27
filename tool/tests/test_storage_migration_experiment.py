@@ -39,6 +39,11 @@ class StorageMigrationExperimentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             candidate_manifest(original.replace("5.0.1", "5.0.2"))
 
+    def test_candidate_accepts_reviewed_package_info_pin(self):
+        original = "flutter_secure_storage: ^9.0.0\npackage_info_plus: 8.3.1"
+        self.assertEqual(candidate_manifest(original),
+                         "flutter_secure_storage: 10.3.4\npackage_info_plus: 8.3.1")
+
     def test_generated_fixture_toolchain_is_pinned(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)

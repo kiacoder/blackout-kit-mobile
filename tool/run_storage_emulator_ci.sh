@@ -79,4 +79,31 @@ if (( SECONDS >= deadline )); then
   exit 1
 fi
 "$adb" -s "$serial" shell input keyevent 82
+# Boot completion alone is not proof that credential-encrypted storage or
+# the activity manager is ready. Check system readiness before any install.
+ready_deadline=$((SECONDS + 90))
+while (( SECONDS < ready_deadline )); do
+  ce_state=$(timeout 5 "$adb" -s "$serial" shell getprop sys.user.0.ce_available 2>/dev/null | tr -d '\r' || true)
+  # Android 7 does not expose the same targeted dumpsys activity users
+  # command as newer releases. Its full ActivityManager dump contains
+  # UserController.dump's explicit "User #0: state=RUNNING_UNLOCKED" line.
+  user_state=""
+  if [[ "$ce_state" != true ]]; then
+    if [[ "$api" == 24 ]]; then
+      user_state=$(timeout 10 "$adb" -s "$serial" shell dumpsys activity 2>/dev/null || true)
+    else
+      user_state=$(timeout 5 "$adb" -s "$serial" shell dumpsys activity users 2>/dev/null || true)
+    fi
+  fi
+  package_state=$(timeout 5 "$adb" -s "$serial" shell pm path android 2>/dev/null | tr -d '\r' || true)
+  if { [[ "$ce_state" == true ]] || grep -Eq '^[[:space:]]*User #0: state=RUNNING_UNLOCKED([[:space:]]|$)' <<< "$user_state"; } &&
+     grep -Eq '^package:/.+' <<< "$package_state"; then
+    break
+  fi
+  sleep 2
+done
+if (( SECONDS >= ready_deadline )); then
+  echo "Credential storage/package manager readiness not confirmed" >&2
+  exit 1
+fi
 python3 tool/run_storage_migration_acceptance.py --folder .cache/storage-fixtures-output --aapt "$tools/aapt" --apksigner "$tools/apksigner" --adb "$adb" --serial "$serial" --mode "$mode" --output migration-result.json

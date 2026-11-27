@@ -97,21 +97,20 @@ internal class BoundedEngineCommand(
                 return CommandOutcome(launchFailed = true)
             }
         pending = PendingCheck(process, config)
-        var outcome = CommandOutcome(launchFailed = true)
-        var cleaned = false
-        try {
-            outcome =
+        val cleaned: Boolean
+        val outcome =
+            try {
                 if (waitFor(process, timeoutMs)) {
                     CommandOutcome(exitCode = process.exitValue())
                 } else {
                     CommandOutcome(timedOut = true)
                 }
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-            outcome = CommandOutcome(interrupted = true)
-        } finally {
-            cleaned = retryCleanup()
-        }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                CommandOutcome(interrupted = true)
+            } finally {
+                cleaned = retryCleanup()
+            }
         return if (cleaned) outcome else outcome.copy(cleanupPending = true)
     }
 

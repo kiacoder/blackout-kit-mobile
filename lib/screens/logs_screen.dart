@@ -6,7 +6,7 @@ import 'package:logger/logger.dart';
 import '../services/debug_service.dart';
 
 class LogsScreen extends StatefulWidget {
-  const LogsScreen({Key? key}) : super(key: key);
+  const LogsScreen({super.key});
 
   @override
   State<LogsScreen> createState() => _LogsScreenState();

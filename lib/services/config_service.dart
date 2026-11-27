@@ -1,10 +1,12 @@
 /// Config service for loading, saving, and parsing VPN configs.
 /// Replicates Blackout Kit CLI's config/manager.py pattern:
-/// - Local persistence with encrypted Hive boxes when keystore is available
+/// - Local persistence with encrypted Hive boxes; no plaintext fallback
 /// - Atomic file I/O (write-temp + move)
 /// - Deduplication by config hash
 /// - Config validation before storage
 library;
+
+import 'dart:async';
 
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -40,9 +42,11 @@ class ConfigService {
 
   bool _vaultActive = false;
 
-  /// Encrypted data exists but its key is gone. The library is intact and
-  /// unreadable; callers must say so rather than showing an empty list.
-  bool _vaultLocked = false;
+  /// Encrypted storage is unavailable. Preserve all files and reject writes
+  /// until a usable key and successful migration are confirmed.
+  bool _vaultLocked = true;
+  static Future<void> _initializationQueue = Future<void>.value();
+  bool _ownsLibrary = false;
   final KeyStore? _keyStore;
   final Logger _log;
 
@@ -53,47 +57,76 @@ class ConfigService {
   /// Initialize without opening or replacing plaintext when an existing
   /// encrypted library needs recovery.
   Future<void> initialize() async {
+    final previous = _initializationQueue;
+    final completion = Completer<void>();
+    _initializationQueue = completion.future;
+    await previous;
+    try {
+      await _initializeLibrary();
+    } finally {
+      completion.complete();
+    }
+  }
+
+  Future<void> _initializeLibrary() async {
+    if (_ownsLibrary &&
+        _configStorage.isOpen &&
+        _sourceStorage.isOpen &&
+        _resultStorage.isOpen) {
+      return;
+    }
+    _ownsLibrary = false;
     _vaultActive = false;
-    _vaultLocked = false;
+    _vaultLocked = true;
+    final opened = <Box<Map>>[];
     final vault = SecureVault(store: _keyStore);
     try {
       final report = await vault.migrate();
-      _vaultActive = report.active;
-      _vaultLocked = report.locked ||
-          (!report.active && await vault.hasEncryptedData());
-      if (_vaultLocked) {
+      if (report.locked || !report.active) {
         _log.w('Config library requires recovery; storage left untouched');
         return;
       }
-      final vaultKey = _vaultActive ? await vault.getOrCreateKey() : null;
-      if (_vaultActive && vaultKey == null) {
+      final vaultKey = await vault.getOrCreateKey();
+      if (vaultKey == null) {
         _vaultActive = false;
         _vaultLocked = true;
         return;
       }
-      final cipher = vaultKey == null ? null : HiveAesCipher(vaultKey);
-      final configBox = await openPreservingBox<Map>(
-          _vaultActive
-              ? SecureVault.encryptedNameFor(_configBoxName)
-              : _configBoxName,
-          cipher: cipher);
-      final sourceBox = await openPreservingBox<Map>(
-          _vaultActive
-              ? SecureVault.encryptedNameFor(_sourceBoxName)
-              : _sourceBoxName,
-          cipher: cipher);
-      final resultBox = await openPreservingBox<Map>(
-          _vaultActive
-              ? SecureVault.encryptedNameFor(_resultBoxName)
-              : _resultBoxName,
-          cipher: cipher);
-      _configStorage = configBox;
-      _sourceStorage = sourceBox;
-      _resultStorage = resultBox;
+      final names = [_configBoxName, _sourceBoxName, _resultBoxName]
+          .map(SecureVault.encryptedNameFor)
+          .toList();
+      // Hive returns an open box without checking the supplied cipher.
+      // Never borrow a box opened by another owner.
+      if (names.any(Hive.isBoxOpen)) {
+        throw StateError('Library already open');
+      }
+      final cipher = HiveAesCipher(vaultKey);
+      for (final name in names) {
+        opened.add(await openPreservingBox<Map>(name, cipher: cipher));
+      }
+      // A key may disappear or change while the boxes are being opened.
+      // Never expose a writable library that cannot be reopened on restart.
+      if (!await vault.isPersistedKey(vaultKey)) {
+        throw StateError('Vault key unavailable during initialization');
+      }
+      _configStorage = opened[0];
+      _sourceStorage = opened[1];
+      _resultStorage = opened[2];
+      _ownsLibrary = true;
+      _vaultActive = true;
+      _vaultLocked = false;
       _log.i('ConfigService initialized (encrypted at rest: $_vaultActive)');
     } catch (_) {
+      _ownsLibrary = false;
       _vaultActive = false;
       _vaultLocked = true;
+      for (final box in opened.reversed) {
+        try {
+          await box.close();
+        } catch (_) {
+          _log.w('Config storage cleanup incomplete');
+        }
+      }
       _log.w('Config storage could not be safely opened; recovery required');
     }
   }

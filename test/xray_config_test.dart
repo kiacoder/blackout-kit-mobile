@@ -4,6 +4,7 @@
 /// core either refuse to start or, worse, start and silently drop every packet.
 /// The shapes asserted here mirror `blackoutkit/engines/xray.py` (the desktop
 /// CLI) and the TUN inbound proven by v2rayNG's `v2ray_config_with_tun.json`.
+library;
 
 import 'dart:convert';
 

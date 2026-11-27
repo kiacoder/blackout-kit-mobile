@@ -1,5 +1,7 @@
 # Android integration
 
+Current hardening candidate: PR #27, v1.19.4. See CURRENT_STATUS.md and docs/ENGINEERING_ACCEPTANCE.md for the current build and verification results. The November 16 milestones below are historical.
+
 > **Latest native-build continuation — still 26%:** full development JDK/NDK recovered;
 > fdlauncher and official AWG/WG JNI libraries compile for ARM64/ARM32 at API24.
 > Both cores passed isolated Linux kernel-TUN TCP/DNS/restart/outage checks.
@@ -40,16 +42,15 @@ Java 17, Flutter 3.24.0 (current CI pin), Android API 34 SDK/NDK/CMake and nativ
 are needed. Consult `.github/workflows/build.yml` for artifact acquisition/build steps;
 record hashes and licensing before using any newly acquired binary.
 ```
-flutter pub get
-flutter analyze --no-fatal-infos --no-fatal-warnings
+flutter pub get --enforce-lockfile
+flutter analyze
 flutter test test/
 cd android && ./gradlew :app:testDebugUnitTest
 # From repository root after native prerequisites:
 flutter build apk --debug --target-platform android-arm64
 flutter test integration_test/ -d <authorized-device>
 ```
-No local toolchain/device is installed; these commands were NOT completed. No new APK
-is delivered. Never replace a release-signed installation with a debug-signed artifact
+At the historical November 16 checkpoint the local toolchain was incomplete. The current candidate has local and hosted test evidence in the acceptance ledger; a new physical-device run is still required. Never replace a release-signed installation with a debug-signed artifact
 or claim that existing release binaries include these changes.
 
 ## Milestone 2: experimental adapter and native checks

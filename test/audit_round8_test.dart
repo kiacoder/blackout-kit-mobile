@@ -56,7 +56,7 @@ void main() {
       // No SettingsController registered here, so the service is disabled —
       // exactly the state the bug showed itself in: applyTo replaced the
       // caller's list with [1.1.1.1] even while the feature was off.
-      final options = const VpnSessionOptions(dnsServers: ['9.9.9.9']);
+      const options = VpnSessionOptions(dnsServers: ['9.9.9.9']);
       final applied = DNSLeakPreventionService().applyTo(options);
       expect(applied.dnsServers, ['9.9.9.9']);
       expect(applied.routeDnsThroughProxy, isFalse);
@@ -173,19 +173,19 @@ void main() {
   group('bare IPv6 endpoints are not mis-split', () {
     test('a numeric last group is not read as a port', () {
       // 2606:4700::1 used to parse as host "2606:4700::" port 1.
-      final peer = WireGuardPeer(publicKey: 'k', endpoint: '2606:4700::1');
+      const peer = WireGuardPeer(publicKey: 'k', endpoint: '2606:4700::1');
       expect(peer.host, '2606:4700::1');
       expect(peer.port, 51820);
     });
 
     test('a plain host:port still splits', () {
-      final peer = WireGuardPeer(publicKey: 'k', endpoint: 'example.com:51820');
+      const peer = WireGuardPeer(publicKey: 'k', endpoint: 'example.com:51820');
       expect(peer.host, 'example.com');
       expect(peer.port, 51820);
     });
 
     test('a bracketed IPv6 endpoint still splits', () {
-      final peer = WireGuardPeer(publicKey: 'k', endpoint: '[2001:db8::1]:443');
+      const peer = WireGuardPeer(publicKey: 'k', endpoint: '[2001:db8::1]:443');
       expect(peer.host, '2001:db8::1');
       expect(peer.port, 443);
     });

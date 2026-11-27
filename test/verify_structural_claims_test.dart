@@ -17,19 +17,31 @@ void main() {
   final repo = Directory.current.path;
   String source(String relative) => _read('$repo/$relative');
 
+  group('Android shared document boundary', () {
+    test('provider reads require explicit grants and run off the activity thread', () {
+      final src = source(
+          'android/app/src/main/kotlin/com/blackoutkit/vpn/MainActivity.kt');
+      expect(src, contains('messenger.makeBackgroundTaskQueue()'));
+      expect(src, contains('pendingImport.getAndSet(null)'));
+      expect(src, contains('provider.applicationInfo.uid != Process.myUid()'));
+      expect(src, contains('checkUriPermission('));
+      expect(src, contains('Intent.FLAG_GRANT_READ_URI_PERMISSION'));
+      expect(src, contains('PackageManager.PERMISSION_GRANTED'));
+      expect(src, contains('if (isSafeImportUri(uri)) readImport(uri) else null'));
+      final capture = src.substring(src.indexOf('private fun captureIntent'),
+          src.indexOf('private fun readSharedText'));
+      expect(capture, isNot(contains('readImport(')));
+      expect(capture, isNot(contains('readSharedText(')));
+    });
+  });
+
   group('Android cleartext network policy', () {
-    test('only loopback hosts are exempt from the HTTPS default', () {
+    test('Android HTTP clients have no cleartext exceptions', () {
       final policy = source(
           'android/app/src/main/res/xml/network_security_config.xml');
       expect(policy, contains('<base-config cleartextTrafficPermitted="false">'));
-      final domains = RegExp(r'<domain includeSubdomains="false">([^<]+)</domain>')
-          .allMatches(policy)
-          .map((match) => match.group(1))
-          .toList();
-      expect(domains, unorderedEquals(['127.0.0.1', 'localhost']));
-      expect(RegExp(r'cleartextTrafficPermitted="true"').allMatches(policy),
-          hasLength(1));
-      expect(RegExp(r'<domain\s').allMatches(policy), hasLength(2));
+      expect(policy, isNot(contains('cleartextTrafficPermitted="true"')));
+      expect(policy, isNot(contains('<domain-config')));
     });
   });
 
@@ -123,8 +135,14 @@ void main() {
   group('BK-038/BK-039 file decoding and size', () {
     test('file bytes are decoded as UTF-8 with a size cap', () {
       final src = source('lib/screens/config_import_screen.dart');
-      expect(src.contains('utf8.decode(file.bytes!'), isTrue);
-      expect(src.contains('maxImportBytes'), isTrue);
+      final reader = source('lib/services/bounded_config_import.dart');
+      expect(src, contains('withData: false'));
+      expect(src, contains('withReadStream: true'));
+      expect(src, contains('readBoundedConfigText(stream)'));
+      expect(src, contains('file.size > maxConfigImportBytes'));
+      expect(src, contains('clearTemporaryFiles()'));
+      expect(reader, contains('chunk.length > maxBytes - bytes.length'));
+      expect(reader, contains('utf8.decode(bytes.takeBytes())'));
     });
   });
 

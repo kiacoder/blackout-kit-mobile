@@ -10,6 +10,7 @@ import 'package:hive/hive.dart';
 import 'package:blackout_kit_mobile/models/config.dart';
 import 'package:blackout_kit_mobile/models/vpn_session_options.dart';
 import 'package:blackout_kit_mobile/services/config_service.dart';
+import 'package:blackout_kit_mobile/services/secure_vault.dart';
 import 'package:blackout_kit_mobile/services/ip_info_service.dart';
 import 'package:blackout_kit_mobile/services/vpn_service.dart';
 
@@ -37,6 +38,7 @@ void main() {
   group('BK-035 multi-source attribution', () {
     late Directory tempDir;
     late ConfigService service;
+  final store = MemoryKeyStore();
 
     setUpAll(() async {
       tempDir = await Directory.systemTemp.createTemp('bk_multisource_test');
@@ -49,7 +51,8 @@ void main() {
     });
 
     setUp(() async {
-      service = ConfigService();
+      await Hive.close();
+      service = ConfigService(keyStore: store);
       await service.initialize();
     });
 

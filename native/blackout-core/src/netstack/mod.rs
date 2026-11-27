@@ -187,11 +187,7 @@ impl NetstackCore {
                     if self.udp_relay_enabled {
                         self.handle_udp_datagram(&packet, &header).await;
                     } else {
-                        tracing::debug!(
-                            dst = %header.dst_ip,
-                            port = header.dst_port,
-                            "UDP dropped (proxied outbound)"
-                        );
+                        tracing::debug!("UDP dropped (proxied outbound)");
                     }
                     return;
                 }
@@ -240,10 +236,7 @@ impl NetstackCore {
 
     fn create_tcp_listener(&mut self, key: &FlowKey) {
         if self.tcp_flows.len() >= TCP_MAX_FLOWS {
-            tracing::warn!(
-                target = %key.target(),
-                "TCP flow table full; refusing new connection"
-            );
+            tracing::warn!("TCP flow table full; refusing new connection");
             return;
         }
         let rx_buffer = SocketBuffer::new(vec![0u8; TCP_SOCKET_BUFFER_BYTES]);
@@ -251,13 +244,13 @@ impl NetstackCore {
         let mut socket = TcpSocket::new(rx_buffer, tx_buffer);
         let listen_endpoint = (to_smoltcp_ip(key.dst), key.dst_port);
         if let Err(error) = socket.listen(listen_endpoint) {
-            tracing::warn!(target = %key.target(), error = %error, "cannot listen on target endpoint");
+            tracing::warn!(error = ?error, "cannot listen on target endpoint");
             return;
         }
         let handle = self.sockets.add(socket);
         self.tcp_flows
             .insert(*key, TcpFlow::new(handle, self.now_ms()));
-        tracing::debug!(target = %key.target(), "new TCP flow masquerading as target");
+        tracing::debug!("new TCP flow masquerading as target");
     }
 
     fn pump_tcp(&mut self) {
@@ -290,7 +283,7 @@ impl NetstackCore {
 
             // b) Stale dial guard: never-established flows are torn down.
             if !flow.connecting && now_ms - flow.created_ms > TCP_STALE_FLOW_MS {
-                tracing::warn!(target = %key.target(), "flow never established; aborting");
+                tracing::warn!("flow never established; aborting");
                 socket.abort();
                 flow.dead = true;
             }
@@ -305,12 +298,8 @@ impl NetstackCore {
                         UpstreamMsg::Eof => {
                             flow.upstream_eof_seen = true;
                         }
-                        UpstreamMsg::DialFailed(reason) => {
-                            tracing::info!(
-                                target = %key.target(),
-                                reason = %reason,
-                                "refusing flow (outbound cannot dial)"
-                            );
+                        UpstreamMsg::DialFailed => {
+                            tracing::info!("refusing flow (outbound cannot dial)");
                             socket.abort();
                             flow.dead = true;
                             break;
@@ -421,7 +410,6 @@ impl NetstackCore {
         };
         if payload.len() > TUN_MTU.saturating_sub(28) {
             tracing::debug!(
-                dst = %header.dst_ip,
                 len = payload.len(),
                 "UDP datagram exceeds TUN MTU; dropping"
             );
@@ -459,7 +447,7 @@ impl NetstackCore {
         };
         let target = key.target();
         if let Err(error) = flow.socket.send_to(payload, target).await {
-            tracing::warn!(target = %target, error = %error, "UDP relay send failed");
+            tracing::warn!(error_kind = ?error.kind(), "UDP relay send failed");
         }
     }
 
@@ -497,7 +485,7 @@ impl NetstackCore {
                     }
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
                     Err(error) => {
-                        tracing::warn!(target = %key.target(), error = %error, "UDP relay socket error");
+                        tracing::warn!(error_kind = ?error.kind(), "UDP relay socket error");
                         self.udp_flows.remove(&key);
                         break;
                     }
@@ -532,7 +520,7 @@ impl NetstackCore {
                     socket.abort();
                 }
                 self.sockets.remove(flow.handle);
-                tracing::debug!(target = %key.target(), "quiesced TCP flow retired");
+                tracing::debug!("quiesced TCP flow retired");
             }
         }
         // UDP: drop idle flows.

@@ -132,8 +132,7 @@ class SecureVault {
       final key = await _store.read(_keyName);
       return key != null && _decode(key) != null;
     } catch (_) {
-      // No keystore (some emulators, stripped devices): stay on plaintext
-      // rather than failing to boot.
+      // No keystore: callers must not fall back to plaintext writes.
       return false;
     }
   }
@@ -175,6 +174,16 @@ class SecureVault {
       return null;
     } finally {
       completion.complete();
+    }
+  }
+
+  /// Confirm the exact key is still persisted without creating a replacement.
+  Future<bool> isPersistedKey(Uint8List key) async {
+    try {
+      final persisted = await _store.read(_keyName);
+      return persisted != null && _sameValue(key, _decode(persisted));
+    } catch (_) {
+      return false;
     }
   }
 
@@ -232,15 +241,15 @@ class SecureVault {
   Future<MigrationReport> _migrate() async {
     final key = await getOrCreateKey();
     if (key == null) {
-      final locked = await state() == VaultState.locked;
+      final hasEncrypted = await hasEncryptedData();
       return MigrationReport(
         active: false,
         migrated: false,
-        locked: locked,
-        detail: locked
+        locked: true,
+        detail: hasEncrypted
             ? 'Encrypted configs exist but the vault key is gone. The data is '
                 'kept on disk; it cannot be read until the key is restored.'
-            : 'Platform keystore unavailable - configs stay in plain text',
+            : 'Platform keystore unavailable; existing files preserved, writes disabled',
       );
     }
 
@@ -282,14 +291,27 @@ class SecureVault {
           );
         }
       }
-      for (final name in _encryptedBoxNames.values) {
-        if (await _boxExists(name)) {
-          final existing = await openPreservingBox<Map>(
-            name,
-            cipher: HiveAesCipher(key),
-          );
-          await existing.close();
+      // Check every existing box before copying or deleting any legacy data.
+      // All three production library boxes contain Map records. A dynamically
+      // readable but incompatible record must not become a migrated library.
+      try {
+        for (final name in _encryptedBoxNames.values) {
+          if (await _boxExists(name)) {
+            await _verifyRecordShape(name, cipher: HiveAesCipher(key));
+          }
         }
+        for (final name in _encryptedBoxNames.keys) {
+          if (await _boxExists(name)) {
+            await _verifyRecordShape(name);
+          }
+        }
+      } catch (_) {
+        return const MigrationReport(
+          active: false,
+          migrated: false,
+          locked: true,
+          detail: 'Storage preflight failed. Existing data was preserved.',
+        );
       }
     }
 
@@ -324,8 +346,24 @@ class SecureVault {
           await encrypted.close();
         }
 
-        // Only now that the encrypted copy is durable is the plaintext box
-        // removed. A crash above leaves both generations for recovery.
+        // Verify the closed copy from disk, not Hive's in-memory cache.
+        // Recheck the persisted key before removing the only legacy copy.
+        final verified = await openPreservingBox<dynamic>(
+          encryptedName,
+          cipher: HiveAesCipher(key),
+        );
+        try {
+          if (!_sameValue(records, verified.toMap())) {
+            throw StateError('Encrypted migration readback mismatch');
+          }
+        } finally {
+          await verified.close();
+        }
+        if (!await isPersistedKey(key)) {
+          throw StateError('Vault key unavailable during migration');
+        }
+
+        // A failure above leaves both generations for recovery.
         await Hive.deleteBoxFromDisk(legacyName);
         moved += records.length;
       } catch (_) {
@@ -350,6 +388,22 @@ class SecureVault {
     );
   }
 
+  Future<void> _verifyRecordShape(String name, {HiveCipher? cipher}) async {
+    if (Hive.isBoxOpen(name)) {
+      throw StateError('Storage already open');
+    }
+    final box = await openPreservingBox<dynamic>(name, cipher: cipher);
+    try {
+      for (final value in box.values) {
+        if (value is! Map) {
+          throw StateError('Unsupported storage record type');
+        }
+      }
+    } finally {
+      await box.close();
+    }
+  }
+
   /// True when a box exists on disk OR is already open.
   ///
   /// Never opens a box to find out: `Hive.openBox` CREATES the box if it is
@@ -359,6 +413,24 @@ class SecureVault {
   Future<bool> _boxExists(String name) async {
     if (Hive.isBoxOpen(name)) return true;
     return Hive.boxExists(name);
+  }
+
+  /// Compare the nested values supported by the config library.
+  /// Unexpected record types fail closed unless they round-trip equal.
+  bool _sameValue(Object? a, Object? b) {
+    if (a is Map && b is Map) {
+      return a.length == b.length &&
+          a.keys.every((key) =>
+              b.containsKey(key) && _sameValue(a[key], b[key]));
+    }
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (!_sameValue(a[i], b[i])) return false;
+      }
+      return true;
+    }
+    return a == b;
   }
 
   Uint8List _randomKey() {

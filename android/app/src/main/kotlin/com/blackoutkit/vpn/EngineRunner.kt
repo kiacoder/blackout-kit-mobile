@@ -449,7 +449,6 @@ object EngineRunner {
 }
 
 private fun configDir(context: Context): File =
-    File(context.filesDir, "engine").apply {
-        mkdirs()
+    privateEngineDirectory(File(context.filesDir, "engine")).apply {
         removeLegacyEngineConfigs(this)
     }

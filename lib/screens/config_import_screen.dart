@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -8,9 +7,10 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../controllers/config_controller.dart';
 import '../models/config.dart';
+import '../services/bounded_config_import.dart';
 
 class ConfigImportScreen extends StatefulWidget {
-  const ConfigImportScreen({Key? key}) : super(key: key);
+  const ConfigImportScreen({super.key});
 
   /// Payload handed over from outside the app ("Open with" / share sheet),
   /// stashed by [RootScreen] before navigation. Consumed once in initState.
@@ -35,6 +35,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   bool _dialogOpen = false;
   bool _saving = false;
   bool _pickingFile = false;
+  static bool _pickerBusy = false;
   String? _lastCode;
   DateTime? _lastHandledAt;
 
@@ -56,25 +57,16 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   /// Ingests a payload received via "Open with" / share (see IntentService).
-  /// Text is parsed like a paste; the file is a native-side cache copy with a
-  /// REAL path (never a content:// URI), so dart:io is safe here.
+  /// The native side reads a bounded UTF-8 document while its grant is live.
   Future<void> _consumeIntentPayload() async {
     final payload = ConfigImportScreen.pendingPayload;
     if (payload == null) return;
     ConfigImportScreen.pendingPayload = null;
     if (_dialogOpen || _saving || !mounted) return;
     try {
-      String content;
-      final sourceName = 'shared-config';
-      if (payload['type'] == 'text') {
-        content = payload['text'] ?? '';
-      } else if (payload['type'] == 'file') {
-        final path = payload['path'];
-        if (path == null) return;
-        content = await File(path).readAsString();
-      } else {
-        return;
-      }
+      if (payload['type'] != 'text') return;
+      final content = payload['text'] ?? '';
+      const sourceName = 'shared-config';
       if (!mounted || _dialogOpen || _saving || _pickingFile ||
           content.trim().isEmpty || content.length > 5 * 1024 * 1024) return;
       final multiple = ConfigParser.parseMultiple(content);
@@ -99,11 +91,11 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           colorText: Colors.white,
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       Get.snackbar(
         'File Error'.tr,
-        'Failed to read file: $e',
+        'Could not read the selected file'.tr,
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -237,51 +229,31 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
   }
 
   Future<void> _pickFile() async {
-    if (!mounted || _dialogOpen || _saving || _pickingFile) return;
+    if (!mounted || _dialogOpen || _saving || _pickingFile || _pickerBusy) return;
     _pickingFile = true;
+    _pickerBusy = true;
     try {
       // FileType.custom + allowedExtensions is a trap on Android: SAF matches
       // by MIME type, .conf/.ovpn have no standard MIME, so Gmail/downloaded
       // configs render GREYED OUT and unselectable. Open to all files instead
-      // and let ConfigParser validate the content; withData guarantees bytes
-      // for content:// URIs that never get a real filesystem path.
+      // and let ConfigParser validate the content. Stream instead of requesting
+      // the entire document in memory from the plugin.
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
-        withData: true,
+        withData: false,
+        withReadStream: true,
       );
 
       if (!mounted || _dialogOpen || _saving) return;
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
-        const maxImportBytes = 5 * 1024 * 1024;
-        if (file.size > maxImportBytes) {
-          Get.snackbar('File Too Large'.tr, 'This file is larger than 5 MB'.tr,
-              backgroundColor: Colors.red, colorText: Colors.white);
-          return;
+        if (file.size > maxConfigImportBytes) {
+          throw const ConfigImportTooLarge();
         }
-        String content = '';
-
-        if (file.bytes != null) {
-          // String.fromCharCodes maps every byte to a code point, which mangles
-          // any UTF-8 config (a Persian or Chinese node name became mojibake
-          // before it was ever parsed).
-          content = utf8.decode(file.bytes!, allowMalformed: true);
-        } else if (file.path != null) {
-          content = await File(file.path!).readAsString();
-        }
-
-        // Parsing is synchronous and runs on the UI isolate: a huge file would
-        // freeze the app. 5 MB is far beyond any real subscription.
-        if (content.length > maxImportBytes) {
-          if (!mounted) return;
-          Get.snackbar(
-            'File Too Large'.tr,
-            'This file is larger than 5 MB - paste the configs instead'.tr,
-            backgroundColor: Colors.red,
-            colorText: Colors.white,
-          );
-          return;
-        }
+        final stream = file.readStream ??
+            (file.path == null ? null : File(file.path!).openRead());
+        if (stream == null) throw const FormatException();
+        final content = await readBoundedConfigText(stream);
 
         if (content.isEmpty) {
           if (!mounted) return;
@@ -330,16 +302,33 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           }
         }
       }
-    } catch (e) {
+    } on ConfigImportTooLarge {
+      if (!mounted) return;
+      Get.snackbar('File Too Large'.tr, 'This file is larger than 5 MB'.tr,
+          backgroundColor: Colors.red, colorText: Colors.white);
+    } catch (_) {
       if (!mounted) return;
       Get.snackbar(
         'File Error'.tr,
-        'Failed to read file: $e',
+        'Could not read the selected file'.tr,
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
     } finally {
-      _pickingFile = false;
+      // Delete plugin-owned cache copies, including on cancellation or failure.
+      // Never delete a provider's original path. Only one picker is active.
+      try {
+        if (Platform.isAndroid || Platform.isIOS) {
+          final cleared = await FilePicker.platform.clearTemporaryFiles();
+          if (cleared != true) debugPrint('File picker cache cleanup unconfirmed');
+        }
+      } catch (_) {
+        // A failed cleanup cannot mask the import outcome.
+        debugPrint('File picker cache cleanup failed');
+      } finally {
+        _pickingFile = false;
+        _pickerBusy = false;
+      }
     }
   }
 
@@ -442,7 +431,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             const SizedBox(height: 8),
             Text(
               'Address: ${config.address}:${config.port}',
-              style: TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
             ),
           ],
         ),
@@ -455,7 +444,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           ),
           ElevatedButton.icon(
             onPressed: _saving ? null : () => _saveConfig(config, dialogContext: dialogContext),
-            icon: Icon(Icons.add),
+            icon: const Icon(Icons.add),
             label: Text('add_to_library'.tr),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
@@ -527,9 +516,9 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
         bottom: TabBar(
           controller: _tabController,
           tabs: [
-            Tab(icon: Icon(Icons.qr_code_scanner), text: 'Scan QR'.tr),
-            Tab(icon: Icon(Icons.paste), text: 'Clipboard & Text'.tr),
-            Tab(icon: Icon(Icons.file_present), text: 'Import File'.tr),
+            Tab(icon: const Icon(Icons.qr_code_scanner), text: 'Scan QR'.tr),
+            Tab(icon: const Icon(Icons.paste), text: 'Clipboard & Text'.tr),
+            Tab(icon: const Icon(Icons.file_present), text: 'Import File'.tr),
           ],
         ),
       ),
@@ -658,7 +647,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             children: [
               Text(
                 'Paste Configuration Text or URI'.tr,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               ElevatedButton.icon(
                 onPressed: () async {
@@ -778,7 +767,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             const SizedBox(height: 16),
             Text(
               'Import Configuration File'.tr,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(

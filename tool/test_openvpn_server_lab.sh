@@ -59,16 +59,22 @@ while True:
     s.sendto(data, addr)
 PY
 start_server() {
-  local transport="$1" auth="$2"
+  local transport="$1" auth="$2" mode="$3"
   local extra=()
   if [[ "$auth" != cert ]]; then
     extra+=(--script-security 2 --auth-user-pass-verify "$work/verify-login" via-file)
   fi
   if [[ "$auth" == login-only ]]; then extra+=(--verify-client-cert none --username-as-common-name); fi
+  local redirect='redirect-gateway def1'
+  if [[ "$mode" == bypass-dns ]]; then redirect+=' bypass-dns'; fi
+  if [[ "$mode" == partial-v6 ]]; then
+    extra+=(--server-ipv6 2001:db8:77::/64)
+  fi
+  if [[ "$mode" != missing-dns ]]; then extra+=(--push 'dhcp-option DNS 10.77.0.1'); fi
   openvpn --dev tun0 --disable-dco --local 127.0.0.1 --port 11940 --proto "$transport" \
     --topology subnet --server 10.77.0.0 255.255.255.0 --ca ca.pem --cert server.pem --key server.key \
     --dh none --tls-version-min 1.2 --data-ciphers AES-256-GCM:AES-128-GCM \
-    --push 'redirect-gateway def1' --push 'dhcp-option DNS 10.77.0.1' \
+    --push "$redirect" \
     --keepalive 5 20 --verb 3 "${extra[@]}" > server.log 2>&1 &
   server_pid=$!
   for i in $(seq 1 50); do
@@ -106,7 +112,7 @@ profile() {
 }
 case_run() {
   local server_proto="$1" client_proto="$2" auth="$3" mode="$4"
-  start_server "$server_proto" "$auth"
+  start_server "$server_proto" "$auth" "$mode"
   profile "$client_proto" "$mode"
   if ! timeout 28 "$client" profile.ovpn "$mode"; then
     echo "Interop failure: $server_proto/$mode"
@@ -130,4 +136,7 @@ case_run udp udp cert bad-name
 if [[ "${2:-}" == require-name ]]; then
   case_run udp udp cert missing-name
 fi
+case_run udp udp cert missing-dns
+case_run udp udp cert bypass-dns
+case_run udp udp cert partial-v6
 echo 'PASS isolated OpenVPN server interoperability cases'

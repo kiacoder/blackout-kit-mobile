@@ -111,6 +111,44 @@ int main(int argc, char** argv) {
         assert(c.prepare(profile, "fixture-user", "fixture-password"));
         assert(f.protected_count == 0 && f.established_count == 0);
     }
+    // A partial IPv6 route or IPv6 DNS alone must never enable a family.
+    for (int scenario = 0; scenario < 6; ++scenario) {
+        Fake f;
+        openvpn::Stop stop;
+        std::atomic<bool> flag{false};
+        blackout::OpenVpnClient c(f, stop, flag);
+        assert(c.tun_builder_new());
+        assert(c.tun_builder_add_address("192.0.2.2", 24, "", false, false));
+        assert(c.tun_builder_reroute_gw(true, scenario == 2, 0));
+        auto dns = dns_options();
+        if (scenario == 0) assert(c.tun_builder_add_route("2001:db8::", 32, 0, true));
+        if (scenario == 1) dns.servers[0].addresses[0].address = "2001:db8::53";
+        if (scenario == 2) {
+            assert(c.tun_builder_add_address("2001:db8::2", 64, "", true, false));
+            assert(c.tun_builder_set_allow_family(AF_INET6, false));
+        }
+        if (scenario == 3) assert(c.tun_builder_set_allow_family(AF_INET, false));
+        if (scenario == 4) assert(!c.tun_builder_reroute_gw(true, false,
+            openvpn::RedirectGatewayFlags::RG_BYPASS_DNS));
+        if (scenario == 5) assert(!c.tun_builder_reroute_gw(true, false,
+            openvpn::RGWFlags::EmulateExcludeRoutes));
+        c.tun_builder_set_dns_options(dns);
+        assert(c.tun_builder_establish() == -1);
+        assert(f.established_count == 0);
+    }
+    {
+        Fake f;
+        openvpn::Stop stop;
+        std::atomic<bool> flag{false};
+        blackout::OpenVpnClient c(f, stop, flag);
+        assert(c.tun_builder_new());
+        assert(c.tun_builder_add_address("192.0.2.2", 24, "", false, false));
+        assert(c.tun_builder_reroute_gw(true, false, 0));
+        assert(c.tun_builder_set_allow_family(AF_INET6, false));
+        assert(c.tun_builder_set_allow_local_dns(true));
+        assert(c.tun_builder_set_dns_options(dns_options()));
+        assert(c.tun_builder_establish() == 42);
+    }
     if (argc == 2) {
         std::ifstream fixture(argv[1]);
         assert(fixture.good());
@@ -126,5 +164,5 @@ int main(int argc, char** argv) {
         assert(f.protected_count == 0 && f.established_count == 0);
         std::cout << "2 encrypted PEM preparation cases passed (no network)\n";
     }
-    std::cout << "8 OpenVPN callback and authentication preparation tests passed\n";
+    std::cout << "15 OpenVPN callback, routing policy and authentication preparation tests passed\n";
 }

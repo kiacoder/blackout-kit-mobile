@@ -3,6 +3,8 @@ package com.blackoutkit.vpn
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import androidx.annotation.Keep
+import java.net.Inet4Address
+import java.net.Inet6Address
 import java.net.InetAddress
 
 /**
@@ -21,14 +23,14 @@ internal class OpenVpnTunCallbacks(
     private var retained: ParcelFileDescriptor? = null
     private val routes = mutableListOf<NativeTunnelConfig.Network>()
     private val dnsServers = mutableListOf<InetAddress>()
-    private var addressCount = 0
+    private val addresses = mutableListOf<InetAddress>()
 
     fun reset(): Boolean =
         checked {
             builder = service.Builder().setSession("OpenVPN").setBlocking(false)
             routes.clear()
             dnsServers.clear()
-            addressCount = 0
+            addresses.clear()
         }
 
     fun address(
@@ -36,12 +38,12 @@ internal class OpenVpnTunCallbacks(
         prefix: Int,
     ): Boolean =
         checked {
-            require(addressCount < MAX_ENTRIES)
+            require(addresses.size < MAX_ENTRIES)
             val address = NativeTunnelConfig.numericAddress(ip)
             require(!address.isAnyLocalAddress && !address.isMulticastAddress && !address.isLoopbackAddress)
             require(prefix in 0..(address.address.size * BITS_PER_BYTE))
             checkNotNull(builder).addAddress(address, prefix)
-            addressCount++
+            addresses.add(address)
         }
 
     fun route(
@@ -78,8 +80,7 @@ internal class OpenVpnTunCallbacks(
             check(current())
             val pending = checkNotNull(builder)
             builder = null
-            require(addressCount > 0 && dnsServers.isNotEmpty())
-            require(dnsServers.all { ip -> routes.any { it.contains(ip) } })
+            require(OpenVpnTunPolicy.admits(addresses, routes, dnsServers))
             dnsServers.forEach { pending.addDnsServer(it) }
             val next = checkNotNull(pending.establish())
             try {
@@ -137,5 +138,26 @@ internal class OpenVpnTunCallbacks(
         const val MAX_MTU = 9000
         const val MAX_ENTRIES = 256
         const val MAX_DNS = 16
+    }
+}
+
+/** Validate the actual platform address families before installing the interface. */
+internal object OpenVpnTunPolicy {
+    fun admits(
+        addresses: List<InetAddress>,
+        routes: List<NativeTunnelConfig.Network>,
+        dns: List<InetAddress>,
+    ): Boolean {
+        val full4 = routes.any { it.address is Inet4Address && it.prefix == 0 }
+        val full6 = routes.any { it.address is Inet6Address && it.prefix == 0 }
+        val address4 = addresses.any { it is Inet4Address }
+        val address6 = addresses.any { it is Inet6Address }
+        val uses6 = address6 || routes.any { it.address is Inet6Address } || dns.any { it is Inet6Address }
+        val safe6 = !uses6 || (address6 && full6)
+        return full4 &&
+            address4 &&
+            safe6 &&
+            dns.isNotEmpty() &&
+            dns.all { ip -> !ip.isLinkLocalAddress && routes.any { it.contains(ip) } }
     }
 }

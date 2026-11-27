@@ -2,6 +2,8 @@
 // Candidate only: no production runtime registration. Uses the pinned OpenVPN 3 API.
 // Include client/ovpncli.cpp first in the owning translation unit.
 #include <openvpn/common/stop.hpp>
+#include <openvpn/client/rgopt.hpp>
+#include <openvpn/tun/builder/rgwflags.hpp>
 #include <atomic>
 #include <string>
 
@@ -27,7 +29,11 @@ class OpenVpnClient final : public openvpn::ClientAPI::OpenVPNClient {
     bool full6 = false;
     bool address4 = false;
     bool address6 = false;
-    bool dns_added = false;
+    bool dns4 = false;
+    bool dns6 = false;
+    bool route6 = false;
+    bool block4 = false;
+    bool block6 = false;
     bool failed = false;
     bool established = false;
     bool connected_once = false;
@@ -57,7 +63,11 @@ public:
         config.connTimeout = 30;
         config.tunPersist = false;
         config.googleDnsFallback = false;
-        config.allowUnusedAddrFamilies = "no";
+        // Do not synthesize block-ipv4/block-ipv6 in the core: the pinned
+        // implementation adds both even when a family is in active use.
+        // The Android builder never enables an unused family, and the
+        // callback policy below rejects contradictory explicit block rules.
+        config.allowUnusedAddrFamilies.clear();
         config.compressionMode = "no";
         config.tlsVersionMinOverride = "tls_1_2";
         auto eval = helper.eval_config(config);
@@ -92,7 +102,8 @@ public:
         return active() && gate(cb.protect(fd));
     }
     bool tun_builder_new() override {
-        full4 = full6 = address4 = address6 = dns_added = established = false;
+        full4 = full6 = address4 = address6 = dns4 = dns6 = route6 = false;
+        block4 = block6 = established = false;
         return active() && gate(cb.reset());
     }
     bool tun_builder_set_layer(int layer) override { return gate(layer == 3); }
@@ -102,10 +113,15 @@ public:
         if (ipv6) address6 = true; else address4 = true;
         return true;
     }
-    bool tun_builder_add_route(const std::string& ip, int prefix, int, bool) override {
+    bool tun_builder_add_route(const std::string& ip, int prefix, int, bool ipv6) override {
+        if (ipv6) route6 = true;
         return active() && gate(cb.route(ip, prefix));
     }
-    bool tun_builder_reroute_gw(bool ipv4, bool ipv6, unsigned int) override {
+    bool tun_builder_reroute_gw(bool ipv4, bool ipv6, unsigned int flags) override {
+        using F = openvpn::RedirectGatewayFlags;
+        constexpr unsigned supported = F::RG_ENABLE | F::RG_REROUTE_GW |
+            F::RG_DEF1 | F::RG_IPv4 | F::RG_IPv6;
+        if (flags & ~supported) return gate(false);
         full4 = ipv4;
         full6 = ipv6;
         return active() && gate((!ipv4 || cb.route("0.0.0.0", 0)) &&
@@ -114,7 +130,15 @@ public:
     bool tun_builder_exclude_route(const std::string&, int, int, bool) override { return gate(false); }
     // OpenVPN calls this even for full-tunnel profiles and ignores its return.
     // Android never calls Builder.allowFamily; unconfigured families stay blocked.
-    bool tun_builder_set_allow_family(int, bool) override { return active(); }
+    bool tun_builder_set_allow_family(int af, bool allow) override {
+        if (af == AF_INET) block4 = block4 || !allow;
+        else if (af == AF_INET6) block6 = block6 || !allow;
+        else return gate(false);
+        return active();
+    }
+    // Android never adds local DNS bypass routes or permits bypass of the VPN.
+    // The upstream default allow=true must not translate into an escape route.
+    bool tun_builder_set_allow_local_dns(bool) override { return active(); }
     bool tun_builder_set_dns_options(const openvpn::DnsOptions& options) override {
         using Server = openvpn::DnsServer;
         if (!options.search_domains.empty()) return gate(false);
@@ -127,7 +151,8 @@ public:
             for (const auto& item : server.addresses) {
                 if ((item.port != 0 && item.port != 53) || !active() || !cb.dns(item.address))
                     return gate(false);
-                dns_added = true;
+                if (item.address.find(':') != std::string::npos) dns6 = true;
+                else dns4 = true;
             }
         }
         return active();
@@ -138,7 +163,12 @@ public:
     int tun_builder_establish() override {
         // Initial policy: IPv4 full tunnel required, other family must be blocked
         // by the platform if no address/route exists. No DNS fallback.
-        if (!active() || !full4 || !address4 || !dns_added || (address6 && !full6) || (full6 && !address6)) { failed = true; return -1; }
+        const bool uses6 = address6 || route6 || dns6 || full6;
+        const bool safe6 = !uses6 || (address6 && full6 && !block6);
+        if (!active() || !full4 || !address4 || block4 || !(dns4 || dns6) || !safe6) {
+            failed = true;
+            return -1;
+        }
         const int fd = cb.establish();
         established = fd >= 0;
         if (!established) failed = true;

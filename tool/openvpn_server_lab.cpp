@@ -159,7 +159,7 @@ int main(int argc,char** argv) {
     std::string mode=argv[2];
     bool auth=mode=="login" || mode=="bad-login" || mode=="login-only";
     bool key=mode=="encrypted" || mode=="bad-key";
-    bool reject=mode=="bad-login" || mode=="bad-key" || mode=="bad-ca" || mode=="bad-name" || mode=="missing-name";
+    bool reject=mode=="bad-login" || mode=="bad-key" || mode=="bad-ca" || mode=="bad-name" || mode=="missing-name" || mode=="missing-dns" || mode=="bypass-dns" || mode=="partial-v6";
     Lab lab;
     openvpn::Stop stop;
     std::atomic<bool> cancelled{false}, ended{false};

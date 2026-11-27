@@ -45,12 +45,12 @@ public:
         cancelled.store(true);
         cancellation.stop();
     }
-    int run(const std::string& profile, const std::string& user, const std::string& password) {
+    bool prepare(const std::string& profile, const std::string& user, const std::string& password) {
         if (cancelled.load() || profile.empty() || profile.size() > 1048576 ||
-            profile.find('\0') != std::string::npos) return 1;
+            profile.find('\0') != std::string::npos) return false;
         openvpn::ClientAPI::OpenVPNClientHelper helper;
         auto merged = helper.merge_config_string(profile);
-        if (merged.status != "MERGE_SUCCESS" || !merged.refPathList.empty()) return 1;
+        if (merged.status != "MERGE_SUCCESS" || !merged.refPathList.empty()) return false;
         Config config;
         config.content = std::move(merged.profileContent);
         config.connTimeout = 30;
@@ -59,17 +59,29 @@ public:
         config.allowUnusedAddrFamilies = "no";
         config.compressionMode = "no";
         config.tlsVersionMinOverride = "tls_1_2";
-        auto eval = eval_config(config);
-        if (eval.error || eval.externalPki || eval.privateKeyPasswordRequired ||
-            !eval.staticChallenge.empty()) return 1;
+        auto eval = helper.eval_config(config);
+        if (eval.error || eval.privateKeyPasswordRequired ||
+            !eval.staticChallenge.empty()) return false;
+        // The service requires a complete inline cert/key pair or explicit
+        // user/password mode. A credential-only profile may omit the client cert.
+        if (eval.externalPki) {
+            if (eval.autologin || user.empty() || password.empty()) return false;
+            config.disableClientCert = true;
+
+        }
+        eval = eval_config(config);
+        if (eval.error) return false;
         if (!eval.autologin) {
-            if (user.empty() || password.empty()) return 1;
+            if (user.empty() || password.empty()) return false;
             openvpn::ClientAPI::ProvideCreds credentials;
             credentials.username = user;
             credentials.password = password;
-            if (provide_creds(credentials).error) return 1;
+            if (provide_creds(credentials).error) return false;
         }
-        if (cancelled.load()) return 1;
+        return !cancelled.load();
+    }
+    int run(const std::string& profile, const std::string& user, const std::string& password) {
+        if (!prepare(profile, user, password)) return 1;
         const auto status = connect();
         cb.connected(false);
         return status.error || failed ? 1 : 0;

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import '../models/config.dart';
 import '../models/openvpn_profile.dart';
+import 'openvpn_credentials.dart';
 import '../models/vpn_session_options.dart';
 import 'xray_config.dart';
 import 'singbox_config.dart';
@@ -202,7 +203,20 @@ class VPNService {
   /// [options] carries the split tunneling, DNS and kill switch decisions. They
   /// are builder-time inputs, so they must be supplied here rather than applied
   /// afterwards — `Builder.establish()` freezes them into the tunnel.
-  Future<bool> connect(Config config, {VpnSessionOptions? options}) async {
+  Future<bool> connect(Config config, {VpnSessionOptions? options}) =>
+      _connect(config, options: options);
+
+  Future<bool> connectAuthenticatedOpenVpn(OpenVpnConfig config,
+      OpenVpnCredentials credentials, {VpnSessionOptions? options}) async {
+    try {
+      return await _connect(config, options: options, credentials: credentials);
+    } finally {
+      credentials.clear();
+    }
+  }
+
+  Future<bool> _connect(Config config, {VpnSessionOptions? options,
+      OpenVpnCredentials? credentials}) async {
     try {
       final session =
           options ?? VpnSessionOptions(dnsServers: dnsServersForConfig(config));
@@ -251,10 +265,18 @@ class VPNService {
           return false;
         }
         final profile = OpenVpnProfile.parse(config.configContent);
-        if (profile == null || profile.directives.contains('auth-user-pass') ||
-            !profile.inlineBlocks.containsAll({'ca', 'cert', 'key'})) {
+        final interactive = profile?.directives.contains('auth-user-pass') == true;
+        final hasCert = profile?.inlineBlocks.contains('cert') == true;
+        final hasKey = profile?.inlineBlocks.contains('key') == true;
+        if (profile == null || !profile.inlineBlocks.contains('ca') ||
+            hasCert != hasKey || (!interactive && !hasCert)) {
           _status = VPNStatus.error;
-          _lastError = 'The initial OpenVPN candidate requires inline CA, certificate and key without interactive authentication.';
+          _lastError = 'OpenVPN requires an inline CA and either a certificate/key pair or interactive authentication.';
+          return false;
+        }
+        if (interactive && credentials?.valid != true) {
+          _status = VPNStatus.error;
+          _lastError = 'OpenVPN requires username and password. Connect directly to enter credentials.';
           return false;
         }
         openVpnConfig = config.configContent;
@@ -364,6 +386,10 @@ class VPNService {
         if (libboxJson != null) 'libboxConfig': libboxJson,
         if (mihomoJson != null) 'mihomoConfig': mihomoJson,
         if (openVpnConfig != null) 'openVpnConfig': openVpnConfig,
+        if (openVpnConfig != null && credentials != null) ...{
+          'openVpnUsername': credentials.username,
+          'openVpnPassword': credentials.password,
+        },
         if (nativeTunnelConfig != null) 'nativeTunnelConfig': nativeTunnelConfig,
       });
 
@@ -383,12 +409,12 @@ class VPNService {
       // The native side reports the real reason (missing engine, revoked
       // consent, establish() failure) instead of a generic error.
       _status = VPNStatus.error;
-      _lastError = e.message ?? e.code;
+      _lastError = config is OpenVpnConfig ? 'OpenVPN connection failed.' : e.message ?? e.code;
       _log.e('Platform error connecting');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
-      _lastError = e.toString();
+      _lastError = config is OpenVpnConfig ? 'OpenVPN connection failed.' : e.toString();
       _log.e('Error connecting');
       return false;
     }
@@ -768,7 +794,7 @@ class EngineAvailability {
     }
     final bundled = <String>[
       if (mihomoAvailable) 'Mihomo (experimental)',
-      if (openVpnAvailable) 'OpenVPN (experimental, certificate-only)',
+      if (openVpnAvailable) 'OpenVPN (experimental)',
       if (nativeWireguardAvailable) 'WireGuard native (experimental)',
       if (nativeAmneziawgAvailable) 'AmneziaWG native (experimental)',
       if (xrayAvailable) 'Xray ${xrayVersion ?? ""}'.trim(),

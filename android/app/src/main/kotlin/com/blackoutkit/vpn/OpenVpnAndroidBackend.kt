@@ -8,6 +8,7 @@ internal class OpenVpnAndroidBackend(
     private val profile: String,
     service: VpnService,
     current: () -> Boolean,
+    private val credentials: OpenVpnCredentials?,
 ) : OpenVpnSession.Backend {
     private var report: (Boolean) -> Unit = {}
     val callbacks = OpenVpnTunCallbacks(service, current) { report(it) }
@@ -16,9 +17,16 @@ internal class OpenVpnAndroidBackend(
         this.report = report
         val bytes = profile.toByteArray(Charsets.UTF_8)
         try {
-            OpenVpnNativeBridge.nativeRun(handle, callbacks, bytes, ByteArray(0), ByteArray(0))
+            OpenVpnNativeBridge.nativeRun(
+                handle,
+                callbacks,
+                bytes,
+                credentials?.username ?: ByteArray(0),
+                credentials?.password ?: ByteArray(0),
+            )
         } finally {
             bytes.fill(0)
+            credentials?.clear()
             this.report = {}
         }
     }
@@ -26,6 +34,7 @@ internal class OpenVpnAndroidBackend(
     override fun cancel() = OpenVpnNativeBridge.nativeCancel(handle)
 
     override fun release() {
+        credentials?.clear()
         check(OpenVpnNativeBridge.nativeRelease(handle)) { "OpenVPN native ownership not released" }
     }
 }

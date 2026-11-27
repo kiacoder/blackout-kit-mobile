@@ -91,5 +91,23 @@ int main() {
         assert(c.run("client", "", "") != 0);
         assert(f.established_count == 0);
     }
-    std::cout << "6 OpenVPN callback contract tests passed\n";
+    {
+        const std::string profile = "client\ndev tun\nproto udp\nremote fixture.test 1194\nauth-user-pass\n";
+        Fake f;
+        openvpn::Stop stop;
+        std::atomic<bool> flag{false};
+        blackout::OpenVpnClient c(f, stop, flag);
+        assert(!c.prepare(profile, "", ""));
+        assert(f.protected_count == 0 && f.established_count == 0);
+    }
+    {
+        const std::string profile = "client\ndev tun\nproto udp\nremote fixture.test 1194\nauth-user-pass\n";
+        Fake f;
+        openvpn::Stop stop;
+        std::atomic<bool> flag{false};
+        blackout::OpenVpnClient c(f, stop, flag);
+        assert(c.prepare(profile, "fixture-user", "fixture-password"));
+        assert(f.protected_count == 0 && f.established_count == 0);
+    }
+    std::cout << "8 OpenVPN callback and authentication preparation tests passed\n";
 }

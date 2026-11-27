@@ -1,6 +1,6 @@
 package com.blackoutkit.vpn
 
-/** Conservative service-side admission for the first certificate-only debug candidate.
+/** Conservative service-side admission for the first authenticated debug candidate.
  * The native core is still responsible for parsing and cryptographic verification.
  * Reject ambiguous syntax rather than attempting to normalize imported profiles.
  */
@@ -29,6 +29,7 @@ internal object OpenVpnCandidateProfile {
             "data-ciphers",
             "data-ciphers-fallback",
             "auth-nocache",
+            "auth-user-pass",
             "remote-cert-tls",
             "verify-x509-name",
             "tls-version-min",
@@ -79,6 +80,7 @@ internal object OpenVpnCandidateProfile {
         private var remote = false
         private var tun = false
         private var server = false
+        private var interactive = false
 
         fun line(raw: String) {
             require(raw.length <= MAX_LINE)
@@ -118,6 +120,10 @@ internal object OpenVpnCandidateProfile {
                     require(words == listOf(key, "server"))
                     server = true
                 }
+                "auth-user-pass" -> {
+                    require(words.size == 1 && !interactive)
+                    interactive = true
+                }
                 "remote" -> {
                     require(words.size in 2..MAX_REMOTE_WORDS)
                     remote = true
@@ -125,7 +131,12 @@ internal object OpenVpnCandidateProfile {
             }
         }
 
-        fun complete(): Boolean =
-            block == null && remote && tun && server && seen.containsAll(setOf("ca", "cert", "key"))
+        fun complete(): Boolean = block == null && remote && tun && server && authenticationValid()
+
+        private fun authenticationValid(): Boolean {
+            val cert = "cert" in seen
+            val key = "key" in seen
+            return "ca" in seen && cert == key && (cert || interactive)
+        }
     }
 }

@@ -11,6 +11,8 @@ import 'package:logger/logger.dart';
 import 'config_controller.dart';
 import 'settings_controller.dart';
 import '../models/config.dart';
+import '../models/openvpn_profile.dart';
+import '../widgets/openvpn_credentials_dialog.dart';
 import '../models/test_result.dart';
 import '../services/localization_service.dart';
 import '../models/vpn_session_options.dart';
@@ -1086,7 +1088,22 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         return false;
       }
 
-      final success = await vpnService.connect(config, options: options);
+      final bool success;
+      if (config is OpenVpnConfig &&
+          OpenVpnProfile.parse(config.configContent)?.directives.contains('auth-user-pass') == true &&
+          !_candidateAttemptInFlight) {
+        final context = Get.context;
+        final credentials = context == null || !context.mounted ? null : await requestOpenVpnCredentials(context);
+        if (credentials == null || _cancelRequested) {
+          credentials?.clear();
+          state.value = ConnectionState.idle;
+          statusMessage.value = LocalizationService.t('openvpn_auth_cancelled');
+          return false;
+        }
+        success = await vpnService.connectAuthenticatedOpenVpn(config, credentials, options: options);
+      } else {
+        success = await vpnService.connect(config, options: options);
+      }
 
       if (success) {
         if (_cancelRequested) {

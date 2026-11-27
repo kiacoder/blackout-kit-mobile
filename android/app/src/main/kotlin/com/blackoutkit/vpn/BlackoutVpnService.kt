@@ -81,6 +81,7 @@ class BlackoutVpnService : VpnService() {
         const val EXTRA_SINGBOX_CONFIG = "singboxConfig"
         const val EXTRA_NATIVE_TUNNEL_CONFIG = "nativeTunnelConfig"
         const val EXTRA_OPENVPN_CONFIG = "openVpnConfig"
+        const val EXTRA_OPENVPN_AUTH_TOKEN = "openVpnAuthToken"
         const val EXTRA_MIHOMO_CONFIG = "mihomoConfig"
 
         /**
@@ -307,10 +308,12 @@ class BlackoutVpnService : VpnService() {
         val libboxConfig = intent?.getStringExtra(EXTRA_LIBBOX_CONFIG)
         val nativeConfig = intent?.getStringExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
         val openVpnConfig = intent?.getStringExtra(EXTRA_OPENVPN_CONFIG)
+        val openVpnAuthToken = intent?.getStringExtra(EXTRA_OPENVPN_AUTH_TOKEN)
 
         init {
             intent?.removeExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
             intent?.removeExtra(EXTRA_OPENVPN_CONFIG)
+            intent?.removeExtra(EXTRA_OPENVPN_AUTH_TOKEN)
         }
 
         val dnsOnly = intent?.getBooleanExtra(EXTRA_DNS_ONLY, false) ?: false
@@ -469,7 +472,7 @@ class BlackoutVpnService : VpnService() {
                 profile == null || !OpenVpnCandidateProfile.admits(profile) || !fullTunnel ->
                     setupFailure(
                         ticket,
-                        "OpenVPN candidate requires a self-contained certificate profile and full-tunnel mode",
+                        "OpenVPN candidate requires a self-contained authenticated profile and full-tunnel mode",
                     )
                 else -> startOpenVpn(request, profile, ticket)
             }
@@ -480,10 +483,24 @@ class BlackoutVpnService : VpnService() {
             profile: String,
             ticket: VpnSessionExecutor.Ticket,
         ): Boolean {
-            OpenVpnNativeBridge.loadCandidate()
-            val handle = OpenVpnNativeBridge.nativeCreate()
-            check(handle > 0)
-            val backend = OpenVpnAndroidBackend(handle, profile, this@BlackoutVpnService, ticket::isCurrent)
+            val token = request.openVpnAuthToken
+            val credentials = token?.let(OpenVpnCredentialHandoff::take)
+            if (token != null && credentials == null) {
+                return setupFailure(ticket, "OpenVPN credentials expired")
+            }
+            val backend =
+                try {
+                    OpenVpnNativeBridge.loadCandidate()
+                    val handle = OpenVpnNativeBridge.nativeCreate()
+                    check(handle > 0)
+                    OpenVpnAndroidBackend(handle, profile, this@BlackoutVpnService, ticket::isCurrent, credentials)
+                } catch (failure: IllegalStateException) {
+                    credentials?.clear()
+                    throw failure
+                } catch (failure: LinkageError) {
+                    credentials?.clear()
+                    throw failure
+                }
             openVpnCallbacks = backend.callbacks
             val session = OpenVpnSession(backend, ticket::isCurrent)
             openVpnSession = session

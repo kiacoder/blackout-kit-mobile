@@ -108,6 +108,12 @@ class LocalizationService extends GetxService implements Translations {
   static const Map<String, Map<String, String>> _translations = {
     // ───────────────────────────── English ─────────────────────────────
     'en': {
+      'openvpn_auth_title': 'OpenVPN authentication',
+      'openvpn_auth_once': 'Credentials are used for this connection only.',
+      'openvpn_auth_username': 'Username',
+      'openvpn_auth_password': 'Password',
+      'openvpn_auth_invalid': 'Enter valid credentials (maximum 4096 UTF-8 bytes each).',
+      'openvpn_auth_cancelled': 'OpenVPN authentication cancelled.',
       'storage_recovery_title': 'Saved library requires recovery',
       'storage_recovery_body': 'Existing files have been preserved. Restore access to the original device keystore and restart the app. If migration was interrupted, contact support for recovery. Do not clear app data or uninstall.',
       'app_title': 'Blackout Kit',
@@ -726,6 +732,12 @@ class LocalizationService extends GetxService implements Translations {
 
     // ───────────────────────────── Persian ─────────────────────────────
     'fa': {
+      'openvpn_auth_title': 'احراز هویت OpenVPN',
+      'openvpn_auth_once': 'اطلاعات ورود فقط برای این اتصال استفاده می‌شود.',
+      'openvpn_auth_username': 'نام کاربری',
+      'openvpn_auth_password': 'رمز عبور',
+      'openvpn_auth_invalid': 'اطلاعات ورود معتبر وارد کنید (حداکثر ۴۰۹۶ بایت UTF-8 برای هر فیلد).',
+      'openvpn_auth_cancelled': 'احراز هویت OpenVPN لغو شد.',
       'storage_recovery_title': 'کتابخانه ذخیره‌شده نیاز به بازیابی دارد',
       'storage_recovery_body': 'فایل‌های موجود حفظ شده‌اند. دسترسی به مخزن کلید دستگاه اصلی را بازیابی کنید و برنامه را دوباره اجرا کنید. اگر انتقال داده‌ها متوقف شده است، برای بازیابی با پشتیبانی تماس بگیرید. داده‌های برنامه را پاک نکنید و برنامه را حذف نکنید.',
       'app_title': 'بلک‌اوت کیت',
@@ -1320,6 +1332,12 @@ class LocalizationService extends GetxService implements Translations {
 
     // ───────────────────────────── Chinese ─────────────────────────────
     'zh': {
+      'openvpn_auth_title': 'OpenVPN 身份验证',
+      'openvpn_auth_once': '凭据仅用于本次连接。',
+      'openvpn_auth_username': '用户名',
+      'openvpn_auth_password': '密码',
+      'openvpn_auth_invalid': '请输入有效凭据（每项最多 4096 个 UTF-8 字节）。',
+      'openvpn_auth_cancelled': '已取消 OpenVPN 身份验证。',
       'storage_recovery_title': '已保存的配置库需要恢复',
       'storage_recovery_body': '现有文件已保留。请恢复对原设备密钥库的访问，然后重新启动应用。如果迁移曾中断，请联系支持人员协助恢复。请勿清除应用数据或卸载应用。',
       'app_title': 'Blackout Kit',

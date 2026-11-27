@@ -20,7 +20,7 @@ class OpenVpnCandidateProfileTest {
         for (extra in listOf(
             "up /tmp/fixture",
             "ca /tmp/fixture",
-            "auth-user-pass",
+            "auth-user-pass credentials.txt",
             "plugin foo",
             "dev tap",
             "remote-cert-tls client",
@@ -32,6 +32,15 @@ class OpenVpnCandidateProfileTest {
         )) {
             assertFalse(OpenVpnCandidateProfile.admits(profile + extra))
         }
+    }
+
+    @Test
+    fun admitsInteractiveWithOrWithoutClientCertificate() {
+        assertTrue(OpenVpnCandidateProfile.admits(profile + "auth-user-pass"))
+        val passwordOnly = profile.substringBefore("<cert>") + "auth-user-pass"
+        assertTrue(OpenVpnCandidateProfile.admits(passwordOnly))
+        assertFalse(OpenVpnCandidateProfile.admits(passwordOnly + "\nauth-user-pass"))
+        assertFalse(OpenVpnCandidateProfile.admits(passwordOnly + "\n<cert>\nfixture\n</cert>"))
     }
 
     @Test

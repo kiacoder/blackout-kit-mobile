@@ -176,6 +176,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   static const int _probeConcurrency = 16;
 
   bool get isConnected => state.value == ConnectionState.connected;
+  final RxBool nativeRecovering = RxBool(false);
 
   DateTime? _connectionStartTime;
   Timer? _uptimeTimer;
@@ -247,12 +248,27 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// Handles a status pushed by the native service.
   void _onNativeStatus(String status, String? error) {
     switch (status) {
+      case 'reconnecting':
+        if (!_operationInFlight && state.value != ConnectionState.disconnecting) {
+          _showNativeRecovery();
+        }
+        break;
       case 'connected':
+        if (nativeRecovering.value) {
+          nativeRecovering.value = false;
+          state.value = ConnectionState.idle;
+        }
         // A tunnel came up behind the app's back (re-attached engine, or a
         // connect that outlived the process).
         if (_canAdopt) reconcileWithNativeService();
         break;
       case 'disconnected':
+        if (nativeRecovering.value) {
+          nativeRecovering.value = false;
+          state.value = ConnectionState.idle;
+          selectedConfig.value = null;
+          statusMessage.value = LocalizationService.t('status_tunnel_ended');
+        }
         if (state.value == ConnectionState.testing && _operationInFlight) {
           _sessionEpoch++;
           state.value = ConnectionState.error;
@@ -278,6 +294,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         break;
       case 'error':
       case 'blocked':
+        nativeRecovering.value = false;
         if (state.value == ConnectionState.testing && _operationInFlight) {
           _sessionEpoch++;
           state.value = ConnectionState.error;
@@ -322,6 +339,19 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         }
         break;
     }
+  }
+
+  void _showNativeRecovery() {
+    if (nativeRecovering.value) return;
+    nativeRecovering.value = true;
+    _sessionEpoch++;
+    state.value = ConnectionState.connecting;
+    statusMessage.value = LocalizationService.t('status_native_reconnecting');
+    connectedIP.value = null;
+    exitIpInfo.value = null;
+    connectionUptime.value = 0;
+    _connectionStartTime = null;
+    _stopUptimeCounter();
   }
 
   /// Connects on launch when the user asked for it, but only after
@@ -452,7 +482,19 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final status = await vpnService.getStatus();
       if (_closed || _operationInFlight || epoch != _sessionEpoch ||
           status['isRunning'] is! bool) return;
+      if (status['isRecovering'] == true) {
+        _showNativeRecovery();
+        return;
+      }
       final nativeRunning = status['isRunning'] == true;
+      if (nativeRecovering.value) {
+        nativeRecovering.value = false;
+        state.value = ConnectionState.idle;
+        if (!nativeRunning) {
+          statusMessage.value = LocalizationService.t('status_tunnel_ended');
+          selectedConfig.value = null;
+        }
+      }
 
       if (nativeRunning && _canAdopt && !isConnected) {
         final name = status['name'] as String?;
@@ -1241,6 +1283,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   Future<bool> _disconnectImpl() async {
     try {
+      nativeRecovering.value = false;
       state.value = ConnectionState.disconnecting;
       statusMessage.value = LocalizationService.t('status_disconnecting');
       // Invalidate in-flight exit-IP lookups. _fetchConnectedIP captures this

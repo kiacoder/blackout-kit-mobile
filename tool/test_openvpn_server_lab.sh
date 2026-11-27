@@ -6,7 +6,9 @@ client="$(realpath "$1")"
 work="$(mktemp -d)"
 server_pid=
 echo_pid=
+client_pid=
 cleanup() {
+  if [[ -n "$client_pid" ]]; then kill "$client_pid" 2>/dev/null || true; wait "$client_pid" 2>/dev/null || true; fi
   if [[ -n "$echo_pid" ]]; then kill "$echo_pid" 2>/dev/null || true; wait "$echo_pid" 2>/dev/null || true; fi
   if [[ -n "$server_pid" ]]; then kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true; fi
   rm -rf "$work"
@@ -48,7 +50,7 @@ def tcp_echo():
                     if not data:
                         break
                     conn.sendall(data)
-            except TimeoutError:
+            except (TimeoutError, ConnectionResetError, BrokenPipeError):
                 pass
 
 threading.Thread(target=tcp_echo, daemon=True).start()
@@ -71,11 +73,13 @@ start_server() {
     extra+=(--server-ipv6 2001:db8:77::/64)
   fi
   if [[ "$mode" != missing-dns ]]; then extra+=(--push 'dhcp-option DNS 10.77.0.1'); fi
+  local keepalive=(5 20)
+  if [[ "$mode" == server-restart ]]; then keepalive=(2 8); fi
   openvpn --dev tun0 --disable-dco --local 127.0.0.1 --port 11940 --proto "$transport" \
     --topology subnet --server 10.77.0.0 255.255.255.0 --ca ca.pem --cert server.pem --key server.key \
     --dh none --tls-version-min 1.2 --data-ciphers AES-256-GCM:AES-128-GCM \
     --push "$redirect" \
-    --keepalive 5 20 --verb 3 "${extra[@]}" > server.log 2>&1 &
+    --keepalive "${keepalive[@]}" --verb 3 "${extra[@]}" > server.log 2>&1 &
   server_pid=$!
   for i in $(seq 1 50); do
     kill -0 "$server_pid" 2>/dev/null || { echo 'Server failed'; tail -12 server.log; return 1; }
@@ -114,7 +118,7 @@ case_run() {
   local server_proto="$1" client_proto="$2" auth="$3" mode="$4"
   start_server "$server_proto" "$auth" "$mode"
   profile "$client_proto" "$mode"
-  if ! timeout 28 "$client" profile.ovpn "$mode"; then
+  if ! timeout 55 "$client" profile.ovpn "$mode"; then
     echo "Interop failure: $server_proto/$mode"
     head -45 server.log
     tail -18 server.log
@@ -139,4 +143,26 @@ fi
 case_run udp udp cert missing-dns
 case_run udp udp cert bypass-dns
 case_run udp udp cert partial-v6
+case_run tcp-server tcp-client cert reconnect
+start_server tcp-server cert server-restart
+profile tcp-client server-restart
+timeout 55 "$client" profile.ovpn server-restart > recovery.log 2>&1 &
+client_pid=$!
+for i in $(seq 1 100); do
+  if [[ -f recovery.ready ]]; then break; fi
+  kill -0 "$client_pid" 2>/dev/null || { cat recovery.log; exit 1; }
+  sleep .2
+done
+[[ -f recovery.ready ]] || { cat recovery.log; exit 1; }
+stop_server
+sleep 2
+start_server tcp-server cert server-restart
+if ! wait "$client_pid"; then
+  cat recovery.log
+  tail -30 server.log
+  exit 1
+fi
+client_pid=
+cat recovery.log
+stop_server
 echo 'PASS isolated OpenVPN server interoperability cases'

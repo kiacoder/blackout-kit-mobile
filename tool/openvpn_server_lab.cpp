@@ -10,18 +10,29 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <thread>
 #include <vector>
 
 using namespace std::chrono_literals;
 struct Lab final : blackout::OpenVpnCallbacks {
-    std::atomic<bool> online{false}, ever{false};
+    std::atomic<bool> online{false}, ever{false}, seen_loss{false};
     std::atomic<int> peer{-1};
     std::atomic<unsigned> protected_count{0}, established_count{0};
+    std::mutex address_lock;
     std::string v4;
-    bool reset() override { v4.clear(); return peer.load() == -1; }
+    std::string current_v4() {
+        std::lock_guard<std::mutex> guard(address_lock);
+        return v4;
+    }
+    bool reset() override {
+        std::lock_guard<std::mutex> guard(address_lock);
+        v4.clear();
+        return true;
+    }
     bool address(const std::string& ip, int) override {
+        std::lock_guard<std::mutex> guard(address_lock);
         if (ip.find(':') == std::string::npos) v4 = ip;
         return true;
     }
@@ -31,13 +42,15 @@ struct Lab final : blackout::OpenVpnCallbacks {
     bool protect(int) override { ++protected_count; return true; }
     int establish() override {
         int fds[2];
-        if (v4.empty() || socketpair(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0, fds)) return -1;
-        peer.store(fds[1]);
+        if (current_v4().empty() || socketpair(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0, fds)) return -1;
+        int previous = peer.exchange(fds[1]);
+        if (previous >= 0) close(previous);
         ++established_count;
         return fds[0];
     }
     void connected(bool value) override {
         if (value) ever.store(true);
+        else if (ever.load()) seen_loss.store(true);
         online.store(value);
     }
     ~Lab() { if (peer.load() >= 0) close(peer.load()); }
@@ -55,7 +68,7 @@ static bool exchange(Lab& lab) {
     std::vector<unsigned char> packet(28+n, 0);
     packet[0]=0x45; packet[2]=packet.size()>>8; packet[3]=packet.size()&255;
     packet[8]=64; packet[9]=17;
-    if (inet_pton(AF_INET, lab.v4.c_str(), packet.data()+12)!=1 ||
+    if (inet_pton(AF_INET, lab.current_v4().c_str(), packet.data()+12)!=1 ||
         inet_pton(AF_INET, "10.77.0.1", packet.data()+16)!=1) return false;
     auto cs=checksum(packet.data(),20); packet[10]=cs>>8; packet[11]=cs&255;
     const unsigned src=41001,dst=41002;
@@ -92,11 +105,12 @@ static void put32(unsigned char* p,uint32_t v) {
 }
 static bool exchange_tcp(Lab& lab) {
     const std::string payload="blackout-tcp-echo-fixture";
-    const unsigned src=30000+static_cast<unsigned>(getpid())%10000;
+    static unsigned sequence=0;
+    const unsigned src=30000+(static_cast<unsigned>(getpid())+sequence++)%10000;
     constexpr unsigned dst=41004;
     constexpr uint32_t initial=12345678;
     std::array<unsigned char,4> from{},to{};
-    if(inet_pton(AF_INET,lab.v4.c_str(),from.data())!=1 ||
+    if(inet_pton(AF_INET,lab.current_v4().c_str(),from.data())!=1 ||
        inet_pton(AF_INET,"10.77.0.1",to.data())!=1) return false;
     auto send_segment=[&](uint32_t seq,uint32_t ack,unsigned char flags,const std::string& data) {
         std::vector<unsigned char> p(40+data.size(),0);
@@ -178,15 +192,34 @@ int main(int argc,char** argv) {
         std::this_thread::sleep_for(20ms);
     const bool udp_data=!reject && lab.online.load() && exchange(lab);
     const bool tcp_data=udp_data && exchange_tcp(lab);
-    const bool data=udp_data && tcp_data;
+    bool data=udp_data && tcp_data;
+    const bool recovery=mode=="reconnect" || mode=="server-restart";
+    bool recovered=false;
+    if (data && recovery) {
+        if (mode=="reconnect") {
+            client.reconnect(0);
+        } else {
+            std::ofstream marker("recovery.ready");
+            marker << "ready\n";
+        }
+        auto limit=std::chrono::steady_clock::now()+30s;
+        while (!ended.load() && std::chrono::steady_clock::now()<limit) {
+            if (lab.seen_loss.load() && lab.established_count.load()>=2 && lab.online.load()) {
+                recovered=exchange(lab) && exchange_tcp(lab);
+                break;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+        data=data && recovered;
+    }
     const bool finished=ended.load();
     if(!finished) client.cancel();
     worker.join();
     const bool ok=reject ? (finished && result.load()!=0 && !lab.ever.load() && lab.established_count==0)
-        : (data && lab.ever.load() && lab.protected_count>0 && lab.established_count==1);
+        : (data && lab.ever.load() && lab.protected_count>0 && lab.established_count==(recovery?2u:1u));
     std::cout << (ok?"PASS ":"FAIL ") << mode << " connected=" << lab.ever.load()
         << " udp=" << udp_data << " tcp=" << tcp_data << " protected=" << lab.protected_count
         << " tun=" << lab.established_count << " result=" << result.load()
-        << " finished_before_cancel=" << finished << "\n";
+        << " recovered=" << recovered << " finished_before_cancel=" << finished << "\n";
     return ok?0:1;
 }

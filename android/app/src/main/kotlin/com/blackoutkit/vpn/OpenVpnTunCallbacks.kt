@@ -85,10 +85,12 @@ internal class OpenVpnTunCallbacks(
             val next = checkNotNull(pending.establish())
             try {
                 check(current())
-                // Close the old service descriptor before transferring the new
-                // duplicate, so a close failure cannot orphan a detached fd.
-                retained?.close()
-                retained = null
+                // establish() replaces the Android interface. Retain the new
+                // descriptor before any fallible close/dup so a failure cannot
+                // silently remove its routes while recovery is still active.
+                val previous = retained
+                retained = next
+                previous?.close()
                 val duplicate = next.dup()
                 val detached =
                     try {
@@ -97,7 +99,6 @@ internal class OpenVpnTunCallbacks(
                         duplicate.close()
                         throw failure
                     }
-                retained = next
                 detached
             } finally {
                 if (retained !== next) next.close()

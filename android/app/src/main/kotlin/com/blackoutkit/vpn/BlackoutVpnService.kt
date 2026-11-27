@@ -132,6 +132,10 @@ class BlackoutVpnService : VpnService() {
         var isRunning: Boolean = false
             private set
 
+        @Volatile
+        var isOpenVpnRecovering: Boolean = false
+            private set
+
         /** Last failure, surfaced to Dart so the UI can show a real reason. */
         @Volatile
         var lastError: String? = null
@@ -391,6 +395,7 @@ class BlackoutVpnService : VpnService() {
         holdTunnelOnFailure = false
         cleanupPending = true
         isRunning = false
+        isOpenVpnRecovering = false
         activeNativeTunnel = false
         val stopped =
             stopEnginesBeforeRelease(
@@ -502,7 +507,7 @@ class BlackoutVpnService : VpnService() {
                     throw failure
                 }
             openVpnCallbacks = backend.callbacks
-            val session = OpenVpnSession(backend, ticket::isCurrent)
+            val session = OpenVpnSession(backend, current = ticket::isCurrent)
             openVpnSession = session
             session.start()
             return if (session.awaitConnected(OPENVPN_CONNECT_MS)) {
@@ -1097,21 +1102,16 @@ class BlackoutVpnService : VpnService() {
                         val self = this
                         sessions.forCurrent(ticket) {
                             val session = openVpnSession
-                            if (session?.isConnected() != true) {
-                                try {
-                                    session?.stop(OPENVPN_STOP_MS)
-                                    openVpnSession = null
-                                } catch (_: Exception) {
-                                } catch (_: LinkageError) {
+                            when (session?.link()) {
+                                OpenVpnSession.Link.CONNECTED -> {
+                                    if (isOpenVpnRecovering) publishOpenVpnRecovery(false, ticket)
+                                    scheduleOpenVpnPoll(self, ticket)
                                 }
-                                ticket.publish { if (nativeMonitor === self) nativeMonitor = null }
-                                onEngineDied("OpenVPN connection ended or requires reconnection", ticket)
-                            } else {
-                                ticket.publish {
-                                    if (nativeMonitor === self) {
-                                        mainHandler.postDelayed(self, NATIVE_MONITOR_INTERVAL_MS)
-                                    }
+                                OpenVpnSession.Link.RECOVERING -> {
+                                    if (!isOpenVpnRecovering) publishOpenVpnRecovery(true, ticket)
+                                    scheduleOpenVpnPoll(self, ticket)
                                 }
+                                else -> finishOpenVpnRecovery(session, self, ticket)
                             }
                         }
                     }
@@ -1119,6 +1119,53 @@ class BlackoutVpnService : VpnService() {
             nativeMonitor?.let { mainHandler.removeCallbacks(it) }
             nativeMonitor = poll
             mainHandler.postDelayed(poll, NATIVE_MONITOR_INTERVAL_MS)
+        }
+
+        private fun scheduleOpenVpnPoll(
+            poll: Runnable,
+            ticket: VpnSessionExecutor.Ticket,
+        ) {
+            ticket.publish {
+                if (nativeMonitor === poll) mainHandler.postDelayed(poll, NATIVE_MONITOR_INTERVAL_MS)
+            }
+        }
+
+        private fun publishOpenVpnRecovery(
+            recovering: Boolean,
+            ticket: VpnSessionExecutor.Ticket,
+        ) {
+            isOpenVpnRecovering = recovering
+            isRunning = !recovering
+            lastError = null
+            if (!recovering) connectedAtMs = System.currentTimeMillis()
+            ticket.publish { notifyStatus(if (recovering) "reconnecting" else "connected") }
+        }
+
+        private fun finishOpenVpnRecovery(
+            session: OpenVpnSession?,
+            poll: Runnable,
+            ticket: VpnSessionExecutor.Ticket,
+        ) {
+            isOpenVpnRecovering = false
+            isRunning = false
+            val stopped =
+                try {
+                    session?.stop(OPENVPN_STOP_MS)
+                    openVpnSession = null
+                    true
+                } catch (_: Exception) {
+                    false
+                } catch (_: LinkageError) {
+                    false
+                }
+            ticket.publish { if (nativeMonitor === poll) nativeMonitor = null }
+            if (stopped) {
+                onEngineDied("OpenVPN recovery ended or timed out", ticket)
+            } else {
+                // Do not claim traffic is blocked before the native worker has joined.
+                lastError = "OpenVPN cleanup pending; system VPN lockdown is required for guaranteed blocking"
+                ticket.publish { notifyStatus("error") }
+            }
         }
 
         fun cancel() {

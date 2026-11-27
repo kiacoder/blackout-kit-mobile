@@ -373,6 +373,30 @@ void main() {
       expect(vpn.connectCalls, 3);
     });
 
+    test('native recovery is not a terminal failure and can be cancelled', () async {
+      final vpn = _RecordingVpnService();
+      final controller = _controller(vpn);
+      controller.debugSetConnectedForTest(vless('fixture.example.com', 'Fixture'));
+      controller.debugHandleNativeStatusForTest('reconnecting', null);
+      expect(controller.nativeRecovering.value, isTrue);
+      expect(controller.isConnected, isFalse);
+      expect(controller.state.value, ConnectionState.connecting);
+      expect(controller.recoveryAvailable.value, isFalse);
+      expect(await controller.disconnect(), isTrue);
+      expect(controller.nativeRecovering.value, isFalse);
+      expect(controller.state.value, ConnectionState.idle);
+    });
+
+    test('terminal recovery failure clears the recovery marker', () {
+      final controller = _controller(_RecordingVpnService());
+      controller.debugSetConnectedForTest(vless('fixture.example.com', 'Fixture'));
+      controller.debugHandleNativeStatusForTest('reconnecting', null);
+      controller.debugHandleNativeStatusForTest('blocked', 'fixture stopped');
+      expect(controller.nativeRecovering.value, isFalse);
+      expect(controller.state.value, ConnectionState.error);
+      expect(controller.recoveryAvailable.value, isTrue);
+    });
+
     test('native candidate rejection does not request recovery and tries next',
         () async {
       final vpn = _RecordingVpnService();

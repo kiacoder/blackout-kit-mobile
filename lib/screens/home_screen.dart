@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleConnectDisconnect() async {
-    if (_connectionController.isConnected) {
+    if (_connectionController.isConnected || _connectionController.nativeRecovering.value) {
       await _connectionController.disconnect();
       return;
     }
@@ -558,6 +558,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildConnectButton() {
     return Obx(() {
       final isConnected = _connectionController.isConnected;
+      final isRecovering = _connectionController.nativeRecovering.value;
       final isConnecting =
           _connectionController.state.value == ConnectionState.connecting;
       // During a scan the button is live again, as a Cancel action.
@@ -567,7 +568,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       return Center(
         child: GestureDetector(
-          onTap: isConnecting ? null : _handleConnectDisconnect,
+          onTap: isConnecting && !isRecovering ? null : _handleConnectDisconnect,
           child: Container(
             width: 160,
             height: 160,
@@ -592,7 +593,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: isConnecting ? null : _handleConnectDisconnect,
+                onTap: isConnecting && !isRecovering ? null : _handleConnectDisconnect,
                 customBorder: const CircleBorder(),
                 child: Center(
                   child: Column(
@@ -616,7 +617,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 8),
                       Text(
                         // During a scan the same button stops it, so say so.
-                        (isScanning
+                        ((isScanning || isRecovering)
                                 ? 'cancel'
                                 : (isConnected ? 'connected' : 'connect'))
                             .tr

@@ -635,6 +635,7 @@ class VPNService {
         _connectedConfigHash = null;
         _log.i('VPN status changed: disconnected');
         break;
+      case 'reconnecting':
       case 'connecting':
         _status = VPNStatus.connecting;
         _log.i('VPN status changed: connecting');

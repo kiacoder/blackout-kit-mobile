@@ -61,7 +61,7 @@ android {
     buildFeatures {
         buildConfig = true
     }
-    compileSdkVersion 34
+    compileSdkVersion 36
 
     lint {
         lintConfig = file("lint.xml")

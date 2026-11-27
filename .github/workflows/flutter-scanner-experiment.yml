@@ -37,3 +37,64 @@ jobs:
           path: pubspec.lock
           if-no-files-found: error
           retention-days: 7
+
+  android:
+    name: Android scanner and native compatibility
+    needs: compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
+      - name: Resolve exact dependencies and install SDK
+        run: |
+          python3 tool/verify_supply_chain.py
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          flutter pub get --enforce-lockfile
+      - name: Compile Android and run native unit tests
+        working-directory: android
+        run: bash ../tool/run_gradle_ci.sh :app:testDebugUnitTest :app:lintDebug
+      - name: Compile debug APK with production engine selection
+        run: flutter build apk --debug --no-pub --target-platform android-arm,android-arm64
+      - name: Check debug APK
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$apk"
+          sha256sum "$apk"
+
+  ios:
+    name: iOS scanner and tunnel compile
+    needs: compatibility
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.23'
+          cache: false
+      - name: Resolve exact dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Build pinned Libbox framework
+        run: bash tool/build_libbox.sh
+      - name: Compile unsigned device app
+        run: flutter build ios --no-codesign
+      - name: Check embedded tunnel
+        run: test -d build/ios/iphoneos/Runner.app/PlugIns/BlackoutTunnel.appex

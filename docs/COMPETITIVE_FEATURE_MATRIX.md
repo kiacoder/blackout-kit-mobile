@@ -7,7 +7,7 @@ Baseline: maintainer update, 2026-11-27. This is a planning ledger, not an audit
 | Xray / VLESS / VMess / Trojan / Shadowsocks | Existing runtime; preserve regressions |
 | sing-box / Hysteria2 / TUIC / AnyTLS | Maintainer reports working; exact build and protocol evidence required for release |
 | Native WireGuard and AmneziaWG | Maintainer reports working; this branch still has a debug acceptance gate |
-| OpenVPN | Private Android service candidate; host OpenSSL lab verified TLS and UDP payload over TCP/UDP transport; Android runtime unverified |
+| OpenVPN | Private Android service candidate; host OpenSSL and pinned Mbed TLS labs verified TCP/UDP payloads and exact server identity rejection; Android runtime unverified |
 | Mihomo | Experimental adapter; API 24 artifacts built; Android traffic pending |
 | Tor, Psiphon, Geph, Lantern, WARP/MASQUE | Planned or catalogue-only; feasibility and licensing review required |
 | Independent Rust core | Experimental; not a complete replacement |

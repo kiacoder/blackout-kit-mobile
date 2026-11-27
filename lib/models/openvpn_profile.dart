@@ -147,6 +147,7 @@ class OpenVpnProfile {
     var hasContent = false;
     var tun = false;
     var peerVerification = false;
+    var exactIdentity = false;
     var pinnedPeer = false;
     final seen = <String>{};
     for (final raw in text.split('\n')) {
@@ -205,6 +206,14 @@ class OpenVpnProfile {
         if (words.length != 2 || words[1] != 'server') return false;
         peerVerification = true;
       }
+      if (key == 'verify-x509-name') {
+        if (exactIdentity || words.length < 2 || words.length > 3 ||
+            words[1].isEmpty ||
+            (words.length == 3 && !{'name', 'subject'}.contains(words[2]))) {
+          return false;
+        }
+        exactIdentity = true;
+      }
       if (key == 'peer-fingerprint') {
         if (words.length != 2 ||
             !RegExp(r'^(?:[A-Fa-f0-9]{2}:){31}[A-Fa-f0-9]{2}$')
@@ -214,7 +223,7 @@ class OpenVpnProfile {
         pinnedPeer = true;
       }
     }
-    return tun && (pinnedPeer || (peerVerification && seen.contains('ca')));
+    return tun && exactIdentity && peerVerification && seen.contains('ca') && !pinnedPeer;
   }
 
   static List<String>? _tokens(String line) {

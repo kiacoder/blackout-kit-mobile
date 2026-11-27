@@ -31,6 +31,27 @@ AUTH
 chmod 700 verify-login
 cat > echo.py <<'PY'
 import socket
+import threading
+
+def tcp_echo():
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("10.77.0.1", 41004))
+    listener.listen(4)
+    while True:
+        conn, _ = listener.accept()
+        with conn:
+            conn.settimeout(10)
+            try:
+                while True:
+                    data = conn.recv(2048)
+                    if not data:
+                        break
+                    conn.sendall(data)
+            except TimeoutError:
+                pass
+
+threading.Thread(target=tcp_echo, daemon=True).start()
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind(("10.77.0.1", 41002))
 while True:
@@ -69,6 +90,11 @@ profile() {
   local transport="$1" mode="$2"
   {
     printf 'client\ndev tun\nproto %s\nremote 127.0.0.1 11940\nremote-cert-tls server\nverb 3\n' "$transport"
+    if [[ "$mode" == bad-name ]]; then
+      printf 'verify-x509-name wrong-server name\n'
+    elif [[ "$mode" != missing-name ]]; then
+      printf 'verify-x509-name server name\n'
+    fi
     printf '<ca>\n'; if [[ "$mode" == bad-ca ]]; then cat wrong.pem; else cat ca.pem; fi; printf '</ca>\n'
     if [[ "$mode" != login-only ]]; then
       printf '<cert>\n'; cat client.pem; printf '</cert>\n<key>\n'
@@ -84,7 +110,9 @@ case_run() {
   profile "$client_proto" "$mode"
   if ! timeout 28 "$client" profile.ovpn "$mode"; then
     echo "Interop failure: $server_proto/$mode"
+    head -45 server.log
     tail -18 server.log
+    cat echo.log
     return 1
   fi
   stop_server
@@ -97,4 +125,9 @@ case_run udp udp login login
 case_run udp udp login bad-login
 case_run udp udp login-only login-only
 case_run udp udp cert bad-ca
-echo 'PASS 8 isolated OpenVPN server interoperability cases'
+case_run udp udp cert bad-name
+# The Mbed TLS overlay deliberately rejects missing explicit identity.
+if [[ "${2:-}" == require-name ]]; then
+  case_run udp udp cert missing-name
+fi
+echo 'PASS isolated OpenVPN server interoperability cases'

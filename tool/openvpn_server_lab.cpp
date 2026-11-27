@@ -82,6 +82,76 @@ static bool exchange(Lab& lab) {
     }
     return false;
 }
+// A small, bounded TCP fixture: SYN, ACK, echo payload and ACK.
+// This is not a general-purpose TCP implementation.
+static uint32_t get32(const unsigned char* p) {
+    return (uint32_t(p[0])<<24)|(uint32_t(p[1])<<16)|(uint32_t(p[2])<<8)|p[3];
+}
+static void put32(unsigned char* p,uint32_t v) {
+    p[0]=v>>24; p[1]=v>>16; p[2]=v>>8; p[3]=v;
+}
+static bool exchange_tcp(Lab& lab) {
+    const std::string payload="blackout-tcp-echo-fixture";
+    const unsigned src=30000+static_cast<unsigned>(getpid())%10000;
+    constexpr unsigned dst=41004;
+    constexpr uint32_t initial=12345678;
+    std::array<unsigned char,4> from{},to{};
+    if(inet_pton(AF_INET,lab.v4.c_str(),from.data())!=1 ||
+       inet_pton(AF_INET,"10.77.0.1",to.data())!=1) return false;
+    auto send_segment=[&](uint32_t seq,uint32_t ack,unsigned char flags,const std::string& data) {
+        std::vector<unsigned char> p(40+data.size(),0);
+        p[0]=0x45; p[2]=p.size()>>8; p[3]=p.size(); p[8]=64; p[9]=6;
+        std::copy(from.begin(),from.end(),p.begin()+12);
+        std::copy(to.begin(),to.end(),p.begin()+16);
+        auto ipcs=checksum(p.data(),20); p[10]=ipcs>>8; p[11]=ipcs;
+        p[20]=src>>8; p[21]=src&255; p[22]=dst>>8; p[23]=dst&255;
+        put32(p.data()+24,seq); put32(p.data()+28,ack);
+        p[32]=0x50; p[33]=flags; p[34]=0xff; p[35]=0xff;
+        std::copy(data.begin(),data.end(),p.begin()+40);
+        std::vector<unsigned char> pseudo(12+p.size()-20+(data.size()%2),0);
+        std::copy(p.begin()+12,p.begin()+20,pseudo.begin());
+        pseudo[9]=6; auto tcp_len=p.size()-20;
+        pseudo[10]=tcp_len>>8; pseudo[11]=tcp_len;
+        std::copy(p.begin()+20,p.end(),pseudo.begin()+12);
+        auto tcpcs=checksum(pseudo.data(),pseudo.size()); p[36]=tcpcs>>8; p[37]=tcpcs;
+        return send(lab.peer.load(),p.data(),p.size(),0)==static_cast<ssize_t>(p.size());
+    };
+    if(!send_segment(initial,0,0x02,"")) return false;
+    uint32_t remote_next=0;
+    bool handshaken=false;
+    std::string received;
+    auto until=std::chrono::steady_clock::now()+6s;
+    while(lab.online.load() && std::chrono::steady_clock::now()<until) {
+        pollfd fd{lab.peer.load(),POLLIN,0};
+        if(poll(&fd,1,100)<=0) continue;
+        std::array<unsigned char,2048> p{};
+        auto len=recv(fd.fd,p.data(),p.size(),0);
+        if(len<40 || p[0]!=0x45 || p[9]!=6 ||
+           !std::equal(to.begin(),to.end(),p.begin()+12) ||
+           !std::equal(from.begin(),from.end(),p.begin()+16) ||
+           p[20]!=(dst>>8)||p[21]!=(dst&255)||p[22]!=(src>>8)||p[23]!=(src&255)) continue;
+        const unsigned h=20+(p[32]>>4)*4;
+        if(h<40 || h>static_cast<unsigned>(len)) return false;
+        const auto seq=get32(p.data()+24), ack=get32(p.data()+28);
+        if(p[33]&0x04) return false;
+        if(!handshaken && (p[33]&0x12)==0x12 && ack==initial+1) {
+            remote_next=seq+1;
+            if(!send_segment(initial+1,remote_next,0x10,"") ||
+               !send_segment(initial+1,remote_next,0x18,payload)) return false;
+            handshaken=true;
+        } else if(handshaken && seq==remote_next && static_cast<unsigned>(len)>h) {
+            received.append(reinterpret_cast<const char*>(p.data()+h),len-h);
+            remote_next+=len-h;
+            if(!send_segment(initial+1+payload.size(),remote_next,0x10,"")) return false;
+            if(received==payload) {
+                send_segment(initial+1+payload.size(),remote_next,0x14,"");
+                return true;
+            }
+            if(received.size()>=payload.size()) return false;
+        }
+    }
+    return false;
+}
 int main(int argc,char** argv) {
     if(argc!=3) return 2;
     std::ifstream in(argv[1]); std::ostringstream profile; profile<<in.rdbuf();
@@ -89,7 +159,7 @@ int main(int argc,char** argv) {
     std::string mode=argv[2];
     bool auth=mode=="login" || mode=="bad-login" || mode=="login-only";
     bool key=mode=="encrypted" || mode=="bad-key";
-    bool reject=mode=="bad-login" || mode=="bad-key" || mode=="bad-ca";
+    bool reject=mode=="bad-login" || mode=="bad-key" || mode=="bad-ca" || mode=="bad-name" || mode=="missing-name";
     Lab lab;
     openvpn::Stop stop;
     std::atomic<bool> cancelled{false}, ended{false};
@@ -106,14 +176,16 @@ int main(int argc,char** argv) {
     auto deadline=std::chrono::steady_clock::now()+18s;
     while(!ended.load() && !lab.online.load() && std::chrono::steady_clock::now()<deadline)
         std::this_thread::sleep_for(20ms);
-    const bool data=!reject && lab.online.load() && exchange(lab);
+    const bool udp_data=!reject && lab.online.load() && exchange(lab);
+    const bool tcp_data=udp_data && exchange_tcp(lab);
+    const bool data=udp_data && tcp_data;
     const bool finished=ended.load();
     if(!finished) client.cancel();
     worker.join();
     const bool ok=reject ? (finished && result.load()!=0 && !lab.ever.load() && lab.established_count==0)
         : (data && lab.ever.load() && lab.protected_count>0 && lab.established_count==1);
     std::cout << (ok?"PASS ":"FAIL ") << mode << " connected=" << lab.ever.load()
-        << " data=" << data << " protected=" << lab.protected_count
+        << " udp=" << udp_data << " tcp=" << tcp_data << " protected=" << lab.protected_count
         << " tun=" << lab.established_count << " result=" << result.load()
         << " finished_before_cancel=" << finished << "\n";
     return ok?0:1;

@@ -40,12 +40,15 @@ New-Item -ItemType Directory -Force $out | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'TLS configure failed' }
 & $cmake --build $build --parallel 4
 if ($LASTEXITCODE -ne 0) { throw 'TLS build failed' }
+$overlay = Join-Path $out 'reviewed-tls-overlay'
+& python (Join-Path $PSScriptRoot 'prepare_openvpn_mbedtls_overlay.py') --source $Source --output $overlay
+if ($LASTEXITCODE -ne 0) { throw 'Reviewed TLS overlay failed' }
 $binary = Join-Path $out 'libopenvpn-candidate.so'
 $bridge = Join-Path $root 'android\app\src\main\cpp\openvpn_jni.cpp'
 $args = @("--target=$target", '-std=c++17', '-O2', '-fPIC', '-shared',
     '-fvisibility=hidden', '-DOPENVPN_CORE_API_VISIBILITY_HIDDEN', '-DUSE_MBEDTLS',
     '-DUSE_ASIO', '-DASIO_STANDALONE', '-DXXH_INLINE_ALL',
-    "-I$Source", "-I$asio/asio/include", "-I$mbed/include", "-I$xxhash",
+    "-I$overlay", "-I$Source", "-I$asio/asio/include", "-I$mbed/include", "-I$xxhash",
     $bridge, "$Source/openvpn/crypto/data_epoch.cpp",
     "$build/library/libmbedtls.a", "$build/library/libmbedx509.a",
     "$build/library/libmbedcrypto.a", '-static-libstdc++', '-llog',

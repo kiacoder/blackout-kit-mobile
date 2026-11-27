@@ -472,7 +472,7 @@ class BlackoutVpnService : VpnService() {
                 profile == null || !OpenVpnCandidateProfile.admits(profile) || !fullTunnel ->
                     setupFailure(
                         ticket,
-                        "OpenVPN candidate requires a self-contained authenticated profile and full-tunnel mode",
+                        "OpenVPN requires an exact server identity and full-tunnel mode",
                     )
                 else -> startOpenVpn(request, profile, ticket)
             }

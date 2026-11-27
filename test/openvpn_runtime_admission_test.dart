@@ -2,7 +2,7 @@ import 'package:blackout_kit_mobile/models/openvpn_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const base = 'client\ndev tun\nproto udp\nremote vpn.example 1194\n'
-    'remote-cert-tls server\n<ca>\nfixture\n</ca>\n';
+    'remote-cert-tls server\nverify-x509-name fixture name\n<ca>\nfixture\n</ca>\n';
 
 void main() {
   test('self-contained certificate profile with interactive auth admitted', () {
@@ -39,7 +39,9 @@ void main() {
     for (final profile in [
       'client\ndev tun\nremote vpn.example 443',
       base.replaceFirst('remote-cert-tls server\n', ''),
-      base.replaceFirst('fixture', ''),
+      base.replaceFirst('verify-x509-name fixture name\n', ''),
+      base.replaceFirst('fixture name', 'fixture name-prefix'),
+      base.replaceFirst('<ca>\nfixture\n</ca>', '<ca>\n</ca>'),
       base.replaceFirst('dev tun', 'dev tap'),
     ]) {
       expect(OpenVpnProfile.admitsRuntime(profile), isFalse);

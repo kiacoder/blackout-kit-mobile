@@ -8,6 +8,7 @@ internal object OpenVpnCandidateProfile {
     private const val MAX_BYTES = 1024 * 1024
     private const val MAX_LINE = 4096
     private const val MAX_REMOTE_WORDS = 4
+    private const val MAX_IDENTITY_WORDS = 3
     private val inline = setOf("ca", "cert", "key", "tls-auth", "tls-crypt", "tls-crypt-v2")
     private val permitted =
         setOf(
@@ -81,6 +82,7 @@ internal object OpenVpnCandidateProfile {
         private var tun = false
         private var server = false
         private var interactive = false
+        private var exactIdentity = false
 
         fun line(raw: String) {
             require(raw.length <= MAX_LINE)
@@ -120,6 +122,12 @@ internal object OpenVpnCandidateProfile {
                     require(words == listOf(key, "server"))
                     server = true
                 }
+                "verify-x509-name" -> {
+                    require(!exactIdentity && words.size in 2..MAX_IDENTITY_WORDS)
+                    require(words[1].isNotEmpty())
+                    require(words.size == 2 || words[2] in setOf("name", "subject"))
+                    exactIdentity = true
+                }
                 "auth-user-pass" -> {
                     require(words.size == 1 && !interactive)
                     interactive = true
@@ -131,7 +139,7 @@ internal object OpenVpnCandidateProfile {
             }
         }
 
-        fun complete(): Boolean = block == null && remote && tun && server && authenticationValid()
+        fun complete(): Boolean = block == null && remote && tun && server && exactIdentity && authenticationValid()
 
         private fun authenticationValid(): Boolean {
             val cert = "cert" in seen

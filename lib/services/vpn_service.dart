@@ -261,7 +261,7 @@ class VPNService {
             !OpenVpnProfile.admitsRuntime(config.configContent) ||
             session.hasSplitTunnel) {
           _status = VPNStatus.error;
-          _lastError = 'OpenVPN requires a private Android candidate, a self-contained profile and full-tunnel mode.';
+          _lastError = 'OpenVPN requires a private Android candidate, a self-contained profile with exact verify-x509-name and full-tunnel mode.';
           return false;
         }
         final profile = OpenVpnProfile.parse(config.configContent);

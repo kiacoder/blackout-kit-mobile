@@ -63,7 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleConnectDisconnect() async {
-    if (_connectionController.isConnected || _connectionController.nativeRecovering.value) {
+    if (_connectionController.isConnected || _connectionController.nativeRecovering.value ||
+        _connectionController.nativeTunnelHeld.value ||
+        _connectionController.nativeCleanupPending.value) {
       await _connectionController.disconnect();
       return;
     }
@@ -559,6 +561,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return Obx(() {
       final isConnected = _connectionController.isConnected;
       final isRecovering = _connectionController.nativeRecovering.value;
+      final isHeld = _connectionController.nativeTunnelHeld.value;
+      final needsRelease = isHeld || _connectionController.nativeCleanupPending.value;
       final isConnecting =
           _connectionController.state.value == ConnectionState.connecting;
       // During a scan the button is live again, as a Cancel action.
@@ -610,14 +614,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         )
                       else
                         Icon(
-                          isConnected ? Icons.vpn_lock : Icons.lock_open,
+                          isConnected || isHeld ? Icons.vpn_lock : Icons.lock_open,
                           size: 56,
                           color: Colors.white,
                         ),
                       const SizedBox(height: 8),
                       Text(
                         // During a scan the same button stops it, so say so.
-                        ((isScanning || isRecovering)
+                        (needsRelease ? 'disconnect' : (isScanning || isRecovering)
                                 ? 'cancel'
                                 : (isConnected ? 'connected' : 'connect'))
                             .tr

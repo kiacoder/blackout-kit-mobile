@@ -81,14 +81,19 @@ class VpnPlugin :
         // A re-attached engine (the Flutter process was killed and the app
         // reopened) has missed every status transition. Tell it the current
         // truth immediately so its UI does not disagree with the notification.
-        if (BlackoutVpnService.isRunning || BlackoutVpnService.isOpenVpnRecovering) {
-            main.post {
+        main.post {
+            val status =
+                when {
+                    BlackoutVpnService.isTunnelCleanupPending -> "cleanup_pending"
+                    BlackoutVpnService.isTunnelHeld -> "blocked"
+                    BlackoutVpnService.isOpenVpnRecovering -> "reconnecting"
+                    BlackoutVpnService.isRunning -> "connected"
+                    else -> null
+                }
+            if (status != null) {
                 channel?.invokeMethod(
                     "onStatusChanged",
-                    mapOf(
-                        "status" to if (BlackoutVpnService.isOpenVpnRecovering) "reconnecting" else "connected",
-                        "error" to null,
-                    ),
+                    mapOf("status" to status, "error" to BlackoutVpnService.lastError),
                 )
             }
         }
@@ -304,6 +309,8 @@ class VpnPlugin :
                 "isConnected" to BlackoutVpnService.isRunning,
                 "isRunning" to BlackoutVpnService.isRunning,
                 "isRecovering" to BlackoutVpnService.isOpenVpnRecovering,
+                "isTunnelHeld" to BlackoutVpnService.isTunnelHeld,
+                "isCleanupPending" to BlackoutVpnService.isTunnelCleanupPending,
                 "activeNativeTunnel" to BlackoutVpnService.activeNativeTunnel,
                 "error" to BlackoutVpnService.lastError,
                 // Identity of the live tunnel: lets a reopened app adopt a tunnel that

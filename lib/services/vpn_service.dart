@@ -649,10 +649,11 @@ class VPNService {
         // The kill switch held the tunnel open after the engine died. Traffic
         // is being dropped on purpose; this is not a clean disconnect.
         _status = VPNStatus.error;
-        _lastError = 'The proxy stopped, so traffic is being blocked. '
-            'Reconnect to restore access.';
+        _lastError = 'The VPN interface is retained after failure. '
+            'System lockdown is needed for full protection.';
         _log.w('VPN status changed: blocked (kill switch holding the tunnel)');
         break;
+      case 'cleanup_pending':
       case 'error':
         // The engine died with the kill switch OFF and the tunnel was torn
         // down. This used to fall into default and be ignored, leaving the

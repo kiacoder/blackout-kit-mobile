@@ -177,6 +177,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   bool get isConnected => state.value == ConnectionState.connected;
   final RxBool nativeRecovering = RxBool(false);
+  final RxBool nativeTunnelHeld = RxBool(false);
+  final RxBool nativeCleanupPending = RxBool(false);
 
   DateTime? _connectionStartTime;
   Timer? _uptimeTimer;
@@ -254,6 +256,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         }
         break;
       case 'connected':
+        nativeCleanupPending.value = false;
+        nativeTunnelHeld.value = false;
         if (nativeRecovering.value) {
           nativeRecovering.value = false;
           state.value = ConnectionState.idle;
@@ -263,6 +267,8 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         if (_canAdopt) reconcileWithNativeService();
         break;
       case 'disconnected':
+        nativeCleanupPending.value = false;
+        nativeTunnelHeld.value = false;
         if (nativeRecovering.value) {
           nativeRecovering.value = false;
           state.value = ConnectionState.idle;
@@ -292,8 +298,16 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           debugService.logAction('tunnel_lost', {'reason': 'disconnected'});
         }
         break;
-      case 'error':
+      case 'cleanup_pending':
+        _showCleanupPending();
+        break;
       case 'blocked':
+        nativeCleanupPending.value = false;
+        nativeTunnelHeld.value = true;
+        _showHeldTunnel();
+        break;
+      case 'error':
+        nativeTunnelHeld.value = false;
         nativeRecovering.value = false;
         if (state.value == ConnectionState.testing && _operationInFlight) {
           _sessionEpoch++;
@@ -341,6 +355,35 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  void _showCleanupPending() {
+    nativeCleanupPending.value = true;
+    nativeTunnelHeld.value = false;
+    nativeRecovering.value = false;
+    _clearRecoveryState();
+    _sessionEpoch++;
+    state.value = ConnectionState.error;
+    statusMessage.value = LocalizationService.t('status_cleanup_pending');
+    connectedIP.value = null;
+    exitIpInfo.value = null;
+    _connectionStartTime = null;
+    _stopUptimeCounter();
+  }
+
+  void _showHeldTunnel() {
+    nativeRecovering.value = false;
+    nativeTunnelHeld.value = true;
+    _sessionEpoch++;
+    state.value = ConnectionState.error;
+    statusMessage.value = LocalizationService.t('status_tunnel_held');
+    connectedIP.value = null;
+    exitIpInfo.value = null;
+    _connectionStartTime = null;
+    _stopUptimeCounter();
+    if (lastKnownWorkingConfig.value != null && !_candidateAttemptInFlight) {
+      _requestRecovery(statusMessage.value);
+    }
+  }
+
   void _showNativeRecovery() {
     if (nativeRecovering.value) return;
     nativeRecovering.value = true;
@@ -359,7 +402,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// process is not the same as starting a new one.
   Future<void> _maybeAutoConnect() async {
     try {
-      if (isConnected || !_canAdopt) return;
+      if (isConnected || nativeTunnelHeld.value || nativeCleanupPending.value || !_canAdopt) return;
       final settings = Get.find<SettingsController>();
       if (!settings.autoConnect.value) return;
       final configController = Get.find<ConfigController>();
@@ -482,6 +525,18 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final status = await vpnService.getStatus();
       if (_closed || _operationInFlight || epoch != _sessionEpoch ||
           status['isRunning'] is! bool) return;
+      if (status['isCleanupPending'] == true) {
+        if (!nativeCleanupPending.value) _showCleanupPending();
+        return;
+      }
+      if (status['isCleanupPending'] == false) nativeCleanupPending.value = false;
+      if (status['isTunnelHeld'] == true) {
+        if (!nativeTunnelHeld.value) _showHeldTunnel();
+        return;
+      }
+      if (nativeTunnelHeld.value && status['isTunnelHeld'] == false) {
+        nativeTunnelHeld.value = false;
+      }
       if (status['isRecovering'] == true) {
         _showNativeRecovery();
         return;
@@ -1302,6 +1357,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final success = await vpnService.disconnect();
 
       if (success) {
+        nativeTunnelHeld.value = false;
+        nativeCleanupPending.value = false;
+        _clearRecoveryState();
         state.value = ConnectionState.idle;
         statusMessage.value = LocalizationService.t('status_disconnected');
         selectedConfig.value = null;

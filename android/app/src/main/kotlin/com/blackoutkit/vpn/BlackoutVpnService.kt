@@ -137,6 +137,15 @@ class BlackoutVpnService : VpnService() {
         var isOpenVpnRecovering: Boolean = false
             private set
 
+        // Live process state only: a preference cannot prove a descriptor is open.
+        @Volatile
+        var isTunnelHeld: Boolean = false
+            private set
+
+        @Volatile
+        var isTunnelCleanupPending: Boolean = false
+            private set
+
         /** Last failure, surfaced to Dart so the UI can show a real reason. */
         @Volatile
         var lastError: String? = null
@@ -366,6 +375,7 @@ class BlackoutVpnService : VpnService() {
 
     /** The system revoked our tunnel (another VPN took over, or the user disabled it). */
     override fun onRevoke() {
+        isTunnelHeld = false
         lastError = "VPN was revoked by the system"
         val completion = takeConnectResultCallback()
         if (completion != null) {
@@ -398,7 +408,9 @@ class BlackoutVpnService : VpnService() {
         cleanupPending = true
         isRunning = false
         isOpenVpnRecovering = false
+        isTunnelHeld = false
         activeNativeTunnel = false
+        isTunnelCleanupPending = true
         val stopped =
             stopEnginesBeforeRelease(
                 stops =
@@ -417,6 +429,7 @@ class BlackoutVpnService : VpnService() {
             error(lastError!!)
         }
         cleanupPending = false
+        isTunnelCleanupPending = false
         // The held-blocking marker describes a live tunnel; once the interface
         // is gone the state is "stopped" again, not "blocked".
         getSharedPreferences(PREFS, MODE_PRIVATE).edit {
@@ -431,6 +444,10 @@ class BlackoutVpnService : VpnService() {
     }
 
     private fun releaseTunnelDescriptors() {
+        // OpenVPN's service descriptor is released only after every engine
+        // has successfully stopped, just like the other retained descriptors.
+        openVpnCallbacks?.closeAfterJoin()
+        openVpnCallbacks = null
         var failed = false
         try {
             engineTunFd?.close()
@@ -462,7 +479,7 @@ class BlackoutVpnService : VpnService() {
     }
 
     private fun notifyStatus(status: String) {
-        statusListener?.invoke(status)
+        statusListener?.invoke(if (status == "error" && isTunnelCleanupPending) "cleanup_pending" else status)
     }
 
     private inner class OpenVpnSetup {
@@ -554,8 +571,6 @@ class BlackoutVpnService : VpnService() {
         fun stop() {
             openVpnSession?.stop(OPENVPN_STOP_MS)
             openVpnSession = null
-            openVpnCallbacks?.closeAfterJoin()
-            openVpnCallbacks = null
         }
     }
 
@@ -1042,6 +1057,7 @@ class BlackoutVpnService : VpnService() {
                 lastError = reason
                 if (holdTunnelOnFailure && (tun != null || openVpnCallbacks?.hasTunnel == true)) {
                     isRunning = false
+                    isTunnelHeld = true
                     getSharedPreferences(PREFS, MODE_PRIVATE).edit {
                         putBoolean(KEY_HELD_BLOCKING, true)
                     }
@@ -1179,6 +1195,8 @@ class BlackoutVpnService : VpnService() {
                 onEngineDied("OpenVPN recovery ended or timed out", ticket)
             } else {
                 // Do not claim traffic is blocked before the native worker has joined.
+                cleanupPending = true
+                isTunnelCleanupPending = true
                 lastError = "OpenVPN cleanup pending; system VPN lockdown is required for guaranteed blocking"
                 ticket.publish { notifyStatus("error") }
             }

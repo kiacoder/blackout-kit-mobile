@@ -1,0 +1,41 @@
+name: Flutter scanner compatibility experiment
+on:
+  push:
+    branches: ['experiment/flutter-scanner-729']
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
+      - name: Verify checked-in inventory
+        run: python3 tool/verify_supply_chain.py
+      - name: Resolve experiment dependencies
+        run: |
+          flutter --version
+          flutter pub get
+          git diff -- pubspec.lock
+          flutter pub get --enforce-lockfile
+      - name: Strict analyzer
+        run: flutter analyze
+      - name: Dart and widget regression tests
+        if: success() || failure()
+        run: |
+          test -f .dart_tool/package_config.json
+          flutter test --no-pub test/
+      - name: Collect dependency evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: scanner-experiment-lock
+          path: pubspec.lock
+          if-no-files-found: error
+          retention-days: 7

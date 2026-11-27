@@ -5,8 +5,8 @@ publish_to: none
 version: 1.19.4+2064
 
 environment:
-  sdk: '>=3.5.0 <4.0.0'
-  flutter: '>=3.24.0'
+  sdk: '>=3.7.0 <4.0.0'
+  flutter: '>=3.29.0'
 
 dependencies:
   flutter:
@@ -34,7 +34,7 @@ dependencies:
   flutter_svg: ^2.0.5
   qr_flutter: ^4.1.0      # QR Code Generation for config sharing
   file_picker: 8.1.7     # Import .conf / .ovpn / config files
-  mobile_scanner: ^4.0.1  # QR Code camera scanning
+  mobile_scanner: 7.5.0  # QR Code camera scanning
 
   # Platform Channels
   # NOTE: the native tunnel lives in android/app/src/main/kotlin/com/blackoutkit/vpn/

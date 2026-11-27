@@ -18,6 +18,8 @@ internal object OpenVpnNativeBridge {
         authentication: Array<ByteArray>,
     ): Int
 
+    external fun nativeReconnect(handle: Long): Boolean
+
     external fun nativeCancel(handle: Long)
 
     external fun nativeRelease(handle: Long): Boolean

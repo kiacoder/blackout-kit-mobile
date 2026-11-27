@@ -16,6 +16,7 @@ struct Session {
     std::atomic<bool> cancelled{false};
     bool running = false;
     bool used = false;
+    blackout::OpenVpnClient* client = nullptr; // guarded by lock
 };
 std::mutex lock;
 std::shared_ptr<Session> session;
@@ -155,6 +156,20 @@ Java_com_blackoutkit_vpn_OpenVpnNativeBridge_nativeRunV3(
             read_auth(env, authentication, name.value, secret.value, keySecret.value)) {
             Callbacks callbacks(env, target);
             blackout::OpenVpnClient client(callbacks, current->stop, current->cancelled);
+            // Only publish the pointer while the owning worker's stack object
+            // is alive. Foreign-thread reconnect is the pinned core's public
+            // thread-safe API; never call it for a stale generation.
+            struct Publication {
+                Session& owner;
+                Publication(Session& s, blackout::OpenVpnClient& c) : owner(s) {
+                    std::lock_guard<std::mutex> guard(lock);
+                    owner.client = &c;
+                }
+                ~Publication() {
+                    std::lock_guard<std::mutex> guard(lock);
+                    owner.client = nullptr;
+                }
+            } published(*current, client);
             result = client.run(raw.value, name.value, secret.value, keySecret.value);
         }
     } catch (...) { result = 1; }
@@ -163,6 +178,17 @@ Java_com_blackoutkit_vpn_OpenVpnNativeBridge_nativeRunV3(
         current->running = false;
     }
     return result;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_blackoutkit_vpn_OpenVpnNativeBridge_nativeReconnect(JNIEnv*, jobject, jlong id) {
+    try {
+        std::lock_guard<std::mutex> guard(lock);
+        if (id != generation || !session || !session->running ||
+            session->cancelled.load() || !session->client) return JNI_FALSE;
+        session->client->reconnect(0);
+        return JNI_TRUE;
+    } catch (...) { return JNI_FALSE; }
 }
 
 extern "C" JNIEXPORT void JNICALL

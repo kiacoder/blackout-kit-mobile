@@ -15,6 +15,7 @@ class OpenVpnSessionTest {
         val finish = CountDownLatch(1)
         val released = AtomicBoolean(false)
         var cancelWorks = true
+        var reconnects = 0
         lateinit var notifyLink: (Boolean) -> Unit
 
         override fun run(report: (Boolean) -> Unit) {
@@ -25,12 +26,66 @@ class OpenVpnSessionTest {
             report(false)
         }
 
+        override fun reconnect(): Boolean {
+            reconnects++
+            return true
+        }
+
         override fun cancel() {
             if (cancelWorks) finish.countDown()
         }
 
         override fun release() {
             released.set(true)
+        }
+    }
+
+    @Test
+    fun debouncesNetworkMembershipAndIgnoresUnknownObservations() {
+        val changes = OpenVpnNetworkChanges()
+        assertFalse(changes.observe(setOf(1L)))
+        assertFalse(changes.observe(setOf(1L)))
+        assertFalse(changes.observe(setOf(1L, 2L)))
+        assertFalse(changes.observe(setOf(1L)))
+        assertFalse(changes.observe(setOf(2L)))
+        assertFalse(changes.observe(null))
+        assertFalse(changes.observe(setOf(2L)))
+        assertTrue(changes.observe(setOf(2L)))
+        assertFalse(changes.observe(setOf(2L)))
+    }
+
+    @Test
+    fun restorationFromEmptyRequestsRecoveryOnlyOnce() {
+        val changes = OpenVpnNetworkChanges()
+        changes.observe(setOf(1L))
+        changes.observe(setOf(1L))
+        assertFalse(changes.observe(emptySet()))
+        assertFalse(changes.observe(emptySet()))
+        assertFalse(changes.observe(setOf(1L)))
+        assertTrue(changes.observe(setOf(1L)))
+        assertFalse(changes.observe(setOf(1L)))
+    }
+
+    @Test
+    fun handoverReusesWorkerAndNeverRequestsAfterTicketInvalidation() {
+        val fake = Fake()
+        val current = AtomicBoolean(true)
+        val session = OpenVpnSession(fake, current = current::get)
+        session.start()
+        try {
+            assertTrue(fake.entered.await(1, TimeUnit.SECONDS))
+            repeat(2) { session.observeNetworks(setOf(1L)) }
+            repeat(2) { session.observeNetworks(setOf(2L)) }
+            assertEquals(1, fake.reconnects)
+            assertFalse(fake.released.get())
+            fake.notifyLink(false)
+            repeat(2) { session.observeNetworks(setOf(3L)) }
+            assertEquals(2, fake.reconnects)
+            current.set(false)
+            repeat(2) { session.observeNetworks(setOf(4L)) }
+            assertEquals(2, fake.reconnects)
+        } finally {
+            session.stop(1000)
         }
     }
 

@@ -14,6 +14,8 @@ internal class OpenVpnSession(
     interface Backend {
         fun run(report: (Boolean) -> Unit)
 
+        fun reconnect(): Boolean = false
+
         fun cancel()
 
         fun release()
@@ -31,6 +33,7 @@ internal class OpenVpnSession(
     private var hasConnected = false
     private var downSince: Long? = null
     private var expired = false
+    private val handover = OpenVpnNetworkChanges()
     private val worker =
         Thread({
             try {
@@ -75,6 +78,15 @@ internal class OpenVpnSession(
             else -> Link.RECOVERING
         }
 
+    /** Called by the serialized service monitor, not the native callback thread. */
+    fun observeNetworks(networks: Set<Long>?) {
+        val request =
+            synchronized(this) {
+                hasConnected && link() != Link.ENDED && handover.observe(networks)
+            }
+        if (request && current() && !stopping.get()) backend.reconnect()
+    }
+
     fun start() {
         worker.start()
     }
@@ -102,4 +114,29 @@ internal class OpenVpnSession(
     private companion object {
         const val POLL_MS = 50L
     }
+}
+
+/** Two identical observations debounce transient membership changes. */
+internal class OpenVpnNetworkChanges {
+    private var stable: Set<Long>? = null
+    private var pending: Set<Long>? = null
+
+    fun observe(networks: Set<Long>?): Boolean =
+        when {
+            networks == null || networks == stable -> {
+                pending = null
+                false
+            }
+            pending != networks -> {
+                pending = networks.toSet()
+                false
+            }
+            else -> {
+                val previous = stable
+                stable = networks.toSet()
+                pending = null
+                // Do not force a reconnect into an empty network set.
+                previous != null && networks.isNotEmpty()
+            }
+        }
 }

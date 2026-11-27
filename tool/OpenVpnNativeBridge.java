@@ -4,6 +4,7 @@ package com.blackoutkit.vpn;
 public final class OpenVpnNativeBridge {
     private native long nativeCreate();
     private native int nativeRunV3(long handle, Object callbacks, byte[] profile, byte[][] authentication);
+    private native boolean nativeReconnect(long handle);
     private native void nativeCancel(long handle);
     private native boolean nativeRelease(long handle);
 
@@ -31,6 +32,7 @@ public final class OpenVpnNativeBridge {
         require(first > 0);
         require(api.nativeCreate() == 0);
         require(!api.nativeRelease(first + 1));
+        require(!api.nativeReconnect(first));
         api.nativeCancel(first);
         require(api.nativeRunV3(first, cb, empty, new byte[][] {empty, empty, empty}) != 0);
         require(api.nativeRunV3(first, cb, empty, new byte[][] {empty, empty, empty}) != 0);
@@ -38,6 +40,7 @@ public final class OpenVpnNativeBridge {
         require(!api.nativeRelease(first));
         long second = api.nativeCreate();
         require(second > first);
+        require(!api.nativeReconnect(first));
         api.nativeCancel(first);
         require(api.nativeRunV3(first, cb, empty, new byte[][] {empty, empty, empty}) != 0);
         require(api.nativeRunV3(second, cb, new byte[1048577], new byte[][] {empty, empty, empty}) != 0);

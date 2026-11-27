@@ -1117,6 +1117,7 @@ class BlackoutVpnService : VpnService() {
                         val self = this
                         sessions.forCurrent(ticket) {
                             val session = openVpnSession
+                            session?.observeNetworks(availableNetworks.underlyingSnapshot())
                             when (session?.link()) {
                                 OpenVpnSession.Link.CONNECTED -> {
                                     if (isOpenVpnRecovering) publishOpenVpnRecovery(false, ticket)

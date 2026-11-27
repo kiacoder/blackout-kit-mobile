@@ -35,6 +35,8 @@ internal class OpenVpnAndroidBackend(
         }
     }
 
+    override fun reconnect(): Boolean = OpenVpnNativeBridge.nativeReconnect(handle)
+
     override fun cancel() = OpenVpnNativeBridge.nativeCancel(handle)
 
     override fun release() {

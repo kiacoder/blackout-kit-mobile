@@ -83,7 +83,7 @@ class _AnimatedConnectionButtonState extends State<AnimatedConnectionButton>
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: buttonColor.withOpacity(0.4),
+                color: buttonColor.withValues(alpha: 0.4),
                 blurRadius: widget.isConnected ? 20 : 10,
                 spreadRadius: widget.isConnected ? 2 : 0,
               ),

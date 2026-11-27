@@ -219,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             gradient: LinearGradient(
-              colors: [accent.withOpacity(0.12), theme.cardColor],
+              colors: [accent.withValues(alpha: 0.12), theme.cardColor],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -289,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: CircularProgressIndicator(
                     value: progress,
                     strokeWidth: 3,
-                    backgroundColor: accent.withOpacity(0.16),
+                    backgroundColor: accent.withValues(alpha: 0.16),
                     color: accent,
                   ),
                 ),
@@ -311,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     decoration: BoxDecoration(
                       color: _phaseIndex(phase) >= _phaseIndex(entry.$1)
                           ? accent
-                          : theme.disabledColor.withOpacity(0.25),
+                          : theme.disabledColor.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(9),
                     ),
                   ),
@@ -338,7 +338,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       value: value,
                       minHeight: 5,
                       color: accent,
-                      backgroundColor: accent.withOpacity(0.12),
+                      backgroundColor: accent.withValues(alpha: 0.12),
                     ),
                   ),
                 ),
@@ -583,7 +583,7 @@ class _HomeScreenState extends State<HomeScreen> {
               boxShadow: [
                 BoxShadow(
                   color: (isConnected ? Colors.green : Colors.indigo)
-                      .withOpacity(0.3),
+                      .withValues(alpha: 0.3),
                   blurRadius: 24,
                   spreadRadius: 4,
                 ),

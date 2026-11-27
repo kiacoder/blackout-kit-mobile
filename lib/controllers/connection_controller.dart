@@ -393,7 +393,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   Future<void> _verifyTunnelAlive() async {
     if (_closed || _operationInFlight || _livenessInFlight ||
-        !isConnected || isDnsOnly.value || Platform.isIOS) return;
+        !isConnected || isDnsOnly.value || Platform.isIOS) {
+      return;
+    }
     final verify = siteCheckService;
     if (verify == null || !verify.enabled) return;
     final epoch = _sessionEpoch;
@@ -401,7 +403,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     try {
       final alive = await verify.verifyLiveConnection();
       if (alive || _closed || _operationInFlight ||
-          epoch != _sessionEpoch || !isConnected) return;
+          epoch != _sessionEpoch || !isConnected) {
+        return;
+      }
       _operationInFlight = true;
       try {
         debugService.logAction('liveness_failed');
@@ -449,7 +453,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final epoch = _sessionEpoch;
       final status = await vpnService.getStatus();
       if (_closed || _operationInFlight || epoch != _sessionEpoch ||
-          status['isRunning'] is! bool) return;
+          status['isRunning'] is! bool) {
+        return;
+      }
       final nativeRunning = status['isRunning'] == true;
 
       if (nativeRunning && _canAdopt && !isConnected) {
@@ -559,7 +565,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     final epoch = _sessionEpoch;
     final fresh = await service.fetchHome();
     if (!_closed && epoch == _sessionEpoch && !isConnected &&
-        !fresh.isEmpty) homeIpInfo.value = fresh;
+        !fresh.isEmpty) {
+      homeIpInfo.value = fresh;
+    }
   }
 
   /// Connect with fastest available config

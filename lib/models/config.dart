@@ -1774,7 +1774,9 @@ class ConfigParser {
       final seen = <String>{};
       for (final entry in (data['endpoints'] as List).take(4000)) {
         if (entry is! Map || entry['type'] != 'wireguard' ||
-            entry.keys.any((k) => !const ['type','tag','address','private_key','peers','mtu'].contains(k))) continue;
+            entry.keys.any((k) => !const ['type','tag','address','private_key','peers','mtu'].contains(k))) {
+          continue;
+        }
         final peers = entry['peers'];
         if (peers is! List || peers.length != 1 || peers.first is! Map) continue;
         final peer = peers.first as Map;
@@ -1787,10 +1789,14 @@ class ConfigParser {
         final pub = peer['public_key'];
         if (host is! String || port is! int || secret is! String ||
             pub is! String || addresses is! List || allowed is! List ||
-            addresses.any((v) => v is! String) || allowed.any((v) => v is! String)) continue;
+            addresses.any((v) => v is! String) || allowed.any((v) => v is! String)) {
+          continue;
+        }
         final reserved = peer['reserved'];
         if (reserved != null && (reserved is! List || reserved.length != 3 ||
-            reserved.any((v) => v != 0))) continue;
+            reserved.any((v) => v != 0))) {
+          continue;
+        }
         try {
           final uri = Uri(scheme: 'wireguard', userInfo: Uri.encodeComponent(secret),
               host: host, port: port, queryParameters: {
@@ -1817,7 +1823,9 @@ class ConfigParser {
     final uri = Uri.parse(text);
     if (uri.host.isEmpty || !uri.hasPort || uri.port < 1 ||
         uri.port > 65535 || uri.userInfo.isEmpty ||
-        (uri.path.isNotEmpty && uri.path != '/')) return null;
+        (uri.path.isNotEmpty && uri.path != '/')) {
+      return null;
+    }
     final q = <String, String>{};
     for (final entry in uri.queryParametersAll.entries) {
       final k = entry.key.toLowerCase();
@@ -1833,7 +1841,9 @@ class ConfigParser {
     if (q.keys.any((k) => !known.contains(k))) return null;
     // Reserved bytes are not supported by the current native engine.
     if (q.containsKey('reserved') &&
-        !RegExp(r'^0\s*,\s*0\s*,\s*0$').hasMatch(q['reserved']!)) return null;
+        !RegExp(r'^0\s*,\s*0\s*,\s*0$').hasMatch(q['reserved']!)) {
+      return null;
+    }
     if (q.containsKey('udp') && !['1','true'].contains(q['udp']!.toLowerCase())) return null;
     String? key(String? value) {
       if (value == null || value.isEmpty) return null;
@@ -1867,7 +1877,9 @@ class ConfigParser {
     if (address == null || routes == null) return null;
     final mtu = q['mtu'];
     if (mtu != null && ((int.tryParse(mtu) ?? 0) < 1280 ||
-        (int.tryParse(mtu) ?? 0) > 9000)) return null;
+        (int.tryParse(mtu) ?? 0) > 9000)) {
+      return null;
+    }
     final dns = q['dns'];
     if (dns != null && dns.split(',').any((v) => InternetAddress.tryParse(v.trim()) == null)) return null;
     final keeps = ['keepalive','persistent_keepalive','persistent-keepalive','persistentkeepalive']
@@ -1875,7 +1887,9 @@ class ConfigParser {
     if (keeps.length > 1) return null;
     final keep = keeps.firstOrNull;
     if (keep != null && ((int.tryParse(keep) ?? -1) < 0 ||
-        (int.tryParse(keep) ?? -1) > 65535)) return null;
+        (int.tryParse(keep) ?? -1) > 65535)) {
+      return null;
+    }
     final isAwg = awg.any(q.containsKey);
     for (final field in ['jc','jmin','jmax','s1','s2','s3','s4']) {
       if (q.containsKey(field)) {
@@ -1888,7 +1902,9 @@ class ConfigParser {
         final parts = q[field]!.split('-').map(int.tryParse).toList();
         if (parts.isEmpty || parts.length > 2 ||
             parts.any((n) => n == null || n < 0 || n > 4294967295) ||
-            (parts.length == 2 && parts.first! > parts.last!)) return null;
+            (parts.length == 2 && parts.first! > parts.last!)) {
+          return null;
+        }
       }
     }
     final endpoint = uri.host.contains(':') ? '[${uri.host}]:${uri.port}' : '${uri.host}:${uri.port}';

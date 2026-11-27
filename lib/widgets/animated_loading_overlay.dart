@@ -75,7 +75,7 @@ class _AnimatedLoadingOverlayState extends State<AnimatedLoadingOverlay>
           opacity: widget.isVisible ? 1 : 0,
           duration: const Duration(milliseconds: 300),
           child: Container(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             child: Center(
               child: FadeTransition(
                 opacity: _fadeAnimation,
@@ -92,14 +92,14 @@ class _AnimatedLoadingOverlayState extends State<AnimatedLoadingOverlay>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
+                              color: Colors.white.withValues(alpha: 0.3),
                               width: 3,
                             ),
                           ),
                           child: CircularProgressIndicator(
                             strokeWidth: 4,
                             valueColor: AlwaysStoppedAnimation(
-                              Colors.white.withOpacity(0.8),
+                              Colors.white.withValues(alpha: 0.8),
                             ),
                           ),
                         ),

@@ -232,7 +232,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final suggestion = _dnsSuggestion();
                   if (suggestion == null) return const SizedBox.shrink();
                   return Container(
-                    color: Colors.orange.withOpacity(0.10),
+                    color: Colors.orange.withValues(alpha: 0.10),
                     child: ListTile(
                       leading: const Icon(Icons.warning_amber_rounded,
                           color: Colors.orange),
@@ -531,7 +531,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 color: (source.isEnabled
                                         ? theme.colorScheme.primary
                                         : Colors.grey)
-                                    .withOpacity(0.12),
+                                    .withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(
@@ -888,7 +888,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   if (suggestion != null)
                     Container(
                       width: double.infinity,
-                      color: Colors.orange.withOpacity(0.12),
+                      color: Colors.orange.withValues(alpha: 0.12),
                       padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                       child: Row(
                         children: [

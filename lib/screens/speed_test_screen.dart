@@ -137,7 +137,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
           // Benchmark Summary Card
           Container(
             padding: const EdgeInsets.all(20),
-            color: isDark ? theme.cardColor : Colors.indigo.withOpacity(0.06),
+            color: isDark ? theme.cardColor : Colors.indigo.withValues(alpha: 0.06),
             child: Column(
               children: [
                 Wrap(
@@ -313,7 +313,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                     leading: CircleAvatar(
                       backgroundColor: isFastest
                           ? Colors.amber
-                          : (result?.isWorking == true ? Colors.green.withOpacity(0.2) : Colors.grey.withOpacity(0.2)),
+                          : (result?.isWorking == true ? Colors.green.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.2)),
                       child: Text(
                         '#${index + 1}',
                         style: TextStyle(

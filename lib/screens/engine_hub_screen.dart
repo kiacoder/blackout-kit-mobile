@@ -172,7 +172,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
           // Header summary card
           Container(
             padding: const EdgeInsets.all(16),
-            color: isDark ? theme.cardColor : Colors.indigo.withOpacity(0.06),
+            color: isDark ? theme.cardColor : Colors.indigo.withValues(alpha: 0.06),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -181,7 +181,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.15),
+                        color: theme.colorScheme.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(Icons.memory, color: theme.colorScheme.primary, size: 28),
@@ -308,7 +308,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: runnable && configCount > 0
-              ? catColor.withOpacity(0.4)
+              ? catColor.withValues(alpha: 0.4)
               : Colors.transparent,
           width: 1,
         ),
@@ -326,7 +326,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: catColor.withOpacity(0.12),
+                      color: catColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -366,7 +366,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                               Flexible(child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: theme.disabledColor.withOpacity(0.15),
+                                  color: theme.disabledColor.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -381,7 +381,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: theme.disabledColor.withOpacity(0.15),
+                                    color: theme.disabledColor.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -409,8 +409,8 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: runnable && configCount > 0
-                          ? Colors.green.withOpacity(0.15)
-                          : theme.disabledColor.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.15)
+                          : theme.disabledColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -503,7 +503,7 @@ class _EngineHubScreenState extends State<EngineHubScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.disabledColor.withOpacity(0.1),
+                    color: theme.disabledColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(

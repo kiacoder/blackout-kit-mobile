@@ -281,7 +281,7 @@ class _AppIcon extends StatelessWidget {
             );
           }
           return CircleAvatar(
-            backgroundColor: fallbackColor.withOpacity(0.12),
+            backgroundColor: fallbackColor.withValues(alpha: 0.12),
             child: Icon(Icons.android, color: fallbackColor),
           );
         },

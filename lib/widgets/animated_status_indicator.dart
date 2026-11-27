@@ -90,9 +90,9 @@ class _AnimatedStatusIndicatorState extends State<AnimatedStatusIndicator>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: _getStatusColor().withOpacity(0.1),
+          color: _getStatusColor().withValues(alpha: 0.1),
           border: Border.all(
-            color: _getStatusColor().withOpacity(0.5),
+            color: _getStatusColor().withValues(alpha: 0.5),
             width: 1.5,
           ),
           borderRadius: BorderRadius.circular(12),

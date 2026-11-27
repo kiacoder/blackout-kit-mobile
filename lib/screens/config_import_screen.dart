@@ -68,7 +68,9 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
       final content = payload['text'] ?? '';
       const sourceName = 'shared-config';
       if (!mounted || _dialogOpen || _saving || _pickingFile ||
-          content.trim().isEmpty || content.length > 5 * 1024 * 1024) return;
+          content.trim().isEmpty || content.length > 5 * 1024 * 1024) {
+        return;
+      }
       final multiple = ConfigParser.parseMultiple(content);
       final single = multiple.length > 1
           ? null
@@ -426,7 +428,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
             const SizedBox(height: 8),
             Chip(
               label: Text(config.protocol.toUpperCase()),
-              backgroundColor: Colors.indigo.withOpacity(0.15),
+              backgroundColor: Colors.indigo.withValues(alpha: 0.15),
             ),
             const SizedBox(height: 8),
             Text(
@@ -712,7 +714,7 @@ class _ConfigImportScreenState extends State<ConfigImportScreen> with SingleTick
           const SizedBox(height: 16),
           if (_parsedConfig != null) ...[
             Card(
-              color: Colors.green.withOpacity(0.12),
+              color: Colors.green.withValues(alpha: 0.12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: const BorderSide(color: Colors.green, width: 1.2),

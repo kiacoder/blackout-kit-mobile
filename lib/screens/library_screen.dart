@@ -573,12 +573,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isTesting
-                        ? Colors.orange.withOpacity(0.2)
+                        ? Colors.orange.withValues(alpha: 0.2)
                         : result?.isWorking == true
-                            ? Colors.green.withOpacity(0.2)
+                            ? Colors.green.withValues(alpha: 0.2)
                             : (result != null && !result.isWorking)
-                                ? Colors.red.withOpacity(0.2)
-                                : Colors.grey.withOpacity(0.2),
+                                ? Colors.red.withValues(alpha: 0.2)
+                                : Colors.grey.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(

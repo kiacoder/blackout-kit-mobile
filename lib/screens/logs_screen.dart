@@ -227,7 +227,7 @@ class _LogsScreenState extends State<LogsScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: levelColor.withOpacity(0.18),
+                                color: levelColor.withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(color: levelColor, width: 0.8),
                               ),

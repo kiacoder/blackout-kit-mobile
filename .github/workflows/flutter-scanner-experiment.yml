@@ -21,8 +21,6 @@ jobs:
       - name: Resolve experiment dependencies
         run: |
           flutter --version
-          flutter pub get
-          git diff -- pubspec.lock
           flutter pub get --enforce-lockfile
       - name: Strict analyzer
         run: flutter analyze

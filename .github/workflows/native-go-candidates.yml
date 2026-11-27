@@ -130,7 +130,7 @@ jobs:
       - name: Build isolated debug package
         run: |
           flutter pub get --enforce-lockfile
-          (cd android && bash ./gradlew --no-daemon -PnativeTestPackage=true -Ptarget-platform=android-arm,android-arm64 :app:assembleDebug)
+          (cd android && bash ../tool/run_gradle_ci.sh -PnativeTestPackage=true -Ptarget-platform=android-arm,android-arm64 :app:assembleDebug)
       - name: Verify candidate package, signature and exact engine bytes
         run: |
           set -euo pipefail

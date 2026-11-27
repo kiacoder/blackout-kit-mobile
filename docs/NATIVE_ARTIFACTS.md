@@ -1,5 +1,7 @@
 # Native artifact snapshot — 2026-11-16
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Read-only hashes and embedded Go module strings from existing checkout.
 These are NOT executed version checks, signatures, source provenance or ABI/device tests.
 No binary was modified or added.

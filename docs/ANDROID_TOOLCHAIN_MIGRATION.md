@@ -1,5 +1,7 @@
 # Android toolchain migration — Ascension Phase 3
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Status: tested bridge toolchain integrated into draft PR20 (2026-11-25). Fresh PR20 CI and physical acceptance pending. The earlier checkpoints below are historical.
 
 Candidate run 45443595453 completed successfully: APK build, signature and inventory checks, antivirus, SBOM, VirusTotal hash lookup, MobSF analysis and provenance steps succeeded. iOS unsigned IPA built. No release signing or publication was requested. Scanner execution success is not a clean security verdict; artifact findings and device behavior remain to be reviewed before promotion. Latest PR20 ShellCheck jobs also passed.

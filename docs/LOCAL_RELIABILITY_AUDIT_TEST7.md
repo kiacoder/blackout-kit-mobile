@@ -1,5 +1,7 @@
 ﻿# Local reliability audit — Native Test 7
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Date: 2026-11-24. Scope: the isolated PR20 worktree, including the changes
 from Native Tests 4–6. This is a source review plus local regression and
 build validation, not an exhaustive device or security certification.

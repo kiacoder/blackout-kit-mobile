@@ -1,5 +1,7 @@
 # Project Ascension ? professional repository program
 
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). Engineering hardening PR #27 is merged and published; automated tag and main checks passed. Device, storage, reproducibility, performance and independent audit work remains open. Historical phase/checkpoint descriptions below are preserved.
+
 ## Roadmap
 
 | Phase | Focus | State |

@@ -1,5 +1,7 @@
 # Phase 4: Testing, Polish & Release - Completion Summary
 
+Historical v1.0.0 milestone summary, not a current release or completeness claim. See [current status](CURRENT_STATUS.md).
+
 **Status: ✅ COMPLETE** | **Date: 2026-01-15** | **Version: v1.0.0**
 
 ---

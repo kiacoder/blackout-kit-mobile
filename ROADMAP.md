@@ -1,5 +1,7 @@
 # Multi-engine roadmap (not a completion claim)
 
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). Remaining work: device and upgrade acceptance, CBC/storage migration, controller decomposition, independent Rust runtime, reproducibility, measured performance and independent audit. The earlier multi-engine plan follows; see [engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md).
+
 1. Establish reproducible Flutter/Android/native toolchain and device baseline. Run all
    new and existing tests; fix regressions before releasing. Review native supply-chain
    provenance and notices. Add translations/widget tests for export UX.

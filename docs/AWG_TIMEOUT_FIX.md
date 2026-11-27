@@ -1,5 +1,7 @@
 # AWG first-read/configuration timeout: reproduced cause and patch
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Overall remains **26%**. This is native-core progress, not Android app integration.
 No APK, physical-device connection or server deployment is claimed.
 

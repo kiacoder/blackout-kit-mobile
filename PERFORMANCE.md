@@ -1,5 +1,7 @@
 # Performance and reliability status
 
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). No matched physical-device throughput, battery, PSS or CPU benchmark is established for this release. The dated checkpoints below are historical; see [engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md).
+
 > **2026-11-16 continuation update (supersedes older evidence below):** overall ~26%.
 > Latest preservation/security/build review: [review](docs/CONTINUATION_REVIEW.md).
 > Official-release-hash-verified Mihomo Linux core: **11 integration tests passed**.

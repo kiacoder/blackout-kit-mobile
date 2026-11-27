@@ -1,5 +1,7 @@
 # UI stability follow-up
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Reported symptom: intermittent crashes while opening screens or tapping controls
 in the first side-by-side native Android test build. No device crash trace was
 available during this investigation (ADB had no connected phone).

@@ -1,5 +1,7 @@
 # Preservation, build and lifecycle review — 2026-11-16
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Overall remains **26%**, not a working new Android engine release.
 
 ## Git source of truth

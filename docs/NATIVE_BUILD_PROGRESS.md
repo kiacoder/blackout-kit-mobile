@@ -1,5 +1,7 @@
 # Native build and real kernel-TUN progress
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 > **Latest source integration:** [NATIVE_ANDROID_INTEGRATION.md](NATIVE_ANDROID_INTEGRATION.md).
 > WG/AWG now have gated service/channel wiring and a combined one-Go-runtime
 > `libblackout-tunnels.so` for both ARM64 and ARMv7. The native-enabled debug APK

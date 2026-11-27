@@ -1,5 +1,7 @@
 # Local build — debug-signed
 
+Historical debug build record only. For normal installation use [the latest release](https://github.com/kiacoder/blackout-kit-mobile/releases/latest). Do not uninstall a production installation to install this archive; uninstalling can erase saved data.
+
 `blackout-kit-v1.12.4-arm64-v8a-debug-signed.apk`
 
 Built locally on 2026-10-24 from commit `6bc0e1c` (tag `v1.12.4`), arm64-v8a,

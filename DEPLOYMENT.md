@@ -1,7 +1,6 @@
 # Deployment and release guide
 
-Current workflow: v1.19.4 candidate, PR #27. The published stable version
-is v1.19.3 until a new draft is reviewed and published. The authoritative
+Current published release: v1.19.4 (PR #27). The authoritative
 security and signing policy is [docs/RELEASE_SECURITY.md](docs/RELEASE_SECURITY.md).
 
 ## 1. Pre-merge acceptance
@@ -56,7 +55,7 @@ security policy before publishing; do not claim independently audited or
 malware-free status from automated scans.
 
 After approval, publish the reviewed draft as a normal release, with
-prerelease disabled. Confirm the public assets and release notes match the
+prerelease disabled. Use the title convention `Blackout Kit Mobile vX.Y.Z - Concise Summary`. Include an overview, version-specific changes, exact evidence, downloads and known limitations. Never rename existing tags or binary assets for editorial consistency. Confirm the public assets and release notes match the
 verified candidate. See the current [GitHub releases](https://github.com/kiacoder/blackout-kit-mobile/releases).
 
 ## 4. Device acceptance and rollback

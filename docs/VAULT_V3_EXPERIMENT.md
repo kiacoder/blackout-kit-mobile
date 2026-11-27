@@ -1,5 +1,7 @@
 # Authenticated vault v3 experiment
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Status: development-only proof of concept, not a shipping storage format.
 
 ## Format and evidence

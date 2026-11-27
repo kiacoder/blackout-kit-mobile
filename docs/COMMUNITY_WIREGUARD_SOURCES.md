@@ -1,5 +1,7 @@
 # Community WireGuard sources
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Reviewed 2026-11-24. Built-in opt-in sources; existing Barry-Far and
 V2Ray Aggregator defaults are unchanged. Enable in Settings and refresh
 the library. These sources are third-party public configuration feeds,

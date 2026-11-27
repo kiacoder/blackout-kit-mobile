@@ -1,5 +1,7 @@
 ﻿# Release security policy and verification
 
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). Review its attached APK inventory, checksums, SBOM and scan reports. ClamAV: zero detections in three APKs; VirusTotal: unknown-file; MobSF: 55/100, two high findings. Device acceptance is not established for this version. Earlier dated sections are historical.
+
 Android release signing already exists. The public certificate was extracted
 from the published v1.19.2 ARMv7 APK after checking the GitHub asset digest:
 

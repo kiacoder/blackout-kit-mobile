@@ -1,5 +1,7 @@
 # Handoff
 
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). Current handoff: review [current status](CURRENT_STATUS.md), [engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md) and [roadmap](ROADMAP.md). The following historical local-only checkpoints are preserved, not current access limitations.
+
 > **Local-only access confirmed — still 26%:** no external build/device environment
 > available. Native runtime parser/routing validation hardened; 24 parser,
 > 17 standalone JUnit, 13 ownership, 30 host, 33 Python checks pass and the

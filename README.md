@@ -2,7 +2,7 @@
   <img src="assets/images/logo.png" width="112" alt="Blackout Kit logo - open-source VPN client for Android and iOS">
 </p>
 
-<h1 align="center">Blackout Kit</h1>
+<h1 align="center">Blackout Kit Mobile</h1>
 
 <p align="center">
   <b>Free, open-source Android VPN and proxy client; experimental iOS integration.</b><br>
@@ -31,7 +31,7 @@ default-off. OpenVPN is configuration-only. See [ENGINE_SUPPORT.md](ENGINE_SUPPO
 - **No account, no ads, no application telemetry.** Config sources, connectivity
   checks, VPN endpoints, update checks and optional exit-IP lookup make network
   requests when used. See [SECURITY.md](SECURITY.md).
-- **Encrypted config library:** the v1.19.4 hardening candidate refuses
+- **Encrypted config library:** v1.19.4 refuses
   plaintext fallback if secure key storage is unavailable. Existing data
   is preserved for recovery; settings are not covered by the config vault.
 - **Accessibility** is a tracked requirement, not an afterthought — see
@@ -49,9 +49,9 @@ Download the APK for your phone from the
 
 | Build | Use it for |
 |---|---|
-| `arm64-v8a` | Almost every phone made since 2017 |
+| `arm64-v8a` | Most modern ARM64 Android phones |
 | `armeabi-v7a` | Older 32-bit devices |
-| `universal` | If you are not sure |
+| `universal` | Both supported ARM ABIs; not x86 |
 
 Then: **Import** → paste your `vless://`, `vmess://`, `trojan://`, `ss://`,
 WireGuard `.conf` or subscription link → **Connect**.
@@ -75,6 +75,8 @@ Building from source instead? See [Setup](#setup).
 
 
 ## Status
+
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). See [release history](docs/RELEASE_HISTORY.md) and [current verification](CURRENT_STATUS.md). Physical acceptance for this release remains open.
 
 **Verified on hardware (Android):** the in-process Xray path carries live traffic
 end to end — a real config on a real device, a TikTok video loading in under a
@@ -247,7 +249,7 @@ flutter run --release -d <device-id>
 
 ### First Run
 1. App automatically fetches configs from trusted sources (GitHub)
-2. Automatic speed/reliability test begins (3-5 minutes)
+2. Reachability and reliability checks begin; duration depends on the source and settings
 3. Home screen shows fastest working config
 4. Tap the big connect button to activate VPN
 
@@ -270,7 +272,7 @@ flutter run --release -d <device-id>
 flutter test
 ```
 
-176 tests across ten files:
+Selected historical test entry points (not the current suite count; see [TESTING.md](TESTING.md)):
 
 ```bash
 flutter test test/config_parsing_test.dart
@@ -330,7 +332,7 @@ Dart-level:
 - [ ] Add custom source adds configs to library
 - [ ] Engine Hub reports the real bundled-engine count, not 10
 
-On a physical device (**nothing below has ever been run**):
+On a physical device (repeat for each release; see the historical Xray result above):
 - [ ] `VpnService.prepare()` consent dialog appears and is accepted
 - [ ] `Builder.establish()` succeeds and the key icon appears in the status bar
 - [ ] The Xray core starts and `isRunning` reports true
@@ -342,7 +344,7 @@ On a physical device (**nothing below has ever been run**):
 
 ## Roadmap
 
-> **Last corrected: 2026-09-19.** Earlier revisions of this section listed the
+> **Historical correction (2026-09-19).** Earlier revisions of this section listed the
 > kill switch, split tunneling and DNS leak prevention as future work while
 > marking the VPN integration "complete". Neither was accurate: the native
 > tunnel did not exist, and those three features were implemented as calls to
@@ -351,7 +353,7 @@ On a physical device (**nothing below has ever been run**):
 
 ### Phase 1 — Foundation ✅ Complete
 - Project setup with GetX + Hive
-- Config models and share-link parsing for all 11 protocols
+- Config models and share-link parsing; see the current protocol matrix
 - GitHub service with caching
 - Config persistence
 
@@ -573,7 +575,7 @@ Open-source under the MIT License. See [LICENSE](LICENSE) for details.
 - ♿ **Accessibility barriers** → issues tagged `accessibility` (see [ACCESSIBILITY.md](ACCESSIBILITY.md))
 - 📜 Everyone interacting here agrees to the [Code of Conduct](.github/CODE_OF_CONDUCT.md)
 
-## Multi-engine expansion work (2026-11-16)
+## Historical multi-engine expansion work (2026-11-16)
 
 This branch adds safer protocol identification, bounded subprocess shutdown,
 application batch JSON/v2rayN clipboard export and a tested offline configuration
@@ -590,7 +592,7 @@ profile path, plus installed-engine validation. **23 real JVM/process/socket hos
 pass; eight native service/engine source files pass a narrow API compile check.**
 Neither result is an APK build or a VPN forwarding test. See
 [toolchain evidence](docs/TOOLCHAIN_PROGRESS.md) and the updated current status before
-attempting to enable the adapter. AWG/native-WG/OpenVPN remain unintegrated.
+attempting to enable the adapter. This paragraph predates the gated native WG/AWG integration; OpenVPN remains configuration-only.
 
 Continuation: 11 verified Mihomo Linux core integration tests, 30 JVM host tests,
 29 factory tests plus four artifact checks, and an eleven-file Android API check including plugin declarations

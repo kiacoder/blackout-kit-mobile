@@ -1,8 +1,12 @@
-# Current status — 2026-11-26
+# Current status — 2026-11-27
 
-PR #27 hardening candidate: strict Dart analysis reports zero issues; 636 local Dart tests passed at 0e1208d, including 15 development-only authenticated vault tests. Focused native lifecycle tests, Kotlin static quality and supply-chain inventory passed at earlier checkpoints. The shipping vault still uses Hive AES-CBC; v3 experiments are not activated. Hosted verification of the final revision and physical-device acceptance remain pending. See [acceptance ledger](docs/ENGINEERING_ACCEPTANCE.md). This is not release approval.
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). Signed Android ARM64, ARMv7 and universal APKs and an unsigned iOS IPA are available. All six tagged workflows passed, including [release build and security evidence](https://github.com/kiacoder/blackout-kit-mobile/actions/runs/45970154024). Nine main workflows passed at the same commit, including code quality, supply chain and unsigned iOS build.
 
-Published stable [v1.19.3](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.3) has signed Android APKs and an unsigned iOS IPA. Main commit 81e613a carries the v1.19.4 candidate, including the PackageInstaller migration. Main tests, CodeQL, supply-chain and iOS build completed successfully; two TLS pinning alerts remain open. Physical update and network-switching acceptance is deferred, not passed. Experimental Rust, native WG/AWG and Mihomo paths are not production-proven. See [engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md) and [release security](docs/RELEASE_SECURITY.md).
+- Shipping Android: Xray and sing-box paths; only earlier Xray hardware traffic evidence is recorded. Native WireGuard/AmneziaWG, Mihomo and independent Rust core remain experimental; OpenVPN is configuration-only.
+- Vault: fail-closed migration and key recovery; Hive AES-CBC remains in production. Authenticated v3 storage experiments are not activated. Local checkpoint 0e1208d passed strict analysis and 636 Dart tests.
+- Updates: pinned signing identity, APK checksums, package/version checks and user-confirmed PackageInstaller sessions. Physical update, interrupted storage recovery and network handover acceptance for v1.19.4 remain outstanding.
+- Attached evidence: pinned release signer, APK inventory, SBOM and checksums; ClamAV zero detections in three APKs; VirusTotal unknown-file for all three hashes; MobSF universal APK 55/100, 2 high, 9 warnings, 1 info. High findings are Android 7 compatibility and CBC. Scanner results are not a malware-free guarantee; independent audit, reproducibility and performance acceptance remain open.
+- [Release history](docs/RELEASE_HISTORY.md) | [Engine support](ENGINE_SUPPORT.md) | [Testing](TESTING.md) | [Security](SECURITY.md) | [Engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md).
 
 The following original 2026-11-16 milestones are historical, not the current release status.
 

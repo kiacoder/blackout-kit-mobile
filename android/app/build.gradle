@@ -145,6 +145,15 @@ android {
         }
         sourceSets.debug.jniLibs.srcDir nativeDir
     }
+    if (project.findProperty("enableMihomo") == "true") {
+        def mihomoDir = rootProject.file("../.cache/mihomo-jni")
+        ["arm64-v8a", "armeabi-v7a"].each { abi ->
+            if (!new File(mihomoDir, "${abi}/libmihomo.so").isFile()) {
+                throw new GradleException("Missing reviewed Mihomo candidate for " + abi)
+            }
+        }
+        sourceSets.debug.jniLibs.srcDir mihomoDir
+    }
     buildTypes {
         debug {
             externalNativeBuild {
@@ -158,6 +167,9 @@ android {
             if (project.findProperty("enableProcessGuardExperiment") == "true") {
                 applicationIdSuffix ".guardtest"
                 versionNameSuffix "-guard-test"
+            } else if (project.findProperty("enableMihomo") == "true") {
+                applicationIdSuffix ".mihomotest"
+                versionNameSuffix "-mihomo-test.1"
             } else if (project.findProperty("nativeTestPackage") == "true") {
                 applicationIdSuffix ".nativetest"
                 versionNameSuffix "-native-test.7"
@@ -171,6 +183,7 @@ android {
             }
             // Never enable an unverified tunnel in a distribution build.
             buildConfigField "boolean", "ENABLE_EXPERIMENTAL_NATIVE_TUNNELS", "false"
+            buildConfigField "boolean", "ENABLE_EXPERIMENTAL_MIHOMO", "false"
             signingConfig = hasReleaseKey ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources = true
@@ -202,6 +215,9 @@ android {
         // APK. If you ever need them back, delete the two `exclude` lines below.
         // Extract to nativeLibraryDir at install time (see the comment above).
         jniLibs.useLegacyPackaging = true
+        if (project.findProperty("enableMihomo") == "true") {
+            jniLibs.keepDebugSymbols += ["**/libmihomo.so"]
+        }
         // Exact candidate byte comparison in the isolated native test APK.
         if (project.findProperty("nativeTestPackage") == "true") {
             jniLibs.keepDebugSymbols += ["**/libsingbox.so", "**/libtun2socks.so"]

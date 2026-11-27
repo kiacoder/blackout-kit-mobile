@@ -11,6 +11,10 @@ Status: development milestone, not a released build. Published version: v1.19.4 
 - Physical v1.19.4 acceptance, independent audit, reproducible APK and device performance evidence remain open.
 - Previous documentation PR #28 is the stacked base. Its release history and historical evidence remain intact.
 
+## Immediate priorities
+
+OpenVPN and Mihomo first. Track evidence in [engine acceptance](OPENVPN_MIHOMO_ACCEPTANCE.md) and retain the [competitive feature matrix](COMPETITIVE_FEATURE_MATRIX.md) for later expansion.
+
 ## Workstreams and gates
 
 | Phase | Deliverables | Required acceptance | State |

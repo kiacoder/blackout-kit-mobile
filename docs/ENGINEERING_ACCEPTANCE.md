@@ -192,3 +192,21 @@ no attached devices; physical migration, VPN and updater acceptance remain
 unverified. The release must remain unpublished until the exact production
 APK and device gates are satisfied. See RELEASE_SECURITY.md and
 MOBSF_REMEDIATION.md.
+
+### Camera and Gradle compatibility triage (2026-11-27)
+
+The published mobile_scanner 6.0.11 archive was checked against the pub.dev
+SHA-256. It still imports android.renderscript and uses ScriptIntrinsicYuvToRGB;
+upgrading from 4.0.1 to that release would not remove the warning. It also
+raises the iOS deployment floor to 15.5. The checked 7.5.0 archive has no
+Android RenderScript imports or ScriptIntrinsicYuvToRGB references, but
+requires Flutter >=3.29 and Dart ^3.7 (currently 3.24.0 / 3.5.0). Keep the
+existing scanner lock pending an isolated SDK and scanner upgrade, Android
+and iOS builds, and real camera permissions, QR import, torch and lifecycle
+acceptance. Do not remove device support or substitute a fake camera fix.
+
+Set org.gradle.warning.mode=all in the shared Android Gradle properties to
+capture individual deprecation origins in Gradle and Flutter-driven builds.
+This is a diagnostic change, not a Gradle 9 migration or a suppression.
+The previous PR CodeQL summary was neutral while the Swift configuration was
+still running; require completed Swift results and a refreshed summary.

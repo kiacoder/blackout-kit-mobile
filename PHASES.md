@@ -1,8 +1,10 @@
 # Blackout Kit Mobile - Development Phases
 
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). Current release and acceptance status: [CURRENT_STATUS.md](CURRENT_STATUS.md). Earlier phase completion refers to historical implementation scope, not all runtime or security gates.
+
 Roadmap and implementation status. “Implemented” means code exists; hardware or interoperability verification is stated separately and must not be inferred from config parsing or process startup.
 
-## Current Native Rust Engine Status (2026-11-01)
+## Historical Native Rust Engine Status (2026-11-01)
 
 The `native/blackout-core` crate is experimental and is **not** yet the default runtime; Xray and sing-box/tun2socks remain the shippers. The netstack now terminates TCP properly (smoltcp: handshake, reassembly, ACK/FIN/RST — no more per-segment dialing), injects response packets back into the TUN through the egress writer, and relays UDP via per-flow datagram sockets with full-cone-style response rewriting (Direct outbound only; proxied UDP would bypass the tunnel). TCP flows route through an outbound dispatcher (`src/outbound.rs`): `Direct` and plain-TCP VLESS (`security: none`, no flow) dial end-to-end; REALITY/TLS, Shadowsocks-2022, ShadowTLS, Hysteria 2, TUIC and WireGuard/AWG are refused with RST until their dialers are stream-complete — never silently leaked outside the tunnel. IPv6 is not relayed yet (dropped; apps fall back over v4). The `v1.18.0-beta` tag builds Rust Android APKs in CI.
 

@@ -1,5 +1,7 @@
 # WG/AWG failed-TUN descriptor ownership fix
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Overall **26%**. This continuation fixes a real native error-path bug; it does
 not establish APK/device acceptance or justify a completion claim.
 

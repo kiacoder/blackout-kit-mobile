@@ -1,6 +1,6 @@
 # Testing: current verification and historical evidence
 
-Current candidate: v1.19.4, PR #27. Local strict Dart analysis and 636 Dart tests passed at 0e1208d. Native lifecycle and vault regression evidence is recorded in [engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md). Hosted checks must be verified on the final revision. No current physical-device acceptance is claimed.
+Published v1.19.4, PR #27, commit 43c6d91. Local strict Dart analysis and 636 Dart tests passed at 0e1208d. Native lifecycle and vault regression evidence is recorded in [engineering acceptance](docs/ENGINEERING_ACCEPTANCE.md). All six tag workflows succeeded; see [release build](https://github.com/kiacoder/blackout-kit-mobile/actions/runs/45970154024) and [Tests](https://github.com/kiacoder/blackout-kit-mobile/actions/runs/45970154032). No current physical-device acceptance is claimed.
 
 ## Historical checkpoint: 2026-11-16
 

@@ -1,5 +1,7 @@
 # Verified Mihomo core progress — 2026-11-16
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Overall mission estimate: **26%, partial**. This evidence supersedes milestone-2
 statements that no real Mihomo binary has been executed; it does not change Android
 engine availability. Mihomo remains disabled by default, with no binary packaged.

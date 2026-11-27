@@ -1,5 +1,7 @@
 # Milestone 2: build environment and upstream API evidence
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 > **2026-11-16 continuation update (supersedes older evidence below):** overall ~26%.
 > Latest preservation/security/build review: [review](CONTINUATION_REVIEW.md).
 > Official-release-hash-verified Mihomo Linux core: **11 integration tests passed**.

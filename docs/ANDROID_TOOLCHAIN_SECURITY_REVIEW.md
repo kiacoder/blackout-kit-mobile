@@ -1,5 +1,7 @@
 # Android toolchain candidate security review
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 Reviewed 2026-11-25. Evidence: GitHub Actions run
 [45443595453](https://github.com/kiacoder/blackout-kit-mobile/actions/runs/45443595453),
 artifact 14945658744, candidate commit 37be23c6394a5f7c41d082861833750e28d8bf04.

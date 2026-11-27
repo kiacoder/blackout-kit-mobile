@@ -1,13 +1,13 @@
 # Blackout Kit Mobile - Quick Start Guide
 
-Get up and running with Blackout Kit Mobile in 5 minutes. 🚀
+Installation and first-run guide for Blackout Kit Mobile. Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064).
 
 ## For Users
 
 ### Installation
 
 **Android:**
-1. Download the APK from [GitHub Releases](https://github.com/kiacoder/blackout-kit-mobile/releases)
+1. Download the APK from [GitHub Releases](https://github.com/kiacoder/blackout-kit-mobile/releases/latest)
 2. Enable "Install from Unknown Sources" in Settings → Security
 3. Tap the APK file to install
 

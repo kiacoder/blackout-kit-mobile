@@ -5,7 +5,13 @@ All notable changes to Blackout Kit Mobile will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.19.4] - Security remediation candidate
+Published release catalogue: [Release history](docs/RELEASE_HISTORY.md). Historical notes describe their original version, not current security or runtime guarantees.
+
+## [Unreleased]
+
+- Refresh release metadata and documentation; no application version change.
+
+## [1.19.4] - 2026-11-27
 
 - Make the config library fail closed when key storage is unavailable; verify migration copies and preserve ambiguous data for recovery.
 - Bound document imports, remove obsolete import caches, redact diagnostic material and retain ownership of failed transient configuration writes.
@@ -14,13 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace deprecated Android exit-IP matching with numeric-only address validation; update setup-java to a pinned v5 revision.
 - Harden transient config path ownership and interrupted subprocess cleanup; add vault preflight and key-persistence checks.
 - Add development-only AES-GCM record and generation verification experiments; production encryption is unchanged.
-- Reconcile security, installation and architecture documentation. The existing release, not this candidate, remains the downloadable stable version.
+- Reconcile security, installation and architecture documentation. The signed Android release is published; the iOS IPA is unsigned.
 
 - Update Gradle to 8.14.8 with verified wrapper/distribution checksums, refresh Android compatibility APIs and dependency pins.
 - Replace deprecated network enumeration with a service-owned callback registry.
 - Verify official update bytes, exact package, signing certificate and increasing version code before staging a user-confirmed PackageInstaller session. Handle interrupted sessions and explicit cancellation without deleting installed app data.
 - Preserve system certificate trust and hostname verification for third-party diagnostic HTTPS destinations. Reviewed pinning findings are separate from code fixes.
-- Physical Android update and network-switching acceptance is deferred at the maintainer's request. Hosted CI, security review and production release approval remain required.
+- Physical Android update and network-switching acceptance is deferred at the maintainer's request. All six tagged CI workflows passed. MobSF 55/100, two high findings and nine warnings; physical acceptance remains outstanding.
 
 ## [1.19.3] - 2026-11-26
 
@@ -34,6 +40,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Release limitations
 - Experimental WireGuard/AWG native integration remains gated out of production builds. The isolated secure-storage and file-picker dependency experiments are not shipped.
 - ARM device acceptance and fresh scanner review remain required for production approval. No malware-free or complete security-remediation claim is made.
+
+## [1.19.2] - 2026-11-06
+
+### Fixed
+- **Candidate rejection no longer contaminates a live session**: Xray/core startup failures remain attached to the candidate while scanning advances. Only verified website failures or native loss of an established tunnel can request session recovery; the last-known-good config is updated only after the configured website gate passes.
+- **Fresh connection errors replace stale errors**: a later candidate no longer displays an earlier config’s Xray rejection when its own startup fails without a new diagnostic.
+- **Connection and recovery status stay consistent**: the home screen identifies the active candidate during scanning and the last-known-good config during recovery. An unresolved exit-location lookup alone does not mark the VPN failed.
+
+## [1.19.1] - 2026-11-06
+
+### Added
+- **Configurable live-tunnel scanning and recovery**: scan configs in configurable batches, retain TCP-failed/unknown candidates for real VPN attempts, verify candidates through the live tunnel using the configured website threshold, and resume recovery at the next untried config.
+- **Library search** across config names, server hosts, protocols, and source names, with animated scan progress and a reconnect-to-last-working-config action.
+
+### Fixed
+- Preserve preferred-protocol ranking after reachability probes and do not treat unresolved exit geolocation as a failed VPN connection.
+
+## [1.19.0] - 2026-11-06
+
+### Added
+- **AmneziaWG Full Obfuscation Parameter Suite**: Configurable junk packet train (`Jc`, `Jmin`, `Jmax`), handshake padding (`S1`, `S2`), and magic message header remapping (`H1`–`H4`) in `AmneziaWGConfig` and Sing-box wireguard endpoint serialization.
+- **FLUX Quick Failover & Concurrent Route Racing**: Parallel candidate racing engine in `ConnectionController` with user-configurable concurrency (`fluxConcurrency`), heartbeat probing, failure threshold, and link flap hysteresis.
+- **AmneziaWG Obfuscation Editor**: Interactive modal dialog in `ConfigEditorScreen` for visual parameter tuning and header injection into raw config profiles.
+- **Embedded libbox Engine (`libcores.aar`)**: Integrated sing-box 1.11.4 core in-process on Android.
+- **Endpoint-Gated Relay Profiles**: Native parsing and storage models for SNI and MHRV relay profiles.
 
 ## [1.18.2] - 2026-11-02
 
@@ -81,32 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dialers were constructed, logged, and dropped) and keeps the netstack
   return channel connected instead of dropping it.
 
-## [1.19.0] - 2026-11-06
-
-### Added
-- **AmneziaWG Full Obfuscation Parameter Suite**: Configurable junk packet train (`Jc`, `Jmin`, `Jmax`), handshake padding (`S1`, `S2`), and magic message header remapping (`H1`–`H4`) in `AmneziaWGConfig` and Sing-box wireguard endpoint serialization.
-- **FLUX Quick Failover & Concurrent Route Racing**: Parallel candidate racing engine in `ConnectionController` with user-configurable concurrency (`fluxConcurrency`), heartbeat probing, failure threshold, and link flap hysteresis.
-- **AmneziaWG Obfuscation Editor**: Interactive modal dialog in `ConfigEditorScreen` for visual parameter tuning and header injection into raw config profiles.
-- **Embedded libbox Engine (`libcores.aar`)**: Integrated sing-box 1.11.4 core in-process on Android.
-- **Endpoint-Gated Relay Profiles**: Native parsing and storage models for SNI and MHRV relay profiles.
-
-## [1.19.1] - 2026-11-06
-
-### Added
-- **Configurable live-tunnel scanning and recovery**: scan configs in configurable batches, retain TCP-failed/unknown candidates for real VPN attempts, verify candidates through the live tunnel using the configured website threshold, and resume recovery at the next untried config.
-- **Library search** across config names, server hosts, protocols, and source names, with animated scan progress and a reconnect-to-last-working-config action.
-
-### Fixed
-- Preserve preferred-protocol ranking after reachability probes and do not treat unresolved exit geolocation as a failed VPN connection.
-
-## [1.19.2] - 2026-11-06
-
-### Fixed
-- **Candidate rejection no longer contaminates a live session**: Xray/core startup failures remain attached to the candidate while scanning advances. Only verified website failures or native loss of an established tunnel can request session recovery; the last-known-good config is updated only after the configured website gate passes.
-- **Fresh connection errors replace stale errors**: a later candidate no longer displays an earlier config’s Xray rejection when its own startup fails without a new diagnostic.
-- **Connection and recovery status stay consistent**: the home screen identifies the active candidate during scanning and the last-known-good config during recovery. An unresolved exit-location lookup alone does not mark the VPN failed.
-
-## [Unreleased]
+### Historical development notes (also described above)
 
 ### Added
 - **Netstack response injection (in-house Rust core)**: upstream responses
@@ -131,21 +137,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dialers were constructed, logged, and dropped) and keeps the netstack
   return channel connected instead of dropping it.
 
-## [1.18.0] - 2026-11-01
+## [1.18.0-beta] - 2026-11-01
 
 ### Added
-- **In-House Native Core (BlackoutCore Rust Engine)**: Initialized proprietary
+- **In-House Native Core (BlackoutCore Rust Engine)**: Initialized experimental
   native proxy core in `native/blackout-core` with clean C-ABI and JNI bindings.
-- **Client Protocol Dialers**: Implemented high-throughput in-house client dialers
+- **Client Protocol Dialers**: Introduced experimental client dialer work
   for ShadowTLS v3, Hysteria 2 (with dynamic multi-port hopping), TUIC v5 (0-RTT),
   VLESS + REALITY (with uTLS camouflage), and Shadowsocks-2022 (BLAKE3-AES).
 - **Userspace Netstack**: Implemented raw packet dissector and bi-directional TUN
   reader/writer netstack loop connecting Android's `tun_fd` directly to protocol
   outbounds in-process.
-- **VpnService Direct Hook**: Wired in-process `BlackoutCoreEngine` into
+- **VpnService Direct Hook**: Introduced experimental in-process `BlackoutCoreEngine` into
   `BlackoutVpnService.kt` to bypass legacy external subprocess architecture.
 - **CI Cross-Compilation**: Configured `cargo-ndk` in `.github/workflows/build.yml`
   for automated `arm64-v8a` and `armeabi-v7a` binary compilation.
+
+This is the historical beta tag, not a production-proven native runtime. See [engine support](ENGINE_SUPPORT.md).
 
 ## [1.17.2] - 2026-11-01
 
@@ -169,6 +177,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Untranslated UI labels in RTL/Persian**: Filter chip 'All', 'Sort by:',
   and Home/Modal stats ('Latency', 'Speed', 'Reliability', 'Working') are now
   properly localized.
+
+## [1.17.1] - 2026-10-30
+
+### Fixed
+- Add signer-mismatch recovery UI to the in-app updater; export configs before any uninstall.
 
 ## [1.17.0] - 2026-10-30
 

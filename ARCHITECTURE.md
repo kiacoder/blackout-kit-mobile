@@ -84,7 +84,7 @@ Hive handles atomic writes internally:
 await _configBox.put(configHash, config.toMap());
 ```
 
-**Security note:** The v1.19.4 candidate opens config, source and test-result boxes with HiveAesCipher and a platform-secure-storage key. Settings remain separate. Migration verifies persisted copies before deletion and fails closed on ambiguous storage. See SECURITY.md for CBC and recovery limitations.
+**Security note:** v1.19.4 opens config, source and test-result boxes with HiveAesCipher and a platform-secure-storage key. Settings remain separate. Migration verifies persisted copies before deletion and fails closed on ambiguous storage. See SECURITY.md for CBC and recovery limitations.
 
 ### 5. State Machine Pattern
 

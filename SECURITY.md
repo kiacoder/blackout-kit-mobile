@@ -1,5 +1,7 @@
 # Security Policy
 
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). See [current security evidence](CURRENT_STATUS.md) and [release security policy](docs/RELEASE_SECURITY.md). Two high MobSF findings remain; no malware-free or independent-audit claim is made.
+
 ## Reporting Security Issues
 
 **Do NOT open public GitHub issues for security vulnerabilities.** Please report security issues responsibly:
@@ -37,7 +39,7 @@ receive. Users must trust their chosen server and configuration sources.
 
 ### 3. Local storage
 
-The v1.19.4 candidate stores configs, sources and test results in encrypted
+v1.19.4 stores configs, sources and test results in encrypted
 Hive boxes using a platform-secure-storage key. Hive 2.2.3 uses AES-256-CBC;
 this is encryption at rest, not authenticated encryption. Settings are
 separate. The candidate locks the library rather than writing plaintext if

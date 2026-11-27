@@ -1,6 +1,6 @@
 # Android integration
 
-Current hardening candidate: PR #27, v1.19.4. See CURRENT_STATUS.md and docs/ENGINEERING_ACCEPTANCE.md for the current build and verification results. The November 16 milestones below are historical.
+Published release: v1.19.4 (PR #27, 43c6d91). See CURRENT_STATUS.md and docs/ENGINEERING_ACCEPTANCE.md for the current build and verification results. The November 16 milestones below are historical.
 
 > **Latest native-build continuation — still 26%:** full development JDK/NDK recovered;
 > fdlauncher and official AWG/WG JNI libraries compile for ARM64/ARM32 at API24.
@@ -50,7 +50,7 @@ cd android && ./gradlew :app:testDebugUnitTest
 flutter build apk --debug --target-platform android-arm64
 flutter test integration_test/ -d <authorized-device>
 ```
-At the historical November 16 checkpoint the local toolchain was incomplete. The current candidate has local and hosted test evidence in the acceptance ledger; a new physical-device run is still required. Never replace a release-signed installation with a debug-signed artifact
+At the historical November 16 checkpoint the local toolchain was incomplete. The published release has local and hosted test evidence in the acceptance ledger; a new physical-device run is still required. Never replace a release-signed installation with a debug-signed artifact
 or claim that existing release binaries include these changes.
 
 ## Milestone 2: experimental adapter and native checks

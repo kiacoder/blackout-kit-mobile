@@ -1,6 +1,6 @@
 # iOS Support — what works today, and the three paths to a working install
 
-Current status: the stable v1.19.3 release provides an unsigned IPA, not a verified installable VPN. Signed device testing remains outstanding. The provisioning notes below originate from 2026-11-01 and need current Apple-policy verification before use.
+Current status: the published v1.19.4 release provides an unsigned IPA, not a verified installable VPN. Signed device testing remains outstanding. The provisioning notes below originate from 2026-11-01 and need current Apple-policy verification before use.
 
 ## What already works (no account needed)
 

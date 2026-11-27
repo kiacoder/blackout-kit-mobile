@@ -1,5 +1,7 @@
 # Three-server deployment report — 2026-11-16
 
+Historical deployment report; no new server inventory or deployment was verified in this documentation update. See [current status](CURRENT_STATUS.md).
+
 | Category | Location / address | Inventory | Changes | Working profiles generated |
 |---|---|---|---|---|
 | frankfurt-1 | Frankfurt / [private Frankfurt-1 address] | Not accessed | None | None |

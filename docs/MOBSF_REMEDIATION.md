@@ -1,5 +1,7 @@
 # MobSF remediation ledger — 2026-11-26
 
+**Published v1.19.4 evidence (2026-11-27):** universal APK SHA-256 `2b2d7e15830ca7c09d28a06275f4f1bce681041a584835538cf8a59f6ea521a8`. MobSF 55/100, 2 high, 9 warnings, 1 info. High findings: minSdk 24 and CBC. Loopback cleartext finding is no longer listed as high; full physical acceptance remains open. [Release evidence](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4). The baseline below is historical.
+
 Baseline: published v1.19.3 universal APK, score 50, 3 high / 10 warning /
 1 info / 2 secure / 1 hotspot. Candidate commit 567e74f, build 45823597770,
 has a hash-bound completed MobSF report (SHA256

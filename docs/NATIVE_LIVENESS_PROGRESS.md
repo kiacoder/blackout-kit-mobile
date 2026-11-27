@@ -1,5 +1,7 @@
 # Native device liveness and build-recovery continuation
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 **Current checkpoint: native-enabled DEBUG APK packaging plus JNI/coexistence on a
 physical ARM64 Android device are proven; real WG/AWG tunnel traffic and production
 readiness are not.** This extends the gated WG/AWG source integration in

@@ -1,5 +1,7 @@
 # WG/AWG Android source integration — private development only
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 > **Superseding liveness update:** [NATIVE_LIVENESS_PROGRESS.md](NATIVE_LIVENESS_PROGRESS.md).
 > The previously missing device-closure monitor now exists in source; Android
 > execution and kill-switch verification remain outstanding. Counts below are

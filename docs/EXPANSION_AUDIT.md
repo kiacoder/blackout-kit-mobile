@@ -1,5 +1,7 @@
 # Multi-engine expansion audit — 2026-11-16
 
+Research or checkpoint record; preserved at its original scope. For the published version and current acceptance limits, see [CURRENT_STATUS.md](../CURRENT_STATUS.md).
+
 ## Scope and evidence
 Baseline: `9c4213dc51b7c2c7c21bc34fb53f5ff760dcbb62`. This is a source-level
 initial audit, not certification of every line or an on-device/server audit.

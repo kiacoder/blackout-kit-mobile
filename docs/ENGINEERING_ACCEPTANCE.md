@@ -1,5 +1,7 @@
 # Engineering hardening — acceptance criteria (2026-11-26)
 
+Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). All six tagged workflows and nine main workflows succeeded on 43c6d91. Physical-device upgrade/recovery/network acceptance, independent audit, reproducibility and performance remain open. The earlier baseline and checkpoints below are historical.
+
 Baseline: main 81e613a, published v1.19.3, v1.19.4 candidate with additional PR #27 hardening.
 Do not claim production acceptance from static analysis, a host test, or compilation alone.
 

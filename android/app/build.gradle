@@ -158,14 +158,22 @@ android {
         }
         sourceSets.debug.jniLibs.srcDir mihomoDir
     }
+    if (project.findProperty("enableOpenVpnEmulator") == "true") {
+        if (project.findProperty("enableOpenVpnCandidate") != "true" ||
+                project.findProperty("target-platform") != "android-x64" ||
+                !gradle.startParameter.taskNames.every { it.tokenize(":").last() in ["assembleDebug", "assembleDebugAndroidTest", "testDebugUnitTest"] }) {
+            throw new GradleException("OpenVPN emulator requires an isolated x86-64 debug APK")
+        }
+    }
     if (project.findProperty("enableOpenVpnCandidate") == "true") {
         ["enableProcessGuardExperiment", "enableMihomo", "nativeTestPackage", "enableNativeTunnels"].each { flag ->
             if (project.findProperty(flag) == "true") {
                 throw new GradleException("OpenVPN candidate requires an isolated test build")
             }
         }
-        def openVpnDir = rootProject.file("../.cache/openvpn3-jni")
-        ["arm64-v8a", "armeabi-v7a"].each { abi ->
+        def emulator = project.findProperty("enableOpenVpnEmulator") == "true"
+        def openVpnDir = rootProject.file(emulator ? "../.cache/openvpn3-emulator-jni" : "../.cache/openvpn3-jni")
+        (emulator ? ["x86_64"] : ["arm64-v8a", "armeabi-v7a"]).each { abi ->
             if (!new File(openVpnDir, "${abi}/libopenvpn-candidate.so").isFile()) {
                 throw new GradleException("Missing staged OpenVPN candidate for " + abi)
             }
@@ -249,7 +257,12 @@ android {
         }
 
         exclude 'lib/x86/**'
-        exclude 'lib/x86_64/**'
+        if (project.findProperty("enableOpenVpnEmulator") == "true") {
+            exclude 'lib/arm64-v8a/**'
+            exclude 'lib/armeabi-v7a/**'
+        } else {
+            exclude 'lib/x86_64/**'
+        }
     }
 
     // libv2ray.aar carries Xray's geoip/geosite databases. Measured effect of

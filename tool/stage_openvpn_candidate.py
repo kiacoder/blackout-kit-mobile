@@ -23,18 +23,18 @@ def sha(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def stage(build, output):
+def stage(build, output, abis=ABIS):
     if output.exists():
         raise ValueError("Existing staging must be reviewed; will not overwrite")
     records = {}
-    for abi in ABIS:
+    for abi in abis:
         source = build / abi / LIB
         validate(source.read_bytes(), abi, 24, required_symbols=SYMBOLS)
         records[f"lib/{abi}/{LIB}"] = sha(source)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=output.parent) as tmp:
         pending = Path(tmp) / "staged"
-        for abi in ABIS:
+        for abi in abis:
             target = pending / abi / LIB
             target.parent.mkdir(parents=True)
             shutil.copy2(build / abi / LIB, target)
@@ -45,8 +45,8 @@ def stage(build, output):
     return records
 
 
-def verify(apk, records, badging):
-    required = {f"lib/{abi}/{LIB}" for abi in ABIS}
+def verify(apk, records, badging, abis=ABIS):
+    required = {f"lib/{abi}/{LIB}" for abi in abis}
     if set(records) != required:
         raise ValueError("Wrong candidate inventory")
     if not badging.startswith(f"package: name='{PACKAGE}' ") or "application-debuggable" not in badging.splitlines():
@@ -70,15 +70,17 @@ def main():
     p.add_argument("--stage", action="store_true")
     p.add_argument("--apk", type=Path)
     p.add_argument("--aapt")
+    p.add_argument("--emulator", action="store_true", help="Isolated x86-64 debug build")
     args = p.parse_args()
-    output = ROOT / ".cache/openvpn3-jni"
+    output = ROOT / (".cache/openvpn3-emulator-jni" if args.emulator else ".cache/openvpn3-jni")
+    abis = ("x86_64",) if args.emulator else ABIS
     if args.stage:
         if args.apk or args.aapt:
             p.error("Stage and verify separately")
-        print(json.dumps(stage(ROOT / ".cache/openvpn3-android", output), indent=2))
+        print(json.dumps(stage(ROOT / ".cache/openvpn3-android", output, abis), indent=2))
     elif args.apk and args.aapt:
         badging = subprocess.check_output([args.aapt, "dump", "badging", str(args.apk)], text=True, encoding="utf-8")
-        print(json.dumps(verify(args.apk, json.loads((output / "SHA256.json").read_text()), badging), indent=2))
+        print(json.dumps(verify(args.apk, json.loads((output / "SHA256.json").read_text()), badging, abis), indent=2))
     else:
         p.error("Provide --stage or --apk and --aapt")
 

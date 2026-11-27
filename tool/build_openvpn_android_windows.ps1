@@ -26,6 +26,7 @@ Assert-Source $xxhash 'c87183a77d67f7d37e3d2d1b7eaac5e7c695e4f0'
 $target = switch ($Abi) {
     'arm64-v8a' { 'aarch64-linux-android24' }
     'armeabi-v7a' { 'armv7a-linux-androideabi24' }
+    'x86_64' { 'x86_64-linux-android24' }
     default { throw 'Unsupported ABI' }
 }
 $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'

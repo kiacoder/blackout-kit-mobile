@@ -31,3 +31,15 @@ class OpenVpnCandidateTests(unittest.TestCase):
                 write(bad)
                 with self.assertRaises(ValueError):
                     verify(apk, records, badging)
+
+    def test_emulator_inventory_requires_explicit_mode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            apk = Path(folder) / "emulator.apk"
+            name = f"lib/x86_64/{LIB}"
+            records = {name: hashlib.sha256(b"fixture").hexdigest()}
+            badging = f"package: name='{PACKAGE}' versionCode='1'\napplication-debuggable\n"
+            with zipfile.ZipFile(apk, "w") as archive:
+                archive.writestr(name, b"fixture")
+            with self.assertRaises(ValueError):
+                verify(apk, records, badging)
+            self.assertEqual(verify(apk, records, badging, ("x86_64",))["sha256"], records)

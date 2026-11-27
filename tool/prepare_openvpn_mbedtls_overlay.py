@@ -1,4 +1,4 @@
-"""Patch one pinned OpenVPN header into a build-only include overlay.
+"""Patch pinned OpenVPN headers into a build-only include overlay.
 
 Mbed TLS 3.6.8 requires explicit hostname policy. OpenVPN verifies its
 configured certificate identity via its X.509 callback instead of HTTPS
@@ -41,6 +41,20 @@ def prepare(source: Path, output: Path) -> Path:
     target = output / RELATIVE
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(header.replace(ANCHOR, INSERT + ANCHOR, 1).encode("utf-8"))
+    # Android defaults to route exclusion emulation, bypassing the adapter's
+    # reroute_gw callback even for ordinary full-tunnel pushes. Reject explicit
+    # excluded routes at the adapter instead of translating them to route holes.
+    route_relative = Path("openvpn/client/cliopt.hpp")
+    route_raw = (source / route_relative).read_bytes().replace(b"\r\n", b"\n")
+    if hashlib.sha256(route_raw).hexdigest() != "2fe1b963c668ee235fe805a7ac673b9ee669b29a0e39d65e57b0bdcce3b23484":
+        raise ValueError("OpenVPN route header does not match reviewed revision")
+    route_header = route_raw.decode("utf-8")
+    route_anchor = "bool enable_route_emulation = true;"
+    if route_header.count(route_anchor) != 1:
+        raise ValueError("Unexpected route header layout")
+    route_target = output / route_relative
+    route_target.parent.mkdir(parents=True, exist_ok=True)
+    route_target.write_text(route_header.replace(route_anchor, "bool enable_route_emulation = false;"), encoding="utf-8")
     return target
 
 

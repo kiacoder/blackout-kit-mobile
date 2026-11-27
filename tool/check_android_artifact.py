@@ -126,7 +126,7 @@ def dynamic_symbols(data):
 
 def validate(data, abi, min_sdk, required_symbols=()):
     result = inspect_elf(data)
-    expected = {'arm64-v8a': (183, 64), 'armeabi-v7a': (40, 32)}[abi]
+    expected = {'arm64-v8a': (183, 64), 'armeabi-v7a': (40, 32), 'x86_64': (62, 64)}[abi]
     if (result['machine'], result['bits']) != expected or result['type'] != 3:
         raise ValueError('Wrong ABI or non-DYN artifact')
     if result['androidApi'] > min_sdk:
@@ -142,7 +142,7 @@ def validate(data, abi, min_sdk, required_symbols=()):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', required=True, type=Path)
-    parser.add_argument('--abi', required=True, choices=['arm64-v8a', 'armeabi-v7a'])
+    parser.add_argument('--abi', required=True, choices=['arm64-v8a', 'armeabi-v7a', 'x86_64'])
     parser.add_argument('--min-sdk', type=int, default=24)
     parser.add_argument('--require-symbol', action='append', default=[])
     args = parser.parse_args()

@@ -30,6 +30,7 @@ class OpenVpnClient final : public openvpn::ClientAPI::OpenVPNClient {
     bool dns_added = false;
     bool failed = false;
     bool established = false;
+    bool connected_once = false;
 
     bool gate(bool ok) {
         if (!ok) failed = true;
@@ -85,7 +86,7 @@ public:
         if (!prepare(profile, user, password, keyPassword)) return 1;
         const auto status = connect();
         cb.connected(false);
-        return status.error || failed ? 1 : 0;
+        return status.error || failed || !connected_once ? 1 : 0;
     }
     bool socket_protect(openvpn_io::detail::socket_type fd, std::string, bool) override {
         return active() && gate(cb.protect(fd));
@@ -148,8 +149,15 @@ public:
         cb.connected(false);
     }
     void event(const openvpn::ClientAPI::Event& e) override {
-        if (e.name == "CONNECTED") cb.connected(active() && established);
-        else if (e.error || e.name == "RECONNECTING" || e.name == "DISCONNECTED") cb.connected(false);
+        // Core connect() may return a non-error status after a fatal event.
+        if (e.fatal) failed = true;
+        if (e.name == "CONNECTED") {
+            const bool ready = active() && established;
+            connected_once = connected_once || ready;
+            cb.connected(ready);
+        } else if (e.error || e.name == "RECONNECTING" || e.name == "DISCONNECTED") {
+            cb.connected(false);
+        }
     }
     bool pause_on_connection_timeout() override { return false; }
     void acc_event(const openvpn::ClientAPI::AppCustomControlMessageEvent&) override {}

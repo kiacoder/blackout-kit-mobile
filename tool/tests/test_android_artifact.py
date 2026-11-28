@@ -55,6 +55,13 @@ class AndroidArtifactTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'above app minSdk'):
             validate(fixture(34), 'arm64-v8a', 24)
 
+    def test_x86_64_metadata_only_admitted_for_matching_abi(self):
+        data = fixture()
+        struct.pack_into('<H', data, 18, 62)
+        self.assertEqual(62, validate(data, 'x86_64', 24)['machine'])
+        with self.assertRaisesRegex(ValueError, 'Wrong ABI'):
+            validate(data, 'arm64-v8a', 24)
+
     def test_wrong_abi_rejected(self):
         with self.assertRaisesRegex(ValueError, 'Wrong ABI'):
             validate(fixture(), 'armeabi-v7a', 24)

@@ -7,6 +7,8 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
+import 'openvpn_credentials.dart';
 
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -260,6 +262,55 @@ class ConfigService {
     final next = _configMutationTail.then((_) => action());
     _configMutationTail = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
     return next;
+  }
+
+  // Attach credentials only to an existing encrypted profile record. No
+  // separate orphanable secret index, and nothing in Config or exported URI.
+  bool canRememberOpenVpn(OpenVpnConfig config) =>
+      _vaultActive && !_vaultLocked &&
+      _configBox.get('config_${config.getHash()}')?['protocol'] == 'openvpn';
+
+  OpenVpnCredentials? readOpenVpnLogin(OpenVpnConfig config) {
+    if (!canRememberOpenVpn(config)) return null;
+    final record = _configBox.get('config_${config.getHash()}');
+    final login = record?['openVpnLogin'];
+    if (login is! Map || login['username'] is! String || login['password'] is! String) {
+      return null;
+    }
+    final credentials = OpenVpnCredentials(login['username'] as String,
+        login['password'] as String, remember: true);
+    if (credentials.valid) return credentials;
+    credentials.clear();
+    return null;
+  }
+
+  Future<void> updateOpenVpnLogin(OpenVpnConfig config, OpenVpnCredentials credentials) {
+    // Decode synchronously before entering the mutation queue. Caller owns
+    // the mutable buffers and can clear them as soon as this completes.
+    final login = credentials.remember
+        ? {'username': utf8.decode(credentials.username),
+           'password': utf8.decode(credentials.password)}
+        : null;
+    return _mutateConfigs(() async {
+      if (!canRememberOpenVpn(config)) {
+        if (login != null) throw StateError('Encrypted profile unavailable');
+        return;
+      }
+      if (login != null &&
+          !credentials.validFor(interactive: true,
+              encryptedKey: credentials.keyPassword.isNotEmpty)) {
+        throw StateError('Invalid saved login');
+      }
+      final key = 'config_${config.getHash()}';
+      final next = Map<dynamic, dynamic>.of(_configBox.get(key)!);
+      if (login == null) {
+        next.remove('openVpnLogin');
+      } else {
+        next['openVpnLogin'] = login;
+      }
+      await _configBox.put(key, next);
+      await _configBox.flush();
+    });
   }
 
   Future<bool> saveConfig(Config config, {String? sourceId}) =>

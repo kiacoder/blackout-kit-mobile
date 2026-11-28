@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Published release catalogue: [Release history](docs/RELEASE_HISTORY.md). Historical notes describe their original version, not current security or runtime guarantees.
 
-## [Unreleased]
+## [Unreleased] — v1.20.0 development
+
+- Improve OpenVPN profile parsing and fail-closed connection status; stage pinned API 24 Mihomo artifacts for private debug testing only.
+- Start Project Blackout: engine expansion and security acceptance program. Add agent guidance and a release evidence baseline; no new engine support is claimed.
 
 - Refresh release metadata and documentation; no application version change.
 

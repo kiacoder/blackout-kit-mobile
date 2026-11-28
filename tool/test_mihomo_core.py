@@ -153,6 +153,7 @@ class CoreTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory(prefix='blackout-core-test-')
         self.home = Path(self.directory.name)
         self.http = serve(HTTPFixture(('127.0.0.1', 0), HTTPHandler))
+        self.readiness_http = serve(HTTPFixture(('127.0.0.1', 0), HTTPHandler))
         self.dns = serve(UDPFixture(('127.0.0.1', 0), DNSHandler))
         self.echo = serve(UDPFixture(('127.0.0.1', 0), EchoHandler))
         self.socks_port = free_port()
@@ -201,7 +202,7 @@ class CoreTests(unittest.TestCase):
         try:
             self.stop()
         finally:
-            for server in [self.http, self.dns, self.echo]:
+            for server in [self.http, self.readiness_http, self.dns, self.echo]:
                 server.shutdown()
                 server.server_close()
             self.directory.cleanup()
@@ -220,20 +221,29 @@ class CoreTests(unittest.TestCase):
             if self.process.poll() is not None:
                 self.fail('Mihomo exited before readiness')
             try:
-                with socket.create_connection(('127.0.0.1', self.socks_port), 0.1) as sock:
-                    sock.settimeout(0.2)
-                    sock.sendall(b'\x05\x01\x00')
-                    if read_exact(sock, 2) == b'\x05\x00':
-                        status = Path(f'/proc/{self.process.pid}/status').read_text()
-                        rss = next((line for line in status.splitlines() if line.startswith('VmRSS:')), '')
-                        OBSERVATIONS.append({'test': self.id().split('.')[-1],
-                                             'startupMs': round((time.monotonic() - started) * 1000), 'rss': rss})
-                        return
-            except OSError:
-                # The listener is not ready yet; retry within the deadline.
+                # A SOCKS greeting can succeed before routing and DNS workers
+                # are initialized. Use a separate disposable endpoint so the
+                # readiness traffic cannot satisfy any forwarding assertion.
+                tcp_ready = b'BLACKOUT_LOOPBACK_FIXTURE' in fetch(
+                    self.socks_port, '127.0.0.1', self.readiness_http.server_port)
+                if tcp_ready and self.dns_ready():
+                    status = Path(f'/proc/{self.process.pid}/status').read_text()
+                    rss = next((line for line in status.splitlines() if line.startswith('VmRSS:')), '')
+                    OBSERVATIONS.append({'test': self.id().split('.')[-1],
+                                         'startupMs': round((time.monotonic() - started) * 1000), 'rss': rss})
+                    return
+            except (OSError, ConnectionError):
                 pass
             time.sleep(0.02)
         self.fail('Mihomo readiness timeout')
+
+    def dns_ready(self):
+        # Unique readiness query, separate from the DNS assertions below.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(0.2)
+            sock.sendto(dns_query('readiness-fixture.test'), ('127.0.0.1', self.dns_port))
+            reply, _ = sock.recvfrom(4096)
+        return reply[:2] == b'\x12\x34' and socket.inet_aton('127.0.0.1') in reply
 
     def stop(self):
         if self.process is None:
@@ -279,18 +289,20 @@ class CoreTests(unittest.TestCase):
 
     def test_tcp_forwarding_by_name_uses_configured_dns(self):
         self.start()
+        before = self.dns.requests
         self.assertIn(b'BLACKOUT_LOOPBACK_FIXTURE', fetch(self.socks_port, 'fixture.test', self.http.server_port))
-        self.assertGreater(self.dns.requests, 0)
+        self.assertGreater(self.dns.requests, before)
 
     def test_dns_listener_uses_loopback_upstream(self):
         self.start()
+        before = self.dns.requests
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(3)
             sock.sendto(dns_query(), ('127.0.0.1', self.dns_port))
             reply, _ = sock.recvfrom(4096)
         self.assertEqual(reply[:2], b'\x12\x34')
         self.assertIn(socket.inet_aton('127.0.0.1'), reply)
-        self.assertGreater(self.dns.requests, 0)
+        self.assertGreater(self.dns.requests, before)
 
     def test_domain_reject_rule_blocks_before_http(self):
         self.start()

@@ -61,4 +61,14 @@ class EngineCatalogueTest {
         assertEquals(false, report["nativeWireguardAvailable"])
         assertEquals(false, report["nativeAmneziawgAvailable"])
     }
+
+    @Test
+    fun openVpnRequiresBothFlagAndLibrary() {
+        assertEquals(false, EngineCatalogue(folder.root, null, false, false, true).report()["openVpnAvailable"])
+        folder.newFile("libopenvpn-candidate.so")
+        assertEquals(false, EngineCatalogue(folder.root, null, false, false).report()["openVpnAvailable"])
+        val candidate = EngineCatalogue(folder.root, null, false, false, true).report()
+        assertEquals(true, candidate["openVpnAvailable"])
+        assertFalse("openvpn" in (candidate["unavailableProtocols"] as List<*>))
+    }
 }

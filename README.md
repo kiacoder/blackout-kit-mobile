@@ -76,6 +76,8 @@ Building from source instead? See [Setup](#setup).
 
 ## Status
 
+**Development milestone:** [Project Blackout v1.20.0](docs/V1_20_0_PLAN.md). The development branch is not a published release; install the latest verified release from GitHub.
+
 Published [v1.19.4](https://github.com/kiacoder/blackout-kit-mobile/releases/tag/v1.19.4) (2026-11-27, source 43c6d91; app version 1.19.4+2064). See [release history](docs/RELEASE_HISTORY.md) and [current verification](CURRENT_STATUS.md). Physical acceptance for this release remains open.
 
 **Verified on hardware (Android):** the in-process Xray path carries live traffic

@@ -27,6 +27,7 @@ private const val SOCKS_VERSION = 5
 private const val SOCKS_READY_TIMEOUT_MS = 1000
 private const val SOCKS_JOIN_TIMEOUT_MS = 1500L
 private const val SOCKS_REFUSED_TIMEOUT_MS = 100
+private const val DIRECT_READY_TEST_MS = 100L
 
 /** Real JVM/process/socket tests, independent of Android and Gradle/JUnit. */
 fun main() {
@@ -48,6 +49,7 @@ fun main() {
     validatorCases(::test)
     processLifecycleCases(::test)
     socksCases(::test)
+    directSessionCases(::test)
     println("$passed host tests passed. No Android TUN or real VPN engine was tested.")
 }
 
@@ -352,5 +354,37 @@ private fun socksCases(test: (String, () -> Unit) -> Unit) {
     test("unavailable SOCKS endpoint") {
         val port = ServerSocket(0).use { it.localPort }
         check(!LocalSocksReadiness.await("127.0.0.1", port, SOCKS_REFUSED_TIMEOUT_MS))
+    }
+}
+
+private fun directSessionCases(test: (String, () -> Unit) -> Unit) {
+    test("direct readiness requires a valid marker and live child") {
+        val directory = Files.createTempDirectory("direct-ready").toFile().canonicalFile
+        try {
+            val marker = directory.resolve("session-123.json.tun-ready")
+            check(!MihomoDirectReadiness.await(marker, DIRECT_READY_TEST_MS) { true })
+            marker.writeText("invalid")
+            check(!MihomoDirectReadiness.await(marker, DIRECT_READY_TEST_MS) { true })
+            marker.writeText("ready\n")
+            check(!MihomoDirectReadiness.await(marker, DIRECT_READY_TEST_MS) { false })
+            check(MihomoDirectReadiness.await(marker, DIRECT_READY_TEST_MS) { true })
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+    test("direct cleanup is scoped to generated session files") {
+        val directory = Files.createTempDirectory("direct-cleanup").toFile().canonicalFile
+        try {
+            val config = directory.resolve("session-123.json").apply { writeText("synthetic") }
+            val marker = directory.resolve("session-123.json.tun-ready").apply { writeText("ready") }
+            val unrelated = directory.resolve("session-other.json").apply { writeText("keep") }
+            removeDirectMihomoSessions(directory)
+            check(!config.exists() && !marker.exists() && unrelated.exists())
+            val replaced = directory.resolve("session-456.json").apply { mkdir() }
+            check(runCatching { removeDirectMihomoSessions(directory) }.isFailure)
+            check(replaced.isDirectory)
+        } finally {
+            directory.deleteRecursively()
+        }
     }
 }

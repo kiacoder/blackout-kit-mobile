@@ -2,6 +2,8 @@ package com.blackoutkit.vpn
 
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.security.SecureRandom
+import java.util.concurrent.TimeUnit
 
 internal object LocalSocksReadiness {
     /** How long to wait between attempts while the engine is still binding. */
@@ -24,14 +26,25 @@ internal object LocalSocksReadiness {
         host: String,
         port: Int,
         timeoutMs: Int,
+    ): Boolean = awaitAuthenticated(host, port, timeoutMs, null)
+
+    fun awaitAuthenticated(
+        host: String,
+        port: Int,
+        timeoutMs: Int,
+        auth: MihomoLocalAuth?,
     ): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(0)
-        var remaining = deadline - System.currentTimeMillis()
+        val deadline = TimeUnit.NANOSECONDS.toMillis(System.nanoTime()) + timeoutMs.coerceAtLeast(0)
+        var remaining = deadline - TimeUnit.NANOSECONDS.toMillis(System.nanoTime())
         while (remaining > 0) {
             val attemptBudget = minOf(remaining, ATTEMPT_TIMEOUT_MS).toInt().coerceAtLeast(1)
-            if (attempt(host, port, attemptBudget)) return true
-            if (deadline - System.currentTimeMillis() <= RETRY_INTERVAL_MS || !pauseBeforeRetry()) break
-            remaining = deadline - System.currentTimeMillis()
+            if (attempt(host, port, attemptBudget, auth)) return true
+            if (deadline - TimeUnit.NANOSECONDS.toMillis(System.nanoTime()) <= RETRY_INTERVAL_MS ||
+                !pauseBeforeRetry()
+            ) {
+                break
+            }
+            remaining = deadline - TimeUnit.NANOSECONDS.toMillis(System.nanoTime())
         }
         return false
     }
@@ -50,6 +63,7 @@ internal object LocalSocksReadiness {
         host: String,
         port: Int,
         timeoutMs: Int,
+        auth: MihomoLocalAuth?,
     ): Boolean =
         try {
             Socket().use { socket ->
@@ -57,13 +71,93 @@ internal object LocalSocksReadiness {
                 socket.soTimeout = timeoutMs
                 val output = socket.getOutputStream()
                 val input = socket.getInputStream()
-                output.write(byteArrayOf(SOCKS_VERSION.toByte(), 0x01, NO_AUTH_METHOD.toByte()))
+                val requested = if (auth == null) NO_AUTH_METHOD else 2
+                output.write(byteArrayOf(SOCKS_VERSION.toByte(), 0x01, requested.toByte()))
                 output.flush()
                 val version = input.read()
                 val method = input.read()
-                version == SOCKS_VERSION && method == NO_AUTH_METHOD
+                version == SOCKS_VERSION &&
+                    method == requested &&
+                    (auth == null || authenticate(socket, auth))
             }
         } catch (_: Exception) {
+            false
+        }
+
+    private fun authenticate(
+        socket: Socket,
+        auth: MihomoLocalAuth,
+    ): Boolean {
+        val request = auth.packet()
+        return try {
+            socket.getOutputStream().write(request)
+            socket.getOutputStream().flush()
+            val input = socket.getInputStream()
+            input.read() == 1 && input.read() == 0
+        } finally {
+            request.fill(0)
+        }
+    }
+}
+
+/** Session-local random credentials, never derived from imported proxy passwords. */
+internal class MihomoLocalAuth private constructor(
+    val password: String,
+) {
+    fun uri(port: Int): String = "socks5://blackout:$password@127.0.0.1:$port"
+
+    fun entry(): String = "blackout:$password"
+
+    fun packet(): ByteArray {
+        val user = "blackout".toByteArray(Charsets.US_ASCII)
+        val secret = password.toByteArray(Charsets.US_ASCII)
+        return byteArrayOf(1, user.size.toByte()) + user +
+            byteArrayOf(secret.size.toByte()) + secret
+    }
+
+    companion object {
+        private const val SECRET_BYTES = 32
+        private const val BYTE_MASK = 0xff
+
+        fun create(): MihomoLocalAuth {
+            val bytes = ByteArray(SECRET_BYTES)
+            SecureRandom().nextBytes(bytes)
+            return try {
+                MihomoLocalAuth(bytes.joinToString("") { "%02x".format(it.toInt() and BYTE_MASK) })
+            } finally {
+                bytes.fill(0)
+            }
+        }
+    }
+}
+
+/** Readiness requires a fresh private native marker and a still-owned live child. */
+internal object MihomoDirectReadiness {
+    private const val POLL_MS = 50L
+    private const val MARKER = "ready\n"
+
+    fun await(
+        file: java.io.File,
+        timeoutMs: Long,
+        alive: () -> Boolean,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (System.nanoTime() < deadline && alive()) {
+            if (isReady(file)) return alive()
+            Thread.sleep(POLL_MS)
+        }
+        return false
+    }
+
+    private fun isReady(file: java.io.File): Boolean =
+        try {
+            isPrivateEnginePath(file) &&
+                file.isFile &&
+                file.length() == MARKER.length.toLong() &&
+                file.readText() == MARKER
+        } catch (_: java.io.IOException) {
+            false
+        } catch (_: SecurityException) {
             false
         }
 }

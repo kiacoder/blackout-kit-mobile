@@ -373,6 +373,72 @@ void main() {
       expect(vpn.connectCalls, 3);
     });
 
+    test('native recovery is not a terminal failure and can be cancelled', () async {
+      final vpn = _RecordingVpnService();
+      final controller = _controller(vpn);
+      controller.debugSetConnectedForTest(vless('fixture.example.com', 'Fixture'));
+      controller.debugHandleNativeStatusForTest('reconnecting', null);
+      expect(controller.nativeRecovering.value, isTrue);
+      expect(controller.isConnected, isFalse);
+      expect(controller.state.value, ConnectionState.connecting);
+      expect(controller.recoveryAvailable.value, isFalse);
+      expect(await controller.disconnect(), isTrue);
+      expect(controller.nativeRecovering.value, isFalse);
+      expect(controller.state.value, ConnectionState.idle);
+    });
+
+    test('terminal recovery failure clears the recovery marker', () {
+      final controller = _controller(_RecordingVpnService());
+      controller.debugSetConnectedForTest(vless('fixture.example.com', 'Fixture'));
+      controller.debugHandleNativeStatusForTest('reconnecting', null);
+      controller.debugHandleNativeStatusForTest('blocked', 'fixture stopped');
+      expect(controller.nativeRecovering.value, isFalse);
+      expect(controller.state.value, ConnectionState.error);
+      expect(controller.recoveryAvailable.value, isTrue);
+    });
+
+    test('reattached UI recognizes retained tunnel without connected claim', () async {
+      final vpn = _RecordingVpnService()..heldTunnel = true;
+      final controller = _controller(vpn);
+      await controller.reconcileWithNativeService();
+      expect(controller.nativeTunnelHeld.value, isTrue);
+      expect(controller.isConnected, isFalse);
+      expect(controller.state.value, ConnectionState.error);
+      expect(vpn.connectCalls, 0);
+      expect(await controller.disconnect(), isTrue);
+      expect(controller.nativeTunnelHeld.value, isFalse);
+      expect(controller.recoveryAvailable.value, isFalse);
+      expect(vpn.disconnectCalls, 1);
+    });
+
+    test('failed explicit release preserves the retained tunnel marker', () async {
+      final vpn = _RecordingVpnService()
+        ..heldTunnel = true
+        ..disconnectSucceeds = false;
+      final controller = _controller(vpn);
+      await controller.reconcileWithNativeService();
+      expect(await controller.disconnect(), isFalse);
+      expect(controller.nativeTunnelHeld.value, isTrue);
+      expect(controller.isConnected, isFalse);
+      vpn.disconnectSucceeds = true;
+      expect(await controller.disconnect(), isTrue);
+      expect(controller.nativeTunnelHeld.value, isFalse);
+    });
+
+    test('pending cleanup never claims a held or connected tunnel', () async {
+      final vpn = _RecordingVpnService();
+      final controller = _controller(vpn);
+      controller.debugSetConnectedForTest(vless('fixture.example.com', 'Fixture'));
+      controller.debugHandleNativeStatusForTest('blocked', 'fixture stopped');
+      controller.debugHandleNativeStatusForTest('cleanup_pending', 'fixture stop timed out');
+      expect(controller.nativeCleanupPending.value, isTrue);
+      expect(controller.nativeTunnelHeld.value, isFalse);
+      expect(controller.isConnected, isFalse);
+      expect(controller.recoveryAvailable.value, isFalse);
+      expect(await controller.disconnect(), isTrue);
+      expect(controller.nativeCleanupPending.value, isFalse);
+    });
+
     test('native candidate rejection does not request recovery and tries next',
         () async {
       final vpn = _RecordingVpnService();
@@ -714,10 +780,14 @@ ConnectionController _controller(
 class _RecordingVpnService extends VPNService {
   _RecordingVpnService() : super();
   bool nativeTunnel = false;
+  bool heldTunnel = false;
+  bool disconnectSucceeds = true;
 
   @override
   Future<Map<String, dynamic>> getStatus() async => {
     'activeNativeTunnel': nativeTunnel,
+    if (heldTunnel) 'isRunning': false,
+    if (heldTunnel) 'isTunnelHeld': true,
   };
 
   int connectCalls = 0;
@@ -749,7 +819,8 @@ class _RecordingVpnService extends VPNService {
   @override
   Future<bool> disconnect() async {
     disconnectCalls += 1;
-    return true;
+    if (disconnectSucceeds) heldTunnel = false;
+    return disconnectSucceeds;
   }
 
   @override

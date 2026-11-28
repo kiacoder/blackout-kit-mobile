@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io' show InternetAddress;
 import 'package:crypto/crypto.dart';
 import 'package:yaml/yaml.dart';
+import 'openvpn_profile.dart';
 
 /// Canonical RFC 4122 UUID shape: 8-4-4-4-12 hex digits.
 ///
@@ -462,7 +463,7 @@ class OpenVpnConfig extends Config {
 
   @override
   Future<bool> connect() async {
-    return true;
+    return false; // Importing a profile is not a running VPN.
   }
 
   @override
@@ -475,42 +476,19 @@ class OpenVpnConfig extends Config {
 
   @override
   bool validate() {
-    return configContent.isNotEmpty && address.isNotEmpty;
+    return OpenVpnProfile.parse(configContent) != null && super.validate();
   }
 
   static OpenVpnConfig? fromUri(String content, {String? customName}) {
-    try {
-      String remoteHost = '127.0.0.1';
-      int remotePort = 1194;
-
-      final lines = content.split('\n');
-      var foundRemote = false;
-      for (final line in lines) {
-        final trimmed = line.trim();
-        if (trimmed.startsWith('remote ')) {
-          final parts = trimmed.split(RegExp(r'\s+'));
-          if (parts.length >= 2) {
-            remoteHost = parts[1];
-            foundRemote = true;
-          }
-          if (parts.length >= 3) remotePort = int.tryParse(parts[2]) ?? 1194;
-          break;
-        }
-      }
-      // A profile without a remote cannot connect to anything. Defaulting to
-      // 127.0.0.1 produced a "valid" config that silently dialled the phone.
-      if (!foundRemote) return null;
-
-      return OpenVpnConfig(
-        name: customName ?? 'OpenVPN ($remoteHost:$remotePort)',
-        rawUri: content,
-        configContent: content,
-        address: remoteHost,
-        port: remotePort,
-      );
-    } catch (e) {
-      return null;
-    }
+    final profile = OpenVpnProfile.parse(content);
+    if (profile == null) return null;
+    return OpenVpnConfig(
+      name: customName ?? 'OpenVPN (${profile.host}:${profile.port})',
+      rawUri: content,
+      configContent: content,
+      address: profile.host,
+      port: profile.port,
+    );
   }
 }
 

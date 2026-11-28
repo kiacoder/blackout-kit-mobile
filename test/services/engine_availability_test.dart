@@ -11,6 +11,13 @@ import 'package:blackout_kit_mobile/models/engine_capability.dart';
 import 'package:blackout_kit_mobile/services/vpn_service.dart';
 
 void main() {
+  test('OpenVPN capability is explicitly opt-in', () {
+    expect(EngineAvailability.fromMap({}).canConnect('openvpn'), isFalse);
+    final candidate = EngineAvailability.fromMap({'openVpnAvailable': true});
+    expect(candidate.canConnect('openvpn'), isTrue);
+    expect(candidate.summary, contains('experimental'));
+  });
+
   group('EngineAvailability.fromMap', () {
     test('reads the native capability report', () {
       final availability = EngineAvailability.fromMap({

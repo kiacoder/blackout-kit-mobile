@@ -81,17 +81,26 @@ class VpnPlugin :
         // A re-attached engine (the Flutter process was killed and the app
         // reopened) has missed every status transition. Tell it the current
         // truth immediately so its UI does not disagree with the notification.
-        if (BlackoutVpnService.isRunning) {
-            main.post {
+        main.post {
+            val status =
+                when {
+                    BlackoutVpnService.isTunnelCleanupPending -> "cleanup_pending"
+                    BlackoutVpnService.isTunnelHeld -> "blocked"
+                    BlackoutVpnService.isOpenVpnRecovering -> "reconnecting"
+                    BlackoutVpnService.isRunning -> "connected"
+                    else -> null
+                }
+            if (status != null) {
                 channel?.invokeMethod(
                     "onStatusChanged",
-                    mapOf("status" to "connected", "error" to null),
+                    mapOf("status" to status, "error" to BlackoutVpnService.lastError),
                 )
             }
         }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        connection.discardOpenVpnHandoff()
         BlackoutVpnService.statusListener = null
         channel?.setMethodCallHandler(null)
         channel = null
@@ -299,6 +308,9 @@ class VpnPlugin :
             mapOf(
                 "isConnected" to BlackoutVpnService.isRunning,
                 "isRunning" to BlackoutVpnService.isRunning,
+                "isRecovering" to BlackoutVpnService.isOpenVpnRecovering,
+                "isTunnelHeld" to BlackoutVpnService.isTunnelHeld,
+                "isCleanupPending" to BlackoutVpnService.isTunnelCleanupPending,
                 "activeNativeTunnel" to BlackoutVpnService.activeNativeTunnel,
                 "error" to BlackoutVpnService.lastError,
                 // Identity of the live tunnel: lets a reopened app adopt a tunnel that
@@ -328,6 +340,8 @@ class VpnPlugin :
             }
         }
 
+        private var openVpnProfileToken: String? = null
+
         private fun beginConnect(
             ctx: Context,
             call: MethodCall,
@@ -341,21 +355,65 @@ class VpnPlugin :
             // getConnectedIP can dial the tunnel later.
             lastSocksPort = call.argument<Int>("socksPort") ?: BlackoutVpnService.DEFAULT_SOCKS_PORT
 
-            val intent = connectIntent(ctx, call, dnsOnly)
+            val failure = startConnectService(ctx, call, dnsOnly)
+            if (failure != null) {
+                resolveConnect(false, failure)
+            } else {
+                scheduleConnectTimeout(ctx)
+            }
+        }
+
+        private fun startConnectService(
+            ctx: Context,
+            call: MethodCall,
+            dnsOnly: Boolean,
+        ): String? =
             try {
+                stageOpenVpnProfile(call, dnsOnly)
+                val intent = connectIntent(ctx, call, dnsOnly)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     ctx.startForegroundService(intent)
                 } else {
                     ctx.startService(intent)
                 }
+                null
+            } catch (_: IllegalArgumentException) {
+                "Invalid OpenVPN profile or credentials."
+            } catch (_: ClassCastException) {
+                "Invalid VPN request types."
             } catch (_: IllegalStateException) {
-                resolveConnect(false, "Could not start the VPN service in the current application state.")
-                return
+                "Could not start the VPN service or authentication handoff."
             } catch (_: SecurityException) {
-                resolveConnect(false, "VPN service start permission denied.")
-                return
+                "VPN service start permission denied."
             }
-            scheduleConnectTimeout(ctx)
+
+        fun discardOpenVpnHandoff() {
+            openVpnProfileToken?.let(OpenVpnProfileHandoff::discard)
+            openVpnProfileToken = null
+        }
+
+        private fun stageOpenVpnProfile(
+            call: MethodCall,
+            dnsOnly: Boolean,
+        ) {
+            if (dnsOnly || call.argument<String>("protocol") != "openvpn") return
+            val profile = requireNotNull(call.argument<String>("openVpnConfig"))
+            val username = call.argument<ByteArray>("openVpnUsername")
+            val password = call.argument<ByteArray>("openVpnPassword")
+            val keyPassword = call.argument<ByteArray>("openVpnKeyPassword")
+            val credentials =
+                if (username != null || password != null || keyPassword != null) {
+                    OpenVpnCredentials(username ?: ByteArray(0), password ?: ByteArray(0), keyPassword ?: ByteArray(0))
+                } else {
+                    null
+                }
+            var staged = false
+            try {
+                openVpnProfileToken = OpenVpnProfileHandoff.stage(profile, credentials)
+                staged = true
+            } finally {
+                if (!staged) credentials?.clear()
+            }
         }
 
         private fun connectIntent(
@@ -403,6 +461,10 @@ class VpnPlugin :
                     ArrayList(call.argument<List<String>>("disallowedApps") ?: emptyList()),
                 )
                 putExtra(BlackoutVpnService.EXTRA_NATIVE_TUNNEL_CONFIG, call.argument<String>("nativeTunnelConfig"))
+                call.argument<List<String>>("openVpnCustomDns")?.let {
+                    putStringArrayListExtra(BlackoutVpnService.EXTRA_OPENVPN_CUSTOM_DNS, ArrayList(it))
+                }
+                putExtra(BlackoutVpnService.EXTRA_OPENVPN_PROFILE_TOKEN, openVpnProfileToken)
                 putExtra(BlackoutVpnService.EXTRA_MIHOMO_CONFIG, call.argument<String>("mihomoConfig"))
                 putExtra(BlackoutVpnService.EXTRA_DNS_ONLY, dnsOnly)
             }
@@ -446,6 +508,7 @@ class VpnPlugin :
             connectTimeoutRunnable?.let { main.removeCallbacks(it) }
             connectTimeoutRunnable = null
 
+            discardOpenVpnHandoff()
             val result = pendingConnect ?: return
             pendingConnect = null
             BlackoutVpnService.connectResultCallback = null
@@ -608,6 +671,7 @@ class VpnPlugin :
                 GoRuntimeAdmission.process.current(),
                 BuildConfig.ENABLE_EXPERIMENTAL_NATIVE_TUNNELS,
                 BuildConfig.ENABLE_EXPERIMENTAL_MIHOMO,
+                BuildConfig.ENABLE_EXPERIMENTAL_OPENVPN,
             ).report()
     }
 

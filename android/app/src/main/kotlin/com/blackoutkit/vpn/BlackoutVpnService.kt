@@ -39,6 +39,8 @@ class BlackoutVpnService : VpnService() {
     companion object {
         private const val TAG = "BlackoutVpnService"
         private const val NATIVE_MONITOR_INTERVAL_MS = 2000L
+        private const val OPENVPN_CONNECT_MS = 30_000L
+        private const val OPENVPN_STOP_MS = 5_000L
 
         private const val PREFS = "blackout_vpn_state"
         private const val KEY_HELD_BLOCKING = "held_blocking"
@@ -56,6 +58,7 @@ class BlackoutVpnService : VpnService() {
         const val EXTRA_SOCKS_PORT = "socksPort"
         const val EXTRA_DNS = "dns"
         const val EXTRA_DNS_SERVERS = "dnsServers"
+        const val EXTRA_OPENVPN_CUSTOM_DNS = "openVpnCustomDns"
 
         /**
          * DNS-only session: advertise the resolvers, route nothing.
@@ -78,6 +81,7 @@ class BlackoutVpnService : VpnService() {
         /** Full sing-box JSON document, built by the Dart side. */
         const val EXTRA_SINGBOX_CONFIG = "singboxConfig"
         const val EXTRA_NATIVE_TUNNEL_CONFIG = "nativeTunnelConfig"
+        const val EXTRA_OPENVPN_PROFILE_TOKEN = "openVpnProfileToken"
         const val EXTRA_MIHOMO_CONFIG = "mihomoConfig"
 
         /**
@@ -126,6 +130,19 @@ class BlackoutVpnService : VpnService() {
         /** Current tunnel state, readable from the plugin without binding. */
         @Volatile
         var isRunning: Boolean = false
+            private set
+
+        @Volatile
+        var isOpenVpnRecovering: Boolean = false
+            private set
+
+        // Live process state only: a preference cannot prove a descriptor is open.
+        @Volatile
+        var isTunnelHeld: Boolean = false
+            private set
+
+        @Volatile
+        var isTunnelCleanupPending: Boolean = false
             private set
 
         /** Last failure, surfaced to Dart so the UI can show a real reason. */
@@ -190,6 +207,7 @@ class BlackoutVpnService : VpnService() {
     private val sessionOwner = Any()
     private val sessions = VpnSessionExecutor(dispatch = { action -> mainHandler.post { action() } })
     private val native = NativeSetup()
+    private val openVpn = OpenVpnSetup()
     private val proxy = ProxySetup()
     private val engines = EngineSelection()
     private val dns = DnsSetup()
@@ -200,6 +218,8 @@ class BlackoutVpnService : VpnService() {
     }
 
     private var tun: ParcelFileDescriptor? = null
+    private var openVpnSession: OpenVpnSession? = null
+    private var openVpnCallbacks: OpenVpnTunCallbacks? = null
 
     /**
      * The engine's own duplicate of the tun descriptor. Kept so teardown can
@@ -300,9 +320,12 @@ class BlackoutVpnService : VpnService() {
         val mihomoConfig = intent?.getStringExtra(EXTRA_MIHOMO_CONFIG)
         val libboxConfig = intent?.getStringExtra(EXTRA_LIBBOX_CONFIG)
         val nativeConfig = intent?.getStringExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
+        val openVpnProfileToken = intent?.getStringExtra(EXTRA_OPENVPN_PROFILE_TOKEN)
+        val openVpnCustomDns = intent?.getStringArrayListExtra(EXTRA_OPENVPN_CUSTOM_DNS)
 
         init {
             intent?.removeExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
+            intent?.removeExtra(EXTRA_OPENVPN_PROFILE_TOKEN)
         }
 
         val dnsOnly = intent?.getBooleanExtra(EXTRA_DNS_ONLY, false) ?: false
@@ -323,10 +346,12 @@ class BlackoutVpnService : VpnService() {
                         "Another engine session is active or awaiting cleanup. Stop it before connecting.",
                     )
                 request.dnsOnly -> dns.establishDnsOnly(request.dnsServers, request.displayName, ticket)
+                request.protocol == "openvpn" -> openVpn.establish(request, ticket)
                 request.nativeConfig != null -> native.establishNative(request, request.nativeConfig, ticket)
                 else -> proxy.establish(request, ticket)
             }
         }, complete = { ok ->
+            request.openVpnProfileToken?.let(OpenVpnProfileHandoff::discard)
             clearConnectResultCallback(completion)
             completion?.invoke(ok)
             if (!ok) {
@@ -348,6 +373,7 @@ class BlackoutVpnService : VpnService() {
 
     /** The system revoked our tunnel (another VPN took over, or the user disabled it). */
     override fun onRevoke() {
+        isTunnelHeld = false
         lastError = "VPN was revoked by the system"
         val completion = takeConnectResultCallback()
         if (completion != null) {
@@ -379,7 +405,10 @@ class BlackoutVpnService : VpnService() {
         holdTunnelOnFailure = false
         cleanupPending = true
         isRunning = false
+        isOpenVpnRecovering = false
+        isTunnelHeld = false
         activeNativeTunnel = false
+        isTunnelCleanupPending = true
         val stopped =
             stopEnginesBeforeRelease(
                 stops =
@@ -389,6 +418,7 @@ class BlackoutVpnService : VpnService() {
                         BlackoutCoreEngine::stop,
                         LibboxEngine::stop,
                         NativeTunnelEngine::stop,
+                        openVpn::stop,
                     ),
                 release = ::releaseTunnelDescriptors,
             )
@@ -397,6 +427,7 @@ class BlackoutVpnService : VpnService() {
             error(lastError!!)
         }
         cleanupPending = false
+        isTunnelCleanupPending = false
         // The held-blocking marker describes a live tunnel; once the interface
         // is gone the state is "stopped" again, not "blocked".
         getSharedPreferences(PREFS, MODE_PRIVATE).edit {
@@ -411,6 +442,10 @@ class BlackoutVpnService : VpnService() {
     }
 
     private fun releaseTunnelDescriptors() {
+        // OpenVPN's service descriptor is released only after every engine
+        // has successfully stopped, just like the other retained descriptors.
+        openVpnCallbacks?.closeAfterJoin()
+        openVpnCallbacks = null
         var failed = false
         try {
             engineTunFd?.close()
@@ -442,7 +477,103 @@ class BlackoutVpnService : VpnService() {
     }
 
     private fun notifyStatus(status: String) {
-        statusListener?.invoke(status)
+        statusListener?.invoke(if (status == "error" && isTunnelCleanupPending) "cleanup_pending" else status)
+    }
+
+    private inner class OpenVpnSetup {
+        fun establish(
+            request: StartRequest,
+            ticket: VpnSessionExecutor.Ticket,
+        ): Boolean {
+            lastError = null
+            val policy =
+                try {
+                    OpenVpnAppPolicy.create(packageName, request.allowed, request.disallowed, request.openVpnCustomDns)
+                } catch (_: IllegalArgumentException) {
+                    return setupFailure(ticket, "Invalid OpenVPN app routing or custom DNS settings")
+                }
+            return if (!BuildConfig.ENABLE_EXPERIMENTAL_OPENVPN) {
+                setupFailure(ticket, "OpenVPN candidate is not enabled in this build")
+            } else {
+                consumeProfile(request, ticket, policy)
+            }
+        }
+
+        private fun consumeProfile(
+            request: StartRequest,
+            ticket: VpnSessionExecutor.Ticket,
+            policy: OpenVpnAppPolicy,
+        ): Boolean {
+            val payload =
+                request.openVpnProfileToken?.let(OpenVpnProfileHandoff::take)
+                    ?: return setupFailure(ticket, "OpenVPN profile handoff expired")
+            return if (!OpenVpnCandidateProfile.admits(payload.profile.toString(Charsets.UTF_8))) {
+                payload.clear()
+                setupFailure(ticket, "OpenVPN requires a self-contained profile with exact server identity")
+            } else {
+                startOpenVpn(request, payload, ticket, policy)
+            }
+        }
+
+        private fun startOpenVpn(
+            request: StartRequest,
+            payload: OpenVpnStartPayload,
+            ticket: VpnSessionExecutor.Ticket,
+            policy: OpenVpnAppPolicy,
+        ): Boolean {
+            val backend =
+                try {
+                    OpenVpnNativeBridge.loadCandidate()
+                    val handle = OpenVpnNativeBridge.nativeCreate()
+                    check(handle > 0)
+                    OpenVpnAndroidBackend(
+                        handle,
+                        payload,
+                        this@BlackoutVpnService,
+                        ticket::isCurrent,
+                        policy,
+                    )
+                } catch (failure: IllegalStateException) {
+                    payload.clear()
+                    throw failure
+                } catch (failure: LinkageError) {
+                    payload.clear()
+                    throw failure
+                }
+            openVpnCallbacks = backend.callbacks
+            val session = OpenVpnSession(backend, current = ticket::isCurrent)
+            openVpnSession = session
+            session.start()
+            return if (session.awaitConnected(OPENVPN_CONNECT_MS)) {
+                publishOpenVpn(request, ticket)
+                true
+            } else {
+                setupFailure(ticket, "OpenVPN did not establish a verified native session")
+            }
+        }
+
+        private fun publishOpenVpn(
+            request: StartRequest,
+            ticket: VpnSessionExecutor.Ticket,
+        ) {
+            activeNativeTunnel = true
+            activeProtocol = request.protocol
+            activeName = request.displayName
+            activeProtocolId = request.protocol
+            activeDisplayName = request.displayName
+            holdTunnelOnFailure = request.holdOnFailure
+            connectedAtMs = System.currentTimeMillis()
+            isRunning = true
+            ticket.publish {
+                monitor.startOpenVpnMonitor(ticket)
+                notifyStatus("connected")
+            }
+        }
+
+        fun stop() {
+            openVpnSession?.stop(OPENVPN_STOP_MS)
+            openVpnSession = null
+        }
     }
 
     private inner class NativeSetup {
@@ -560,15 +691,22 @@ class BlackoutVpnService : VpnService() {
             ticket: VpnSessionExecutor.Ticket,
         ): Builder? {
             val displayName = request.displayName
-            val dnsServers = request.dnsServers
             val allowed = request.allowed
             val disallowed = request.disallowed
             val builder =
                 Builder()
                     .setSession(displayName)
                     .setMtu(VPN_MTU)
-                    .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
-                    .addRoute("0.0.0.0", 0)
+                    .addAddress(
+                        if (request.protocol == "mihomo" &&
+                            BuildConfig.ENABLE_MIHOMO_DIRECT_TUN
+                        ) {
+                            "198.18.0.1"
+                        } else {
+                            VPN_ADDRESS_V4
+                        },
+                        VPN_PREFIX_V4,
+                    ).addRoute("0.0.0.0", 0)
                     // IPv6 blackhole (kill switch for v6): route ::/0 into the TUN
                     // WITHOUT giving the interface an IPv6 address. v6 packets
                     // enter the tunnel, find no v6 netstack on the other side, and
@@ -582,19 +720,7 @@ class BlackoutVpnService : VpnService() {
             // DNS leak prevention: every resolver the tunnel advertises is one
             // we control. The system resolver is never offered, so queries
             // cannot silently fall back to the carrier.
-            val acceptedDns = addDnsServers(builder, dnsServers)
-            // Every server was refused. Establishing anyway would give Android
-            // an interface with no DNS at all, and the system would quietly
-            // fall back to the carrier's resolver while the UI still says leak
-            // prevention is on — a silent leak is worse than a failed connect.
-            if (dnsServers.isNotEmpty() && acceptedDns == 0) {
-                lastError = "Every DNS server was rejected by Android " +
-                    "($dnsServers). Refusing to build a tunnel that would " +
-                    "silently fall back to the carrier resolver."
-                Log.e(TAG, "Android rejected all configured DNS servers")
-                ticket.publish { notifyStatus("error") }
-                return null
-            }
+            if (!configureProxyDns(builder, request, ticket)) return null
 
             // NOTE: deliberately no setBlocking(). The Xray tun inbound reads
             // the fd through Go's runtime poller, which requires the descriptor
@@ -605,9 +731,51 @@ class BlackoutVpnService : VpnService() {
                 builder.setMetered(false)
             }
 
-            configureProxyAppRouting(builder, allowed, disallowed)
+            if (request.protocol == "mihomo") {
+                configureMihomoAppRouting(builder, allowed, disallowed)
+            } else {
+                configureProxyAppRouting(builder, allowed, disallowed)
+            }
 
             return builder
+        }
+
+        private fun configureProxyDns(
+            builder: Builder,
+            request: StartRequest,
+            ticket: VpnSessionExecutor.Ticket,
+        ): Boolean {
+            val dnsServers = request.dnsServers
+            if (request.protocol == "mihomo") {
+                MihomoRoutePolicy.dns(dnsServers).forEach { builder.addDnsServer(it) }
+                return true
+            }
+            val acceptedDns = addDnsServers(builder, dnsServers)
+            val valid = dnsServers.isEmpty() || acceptedDns > 0
+            if (!valid) {
+                lastError =
+                    "Every DNS server was rejected by Android. Refusing unsafe fallback."
+                Log.e(TAG, "Android rejected all configured DNS servers")
+                ticket.publish { notifyStatus("error") }
+            }
+            return valid
+        }
+
+        private fun configureMihomoAppRouting(
+            builder: Builder,
+            allowed: List<String>,
+            disallowed: List<String>,
+        ) {
+            MihomoRoutePolicy.checkApps(packageName, allowed, disallowed)
+            try {
+                if (allowed.isNotEmpty()) {
+                    allowed.distinct().forEach { builder.addAllowedApplication(it) }
+                } else {
+                    (disallowed + packageName).distinct().forEach { builder.addDisallowedApplication(it) }
+                }
+            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                throw IllegalArgumentException("Mihomo split tunneling package missing")
+            }
         }
 
         private fun openProxyTunnel(
@@ -926,8 +1094,9 @@ class BlackoutVpnService : VpnService() {
         ) {
             sessions.forCurrent(ticket) {
                 lastError = reason
-                if (holdTunnelOnFailure && tun != null) {
+                if (holdTunnelOnFailure && (tun != null || openVpnCallbacks?.hasTunnel == true)) {
                     isRunning = false
+                    isTunnelHeld = true
                     getSharedPreferences(PREFS, MODE_PRIVATE).edit {
                         putBoolean(KEY_HELD_BLOCKING, true)
                     }
@@ -993,6 +1162,83 @@ class BlackoutVpnService : VpnService() {
             nativeMonitor?.let { mainHandler.removeCallbacks(it) }
             nativeMonitor = poll
             mainHandler.postDelayed(poll, NATIVE_MONITOR_INTERVAL_MS)
+        }
+
+        fun startOpenVpnMonitor(ticket: VpnSessionExecutor.Ticket) {
+            val poll =
+                object : Runnable {
+                    override fun run() {
+                        if (nativeMonitor !== this || !ticket.isCurrent()) return
+                        val self = this
+                        sessions.forCurrent(ticket) {
+                            val session = openVpnSession
+                            session?.observeNetworks(availableNetworks.underlyingSnapshot())
+                            when (session?.link()) {
+                                OpenVpnSession.Link.CONNECTED -> {
+                                    if (isOpenVpnRecovering) publishOpenVpnRecovery(false, ticket)
+                                    scheduleOpenVpnPoll(self, ticket)
+                                }
+                                OpenVpnSession.Link.RECOVERING -> {
+                                    if (!isOpenVpnRecovering) publishOpenVpnRecovery(true, ticket)
+                                    scheduleOpenVpnPoll(self, ticket)
+                                }
+                                else -> finishOpenVpnRecovery(session, self, ticket)
+                            }
+                        }
+                    }
+                }
+            nativeMonitor?.let { mainHandler.removeCallbacks(it) }
+            nativeMonitor = poll
+            mainHandler.postDelayed(poll, NATIVE_MONITOR_INTERVAL_MS)
+        }
+
+        private fun scheduleOpenVpnPoll(
+            poll: Runnable,
+            ticket: VpnSessionExecutor.Ticket,
+        ) {
+            ticket.publish {
+                if (nativeMonitor === poll) mainHandler.postDelayed(poll, NATIVE_MONITOR_INTERVAL_MS)
+            }
+        }
+
+        private fun publishOpenVpnRecovery(
+            recovering: Boolean,
+            ticket: VpnSessionExecutor.Ticket,
+        ) {
+            isOpenVpnRecovering = recovering
+            isRunning = !recovering
+            lastError = null
+            if (!recovering) connectedAtMs = System.currentTimeMillis()
+            ticket.publish { notifyStatus(if (recovering) "reconnecting" else "connected") }
+        }
+
+        private fun finishOpenVpnRecovery(
+            session: OpenVpnSession?,
+            poll: Runnable,
+            ticket: VpnSessionExecutor.Ticket,
+        ) {
+            isOpenVpnRecovering = false
+            isRunning = false
+            val stopped =
+                try {
+                    session?.stop(OPENVPN_STOP_MS)
+                    openVpnSession = null
+                    true
+                } catch (_: Exception) {
+                    false
+                } catch (_: LinkageError) {
+                    false
+                }
+            ticket.publish { if (nativeMonitor === poll) nativeMonitor = null }
+            if (stopped) {
+                onEngineDied("OpenVPN recovery ended or timed out", ticket)
+            } else {
+                // Do not claim traffic is blocked before the native worker has joined.
+                cleanupPending = true
+                isTunnelCleanupPending = true
+                lastError = "OpenVPN cleanup pending; system VPN lockdown is required for guaranteed blocking"
+                ticket.publish { notifyStatus("error") }
+            }
         }
 
         fun cancel() {

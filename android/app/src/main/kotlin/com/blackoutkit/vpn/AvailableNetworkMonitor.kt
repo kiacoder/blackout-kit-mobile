@@ -64,6 +64,27 @@ internal class AvailableNetworkMonitor(
         }
     }
 
+    /** Passive physical-network membership, never the VPN's own network.
+     * Null means observation is unavailable, not that all networks disappeared.
+     */
+    @Synchronized
+    fun underlyingSnapshot(): Set<Long>? {
+        if (closed || !registered) return null
+        return try {
+            registry
+                .snapshot()
+                .filter { network ->
+                    manager.getNetworkCapabilities(network)?.let {
+                        it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                            it.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                    } == true
+                }.map { it.networkHandle }
+                .toSet()
+        } catch (_: SecurityException) {
+            null
+        }
+    }
+
     @Synchronized
     fun close() {
         if (closed) return

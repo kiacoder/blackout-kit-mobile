@@ -11,6 +11,8 @@ import 'package:logger/logger.dart';
 import 'config_controller.dart';
 import 'settings_controller.dart';
 import '../models/config.dart';
+import '../models/openvpn_profile.dart';
+import '../widgets/openvpn_credentials_dialog.dart';
 import '../models/test_result.dart';
 import '../services/localization_service.dart';
 import '../models/vpn_session_options.dart';
@@ -174,6 +176,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   static const int _probeConcurrency = 16;
 
   bool get isConnected => state.value == ConnectionState.connected;
+  final RxBool nativeRecovering = RxBool(false);
+  final RxBool nativeTunnelHeld = RxBool(false);
+  final RxBool nativeCleanupPending = RxBool(false);
 
   DateTime? _connectionStartTime;
   Timer? _uptimeTimer;
@@ -245,12 +250,31 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
   /// Handles a status pushed by the native service.
   void _onNativeStatus(String status, String? error) {
     switch (status) {
+      case 'reconnecting':
+        if (!_operationInFlight && state.value != ConnectionState.disconnecting) {
+          _showNativeRecovery();
+        }
+        break;
       case 'connected':
+        nativeCleanupPending.value = false;
+        nativeTunnelHeld.value = false;
+        if (nativeRecovering.value) {
+          nativeRecovering.value = false;
+          state.value = ConnectionState.idle;
+        }
         // A tunnel came up behind the app's back (re-attached engine, or a
         // connect that outlived the process).
         if (_canAdopt) reconcileWithNativeService();
         break;
       case 'disconnected':
+        nativeCleanupPending.value = false;
+        nativeTunnelHeld.value = false;
+        if (nativeRecovering.value) {
+          nativeRecovering.value = false;
+          state.value = ConnectionState.idle;
+          selectedConfig.value = null;
+          statusMessage.value = LocalizationService.t('status_tunnel_ended');
+        }
         if (state.value == ConnectionState.testing && _operationInFlight) {
           _sessionEpoch++;
           state.value = ConnectionState.error;
@@ -274,8 +298,17 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
           debugService.logAction('tunnel_lost', {'reason': 'disconnected'});
         }
         break;
-      case 'error':
+      case 'cleanup_pending':
+        _showCleanupPending();
+        break;
       case 'blocked':
+        nativeCleanupPending.value = false;
+        nativeTunnelHeld.value = true;
+        _showHeldTunnel();
+        break;
+      case 'error':
+        nativeTunnelHeld.value = false;
+        nativeRecovering.value = false;
         if (state.value == ConnectionState.testing && _operationInFlight) {
           _sessionEpoch++;
           state.value = ConnectionState.error;
@@ -322,12 +355,54 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  void _showCleanupPending() {
+    nativeCleanupPending.value = true;
+    nativeTunnelHeld.value = false;
+    nativeRecovering.value = false;
+    _clearRecoveryState();
+    _sessionEpoch++;
+    state.value = ConnectionState.error;
+    statusMessage.value = LocalizationService.t('status_cleanup_pending');
+    connectedIP.value = null;
+    exitIpInfo.value = null;
+    _connectionStartTime = null;
+    _stopUptimeCounter();
+  }
+
+  void _showHeldTunnel() {
+    nativeRecovering.value = false;
+    nativeTunnelHeld.value = true;
+    _sessionEpoch++;
+    state.value = ConnectionState.error;
+    statusMessage.value = LocalizationService.t('status_tunnel_held');
+    connectedIP.value = null;
+    exitIpInfo.value = null;
+    _connectionStartTime = null;
+    _stopUptimeCounter();
+    if (lastKnownWorkingConfig.value != null && !_candidateAttemptInFlight) {
+      _requestRecovery(statusMessage.value);
+    }
+  }
+
+  void _showNativeRecovery() {
+    if (nativeRecovering.value) return;
+    nativeRecovering.value = true;
+    _sessionEpoch++;
+    state.value = ConnectionState.connecting;
+    statusMessage.value = LocalizationService.t('status_native_reconnecting');
+    connectedIP.value = null;
+    exitIpInfo.value = null;
+    connectionUptime.value = 0;
+    _connectionStartTime = null;
+    _stopUptimeCounter();
+  }
+
   /// Connects on launch when the user asked for it, but only after
   /// reconciliation has had its say — adopting a tunnel that survived the
   /// process is not the same as starting a new one.
   Future<void> _maybeAutoConnect() async {
     try {
-      if (isConnected || !_canAdopt) return;
+      if (isConnected || nativeTunnelHeld.value || nativeCleanupPending.value || !_canAdopt) return;
       final settings = Get.find<SettingsController>();
       if (!settings.autoConnect.value) return;
       final configController = Get.find<ConfigController>();
@@ -450,7 +525,31 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final status = await vpnService.getStatus();
       if (_closed || _operationInFlight || epoch != _sessionEpoch ||
           status['isRunning'] is! bool) return;
+      if (status['isCleanupPending'] == true) {
+        if (!nativeCleanupPending.value) _showCleanupPending();
+        return;
+      }
+      if (status['isCleanupPending'] == false) nativeCleanupPending.value = false;
+      if (status['isTunnelHeld'] == true) {
+        if (!nativeTunnelHeld.value) _showHeldTunnel();
+        return;
+      }
+      if (nativeTunnelHeld.value && status['isTunnelHeld'] == false) {
+        nativeTunnelHeld.value = false;
+      }
+      if (status['isRecovering'] == true) {
+        _showNativeRecovery();
+        return;
+      }
       final nativeRunning = status['isRunning'] == true;
+      if (nativeRecovering.value) {
+        nativeRecovering.value = false;
+        state.value = ConnectionState.idle;
+        if (!nativeRunning) {
+          statusMessage.value = LocalizationService.t('status_tunnel_ended');
+          selectedConfig.value = null;
+        }
+      }
 
       if (nativeRunning && _canAdopt && !isConnected) {
         final name = status['name'] as String?;
@@ -1086,7 +1185,43 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
         return false;
       }
 
-      final success = await vpnService.connect(config, options: options);
+      final bool success;
+      final interactive = config is OpenVpnConfig &&
+          OpenVpnProfile.parse(config.configContent)?.directives.contains('auth-user-pass') == true;
+      final encryptedKey = config is OpenVpnConfig &&
+          OpenVpnProfile.needsKeyPassword(config.configContent);
+      if (config is OpenVpnConfig && (interactive || encryptedKey) && !_candidateAttemptInFlight) {
+        final library = Get.isRegistered<ConfigController>()
+            ? Get.find<ConfigController>().configService : null;
+        final canRemember = interactive && library?.canRememberOpenVpn(config) == true;
+        final saved = canRemember ? library?.readOpenVpnLogin(config) : null;
+        final context = Get.context;
+        final credentials = context == null || !context.mounted ? null :
+            await requestOpenVpnCredentials(context, interactive: interactive,
+                encryptedKey: encryptedKey, canRemember: canRemember, saved: saved);
+        saved?.clear();
+        if (credentials == null || _cancelRequested) {
+          credentials?.clear();
+          state.value = ConnectionState.idle;
+          statusMessage.value = LocalizationService.t('openvpn_auth_cancelled');
+          return false;
+        }
+        try {
+          if (canRemember) await library!.updateOpenVpnLogin(config, credentials);
+        } catch (_) {
+          credentials.clear();
+          state.value = ConnectionState.error;
+          statusMessage.value = LocalizationService.t('openvpn_auth_storage_error');
+          return false;
+        }
+        if (_cancelRequested) {
+          credentials.clear();
+          return false;
+        }
+        success = await vpnService.connectAuthenticatedOpenVpn(config, credentials, options: options);
+      } else {
+        success = await vpnService.connect(config, options: options);
+      }
 
       if (success) {
         if (_cancelRequested) {
@@ -1203,6 +1338,7 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
 
   Future<bool> _disconnectImpl() async {
     try {
+      nativeRecovering.value = false;
       state.value = ConnectionState.disconnecting;
       statusMessage.value = LocalizationService.t('status_disconnecting');
       // Invalidate in-flight exit-IP lookups. _fetchConnectedIP captures this
@@ -1221,6 +1357,9 @@ class ConnectionController extends GetxController with WidgetsBindingObserver {
       final success = await vpnService.disconnect();
 
       if (success) {
+        nativeTunnelHeld.value = false;
+        nativeCleanupPending.value = false;
+        _clearRecoveryState();
         state.value = ConnectionState.idle;
         statusMessage.value = LocalizationService.t('status_disconnected');
         selectedConfig.value = null;

@@ -8,6 +8,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
 import '../models/config.dart';
+import '../models/openvpn_profile.dart';
+import 'openvpn_credentials.dart';
 import '../models/vpn_session_options.dart';
 import 'xray_config.dart';
 import 'singbox_config.dart';
@@ -201,7 +203,20 @@ class VPNService {
   /// [options] carries the split tunneling, DNS and kill switch decisions. They
   /// are builder-time inputs, so they must be supplied here rather than applied
   /// afterwards — `Builder.establish()` freezes them into the tunnel.
-  Future<bool> connect(Config config, {VpnSessionOptions? options}) async {
+  Future<bool> connect(Config config, {VpnSessionOptions? options}) =>
+      _connect(config, options: options);
+
+  Future<bool> connectAuthenticatedOpenVpn(OpenVpnConfig config,
+      OpenVpnCredentials credentials, {VpnSessionOptions? options}) async {
+    try {
+      return await _connect(config, options: options, credentials: credentials);
+    } finally {
+      credentials.clear();
+    }
+  }
+
+  Future<bool> _connect(Config config, {VpnSessionOptions? options,
+      OpenVpnCredentials? credentials}) async {
     try {
       final session =
           options ?? VpnSessionOptions(dnsServers: dnsServersForConfig(config));
@@ -238,6 +253,34 @@ class VPNService {
               : 'AmneziaWG requires an enabled private native-tunnel build.';
           return false;
         }
+      }
+      String? openVpnConfig;
+      if (config is OpenVpnConfig) {
+        final availability = await getEngineInfo();
+        if (!Platform.isAndroid || !availability.openVpnAvailable ||
+            !OpenVpnProfile.admitsRuntime(config.configContent)) {
+          _status = VPNStatus.error;
+          _lastError = 'OpenVPN requires a private Android candidate, a self-contained profile with exact verify-x509-name rule.';
+          return false;
+        }
+        final profile = OpenVpnProfile.parse(config.configContent);
+        final interactive = profile?.directives.contains('auth-user-pass') == true;
+        final hasCert = profile?.inlineBlocks.contains('cert') == true;
+        final hasKey = profile?.inlineBlocks.contains('key') == true;
+        if (profile == null || !profile.inlineBlocks.contains('ca') ||
+            hasCert != hasKey || (!interactive && !hasCert)) {
+          _status = VPNStatus.error;
+          _lastError = 'OpenVPN requires an inline CA and either a certificate/key pair or interactive authentication.';
+          return false;
+        }
+        final encryptedKey = OpenVpnProfile.needsKeyPassword(config.configContent);
+        if ((interactive || encryptedKey) &&
+            credentials?.validFor(interactive: interactive, encryptedKey: encryptedKey) != true) {
+          _status = VPNStatus.error;
+          _lastError = 'OpenVPN requires authentication material. Connect directly to enter credentials.';
+          return false;
+        }
+        openVpnConfig = config.configContent;
       }
       String? mihomoJson;
       if (config is MihomoConfig) {
@@ -320,7 +363,7 @@ class VPNService {
       // config document built here. A protocol that produces neither is one
       // this build cannot dial - say so instead of handing the native layer a
       // connect request it will serve from a stale config file.
-      if (nativeTunnelConfig == null && xrayJson == null && singboxJson == null && mihomoJson == null) {
+      if (nativeTunnelConfig == null && openVpnConfig == null && xrayJson == null && singboxJson == null && mihomoJson == null) {
         _status = VPNStatus.error;
         _lastError = 'This build cannot dial "${config.protocol}" configs. '
             'Use a VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC or AnyTLS '
@@ -343,6 +386,14 @@ class VPNService {
         if (singboxJson != null) 'singboxConfig': singboxJson,
         if (libboxJson != null) 'libboxConfig': libboxJson,
         if (mihomoJson != null) 'mihomoConfig': mihomoJson,
+        if (openVpnConfig != null) 'openVpnConfig': openVpnConfig,
+        if (openVpnConfig != null && session.routeDnsThroughProxy)
+          'openVpnCustomDns': session.dnsServers,
+        if (openVpnConfig != null && credentials != null) ...{
+          'openVpnUsername': credentials.username,
+          'openVpnPassword': credentials.password,
+          'openVpnKeyPassword': credentials.keyPassword,
+        },
         if (nativeTunnelConfig != null) 'nativeTunnelConfig': nativeTunnelConfig,
       });
 
@@ -362,12 +413,12 @@ class VPNService {
       // The native side reports the real reason (missing engine, revoked
       // consent, establish() failure) instead of a generic error.
       _status = VPNStatus.error;
-      _lastError = e.message ?? e.code;
+      _lastError = config is OpenVpnConfig ? 'OpenVPN connection failed.' : e.message ?? e.code;
       _log.e('Platform error connecting');
       return false;
     } catch (e) {
       _status = VPNStatus.error;
-      _lastError = e.toString();
+      _lastError = config is OpenVpnConfig ? 'OpenVPN connection failed.' : e.toString();
       _log.e('Error connecting');
       return false;
     }
@@ -585,6 +636,7 @@ class VPNService {
         _connectedConfigHash = null;
         _log.i('VPN status changed: disconnected');
         break;
+      case 'reconnecting':
       case 'connecting':
         _status = VPNStatus.connecting;
         _log.i('VPN status changed: connecting');
@@ -597,10 +649,11 @@ class VPNService {
         // The kill switch held the tunnel open after the engine died. Traffic
         // is being dropped on purpose; this is not a clean disconnect.
         _status = VPNStatus.error;
-        _lastError = 'The proxy stopped, so traffic is being blocked. '
-            'Reconnect to restore access.';
+        _lastError = 'The VPN interface is retained after failure. '
+            'System lockdown is needed for full protection.';
         _log.w('VPN status changed: blocked (kill switch holding the tunnel)');
         break;
+      case 'cleanup_pending':
       case 'error':
         // The engine died with the kill switch OFF and the tunnel was torn
         // down. This used to fall into default and be ignored, leaving the
@@ -644,6 +697,7 @@ class EngineAvailability {
   final bool singboxAvailable;
   final String? singboxVersion;
   final bool mihomoAvailable;
+  final bool openVpnAvailable;
   final bool nativeWireguardAvailable;
   final bool nativeAmneziawgAvailable;
   final List<String> singboxProtocols;
@@ -669,6 +723,7 @@ class EngineAvailability {
     required this.singboxAvailable,
     this.singboxVersion,
     this.mihomoAvailable = false,
+    this.openVpnAvailable = false,
     this.nativeWireguardAvailable = false,
     this.nativeAmneziawgAvailable = false,
     required this.singboxProtocols,
@@ -687,6 +742,7 @@ class EngineAvailability {
         xrayProtocols = const [],
         singboxAvailable = false,
         mihomoAvailable = false,
+        openVpnAvailable = false,
         nativeWireguardAvailable = false,
         nativeAmneziawgAvailable = false,
         singboxVersion = null,
@@ -709,6 +765,7 @@ class EngineAvailability {
       singboxAvailable: map['singboxAvailable'] == true,
       singboxVersion: map['singboxVersion'] as String?,
       mihomoAvailable: map['mihomoAvailable'] == true,
+      openVpnAvailable: map['openVpnAvailable'] == true,
       nativeWireguardAvailable: map['nativeWireguardAvailable'] == true,
       nativeAmneziawgAvailable: map['nativeAmneziawgAvailable'] == true,
       singboxProtocols: strings('singboxProtocols'),
@@ -723,6 +780,7 @@ class EngineAvailability {
         if (xrayAvailable) ...xrayProtocols,
         if (singboxAvailable) ...singboxProtocols,
         if (mihomoAvailable) 'mihomo',
+        if (openVpnAvailable) 'openvpn',
         if (nativeWireguardAvailable) 'wireguard',
         if (nativeAmneziawgAvailable) 'amneziawg',
       ];
@@ -742,6 +800,7 @@ class EngineAvailability {
     }
     final bundled = <String>[
       if (mihomoAvailable) 'Mihomo (experimental)',
+      if (openVpnAvailable) 'OpenVPN (experimental)',
       if (nativeWireguardAvailable) 'WireGuard native (experimental)',
       if (nativeAmneziawgAvailable) 'AmneziaWG native (experimental)',
       if (xrayAvailable) 'Xray ${xrayVersion ?? ""}'.trim(),

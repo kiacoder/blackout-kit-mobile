@@ -1,8 +1,8 @@
 name: blackout_kit_mobile
-description: Trustworthy VPN alternative for Iranian users. Config-based, open-source, no backend exposure.
+description: Open-source configuration-based Android VPN and proxy client; experimental iOS integration.
 publish_to: none
 
-version: 1.19.4+2064
+version: 1.20.0+2065
 
 environment:
   sdk: '>=3.5.0 <4.0.0'

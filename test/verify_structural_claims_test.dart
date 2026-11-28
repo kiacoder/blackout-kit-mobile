@@ -230,7 +230,10 @@ void main() {
     test('engine death holds the TUN only for an active kill-switch request', () {
       final svc = source(
           'android/app/src/main/kotlin/com/blackoutkit/vpn/BlackoutVpnService.kt');
-      expect(svc.contains('if (holdTunnelOnFailure && tun != null)'), isTrue);
+      expect(
+          svc.contains(
+              'if (holdTunnelOnFailure && (tun != null || openVpnCallbacks?.hasTunnel == true))'),
+          isTrue);
       expect(
           RegExp(r'getSharedPreferences\(PREFS, MODE_PRIVATE\)\.edit\s*\{\s*putBoolean\(KEY_HELD_BLOCKING, true\)\s*\}')
               .hasMatch(svc),

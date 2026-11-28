@@ -6,7 +6,7 @@ umask 077
 [[ "$(cat /proc/sys/net/ipv4/ip_forward)" == 0 ]] || { echo 'Refusing forwarding-enabled server'; exit 2; }
 mode="${1:-cert}"
 transport="${2:-tcp}"
-case "$mode" in cert|encrypted-login|login-only|hold) ;; *) exit 2 ;; esac
+case "$mode" in cert|encrypted-login|login-only|hold|tls-auth|tls-crypt|tls-crypt-v2|tls13) ;; *) exit 2 ;; esac
 case "$transport" in tcp|udp) ;; *) exit 2 ;; esac
 work="$(mktemp -d)"
 server_pid=
@@ -37,6 +37,22 @@ fi
 if [[ "$mode" == login-only ]]; then
   extra+=(--verify-client-cert none --username-as-common-name)
 fi
+case "$mode" in
+  tls-auth)
+    openvpn --genkey secret control.key
+    extra+=(--tls-auth control.key 0)
+    ;;
+  tls-crypt)
+    openvpn --genkey secret control.key
+    extra+=(--tls-crypt control.key)
+    ;;
+  tls-crypt-v2)
+    openvpn --genkey tls-crypt-v2-server control-v2-server.key
+    openvpn --tls-crypt-v2 control-v2-server.key --genkey tls-crypt-v2-client control.key
+    extra+=(--tls-crypt-v2 control-v2-server.key)
+    ;;
+  tls13) extra+=(--tls-version-min 1.3) ;;
+esac
 server_proto=udp
 client_proto=udp
 if [[ "$transport" == tcp ]]; then server_proto=tcp-server; client_proto=tcp-client; fi
@@ -124,6 +140,12 @@ kill -0 "$echo_pid"
     printf '</key>\n'
   fi
   if [[ "$mode" == encrypted-login || "$mode" == login-only || "$mode" == hold ]]; then printf 'auth-user-pass\n'; fi
+  case "$mode" in
+    tls-auth) printf 'key-direction 1\n<tls-auth>\n'; cat control.key; printf '</tls-auth>\n' ;;
+    tls-crypt) printf '<tls-crypt>\n'; cat control.key; printf '</tls-crypt>\n' ;;
+    tls-crypt-v2) printf '<tls-crypt-v2>\n'; cat control.key; printf '</tls-crypt-v2>\n' ;;
+    tls13) printf 'tls-version-min 1.3\n' ;;
+  esac
 } > /fixture/profile.tmp
 mv /fixture/profile.tmp /fixture/profile.ovpn
 echo 'SYNTHETIC_ANDROID_FIXTURE_READY'

@@ -90,6 +90,8 @@ android {
                 (project.findProperty("enableOpenVpnCandidate") == "true").toString()
         // Opt-in development adapter, NOT a shipped/verified engine. No binary
         // is downloaded at runtime. Supply reviewed GPL-compliant artifacts.
+        buildConfigField "boolean", "ENABLE_MIHOMO_DIRECT_TUN",
+                (project.findProperty("enableMihomoDirectTun") == "true").toString()
         buildConfigField "boolean", "ENABLE_EXPERIMENTAL_MIHOMO",
                 (project.findProperty("enableMihomo") == "true").toString()
         // Private integration only: disabled until Android acceptance tests pass.
@@ -151,6 +153,10 @@ android {
         }
         sourceSets.debug.jniLibs.srcDir nativeDir
     }
+    if (project.findProperty("enableMihomoDirectTun") == "true" &&
+            project.findProperty("enableMihomoEmulator") != "true") {
+        throw new GradleException("Mihomo direct TUN is a disposable emulator experiment only")
+    }
     def mihomoEmulator = project.findProperty("enableMihomoEmulator") == "true"
     if (mihomoEmulator && (project.findProperty("enableMihomo") != "true" ||
             project.findProperty("enableOpenVpnCandidate") == "true" ||
@@ -162,7 +168,9 @@ android {
         throw new GradleException("Mihomo emulator requires isolated x86-64 debug tasks")
     }
     if (project.findProperty("enableMihomo") == "true") {
-        def mihomoDir = rootProject.file(mihomoEmulator ? "../.cache/mihomo-emulator-jni" : "../.cache/mihomo-jni")
+        def mihomoDir = rootProject.file(project.findProperty("enableMihomoDirectTun") == "true" ?
+                "../.cache/mihomo-direct-emulator-jni" :
+                (mihomoEmulator ? "../.cache/mihomo-emulator-jni" : "../.cache/mihomo-jni"))
         (mihomoEmulator ? ["x86_64"] : ["arm64-v8a", "armeabi-v7a"]).each { abi ->
             (mihomoEmulator ? ["libmihomo.so", "libtun2socks.so"] : ["libmihomo.so"]).each { lib ->
                 if (!new File(mihomoDir, "${abi}/${lib}").isFile()) {

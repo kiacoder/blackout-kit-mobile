@@ -59,6 +59,7 @@ internal object OpenVpnCandidateProfile {
             "explicit-exit-notify",
             "reneg-sec",
         )
+    private val staticKeys = setOf("tls-auth", "tls-crypt", "tls-crypt-v2")
     private val tag = Regex("^<(/?)([a-z0-9-]+)>$")
     private val safe = Regex("[A-Za-z0-9_:.+/=,@% -]+")
     private val blockText = Regex("[A-Za-z0-9+/=:, -]+")
@@ -94,7 +95,7 @@ internal object OpenVpnCandidateProfile {
                 if (match != null) {
                     require(match.groupValues[1] == "/" && match.groupValues[2] == block && hasContent)
                     block = null
-                } else {
+                } else if (!(block in staticKeys && line.startsWith("#"))) {
                     require(blockText.matches(line))
                     hasContent = true
                 }

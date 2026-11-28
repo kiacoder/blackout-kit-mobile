@@ -1,7 +1,7 @@
 # Disposable emulator only. The upstream fixture never connects to external hosts.
 [CmdletBinding()]
 param([Parameter(Mandatory=$true)][ValidatePattern('^emulator-[0-9]+$')][string]$Serial,
-      [switch]$DisposableEmulator)
+      [switch]$DisposableEmulator, [switch]$DirectTun)
 $ErrorActionPreference = 'Stop'
 if (!$DisposableEmulator) { throw 'Explicit disposable emulator confirmation required' }
 $root = Split-Path -Parent $PSScriptRoot
@@ -44,9 +44,10 @@ try {
         Start-Sleep -Milliseconds 500
     }
     if (!$ready) { Receive-Job $job; throw 'Engine readiness failed' }
-    $result = & $adb -s $Serial shell am instrument -w -e mode mihomo-probe "$probe.test/com.blackoutkit.vpn.OpenVpnCandidateAcceptance"
+    $mode = if ($DirectTun) { 'mihomo-direct-probe' } else { 'mihomo-probe' }
+    $result = & $adb -s $Serial shell am instrument -w -e mode $mode "$probe.test/com.blackoutkit.vpn.OpenVpnCandidateAcceptance"
     $result
-    if (($result -join "`n") -notmatch 'MIHOMO_ANDROID_PROBE_PASS') { throw 'Probe failed' }
+    if (($result -join "`n") -notmatch 'MIHOMO_ANDROID_PROBE_PASS') { & docker logs $name; throw 'Probe failed' }
     & $adb -s $Serial shell run-as $engine touch files/mihomo-fixture-stop
     if ($LASTEXITCODE -ne 0) { throw 'Stop request failed' }
     $null = Wait-Job $job -Timeout 25

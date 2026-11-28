@@ -173,7 +173,7 @@ int main(int argc,char** argv) {
     std::string mode=argv[2];
     bool auth=mode=="login" || mode=="bad-login" || mode=="login-only";
     bool key=mode=="encrypted" || mode=="bad-key";
-    bool reject=mode=="bad-login" || mode=="bad-key" || mode=="bad-ca" || mode=="bad-name" || mode=="missing-name" || mode=="missing-dns" || mode=="bypass-dns" || mode=="partial-v6";
+    bool reject=mode=="tls13-no-downgrade" || mode=="bad-login" || mode=="bad-key" || mode=="bad-ca" || mode=="bad-name" || mode=="missing-name" || mode=="missing-dns" || mode=="bypass-dns" || mode=="partial-v6";
     Lab lab;
     openvpn::Stop stop;
     std::atomic<bool> cancelled{false}, ended{false};
@@ -187,7 +187,7 @@ int main(int argc,char** argv) {
         } catch (...) { result.store(98); }
         ended.store(true);
     });
-    auto deadline=std::chrono::steady_clock::now()+18s;
+    auto deadline=std::chrono::steady_clock::now()+(mode=="tls13-no-downgrade"?36s:18s);
     while(!ended.load() && !lab.online.load() && std::chrono::steady_clock::now()<deadline)
         std::this_thread::sleep_for(20ms);
     const bool udp_data=!reject && lab.online.load() && exchange(lab);

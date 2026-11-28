@@ -42,9 +42,9 @@ public final class OpenVpnCandidateAcceptance extends Instrumentation {
         Bundle result = new Bundle();
         try {
             require("com.blackoutkit.vpn.openvpntest".equals(getTargetContext().getPackageName()));
-            if ("mihomo-probe".equals(mode)) {
+            if ("mihomo-probe".equals(mode) || "mihomo-direct-probe".equals(mode)) {
                 phase = "mihomo-probe";
-                MihomoEmulatorAcceptance.probe(getTargetContext());
+                MihomoEmulatorAcceptance.probe(getTargetContext(), "mihomo-direct-probe".equals(mode));
                 result.putString("stream", "\nMIHOMO_ANDROID_PROBE_PASS\n");
                 finish(Activity.RESULT_OK, result);
                 return;

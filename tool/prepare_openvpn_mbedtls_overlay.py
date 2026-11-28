@@ -40,6 +40,17 @@ def prepare(source: Path, output: Path) -> Path:
         raise ValueError("Unexpected TLS header layout")
     target = output / RELATIVE
     target.parent.mkdir(parents=True, exist_ok=True)
+    # The pinned core already configures TLS 1.3 for Mbed TLS 3.x but
+    # its option parser still advertises a maximum of TLS 1.2. Only
+    # admit TLS 1.3 when the actual TLS library enables it.
+    version_anchor = "#if defined(MBEDTLS_SSL_MAJOR_VERSION_3) && defined(MBEDTLS_SSL_MINOR_VERSION_3)\n                const TLSVersion::Type maxver = TLSVersion::Type::V1_2;"
+    if header.count(version_anchor) != 1:
+        raise ValueError("Unexpected TLS version parser layout")
+    header = header.replace(version_anchor,
+        "#if defined(MBEDTLS_SSL_PROTO_TLS1_3) && MBEDTLS_VERSION_NUMBER > 0x03000000\n"
+        "                const TLSVersion::Type maxver = TLSVersion::Type::V1_3;\n"
+        "#elif defined(MBEDTLS_SSL_MAJOR_VERSION_3) && defined(MBEDTLS_SSL_MINOR_VERSION_3)\n"
+        "                const TLSVersion::Type maxver = TLSVersion::Type::V1_2;", 1)
     target.write_bytes(header.replace(ANCHOR, INSERT + ANCHOR, 1).encode("utf-8"))
     # Android defaults to route exclusion emulation, bypassing the adapter's
     # reroute_gw callback even for ordinary full-tunnel pushes. Reject explicit

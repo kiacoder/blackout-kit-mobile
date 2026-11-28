@@ -697,8 +697,16 @@ class BlackoutVpnService : VpnService() {
                 Builder()
                     .setSession(displayName)
                     .setMtu(VPN_MTU)
-                    .addAddress(VPN_ADDRESS_V4, VPN_PREFIX_V4)
-                    .addRoute("0.0.0.0", 0)
+                    .addAddress(
+                        if (request.protocol == "mihomo" &&
+                            BuildConfig.ENABLE_MIHOMO_DIRECT_TUN
+                        ) {
+                            "198.18.0.1"
+                        } else {
+                            VPN_ADDRESS_V4
+                        },
+                        VPN_PREFIX_V4,
+                    ).addRoute("0.0.0.0", 0)
                     // IPv6 blackhole (kill switch for v6): route ::/0 into the TUN
                     // WITHOUT giving the interface an IPv6 address. v6 packets
                     // enter the tunnel, find no v6 netstack on the other side, and

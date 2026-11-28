@@ -114,7 +114,7 @@ public final class MihomoEmulatorAcceptance extends Instrumentation {
         }
     }
 
-    static void probe(Context context) throws Exception {
+    static void probe(Context context, boolean directProbe) throws Exception {
         require(PROBE_PACKAGE.equals(context.getPackageName()));
         ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
         long until = SystemClock.elapsedRealtime() + 8000;
@@ -131,25 +131,38 @@ public final class MihomoEmulatorAcceptance extends Instrumentation {
             SystemClock.sleep(100);
         }
         require(routed);
-        // A different app UID must not negotiate an unauthenticated TCP session.
-        try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress("127.0.0.1", 10808), 3000);
-            socket.setSoTimeout(3000);
-            socket.getOutputStream().write(new byte[] {5,1,0});
-            require(socket.getInputStream().read() == 5);
-            // The pinned server requests password auth even if not offered.
-            // A strict RFC rejection (255) or challenge (2) is safe only
-            // when incorrect credentials cannot complete authentication.
-            int method = socket.getInputStream().read();
-            require(method == 255 || method == 2);
-            if (method == 2) {
-                byte[] invalid = "invalid".getBytes(StandardCharsets.US_ASCII);
-                socket.getOutputStream().write(new byte[] {1,7});
-                socket.getOutputStream().write(invalid);
-                socket.getOutputStream().write(7);
-                socket.getOutputStream().write(invalid);
-                require(socket.getInputStream().read() == 1);
-                require(socket.getInputStream().read() != 0);
+        // In direct mode there must be no TCP listener at the old SOCKS port.
+        // The probe APK uses the OpenVPN BuildConfig, so mode is passed in the
+        // instrumentation arguments rather than inferred from its build flag.
+        if (directProbe) {
+            boolean refused = false;
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress("127.0.0.1", 10808), 1500);
+            } catch (java.io.IOException unavailable) {
+                refused = true;
+            }
+            require(refused);
+        } else {
+            // A different app UID must not negotiate an unauthenticated TCP session.
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress("127.0.0.1", 10808), 3000);
+                socket.setSoTimeout(3000);
+                socket.getOutputStream().write(new byte[] {5,1,0});
+                require(socket.getInputStream().read() == 5);
+                // The pinned server requests password auth even if not offered.
+                // A strict RFC rejection (255) or challenge (2) is safe only
+                // when incorrect credentials cannot complete authentication.
+                int method = socket.getInputStream().read();
+                require(method == 255 || method == 2);
+                if (method == 2) {
+                    byte[] invalid = "invalid".getBytes(StandardCharsets.US_ASCII);
+                    socket.getOutputStream().write(new byte[] {1,7});
+                    socket.getOutputStream().write(invalid);
+                    socket.getOutputStream().write(7);
+                    socket.getOutputStream().write(invalid);
+                    require(socket.getInputStream().read() == 1);
+                    require(socket.getInputStream().read() != 0);
+                }
             }
         }
         byte[] payload = "mihomo-android-fixture-echo".getBytes(StandardCharsets.US_ASCII);

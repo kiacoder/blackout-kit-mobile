@@ -167,7 +167,9 @@ class OpenVpnProfile {
         if (tag != null) {
           if (tag[1] != '/' || tag[2] != block || !hasContent) return false;
           block = null;
-        } else {
+        } else if (!({'tls-auth', 'tls-crypt', 'tls-crypt-v2'}
+                .contains(block) &&
+            line.startsWith('#'))) {
           if (!blockText.hasMatch(line)) return false;
           hasContent = true;
         }

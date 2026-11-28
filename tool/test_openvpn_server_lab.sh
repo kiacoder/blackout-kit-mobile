@@ -25,6 +25,9 @@ for role in server client; do
   printf 'basicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=%sAuth\n' "$role" > "$role.ext"
   openssl x509 -req -in "$role.csr" -CA ca.pem -CAkey ca.key -CAcreateserial -out "$role.pem" -days 1 -extfile "$role.ext" >/dev/null 2>&1
 done
+openvpn --genkey secret control.key
+openvpn --genkey tls-crypt-v2-server control-v2-server.key
+openvpn --tls-crypt-v2 control-v2-server.key --genkey tls-crypt-v2-client control-v2-client.key
 openssl pkcs8 -topk8 -in client.key -out encrypted.key -v2 aes-256-cbc -passout pass:fixture-key-password
 cat > verify-login <<'AUTH'
 #!/bin/sh
@@ -67,6 +70,12 @@ start_server() {
     extra+=(--script-security 2 --auth-user-pass-verify "$work/verify-login" via-file)
   fi
   if [[ "$auth" == login-only ]]; then extra+=(--verify-client-cert none --username-as-common-name); fi
+  case "$mode" in
+    tls-auth) extra+=(--tls-auth control.key 0) ;;
+    tls-crypt) extra+=(--tls-crypt control.key) ;;
+    tls-crypt-v2) extra+=(--tls-crypt-v2 control-v2-server.key) ;;
+  esac
+  if [[ "$mode" == tls13-no-downgrade ]]; then extra+=(--tls-version-max 1.2); fi
   local redirect='redirect-gateway def1'
   if [[ "$mode" == bypass-dns ]]; then redirect+=' bypass-dns'; fi
   if [[ "$mode" == partial-v6 ]]; then
@@ -112,6 +121,12 @@ profile() {
       printf '</key>\n'
     fi
     if [[ "$mode" == login || "$mode" == bad-login || "$mode" == login-only ]]; then printf 'auth-user-pass\n'; fi
+    case "$mode" in
+      tls-auth) printf 'key-direction 1\n<tls-auth>\n'; sed -n '/^-----BEGIN /,/^-----END /p' control.key; printf '</tls-auth>\n' ;;
+      tls-crypt) printf '<tls-crypt>\n'; sed -n '/^-----BEGIN /,/^-----END /p' control.key; printf '</tls-crypt>\n' ;;
+      tls-crypt-v2) printf '<tls-crypt-v2>\n'; sed -n '/^-----BEGIN /,/^-----END /p' control-v2-client.key; printf '</tls-crypt-v2>\n' ;;
+      tls13|tls13-no-downgrade) printf 'tls-version-min 1.3\n' ;;
+    esac
   } > profile.ovpn
 }
 case_run() {
@@ -127,6 +142,15 @@ case_run() {
   fi
   stop_server
 }
+case_run udp udp cert tls-auth
+case_run udp udp cert tls-crypt
+case_run udp udp cert tls-crypt-v2
+case_run udp udp cert tls13
+case_run udp udp cert tls13-no-downgrade
+if [[ "${3:-}" == advanced-only ]]; then
+  echo 'PASS advanced OpenVPN control-channel profiles'
+  exit 0
+fi
 case_run udp udp cert cert
 case_run tcp-server tcp-client cert cert
 case_run udp udp cert encrypted

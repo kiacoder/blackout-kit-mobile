@@ -11,6 +11,15 @@ class OpenVpnCandidateProfileTest {
             "<ca>\nfixture\n</ca>\n<cert>\nfixture\n</cert>\n<key>\nfixture\n</key>\n"
 
     @Test
+    fun allowsGeneratedStaticKeyCommentsWithoutCountingThemAsKeyMaterial() {
+        for (block in listOf("tls-auth", "tls-crypt", "tls-crypt-v2")) {
+            assertTrue(OpenVpnCandidateProfile.admits(profile + "<$block>\n# OpenVPN static key\nfixture\n</$block>"))
+            assertFalse(OpenVpnCandidateProfile.admits(profile + "<$block>\n# comment only\n</$block>"))
+        }
+        assertFalse(OpenVpnCandidateProfile.admits(profile.replace("<ca>\nfixture", "<ca>\n# comment\nfixture")))
+    }
+
+    @Test
     fun admitsSelfContainedCertificateProfile() {
         assertTrue(OpenVpnCandidateProfile.admits(profile))
         assertTrue(OpenVpnCandidateProfile.admits(profile.replace("\n", "\r\n")))

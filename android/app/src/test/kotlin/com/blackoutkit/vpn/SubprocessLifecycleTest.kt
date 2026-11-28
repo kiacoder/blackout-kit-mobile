@@ -12,6 +12,26 @@ import java.util.concurrent.TimeUnit
 
 class SubprocessLifecycleTest {
     @Test
+    fun directReadinessRequiresExactMarkerAndLiveChild() {
+        val folder =
+            java.nio.file.Files
+                .createTempDirectory("direct-ready")
+                .toFile()
+                .canonicalFile
+        try {
+            val marker = java.io.File(folder, "session.tun-ready")
+            assertEquals(false, MihomoDirectReadiness.await(marker, 70) { true })
+            marker.writeText("wrong")
+            assertEquals(false, MihomoDirectReadiness.await(marker, 70) { true })
+            marker.writeText("ready\n")
+            assertEquals(false, MihomoDirectReadiness.await(marker, 70) { false })
+            assertEquals(true, MihomoDirectReadiness.await(marker, 70) { true })
+        } finally {
+            folder.deleteRecursively()
+        }
+    }
+
+    @Test
     fun startupFailsWhenChildExitsImmediately() {
         val exited = FakeProcess(alive = false, code = 17)
         val lifecycle = SubprocessLifecycle(isAlive = { it.isAlive })

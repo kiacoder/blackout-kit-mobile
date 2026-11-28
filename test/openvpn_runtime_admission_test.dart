@@ -16,6 +16,19 @@ void main() {
         isTrue);
   });
 
+  test('static key comments do not count as key material', () {
+    for (final block in ['tls-auth', 'tls-crypt', 'tls-crypt-v2']) {
+      expect(
+          OpenVpnProfile.admitsRuntime(
+              '${base}auth-user-pass\n<$block>\n# OpenVPN static key\nfixture\n</$block>'),
+          isTrue);
+      expect(
+          OpenVpnProfile.admitsRuntime(
+              '${base}auth-user-pass\n<$block>\n# comment only\n</$block>'),
+          isFalse);
+    }
+  });
+
   test('import remains broader than runtime admission', () {
     for (final directive in [
       'up /tmp/test',

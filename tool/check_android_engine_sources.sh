@@ -42,7 +42,7 @@ PY
 cat > .cache/android-api-check/Generated.kt <<'KOTLIN'
 package com.blackoutkit.vpn
 // Compile-only substitutes for AGP-generated fields and a class literal.
-object BuildConfig { const val ENABLE_EXPERIMENTAL_OPENVPN = false; const val ENABLE_EXPERIMENTAL_MIHOMO = false; const val ENABLE_EXPERIMENTAL_NATIVE_TUNNELS = false }
+object BuildConfig { const val ENABLE_EXPERIMENTAL_OPENVPN = false; const val ENABLE_EXPERIMENTAL_MIHOMO = false; const val ENABLE_MIHOMO_DIRECT_TUN = false; const val ENABLE_EXPERIMENTAL_NATIVE_TUNNELS = false }
 object R { object drawable { const val ic_vpn_notification = 1 } }
 class MainActivity : android.app.Activity()
 KOTLIN

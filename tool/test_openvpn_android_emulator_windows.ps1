@@ -4,7 +4,7 @@
 param(
     [Parameter(Mandatory=$true)][ValidatePattern('^emulator-[0-9]+$')][string]$Serial,
     [switch]$DisposableEmulator,
-    [ValidateSet("cert:tcp","encrypted-login:udp","login-only:tcp","hold:tcp")][string[]]$Cases = @("cert:tcp","encrypted-login:udp","login-only:tcp","hold:tcp")
+    [ValidateSet("cert:tcp","encrypted-login:udp","login-only:tcp","hold:tcp","tls-auth:udp","tls-crypt:udp","tls-crypt-v2:udp","tls13:tcp")][string[]]$Cases = @("cert:tcp","encrypted-login:udp","login-only:tcp","hold:tcp")
 )
 $ErrorActionPreference = 'Stop'
 if (!$DisposableEmulator) { throw 'Explicit disposable-emulator confirmation required.' }

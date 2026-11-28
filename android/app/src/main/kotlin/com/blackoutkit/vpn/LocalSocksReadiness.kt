@@ -130,3 +130,34 @@ internal class MihomoLocalAuth private constructor(
         }
     }
 }
+
+/** Readiness requires a fresh private native marker and a still-owned live child. */
+internal object MihomoDirectReadiness {
+    private const val POLL_MS = 50L
+    private const val MARKER = "ready\n"
+
+    fun await(
+        file: java.io.File,
+        timeoutMs: Long,
+        alive: () -> Boolean,
+    ): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (System.nanoTime() < deadline && alive()) {
+            if (isReady(file)) return alive()
+            Thread.sleep(POLL_MS)
+        }
+        return false
+    }
+
+    private fun isReady(file: java.io.File): Boolean =
+        try {
+            isPrivateEnginePath(file) &&
+                file.isFile &&
+                file.length() == MARKER.length.toLong() &&
+                file.readText() == MARKER
+        } catch (_: java.io.IOException) {
+            false
+        } catch (_: SecurityException) {
+            false
+        }
+}

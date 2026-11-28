@@ -14,6 +14,30 @@ class LegacyEngineConfigsTest {
     val folder = TemporaryFolder()
 
     @Test
+    fun directCleanupDeletesOnlyGeneratedSessionNames() {
+        val direct = folder.newFolder("direct").canonicalFile
+        val config = direct.resolve("session-123.json").apply { writeText("fixture") }
+        val marker = direct.resolve("session-123.json.tun-ready").apply { writeText("ready") }
+        val cache = direct.resolve("cache.db").apply { writeText("fixture") }
+        val unrelated = direct.resolve("session-other.json").apply { writeText("fixture") }
+        val other = folder.newFile("session-123.json")
+        removeDirectMihomoSessions(direct)
+        assertFalse(config.exists())
+        assertFalse(marker.exists())
+        assertTrue(cache.exists())
+        assertTrue(unrelated.exists())
+        assertTrue(other.exists())
+    }
+
+    @Test
+    fun directCleanupRefusesSubstitutedDirectory() {
+        val direct = folder.newFolder("direct").canonicalFile
+        val substituted = direct.resolve("session-123.json").apply { mkdir() }
+        assertTrue(runCatching { removeDirectMihomoSessions(direct) }.isFailure)
+        assertTrue(substituted.isDirectory)
+    }
+
+    @Test
     fun deletesOnlyTheThreeRetiredFixedNames() {
         val obsolete = listOf("singbox.json", "mihomo.json", "singbox-probe.json").map { folder.newFile(it) }
         val current = folder.newFile("session-123.json")

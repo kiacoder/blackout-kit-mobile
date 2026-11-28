@@ -12,6 +12,7 @@ mkdir -p .cache/host-tests
   android/app/src/main/kotlin/com/blackoutkit/vpn/ProcessCompat.kt \
   tool/kotlin/android/os/Build.kt \
   android/app/src/main/kotlin/com/blackoutkit/vpn/SubprocessLifecycle.kt \
+  android/app/src/main/kotlin/com/blackoutkit/vpn/LegacyEngineConfigs.kt \
   android/app/src/main/kotlin/com/blackoutkit/vpn/LocalSocksReadiness.kt \
   tool/kotlin/com/blackoutkit/vpn/EngineHostTests.kt \
   -jvm-target 17 -include-runtime -d .cache/host-tests/engines.jar

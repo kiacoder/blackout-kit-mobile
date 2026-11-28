@@ -22,7 +22,13 @@ class Client(socketserver.BaseRequestHandler):
         sock = self.request
         sock.settimeout(10)
         try:
-            version, count = exact(sock, 2)
+            prefix = exact(sock, 2)
+            if prefix == b"BK":
+                if exact(sock, 6) == b"CHECK!":
+                    sock.sendall(b"BK-OUTSIDE")
+                    print("DIRECT_SENTINEL_PASS", flush=True)
+                return
+            version, count = prefix
             if version != 5 or 0 not in exact(sock, count):
                 return
             sock.sendall(b"\x05\x00")

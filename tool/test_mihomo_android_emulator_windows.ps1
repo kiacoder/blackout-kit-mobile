@@ -1,8 +1,9 @@
 # Disposable emulator only. The upstream fixture never connects to external hosts.
 [CmdletBinding()]
 param([Parameter(Mandatory=$true)][ValidatePattern('^emulator-[0-9]+$')][string]$Serial,
-      [switch]$DisposableEmulator, [switch]$DirectTun)
+      [switch]$DisposableEmulator, [switch]$DirectTun, [switch]$Hold)
 $ErrorActionPreference = 'Stop'
+if ($Hold -and !$DirectTun) { throw 'Hold fixture requires direct TUN' }
 if (!$DisposableEmulator) { throw 'Explicit disposable emulator confirmation required' }
 $root = Split-Path -Parent $PSScriptRoot
 $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
@@ -30,12 +31,20 @@ try {
     & docker run --rm -d --name $name --cap-drop ALL --security-opt no-new-privileges --sysctl net.ipv4.ip_forward=0 --sysctl net.ipv6.conf.all.forwarding=0 -p 127.0.0.1:11940:11940/tcp -p 127.0.0.1:11940:11940/udp -v "${root}:/repo:ro" blackout-openvpn-server-lab:review python3 /repo/tool/mihomo_android_socks_fixture.py | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Fixture failed to start' }
     $started = $true
-    & $adb -s $Serial shell run-as $engine rm -f files/mihomo-fixture-ready files/mihomo-fixture-stop
+    & $adb -s $Serial shell run-as $engine rm -f files/mihomo-fixture-ready files/mihomo-fixture-stop files/mihomo-fixture-held
     if ($LASTEXITCODE -ne 0) { throw 'Could not reset fixture markers' }
+    $probeRunner = "$probe.test/com.blackoutkit.vpn.OpenVpnCandidateAcceptance"
+    function Assert-Sentinel([string]$mode) {
+        $result = & $adb -s $Serial shell am instrument -w -e mode $mode $probeRunner
+        $result
+        if (($result -join "`n") -notmatch 'MIHOMO_SENTINEL_PASS') { throw "Sentinel failed: $mode" }
+    }
+    if ($Hold) { Assert-Sentinel 'mihomo-sentinel-open' }
     $runner = "$engine.test/com.blackoutkit.vpn.MihomoEmulatorAcceptance"
-    $job = Start-Job -ScriptBlock { param($exe,$serial,$runner)
-        & $exe -s $serial shell am instrument -w $runner
-    } -ArgumentList $adb,$Serial,$runner
+    $serviceMode = if ($Hold) { 'hold' } else { 'normal' }
+    $job = Start-Job -ScriptBlock { param($exe,$serial,$runner,$mode)
+        & $exe -s $serial shell am instrument -w -e mode $mode $runner
+    } -ArgumentList $adb,$Serial,$runner,$serviceMode
     $ready = $false
     for ($i=0; $i -lt 85; $i++) {
         if ($job.State -ne 'Running' -and $job.State -ne 'NotStarted') { break }
@@ -48,17 +57,38 @@ try {
     $result = & $adb -s $Serial shell am instrument -w -e mode $mode "$probe.test/com.blackoutkit.vpn.OpenVpnCandidateAcceptance"
     $result
     if (($result -join "`n") -notmatch 'MIHOMO_ANDROID_PROBE_PASS') { & docker logs $name; throw 'Probe failed' }
+    if ($Hold) {
+        Assert-Sentinel 'mihomo-sentinel-blocked'
+        $child = (& $adb -s $Serial shell run-as $engine pidof libmihomo.so).Trim()
+        if ($child -notmatch '^[0-9]+$') { throw 'Expected one direct native fixture child' }
+        $exe = (& $adb -s $Serial shell run-as $engine readlink "/proc/$child/exe").Trim()
+        if ($exe -notmatch '/com\.blackoutkit\.vpn\.mihomotest-[^/]+/lib/x86_64/libmihomo\.so$') {
+            throw 'Native child identity not established'
+        }
+        & $adb -s $Serial shell run-as $engine kill -9 $child
+        if ($LASTEXITCODE -ne 0) { throw 'Fixture child failure injection failed' }
+        $held = $false
+        for ($i=0; $i -lt 30; $i++) {
+            $status = & $adb -s $Serial shell "run-as $engine sh -c 'test -f files/mihomo-fixture-held && echo HELD'"
+            if ($status -contains 'HELD') { $held = $true; break }
+            Start-Sleep -Milliseconds 500
+        }
+        if (!$held) { throw 'VPN did not retain interface after native exit' }
+        Assert-Sentinel 'mihomo-sentinel-blocked'
+    }
     & $adb -s $Serial shell run-as $engine touch files/mihomo-fixture-stop
     if ($LASTEXITCODE -ne 0) { throw 'Stop request failed' }
     $null = Wait-Job $job -Timeout 25
     $result = Receive-Job $job
     $result
     if (($result -join "`n") -notmatch 'MIHOMO_ANDROID_SERVICE_PASS') { throw 'Service cleanup failed' }
+    if ($Hold) { Assert-Sentinel 'mihomo-sentinel-open' }
     $logs = & docker logs $name
     $logs
     foreach ($marker in @('TCP_FIXTURE_PASS','UDP_FIXTURE_PASS','DNS_FIXTURE_PASS')) {
         if ($logs -notcontains $marker) { throw "Upstream did not observe $marker" }
     }
+    if ($Hold -and @($logs | Where-Object { $_ -eq 'DIRECT_SENTINEL_PASS' }).Count -ne 2) { throw 'Sentinel upstream count mismatch' }
     Write-Output 'MIHOMO_ANDROID_ACCEPTANCE_PASS'
 } finally {
     & $adb -s $Serial shell am force-stop $engine

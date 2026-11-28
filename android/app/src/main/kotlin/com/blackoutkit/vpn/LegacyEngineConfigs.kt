@@ -35,3 +35,20 @@ internal fun removeLegacyEngineConfigs(directory: File) {
         }
     }
 }
+
+/**
+ * Only the direct-Mihomo runner uses this dedicated directory. Call after
+ * stopping the owned child, never on the shared engine/probe directory.
+ * The native child has a parent-death guard; a previous app process cannot
+ * intentionally retain the TUN. Unknown files and directories are untouched.
+ */
+internal fun removeDirectMihomoSessions(directory: File) {
+    val root = privateEngineDirectory(directory)
+    val entries = root.listFiles() ?: throw IOException("Cannot inspect direct engine directory")
+    val session = Regex("session--?[0-9]+\\.json(\\.tun-ready)?")
+    for (file in entries.filter { session.matches(it.name) }) {
+        if (!isPrivateEnginePath(file) || !file.isFile || !file.delete()) {
+            throw IOException("Stale direct engine session cleanup failed")
+        }
+    }
+}

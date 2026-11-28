@@ -38,9 +38,11 @@ public final class MihomoEmulatorAcceptance extends Instrumentation {
         + "\"proxy-groups\":[{\"name\":\"selected\",\"type\":\"select\",\"proxies\":[\"fixture\"]}],"
         + "\"rules\":[\"MATCH,selected\"]}";
     private String phase = "start";
+    private boolean holdTest;
 
     @Override public void onCreate(Bundle args) {
         super.onCreate(args);
+        holdTest = args != null && "hold".equals(args.getString("mode"));
         start();
     }
 
@@ -63,8 +65,20 @@ public final class MihomoEmulatorAcceptance extends Instrumentation {
         require(VpnService.prepare(context) == null);
         File ready = new File(context.getFilesDir(), READY);
         File stop = new File(context.getFilesDir(), STOP);
+        File held = new File(context.getFilesDir(), "mihomo-fixture-held");
         ready.delete();
         stop.delete();
+        held.delete();
+        File direct = new File(context.getNoBackupFilesDir(), "direct-mihomo");
+        File stale = new File(direct, "session-123.json");
+        File staleMarker = new File(direct, "session-123.json.tun-ready");
+        if (BuildConfig.ENABLE_MIHOMO_DIRECT_TUN) {
+            require(direct.isDirectory() || direct.mkdirs());
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(stale)) {
+                out.write("synthetic-stale".getBytes(StandardCharsets.US_ASCII));
+            }
+            require(staleMarker.exists() || staleMarker.createNewFile());
+        }
         Intent start = new Intent(context, BlackoutVpnService.class);
         start.setAction(BlackoutVpnService.ACTION_CONNECT);
         start.putExtra(BlackoutVpnService.EXTRA_PROTOCOL, "mihomo");
@@ -84,19 +98,30 @@ public final class MihomoEmulatorAcceptance extends Instrumentation {
             }
             phase = "engine-ready";
             require(BlackoutVpnService.Companion.isRunning());
+            if (BuildConfig.ENABLE_MIHOMO_DIRECT_TUN) {
+                require(!stale.exists() && !staleMarker.exists());
+            }
             require(ready.createNewFile());
             phase = "probe";
             deadline = SystemClock.elapsedRealtime() + 45000;
             while (!stop.exists() && SystemClock.elapsedRealtime() < deadline) {
-                require(BlackoutVpnService.Companion.isRunning());
+                if (holdTest) {
+                    if (BlackoutVpnService.Companion.isTunnelHeld()) {
+                        require(held.exists() || held.createNewFile());
+                    }
+                } else {
+                    require(BlackoutVpnService.Companion.isRunning());
+                }
                 SystemClock.sleep(100);
             }
             require(stop.exists());
+            if (holdTest) require(held.exists());
         } finally {
             String prior = phase;
             phase = "stop";
             ready.delete();
             stop.delete();
+            held.delete();
             CountDownLatch ended = new CountDownLatch(1);
             boolean[] success = {false};
             BlackoutVpnService.Companion.setOnTeardownComplete(ok -> {
@@ -110,6 +135,10 @@ public final class MihomoEmulatorAcceptance extends Instrumentation {
             require(ended.await(15, TimeUnit.SECONDS) && success[0]);
             require(!BlackoutVpnService.Companion.isRunning());
             require(!BlackoutVpnService.Companion.isTunnelCleanupPending());
+            if (BuildConfig.ENABLE_MIHOMO_DIRECT_TUN) {
+                String[] sessions = direct.list((dir, name) -> name.matches("session--?[0-9]+\\.json(\\.tun-ready)?"));
+                require(sessions != null && sessions.length == 0);
+            }
             phase = prior;
         }
     }
@@ -196,6 +225,28 @@ public final class MihomoEmulatorAcceptance extends Instrumentation {
             require(n == query.length + 16 && data[0] == 0x12 && data[1] == 0x34);
             require(Arrays.equals(Arrays.copyOfRange(data,n-4,n),InetAddress.getByName("192.0.2.80").getAddress()));
         }
+    }
+
+    static void sentinel(Context context, boolean expected) {
+        require(PROBE_PACKAGE.equals(context.getPackageName()));
+        long until = SystemClock.elapsedRealtime() + (expected ? 8000 : 3000);
+        do {
+            boolean reachable = false;
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress("10.0.2.2", 11940), 1000);
+                socket.setSoTimeout(1000);
+                socket.getOutputStream().write("BKCHECK!".getBytes(StandardCharsets.US_ASCII));
+                byte[] reply = new byte[10];
+                new DataInputStream(socket.getInputStream()).readFully(reply);
+                reachable = Arrays.equals(reply, "BK-OUTSIDE".getBytes(StandardCharsets.US_ASCII));
+            } catch (java.io.IOException unavailable) {
+                // Expected in the retained TUN case.
+            }
+            if (expected && reachable) return;
+            require(expected || !reachable);
+            SystemClock.sleep(100);
+        } while (SystemClock.elapsedRealtime() < until);
+        require(!expected);
     }
 
     private static void require(boolean ok) {

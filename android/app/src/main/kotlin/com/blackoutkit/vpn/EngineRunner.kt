@@ -231,7 +231,8 @@ object EngineRunner {
                         auth != null -> secureMihomoConfig(json, socksPort, auth)
                         else -> json
                     }
-                val config = configOwner.stage(configDir(context), runtime)
+                val directory = if (direct) directConfigDir(context) else configDir(context)
+                val config = configOwner.stage(directory, runtime)
                 LaunchFiles(spec, engine, bridge, config, auth)
             }
         }
@@ -431,7 +432,7 @@ object EngineRunner {
                             token > 0 &&
                             nativePollChild(token) != -1
                         ) {
-                            val reason = "tun2socks exited unexpectedly (code ${nativePollChild(token)})."
+                            val reason = "Native TUN child exited unexpectedly (code ${nativePollChild(token)})."
                             if (!cancelled.get()) listener?.invoke(reason)
                             return@Thread
                         }
@@ -571,6 +572,13 @@ object EngineRunner {
         )
         return doc.toString()
     }
+
+    // start() has completed stop() before entering this path. Do not share
+    // this directory with probes or independent configuration checkers.
+    private fun directConfigDir(context: Context): File =
+        privateEngineDirectory(File(context.noBackupFilesDir, "direct-mihomo")).apply {
+            removeDirectMihomoSessions(this)
+        }
 
     /** Directory the engine reads its config from; the probe writes here too. */
     internal fun configDirectory(context: Context): File = configDir(context)

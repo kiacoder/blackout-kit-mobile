@@ -2,6 +2,8 @@ package com.blackoutkit.vpn
 
 import android.content.Context
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -140,6 +142,7 @@ object EngineRunner {
         val enginePath: File,
         val tun2socksPath: File,
         val configFile: File,
+        val auth: MihomoLocalAuth?,
     )
 
     private val launcher = LaunchCoordinator()
@@ -160,12 +163,15 @@ object EngineRunner {
         }
         var started = false
         return try {
-            val files = launcher.prepareLaunch(context, protocol, json)
+            val files = launcher.prepareLaunch(context, protocol, json, socksPort)
             if (files == null) {
                 false
             } else {
                 launcher.validateAndLaunch(context, files, tunFd, socksPort).also { started = it }
             }
+        } catch (_: org.json.JSONException) {
+            lastError = "Invalid Mihomo configuration."
+            false
         } catch (_: java.io.IOException) {
             lastError = "Engine launch failed due to an I/O error."
             false
@@ -191,6 +197,7 @@ object EngineRunner {
             context: Context,
             protocol: String,
             json: String,
+            socksPort: Int,
         ): LaunchFiles? {
             val spec = EngineCommands.forProtocol(protocol)
             if (spec == null) {
@@ -213,8 +220,10 @@ object EngineRunner {
                 Log.w(TAG, "Required engine binary missing")
                 null
             } else {
-                val config = configOwner.stage(configDir(context), json)
-                LaunchFiles(spec, engine, bridge, config)
+                val auth = if (spec == EngineCommands.MIHOMO) MihomoLocalAuth.create() else null
+                val runtime = if (auth == null) json else secureMihomoConfig(json, socksPort, auth)
+                val config = configOwner.stage(configDir(context), runtime)
+                LaunchFiles(spec, engine, bridge, config, auth)
             }
         }
 
@@ -247,7 +256,7 @@ object EngineRunner {
                         "tunnel's file descriptor cannot be handed to the engine.",
                 )
             }
-            spawnBridge(files.tun2socksPath, tunFd, socksPort)
+            spawnBridge(files.tun2socksPath, tunFd, socksPort, files.auth)
             val startupError = bridgeStartupError()
             return if (startupError != null) {
                 failLaunch(startupError)
@@ -260,6 +269,7 @@ object EngineRunner {
             tun2socksPath: File,
             tunFd: Int,
             socksPort: Int,
+            auth: MihomoLocalAuth?,
         ) {
             // ProcessBuilder cannot deliver the TUN descriptor; the launcher duplicates it.
             val engineLog = File("/dev/null")
@@ -279,7 +289,7 @@ object EngineRunner {
                         "--device",
                         "fd://$FD_SLOT",
                         "--proxy",
-                        "socks5://127.0.0.1:$socksPort",
+                        auth?.uri(socksPort) ?: "socks5://127.0.0.1:$socksPort",
                         "--mtu",
                         BlackoutVpnService.VPN_MTU.toString(),
                         "--loglevel",
@@ -321,7 +331,16 @@ object EngineRunner {
                 }
             val ready =
                 readinessPort in 1..MAX_SOCKS_PORT &&
-                    readinessProbe("127.0.0.1", readinessPort, SOCKS_READY_TIMEOUT_MS)
+                    if (files.auth == null) {
+                        readinessProbe("127.0.0.1", readinessPort, SOCKS_READY_TIMEOUT_MS)
+                    } else {
+                        LocalSocksReadiness.awaitAuthenticated(
+                            "127.0.0.1",
+                            readinessPort,
+                            SOCKS_READY_TIMEOUT_MS,
+                            files.auth,
+                        )
+                    }
             if (!ready ||
                 anyChildDied() ||
                 lifecycle.exitedProcess(listOfNotNull(engineProcess, tun2socksProcess)) != null
@@ -442,6 +461,43 @@ object EngineRunner {
             throw IllegalStateException(lastError)
         }
         configOwner.release()
+    }
+
+    // The native launch boundary owns these fields, regardless of the source
+    // profile or any caller bypassing Dart's runtime normalization.
+    private fun secureMihomoConfig(
+        json: String,
+        port: Int,
+        auth: MihomoLocalAuth,
+    ): String {
+        require(port in 1..MAX_SOCKS_PORT)
+        val doc = JSONObject(json)
+        for (key in listOf(
+            "listeners",
+            "tunnels",
+            "script",
+            "external-controller",
+            "external-controller-tls",
+            "external-controller-unix",
+            "external-controller-pipe",
+            "external-ui",
+            "external-ui-url",
+            "interface-name",
+            "routing-mark",
+            "skip-auth-prefixes",
+            "lan-allowed-ips",
+            "lan-disallowed-ips",
+        )) {
+            doc.remove(key)
+        }
+        for (key in listOf("port", "mixed-port", "redir-port", "tproxy-port")) doc.put(key, 0)
+        doc.put("socks-port", port)
+        doc.put("allow-lan", false)
+        doc.put("bind-address", "127.0.0.1")
+        doc.put("authentication", JSONArray().put(auth.entry()))
+        doc.put("tun", JSONObject().put("enable", false))
+        doc.optJSONObject("dns")?.remove("listen")
+        return doc.toString()
     }
 
     /** Directory the engine reads its config from; the probe writes here too. */

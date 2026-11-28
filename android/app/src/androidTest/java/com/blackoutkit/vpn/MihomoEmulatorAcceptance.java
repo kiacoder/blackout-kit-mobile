@@ -131,6 +131,27 @@ public final class MihomoEmulatorAcceptance extends Instrumentation {
             SystemClock.sleep(100);
         }
         require(routed);
+        // A different app UID must not negotiate an unauthenticated TCP session.
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress("127.0.0.1", 10808), 3000);
+            socket.setSoTimeout(3000);
+            socket.getOutputStream().write(new byte[] {5,1,0});
+            require(socket.getInputStream().read() == 5);
+            // The pinned server requests password auth even if not offered.
+            // A strict RFC rejection (255) or challenge (2) is safe only
+            // when incorrect credentials cannot complete authentication.
+            int method = socket.getInputStream().read();
+            require(method == 255 || method == 2);
+            if (method == 2) {
+                byte[] invalid = "invalid".getBytes(StandardCharsets.US_ASCII);
+                socket.getOutputStream().write(new byte[] {1,7});
+                socket.getOutputStream().write(invalid);
+                socket.getOutputStream().write(7);
+                socket.getOutputStream().write(invalid);
+                require(socket.getInputStream().read() == 1);
+                require(socket.getInputStream().read() != 0);
+            }
+        }
         byte[] payload = "mihomo-android-fixture-echo".getBytes(StandardCharsets.US_ASCII);
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress("192.0.2.80", 41004), 5000);

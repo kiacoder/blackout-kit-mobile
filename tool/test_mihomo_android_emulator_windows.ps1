@@ -30,6 +30,8 @@ try {
     & docker run --rm -d --name $name --cap-drop ALL --security-opt no-new-privileges --sysctl net.ipv4.ip_forward=0 --sysctl net.ipv6.conf.all.forwarding=0 -p 127.0.0.1:11940:11940/tcp -p 127.0.0.1:11940:11940/udp -v "${root}:/repo:ro" blackout-openvpn-server-lab:review python3 /repo/tool/mihomo_android_socks_fixture.py | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Fixture failed to start' }
     $started = $true
+    & $adb -s $Serial shell run-as $engine rm -f files/mihomo-fixture-ready files/mihomo-fixture-stop
+    if ($LASTEXITCODE -ne 0) { throw 'Could not reset fixture markers' }
     $runner = "$engine.test/com.blackoutkit.vpn.MihomoEmulatorAcceptance"
     $job = Start-Job -ScriptBlock { param($exe,$serial,$runner)
         & $exe -s $serial shell am instrument -w $runner

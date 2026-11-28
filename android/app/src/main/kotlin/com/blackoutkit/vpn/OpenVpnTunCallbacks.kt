@@ -213,3 +213,36 @@ internal class OpenVpnAppPolicy private constructor(
                 !ip.isLinkLocalAddress
     }
 }
+
+/** Strict IPv4 resolver and per-app policy for the experimental subprocess bridge. */
+internal object MihomoRoutePolicy {
+    private const val MAX_APPS = 100
+    private const val MAX_DNS = 16
+    private const val MAX_PACKAGE_LENGTH = 255
+
+    fun dns(values: List<String>): List<InetAddress> {
+        require(values.isNotEmpty() && values.size <= MAX_DNS)
+        return values.map { NativeTunnelConfig.numericAddress(it) }.distinct().also { addresses ->
+            require(
+                addresses.all {
+                    it is Inet4Address &&
+                        !it.isAnyLocalAddress &&
+                        !it.isLoopbackAddress &&
+                        !it.isLinkLocalAddress &&
+                        !it.isMulticastAddress
+                },
+            )
+        }
+    }
+
+    fun checkApps(
+        self: String,
+        allowed: List<String>,
+        disallowed: List<String>,
+    ) {
+        require(allowed.size <= MAX_APPS && disallowed.size <= MAX_APPS)
+        require(allowed.isEmpty() || disallowed.isEmpty())
+        require(self !in allowed)
+        require((allowed + disallowed).all { it.isNotBlank() && it.length <= MAX_PACKAGE_LENGTH })
+    }
+}

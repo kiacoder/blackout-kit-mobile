@@ -691,7 +691,6 @@ class BlackoutVpnService : VpnService() {
             ticket: VpnSessionExecutor.Ticket,
         ): Builder? {
             val displayName = request.displayName
-            val dnsServers = request.dnsServers
             val allowed = request.allowed
             val disallowed = request.disallowed
             val builder =
@@ -713,19 +712,7 @@ class BlackoutVpnService : VpnService() {
             // DNS leak prevention: every resolver the tunnel advertises is one
             // we control. The system resolver is never offered, so queries
             // cannot silently fall back to the carrier.
-            val acceptedDns = addDnsServers(builder, dnsServers)
-            // Every server was refused. Establishing anyway would give Android
-            // an interface with no DNS at all, and the system would quietly
-            // fall back to the carrier's resolver while the UI still says leak
-            // prevention is on — a silent leak is worse than a failed connect.
-            if (dnsServers.isNotEmpty() && acceptedDns == 0) {
-                lastError = "Every DNS server was rejected by Android " +
-                    "($dnsServers). Refusing to build a tunnel that would " +
-                    "silently fall back to the carrier resolver."
-                Log.e(TAG, "Android rejected all configured DNS servers")
-                ticket.publish { notifyStatus("error") }
-                return null
-            }
+            if (!configureProxyDns(builder, request, ticket)) return null
 
             // NOTE: deliberately no setBlocking(). The Xray tun inbound reads
             // the fd through Go's runtime poller, which requires the descriptor
@@ -736,9 +723,51 @@ class BlackoutVpnService : VpnService() {
                 builder.setMetered(false)
             }
 
-            configureProxyAppRouting(builder, allowed, disallowed)
+            if (request.protocol == "mihomo") {
+                configureMihomoAppRouting(builder, allowed, disallowed)
+            } else {
+                configureProxyAppRouting(builder, allowed, disallowed)
+            }
 
             return builder
+        }
+
+        private fun configureProxyDns(
+            builder: Builder,
+            request: StartRequest,
+            ticket: VpnSessionExecutor.Ticket,
+        ): Boolean {
+            val dnsServers = request.dnsServers
+            if (request.protocol == "mihomo") {
+                MihomoRoutePolicy.dns(dnsServers).forEach { builder.addDnsServer(it) }
+                return true
+            }
+            val acceptedDns = addDnsServers(builder, dnsServers)
+            val valid = dnsServers.isEmpty() || acceptedDns > 0
+            if (!valid) {
+                lastError =
+                    "Every DNS server was rejected by Android. Refusing unsafe fallback."
+                Log.e(TAG, "Android rejected all configured DNS servers")
+                ticket.publish { notifyStatus("error") }
+            }
+            return valid
+        }
+
+        private fun configureMihomoAppRouting(
+            builder: Builder,
+            allowed: List<String>,
+            disallowed: List<String>,
+        ) {
+            MihomoRoutePolicy.checkApps(packageName, allowed, disallowed)
+            try {
+                if (allowed.isNotEmpty()) {
+                    allowed.distinct().forEach { builder.addAllowedApplication(it) }
+                } else {
+                    (disallowed + packageName).distinct().forEach { builder.addDisallowedApplication(it) }
+                }
+            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                throw IllegalArgumentException("Mihomo split tunneling package missing")
+            }
         }
 
         private fun openProxyTunnel(

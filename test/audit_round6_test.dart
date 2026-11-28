@@ -112,7 +112,8 @@ void main() {
       final runner = _source(
         'android/app/src/main/kotlin/com/blackoutkit/vpn/EngineRunner.kt',
       );
-      expect(runner, contains('configOwner.stage(configDir(context), json)'));
+      expect(runner, contains('configOwner.stage(configDir(context), runtime)'));
+      expect(runner, contains('secureMihomoConfig(json, socksPort, auth)'));
       expect(runner, contains('configOwner.release()'));
     });
 

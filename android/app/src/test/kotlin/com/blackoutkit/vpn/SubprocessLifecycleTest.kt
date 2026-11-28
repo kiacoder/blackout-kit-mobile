@@ -52,6 +52,64 @@ class SubprocessLifecycleTest {
     }
 
     @Test
+    fun authenticatedReadinessRequiresRfc1929AndExactCredentials() {
+        val auth = MihomoLocalAuth.create()
+        val other = MihomoLocalAuth.create()
+        assertEquals(false, auth.password == other.password)
+        assertEquals(64, auth.password.length)
+        val server = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
+        val matched =
+            java.util.concurrent.atomic
+                .AtomicBoolean(false)
+        val thread =
+            Thread {
+                server.accept().use { socket ->
+                    val input = java.io.DataInputStream(socket.getInputStream())
+                    val greeting = ByteArray(3)
+                    input.readFully(greeting)
+                    socket.getOutputStream().write(byteArrayOf(5, 2))
+                    val packet = ByteArray(auth.packet().size)
+                    input.readFully(packet)
+                    matched.set(greeting.contentEquals(byteArrayOf(5, 1, 2)) && packet.contentEquals(auth.packet()))
+                    socket.getOutputStream().write(byteArrayOf(1, if (matched.get()) 0 else 1))
+                }
+            }.apply { start() }
+        try {
+            assertEquals(true, LocalSocksReadiness.awaitAuthenticated("127.0.0.1", server.localPort, 1000, auth))
+            assertEquals(true, matched.get())
+        } finally {
+            server.close()
+            thread.join(1000)
+        }
+    }
+
+    @Test
+    fun authenticatedReadinessRejectsNoAuthDowngrade() {
+        val server = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
+        val thread =
+            Thread {
+                server.accept().use { socket ->
+                    java.io.DataInputStream(socket.getInputStream()).readFully(ByteArray(3))
+                    socket.getOutputStream().write(byteArrayOf(5, 0))
+                }
+            }.apply { start() }
+        try {
+            assertEquals(
+                false,
+                LocalSocksReadiness.awaitAuthenticated(
+                    "127.0.0.1",
+                    server.localPort,
+                    100,
+                    MihomoLocalAuth.create(),
+                ),
+            )
+        } finally {
+            server.close()
+            thread.join(1000)
+        }
+    }
+
+    @Test
     fun localSocksReadinessRejectsUnavailableEndpoint() {
         val server = java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))
         val port = server.localPort

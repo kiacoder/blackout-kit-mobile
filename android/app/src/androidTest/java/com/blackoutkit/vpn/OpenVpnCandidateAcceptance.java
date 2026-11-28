@@ -42,6 +42,13 @@ public final class OpenVpnCandidateAcceptance extends Instrumentation {
         Bundle result = new Bundle();
         try {
             require("com.blackoutkit.vpn.openvpntest".equals(getTargetContext().getPackageName()));
+            if ("mihomo-probe".equals(mode)) {
+                phase = "mihomo-probe";
+                MihomoEmulatorAcceptance.probe(getTargetContext());
+                result.putString("stream", "\nMIHOMO_ANDROID_PROBE_PASS\n");
+                finish(Activity.RESULT_OK, result);
+                return;
+            }
             loadContract();
             if (fixture != null) trafficContract();
             result.putString("stream", "\nOPENVPN_CANDIDATE_LOAD_PASS\n"
@@ -95,20 +102,18 @@ public final class OpenVpnCandidateAcceptance extends Instrumentation {
         Intent start = new Intent(context, BlackoutVpnService.class);
         start.setAction(BlackoutVpnService.ACTION_CONNECT);
         start.putExtra(BlackoutVpnService.EXTRA_PROTOCOL, "openvpn");
-        start.putExtra(BlackoutVpnService.EXTRA_OPENVPN_CONFIG, profile);
         start.putExtra(BlackoutVpnService.EXTRA_DISPLAY_NAME, "Synthetic fixture");
         start.putExtra(BlackoutVpnService.EXTRA_HOLD_ON_ENGINE_FAILURE, true);
         // Test only the app UID, not other apps or the emulator's traffic.
         start.putStringArrayListExtra(BlackoutVpnService.EXTRA_ALLOWED_APPS,
                 new ArrayList<>(Arrays.asList(context.getPackageName())));
+        OpenVpnCredentials auth = null;
         if ("encrypted-login".equals(mode) || "login-only".equals(mode) || "hold".equals(mode)) {
             byte[] keyPassword = "encrypted-login".equals(mode)
                     ? "fixture-key-password".getBytes(StandardCharsets.UTF_8) : new byte[0];
-            OpenVpnCredentials auth = new OpenVpnCredentials(
+            auth = new OpenVpnCredentials(
                     "fixture-user".getBytes(StandardCharsets.UTF_8),
                     "fixture-password".getBytes(StandardCharsets.UTF_8), keyPassword);
-            start.putExtra(BlackoutVpnService.EXTRA_OPENVPN_AUTH_TOKEN,
-                    OpenVpnCredentialHandoff.INSTANCE.stage(auth));
         }
         boolean customDns = "encrypted-login".equals(mode);
         String expectedDns = customDns ? "10.77.0.53" : "10.77.0.1";
@@ -127,6 +132,8 @@ public final class OpenVpnCandidateAcceptance extends Instrumentation {
             require(baseline);
         }
         phase = "start";
+        String token = OpenVpnProfileHandoff.INSTANCE.stage(profile, auth);
+        start.putExtra(BlackoutVpnService.EXTRA_OPENVPN_PROFILE_TOKEN, token);
         try {
             context.startForegroundService(start);
             long deadline = SystemClock.elapsedRealtime() + 40000;
@@ -209,6 +216,7 @@ public final class OpenVpnCandidateAcceptance extends Instrumentation {
                 require(!sentinelReachable());
             }
         } finally {
+            OpenVpnProfileHandoff.INSTANCE.discard(token);
             String prior = phase;
             phase = "stop";
             CountDownLatch ended = new CountDownLatch(1);

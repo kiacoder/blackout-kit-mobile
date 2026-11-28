@@ -5,10 +5,9 @@ import android.net.VpnService
 /** Keeps native handles and secret bytes inside the candidate service lifetime. */
 internal class OpenVpnAndroidBackend(
     private val handle: Long,
-    private val profile: String,
+    private val payload: OpenVpnStartPayload,
     service: VpnService,
     current: () -> Boolean,
-    private val credentials: OpenVpnCredentials?,
     policy: OpenVpnAppPolicy,
 ) : OpenVpnSession.Backend {
     private var report: (Boolean) -> Unit = {}
@@ -16,12 +15,12 @@ internal class OpenVpnAndroidBackend(
 
     override fun run(report: (Boolean) -> Unit) {
         this.report = report
-        val bytes = profile.toByteArray(Charsets.UTF_8)
+        val credentials = payload.credentials
         try {
             OpenVpnNativeBridge.nativeRunV3(
                 handle,
                 callbacks,
-                bytes,
+                payload.profile,
                 arrayOf(
                     credentials?.username ?: ByteArray(0),
                     credentials?.password ?: ByteArray(0),
@@ -29,8 +28,7 @@ internal class OpenVpnAndroidBackend(
                 ),
             )
         } finally {
-            bytes.fill(0)
-            credentials?.clear()
+            payload.clear()
             this.report = {}
         }
     }
@@ -40,7 +38,7 @@ internal class OpenVpnAndroidBackend(
     override fun cancel() = OpenVpnNativeBridge.nativeCancel(handle)
 
     override fun release() {
-        credentials?.clear()
+        payload.clear()
         check(OpenVpnNativeBridge.nativeRelease(handle)) { "OpenVPN native ownership not released" }
     }
 }

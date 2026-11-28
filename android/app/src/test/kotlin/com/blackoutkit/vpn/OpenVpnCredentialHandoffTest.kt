@@ -8,11 +8,32 @@ import org.junit.Test
 
 class OpenVpnCredentialHandoffTest {
     @Test
+    fun certificateOnlyPayloadAndBoundedSlot() {
+        val token = OpenVpnProfileHandoff.stage("fixture", null)
+        try {
+            org.junit.Assert.assertThrows(IllegalStateException::class.java) {
+                OpenVpnProfileHandoff.stage("other", null)
+            }
+            val payload = checkNotNull(OpenVpnProfileHandoff.take(token))
+            assertNull(payload.credentials)
+            payload.clear()
+            assertTrue(payload.profile.all { it == 0.toByte() })
+        } finally {
+            OpenVpnProfileHandoff.discard(token)
+        }
+        for (profile in listOf("", "a\u0000b", "é".repeat(600_000))) {
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                OpenVpnProfileHandoff.stage(profile, null)
+            }
+        }
+    }
+
+    @Test
     fun supportsKeyOnlyAndRejectsIncompleteLogin() {
         val key = OpenVpnCredentials(ByteArray(0), ByteArray(0), byteArrayOf(1))
         assertTrue(key.isValid())
-        val token = OpenVpnCredentialHandoff.stage(key)
-        OpenVpnCredentialHandoff.discard(token)
+        val token = OpenVpnProfileHandoff.stage("fixture", key)
+        OpenVpnProfileHandoff.discard(token)
         assertFalse(key.isValid())
         val partial = OpenVpnCredentials(byteArrayOf(1), ByteArray(0), byteArrayOf(2))
         assertFalse(partial.isValid())
@@ -22,13 +43,17 @@ class OpenVpnCredentialHandoffTest {
     @Test
     fun consumesOnlyMatchingTokenOnce() {
         val credentials = OpenVpnCredentials(byteArrayOf(1), byteArrayOf(2))
-        val token = OpenVpnCredentialHandoff.stage(credentials)
+        val token = OpenVpnProfileHandoff.stage("fixture", credentials)
         try {
-            assertNull(OpenVpnCredentialHandoff.take("wrong"))
-            assertSame(credentials, OpenVpnCredentialHandoff.take(token))
-            assertNull(OpenVpnCredentialHandoff.take(token))
+            assertNull(OpenVpnProfileHandoff.take("wrong"))
+            val payload = checkNotNull(OpenVpnProfileHandoff.take(token))
+            assertSame(credentials, payload.credentials)
+            assertTrue(payload.profile.contentEquals("fixture".toByteArray()))
+            payload.clear()
+            assertTrue(payload.profile.all { it == 0.toByte() })
+            assertNull(OpenVpnProfileHandoff.take(token))
         } finally {
-            OpenVpnCredentialHandoff.discard(token)
+            OpenVpnProfileHandoff.discard(token)
             credentials.clear()
         }
         assertFalse(credentials.isValid())
@@ -37,16 +62,16 @@ class OpenVpnCredentialHandoffTest {
     @Test
     fun discardWipesAndDoesNotTouchNewOwner() {
         val first = OpenVpnCredentials(byteArrayOf(1), byteArrayOf(2))
-        val old = OpenVpnCredentialHandoff.stage(first)
-        OpenVpnCredentialHandoff.discard(old)
+        val old = OpenVpnProfileHandoff.stage("fixture", first)
+        OpenVpnProfileHandoff.discard(old)
         assertFalse(first.isValid())
         val second = OpenVpnCredentials(byteArrayOf(3), byteArrayOf(4))
-        val next = OpenVpnCredentialHandoff.stage(second)
+        val next = OpenVpnProfileHandoff.stage("fixture", second)
         try {
-            OpenVpnCredentialHandoff.discard(old)
+            OpenVpnProfileHandoff.discard(old)
             assertTrue(second.isValid())
         } finally {
-            OpenVpnCredentialHandoff.discard(next)
+            OpenVpnProfileHandoff.discard(next)
         }
         assertFalse(second.isValid())
     }

@@ -340,7 +340,7 @@ class VpnPlugin :
             }
         }
 
-        private var openVpnCredentialToken: String? = null
+        private var openVpnProfileToken: String? = null
 
         private fun beginConnect(
             ctx: Context,
@@ -355,54 +355,64 @@ class VpnPlugin :
             // getConnectedIP can dial the tunnel later.
             lastSocksPort = call.argument<Int>("socksPort") ?: BlackoutVpnService.DEFAULT_SOCKS_PORT
 
+            val failure = startConnectService(ctx, call, dnsOnly)
+            if (failure != null) {
+                resolveConnect(false, failure)
+            } else {
+                scheduleConnectTimeout(ctx)
+            }
+        }
+
+        private fun startConnectService(
+            ctx: Context,
+            call: MethodCall,
+            dnsOnly: Boolean,
+        ): String? =
             try {
-                stageOpenVpnCredentials(call, dnsOnly)
+                stageOpenVpnProfile(call, dnsOnly)
                 val intent = connectIntent(ctx, call, dnsOnly)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     ctx.startForegroundService(intent)
                 } else {
                     ctx.startService(intent)
                 }
+                null
+            } catch (_: IllegalArgumentException) {
+                "Invalid OpenVPN profile or credentials."
+            } catch (_: ClassCastException) {
+                "Invalid VPN request types."
             } catch (_: IllegalStateException) {
-                resolveConnect(false, "Could not start the VPN service or authentication handoff.")
-                return
+                "Could not start the VPN service or authentication handoff."
             } catch (_: SecurityException) {
-                resolveConnect(false, "VPN service start permission denied.")
-                return
+                "VPN service start permission denied."
             }
-            scheduleConnectTimeout(ctx)
-        }
 
         fun discardOpenVpnHandoff() {
-            openVpnCredentialToken?.let(OpenVpnCredentialHandoff::discard)
-            openVpnCredentialToken = null
+            openVpnProfileToken?.let(OpenVpnProfileHandoff::discard)
+            openVpnProfileToken = null
         }
 
-        private fun stageOpenVpnCredentials(
+        private fun stageOpenVpnProfile(
             call: MethodCall,
             dnsOnly: Boolean,
         ) {
             if (dnsOnly || call.argument<String>("protocol") != "openvpn") return
+            val profile = requireNotNull(call.argument<String>("openVpnConfig"))
             val username = call.argument<ByteArray>("openVpnUsername")
             val password = call.argument<ByteArray>("openVpnPassword")
             val keyPassword = call.argument<ByteArray>("openVpnKeyPassword")
-            if (username == null && password == null && keyPassword == null) return
             val credentials =
-                OpenVpnCredentials(
-                    username ?: ByteArray(0),
-                    password ?: ByteArray(0),
-                    keyPassword ?: ByteArray(0),
-                )
-            if (!credentials.isValid()) {
-                credentials.clear()
-                error("Invalid OpenVPN credentials")
-            }
+                if (username != null || password != null || keyPassword != null) {
+                    OpenVpnCredentials(username ?: ByteArray(0), password ?: ByteArray(0), keyPassword ?: ByteArray(0))
+                } else {
+                    null
+                }
             var staged = false
             try {
-                openVpnCredentialToken = OpenVpnCredentialHandoff.stage(credentials)
+                openVpnProfileToken = OpenVpnProfileHandoff.stage(profile, credentials)
                 staged = true
             } finally {
-                if (!staged) credentials.clear()
+                if (!staged) credentials?.clear()
             }
         }
 
@@ -451,11 +461,10 @@ class VpnPlugin :
                     ArrayList(call.argument<List<String>>("disallowedApps") ?: emptyList()),
                 )
                 putExtra(BlackoutVpnService.EXTRA_NATIVE_TUNNEL_CONFIG, call.argument<String>("nativeTunnelConfig"))
-                putExtra(BlackoutVpnService.EXTRA_OPENVPN_CONFIG, call.argument<String>("openVpnConfig"))
                 call.argument<List<String>>("openVpnCustomDns")?.let {
                     putStringArrayListExtra(BlackoutVpnService.EXTRA_OPENVPN_CUSTOM_DNS, ArrayList(it))
                 }
-                putExtra(BlackoutVpnService.EXTRA_OPENVPN_AUTH_TOKEN, openVpnCredentialToken)
+                putExtra(BlackoutVpnService.EXTRA_OPENVPN_PROFILE_TOKEN, openVpnProfileToken)
                 putExtra(BlackoutVpnService.EXTRA_MIHOMO_CONFIG, call.argument<String>("mihomoConfig"))
                 putExtra(BlackoutVpnService.EXTRA_DNS_ONLY, dnsOnly)
             }

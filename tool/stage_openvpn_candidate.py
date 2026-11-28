@@ -45,11 +45,11 @@ def stage(build, output, abis=ABIS):
     return records
 
 
-def verify(apk, records, badging, abis=ABIS):
+def verify(apk, records, badging, abis=ABIS, package=PACKAGE):
     required = {f"lib/{abi}/{LIB}" for abi in abis}
     if set(records) != required:
         raise ValueError("Wrong candidate inventory")
-    if not badging.startswith(f"package: name='{PACKAGE}' ") or "application-debuggable" not in badging.splitlines():
+    if not badging.startswith(f"package: name='{package}' ") or "application-debuggable" not in badging.splitlines():
         raise ValueError("Wrong debug package")
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
@@ -61,7 +61,7 @@ def verify(apk, records, badging, abis=ABIS):
             with archive.open(name) as stream:
                 if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
                     raise ValueError("Candidate bytes differ")
-    return {"package": PACKAGE, "apkSha256": sha(apk), "sha256": records,
+    return {"package": package, "apkSha256": sha(apk), "sha256": records,
             "scope": "private packaging only, Android execution not tested"}
 
 

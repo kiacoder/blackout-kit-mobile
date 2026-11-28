@@ -81,8 +81,7 @@ class BlackoutVpnService : VpnService() {
         /** Full sing-box JSON document, built by the Dart side. */
         const val EXTRA_SINGBOX_CONFIG = "singboxConfig"
         const val EXTRA_NATIVE_TUNNEL_CONFIG = "nativeTunnelConfig"
-        const val EXTRA_OPENVPN_CONFIG = "openVpnConfig"
-        const val EXTRA_OPENVPN_AUTH_TOKEN = "openVpnAuthToken"
+        const val EXTRA_OPENVPN_PROFILE_TOKEN = "openVpnProfileToken"
         const val EXTRA_MIHOMO_CONFIG = "mihomoConfig"
 
         /**
@@ -321,14 +320,12 @@ class BlackoutVpnService : VpnService() {
         val mihomoConfig = intent?.getStringExtra(EXTRA_MIHOMO_CONFIG)
         val libboxConfig = intent?.getStringExtra(EXTRA_LIBBOX_CONFIG)
         val nativeConfig = intent?.getStringExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
-        val openVpnConfig = intent?.getStringExtra(EXTRA_OPENVPN_CONFIG)
-        val openVpnAuthToken = intent?.getStringExtra(EXTRA_OPENVPN_AUTH_TOKEN)
+        val openVpnProfileToken = intent?.getStringExtra(EXTRA_OPENVPN_PROFILE_TOKEN)
         val openVpnCustomDns = intent?.getStringArrayListExtra(EXTRA_OPENVPN_CUSTOM_DNS)
 
         init {
             intent?.removeExtra(EXTRA_NATIVE_TUNNEL_CONFIG)
-            intent?.removeExtra(EXTRA_OPENVPN_CONFIG)
-            intent?.removeExtra(EXTRA_OPENVPN_AUTH_TOKEN)
+            intent?.removeExtra(EXTRA_OPENVPN_PROFILE_TOKEN)
         }
 
         val dnsOnly = intent?.getBooleanExtra(EXTRA_DNS_ONLY, false) ?: false
@@ -354,6 +351,7 @@ class BlackoutVpnService : VpnService() {
                 else -> proxy.establish(request, ticket)
             }
         }, complete = { ok ->
+            request.openVpnProfileToken?.let(OpenVpnProfileHandoff::discard)
             clearConnectResultCallback(completion)
             completion?.invoke(ok)
             if (!ok) {
@@ -488,36 +486,41 @@ class BlackoutVpnService : VpnService() {
             ticket: VpnSessionExecutor.Ticket,
         ): Boolean {
             lastError = null
-            val profile = request.openVpnConfig
             val policy =
                 try {
                     OpenVpnAppPolicy.create(packageName, request.allowed, request.disallowed, request.openVpnCustomDns)
                 } catch (_: IllegalArgumentException) {
                     return setupFailure(ticket, "Invalid OpenVPN app routing or custom DNS settings")
                 }
-            return when {
-                !BuildConfig.ENABLE_EXPERIMENTAL_OPENVPN ->
-                    setupFailure(ticket, "OpenVPN candidate is not enabled in this build")
-                profile == null || !OpenVpnCandidateProfile.admits(profile) ->
-                    setupFailure(
-                        ticket,
-                        "OpenVPN requires a self-contained profile with exact server identity",
-                    )
-                else -> startOpenVpn(request, profile, ticket, policy)
+            return if (!BuildConfig.ENABLE_EXPERIMENTAL_OPENVPN) {
+                setupFailure(ticket, "OpenVPN candidate is not enabled in this build")
+            } else {
+                consumeProfile(request, ticket, policy)
+            }
+        }
+
+        private fun consumeProfile(
+            request: StartRequest,
+            ticket: VpnSessionExecutor.Ticket,
+            policy: OpenVpnAppPolicy,
+        ): Boolean {
+            val payload =
+                request.openVpnProfileToken?.let(OpenVpnProfileHandoff::take)
+                    ?: return setupFailure(ticket, "OpenVPN profile handoff expired")
+            return if (!OpenVpnCandidateProfile.admits(payload.profile.toString(Charsets.UTF_8))) {
+                payload.clear()
+                setupFailure(ticket, "OpenVPN requires a self-contained profile with exact server identity")
+            } else {
+                startOpenVpn(request, payload, ticket, policy)
             }
         }
 
         private fun startOpenVpn(
             request: StartRequest,
-            profile: String,
+            payload: OpenVpnStartPayload,
             ticket: VpnSessionExecutor.Ticket,
             policy: OpenVpnAppPolicy,
         ): Boolean {
-            val token = request.openVpnAuthToken
-            val credentials = token?.let(OpenVpnCredentialHandoff::take)
-            if (token != null && credentials == null) {
-                return setupFailure(ticket, "OpenVPN credentials expired")
-            }
             val backend =
                 try {
                     OpenVpnNativeBridge.loadCandidate()
@@ -525,17 +528,16 @@ class BlackoutVpnService : VpnService() {
                     check(handle > 0)
                     OpenVpnAndroidBackend(
                         handle,
-                        profile,
+                        payload,
                         this@BlackoutVpnService,
                         ticket::isCurrent,
-                        credentials,
                         policy,
                     )
                 } catch (failure: IllegalStateException) {
-                    credentials?.clear()
+                    payload.clear()
                     throw failure
                 } catch (failure: LinkageError) {
-                    credentials?.clear()
+                    payload.clear()
                     throw failure
                 }
             openVpnCallbacks = backend.callbacks

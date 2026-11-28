@@ -6,9 +6,14 @@ const base = 'client\ndev tun\nproto udp\nremote vpn.example 1194\n'
 
 void main() {
   test('self-contained certificate profile with interactive auth admitted', () {
-    expect(OpenVpnProfile.admitsRuntime(base), isTrue);
+    expect(OpenVpnProfile.admitsRuntime(base), isFalse);
     expect(OpenVpnProfile.admitsRuntime('${base}auth-user-pass'), isTrue);
-    expect(OpenVpnProfile.admitsRuntime('$base<key>\nfixture\n</key>'), isTrue);
+    expect(
+        OpenVpnProfile.admitsRuntime('$base<key>\nfixture\n</key>'), isFalse);
+    expect(
+        OpenVpnProfile.admitsRuntime(
+            '$base<cert>\nfixture\n</cert>\n<key>\nfixture\n</key>'),
+        isTrue);
   });
 
   test('import remains broader than runtime admission', () {
@@ -27,9 +32,18 @@ void main() {
       'remote-cert-tls client',
       '<auth-user-pass>\nfixture\n</auth-user-pass>',
       '<ca>\nsecond\n</ca>',
+      'auth-user-pass',
+      'remote "other.example" 443',
+      'remote-random-hostname',
+      'peer-fingerprint aa',
+      '<connection>\nremote other.example 443\n</connection>',
+      '<cert>\nfixture\n</cert>',
+      'verb 3 # trailing comment',
+      'verb\t3',
+      '# ${List.filled(4097, 'x').join()}',
       '<connection>\nremote other.example 443\nremote-cert-tls server\n</connection>',
     ]) {
-      final profile = '$base$directive';
+      final profile = '${base}auth-user-pass\n$directive';
       expect(OpenVpnProfile.parse(profile), isNotNull);
       expect(OpenVpnProfile.admitsRuntime(profile), isFalse, reason: directive);
     }

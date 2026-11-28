@@ -81,6 +81,8 @@ android {
         applicationId "com.blackoutkit.vpn"
         if (project.findProperty("enableProcessGuardExperiment") == "true") {
             testInstrumentationRunner "com.blackoutkit.vpn.ProcessGuardAcceptance"
+        } else if (project.findProperty("enableMihomoEmulator") == "true") {
+            testInstrumentationRunner "com.blackoutkit.vpn.MihomoEmulatorAcceptance"
         } else if (project.findProperty("enableOpenVpnCandidate") == "true") {
             testInstrumentationRunner "com.blackoutkit.vpn.OpenVpnCandidateAcceptance"
         }
@@ -149,11 +151,23 @@ android {
         }
         sourceSets.debug.jniLibs.srcDir nativeDir
     }
+    def mihomoEmulator = project.findProperty("enableMihomoEmulator") == "true"
+    if (mihomoEmulator && (project.findProperty("enableMihomo") != "true" ||
+            project.findProperty("enableOpenVpnCandidate") == "true" ||
+            project.findProperty("target-platform") != "android-x64" ||
+            ["enableProcessGuardExperiment", "nativeTestPackage", "enableNativeTunnels"].any {
+                project.findProperty(it) == "true"
+            } ||
+            !gradle.startParameter.taskNames.every { it.tokenize(":").last() in ["assembleDebug", "assembleDebugAndroidTest", "testDebugUnitTest"] })) {
+        throw new GradleException("Mihomo emulator requires isolated x86-64 debug tasks")
+    }
     if (project.findProperty("enableMihomo") == "true") {
-        def mihomoDir = rootProject.file("../.cache/mihomo-jni")
-        ["arm64-v8a", "armeabi-v7a"].each { abi ->
-            if (!new File(mihomoDir, "${abi}/libmihomo.so").isFile()) {
-                throw new GradleException("Missing reviewed Mihomo candidate for " + abi)
+        def mihomoDir = rootProject.file(mihomoEmulator ? "../.cache/mihomo-emulator-jni" : "../.cache/mihomo-jni")
+        (mihomoEmulator ? ["x86_64"] : ["arm64-v8a", "armeabi-v7a"]).each { abi ->
+            (mihomoEmulator ? ["libmihomo.so", "libtun2socks.so"] : ["libmihomo.so"]).each { lib ->
+                if (!new File(mihomoDir, "${abi}/${lib}").isFile()) {
+                    throw new GradleException("Missing reviewed Mihomo candidate for " + abi + "/" + lib)
+                }
             }
         }
         sourceSets.debug.jniLibs.srcDir mihomoDir
@@ -165,8 +179,20 @@ android {
             throw new GradleException("OpenVPN emulator requires an isolated x86-64 debug APK")
         }
     }
+    def dualCandidate = project.findProperty("enableDualEngineTest") == "true"
+    if (dualCandidate && (project.findProperty("enableOpenVpnCandidate") != "true" ||
+            project.findProperty("enableMihomo") != "true" ||
+            project.findProperty("enableOpenVpnEmulator") == "true" ||
+            project.findProperty("target-platform") != "android-arm,android-arm64" ||
+            !gradle.startParameter.taskNames.every { it.tokenize(":").last() in ["assembleDebug", "assembleDebugAndroidTest", "testDebugUnitTest"] })) {
+        throw new GradleException("Dual candidate requires both engines and ARM debug tasks")
+    }
+    if (!dualCandidate && project.findProperty("enableOpenVpnCandidate") == "true" &&
+            project.findProperty("enableMihomo") == "true") {
+        throw new GradleException("Explicit dual-engine test flag required")
+    }
     if (project.findProperty("enableOpenVpnCandidate") == "true") {
-        ["enableProcessGuardExperiment", "enableMihomo", "nativeTestPackage", "enableNativeTunnels"].each { flag ->
+        ["enableProcessGuardExperiment", "nativeTestPackage", "enableNativeTunnels"].each { flag ->
             if (project.findProperty(flag) == "true") {
                 throw new GradleException("OpenVPN candidate requires an isolated test build")
             }
@@ -193,6 +219,9 @@ android {
             if (project.findProperty("enableProcessGuardExperiment") == "true") {
                 applicationIdSuffix ".guardtest"
                 versionNameSuffix "-guard-test"
+            } else if (dualCandidate) {
+                applicationIdSuffix ".dualenginetest"
+                versionNameSuffix "-dual-engine-test.1"
             } else if (project.findProperty("enableOpenVpnCandidate") == "true") {
                 applicationIdSuffix ".openvpntest"
                 versionNameSuffix "-openvpn-test.1"
@@ -250,6 +279,7 @@ android {
         }
         if (project.findProperty("enableMihomo") == "true") {
             jniLibs.keepDebugSymbols += ["**/libmihomo.so"]
+            if (mihomoEmulator) jniLibs.keepDebugSymbols += ["**/libtun2socks.so"]
         }
         // Exact candidate byte comparison in the isolated native test APK.
         if (project.findProperty("nativeTestPackage") == "true") {
@@ -257,7 +287,7 @@ android {
         }
 
         exclude 'lib/x86/**'
-        if (project.findProperty("enableOpenVpnEmulator") == "true") {
+        if (project.findProperty("enableOpenVpnEmulator") == "true" || mihomoEmulator) {
             exclude 'lib/arm64-v8a/**'
             exclude 'lib/armeabi-v7a/**'
         } else {

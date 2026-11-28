@@ -27,8 +27,8 @@ def expected(manifest):
     return result
 
 
-def verify(apk, manifest, badging):
-    if not badging.startswith(f"package: name='{PACKAGE}' ") or "application-debuggable" not in badging.splitlines():
+def verify(apk, manifest, badging, package=PACKAGE):
+    if not badging.startswith(f"package: name='{package}' ") or "application-debuggable" not in badging.splitlines():
         raise ValueError("Expected isolated debuggable Mihomo package")
     records = expected(manifest)
     with zipfile.ZipFile(apk) as archive:
@@ -49,7 +49,7 @@ def verify(apk, manifest, badging):
     with apk.open("rb") as stream:
         apk_hash = hashlib.file_digest(stream, "sha256").hexdigest()
     return {"scope": "private debug packaging only; not device acceptance",
-            "package": PACKAGE, "apkSha256": apk_hash, "sha256": records}
+            "package": package, "apkSha256": apk_hash, "sha256": records}
 
 
 def main():
